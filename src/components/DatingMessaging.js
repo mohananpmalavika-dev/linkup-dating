@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import '../styles/DatingMessaging.css';
-import { notificationService } from '../services/notificationService';
 
 /**
  * DatingMessaging Component
@@ -19,7 +18,7 @@ const DatingMessaging = ({ matchedProfile, onVideoCall }) => {
     if (matchedProfile) {
       loadMessages();
     }
-  }, [matchedProfile?.userId]);
+  }, [matchedProfile]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -28,6 +27,7 @@ const DatingMessaging = ({ matchedProfile, onVideoCall }) => {
 
   const loadMessages = async () => {
     setLoading(true);
+    setError('');
     try {
       // TODO: Implement actual message loading from service
       setMessages([]);
@@ -50,15 +50,16 @@ const DatingMessaging = ({ matchedProfile, onVideoCall }) => {
       isOwn: true,
     };
 
-    setMessages([...messages, newMessage]);
+    setMessages((currentMessages) => [...currentMessages, newMessage]);
     setInputMessage('');
+    setError('');
 
     try {
       // TODO: Implement actual message sending
       console.log('Message sent:', newMessage);
     } catch (err) {
       console.error('Failed to send message:', err);
-      notificationService.showError('Failed to send message');
+      setError('Failed to send message');
     }
   };
 
@@ -100,6 +101,12 @@ const DatingMessaging = ({ matchedProfile, onVideoCall }) => {
           📹
         </button>
       </div>
+
+      {error && (
+        <div className="messaging-error" role="alert">
+          {error}
+        </div>
+      )}
 
       {/* Messages */}
       <div className="messages-container">
