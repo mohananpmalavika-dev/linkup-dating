@@ -1,0 +1,266 @@
+.video-dating-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  background: #000;
+  position: relative;
+}
+
+/* Main Video Area */
+.video-main {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a1a;
+}
+
+/* Remote Video */
+.remote-video {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 60px;
+  position: relative;
+  overflow: hidden;
+}
+
+.video-placeholder img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Remote Info */
+.remote-info {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  color: white;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.remote-info h3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.online-indicator {
+  margin: 4px 0 0 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* Local Video (Picture-in-Picture) */
+.local-video {
+  position: absolute;
+  bottom: 80px;
+  right: 15px;
+  width: 100px;
+  height: 150px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid white;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  background: #333;
+}
+
+.local-video .video-placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.local-video .label {
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 2px 6px;
+  border-radius: 3px;
+  margin: 0;
+}
+
+/* Call Header */
+.call-header {
+  padding: 15px;
+  display: flex;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+}
+
+.call-duration {
+  color: white;
+  font-size: 18px;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+}
+
+/* Call Controls */
+.call-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.control-btn {
+  width: 55px;
+  height: 55px;
+  border-radius: 50%;
+  border: none;
+  background: #667eea;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.control-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+}
+
+.control-btn:active {
+  transform: scale(0.95);
+}
+
+/* Mute Button */
+.control-btn.muted {
+  background: #ff6b6b;
+}
+
+.control-btn.muted:hover {
+  background: #ff5252;
+  box-shadow: 0 6px 16px rgba(255, 107, 107, 0.5);
+}
+
+/* Video Off Button */
+.control-btn.off {
+  background: #ff9800;
+}
+
+.control-btn.off:hover {
+  background: #f57c00;
+  box-shadow: 0 6px 16px rgba(255, 152, 0, 0.5);
+}
+
+/* Chat Button */
+.control-btn.chat {
+  background: #764ba2;
+}
+
+.control-btn.chat:hover {
+  background: #6a3b8b;
+  box-shadow: 0 6px 16px rgba(118, 75, 162, 0.5);
+}
+
+/* End Call Button */
+.control-btn.end-call {
+  background: #ff6b6b;
+}
+
+.control-btn.end-call:hover {
+  background: #ff5252;
+  box-shadow: 0 6px 16px rgba(255, 107, 107, 0.5);
+}
+
+/* Call Ended */
+.call-ended {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.call-end-content {
+  text-align: center;
+  color: white;
+}
+
+.call-end-content h2 {
+  margin: 0 0 10px 0;
+  font-size: 32px;
+}
+
+.call-end-content p {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  opacity: 0.9;
+}
+
+.btn-back {
+  padding: 12px 30px;
+  background: white;
+  color: #667eea;
+  border: none;
+  border-radius: 25px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-back:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .remote-video .video-placeholder {
+    font-size: 40px;
+  }
+
+  .remote-info h3 {
+    font-size: 18px;
+  }
+
+  .local-video {
+    width: 80px;
+    height: 120px;
+    bottom: 70px;
+    right: 10px;
+  }
+
+  .call-duration {
+    font-size: 16px;
+  }
+
+  .control-btn {
+    width: 50px;
+    height: 50px;
+    font-size: 20px;
+    gap: 12px;
+  }
+
+  .call-controls {
+    gap: 12px;
+    padding: 12px;
+  }
+}

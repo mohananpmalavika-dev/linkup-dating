@@ -1,0 +1,501 @@
+:root {
+  --food-bg: linear-gradient(180deg, #fff8ef 0%, #fffdf8 36%, #f8f5ee 100%);
+  --food-surface: rgba(255, 255, 255, 0.88);
+  --food-surface-strong: #ffffff;
+  --food-border: rgba(112, 78, 30, 0.14);
+  --food-text: #2e2418;
+  --food-muted: #6f6254;
+  --food-primary: #ad4c1d;
+  --food-primary-dark: #843312;
+  --food-accent: #f2b544;
+  --food-ok: #227a49;
+  --food-warn: #b04b2c;
+  --food-shadow: 0 18px 40px rgba(107, 68, 27, 0.12);
+}
+
+.fooddelivery-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  color: var(--food-text);
+}
+
+.fooddelivery-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.9fr);
+  gap: 1.25rem;
+  padding: 1.5rem;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top right, rgba(242, 181, 68, 0.3), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(173, 76, 29, 0.14), transparent 32%),
+    var(--food-bg);
+  box-shadow: var(--food-shadow);
+}
+
+.fooddelivery-hero-copy h1,
+.fooddelivery-panelhead h2,
+.fooddelivery-featurebox h3,
+.fooddelivery-cardbutton h3 {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.fooddelivery-hero-copy p {
+  margin: 0.35rem 0 0;
+  color: var(--food-muted);
+  max-width: 60ch;
+}
+
+.fooddelivery-kicker,
+.fooddelivery-cardlabel {
+  margin: 0 0 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--food-primary);
+}
+
+.fooddelivery-panel,
+.fooddelivery-hero-card,
+.fooddelivery-featurebox,
+.fooddelivery-restaurantcard,
+.fooddelivery-metriccard {
+  border: 1px solid var(--food-border);
+  border-radius: 22px;
+  background: var(--food-surface);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--food-shadow);
+}
+
+.fooddelivery-panel,
+.fooddelivery-hero-card {
+  padding: 1.1rem;
+}
+
+.fooddelivery-overview,
+.fooddelivery-requirements,
+.fooddelivery-grid2,
+.fooddelivery-metricgrid {
+  display: grid;
+  gap: 1rem;
+}
+
+.fooddelivery-overview {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fooddelivery-requirements {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fooddelivery-grid2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fooddelivery-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.75fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.fooddelivery-main,
+.fooddelivery-rail,
+.fooddelivery-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fooddelivery-panelhead,
+.fooddelivery-cardtop,
+.fooddelivery-actionrow,
+.fooddelivery-rolebar,
+.fooddelivery-inlinepanel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.fooddelivery-chiprow,
+.fooddelivery-pillrow,
+.fooddelivery-rolebuttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.fooddelivery-chip,
+.fooddelivery-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.fooddelivery-chip {
+  background: rgba(173, 76, 29, 0.09);
+  color: var(--food-primary-dark);
+}
+
+.fooddelivery-chip.highlight {
+  background: rgba(242, 181, 68, 0.25);
+}
+
+.fooddelivery-chip.danger {
+  background: rgba(176, 75, 44, 0.15);
+  color: var(--food-warn);
+}
+
+.fooddelivery-pill {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--food-border);
+}
+
+.fooddelivery-pill.muted {
+  color: var(--food-muted);
+}
+
+.fooddelivery-rolebar {
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.fooddelivery-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.fooddelivery-filters label,
+.fooddelivery-formgrid label,
+.fooddelivery-textarea,
+.fooddelivery-featurebox label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--food-muted);
+  font-size: 0.92rem;
+}
+
+.fooddelivery-shell input,
+.fooddelivery-shell select,
+.fooddelivery-shell textarea,
+.fooddelivery-rolebtn,
+.fooddelivery-primary,
+.fooddelivery-secondary,
+.fooddelivery-cardbutton,
+.fooddelivery-menuitem {
+  font: inherit;
+}
+
+.fooddelivery-shell input,
+.fooddelivery-shell select,
+.fooddelivery-shell textarea {
+  width: 100%;
+  border: 1px solid rgba(120, 88, 49, 0.2);
+  border-radius: 14px;
+  padding: 0.8rem 0.9rem;
+  color: var(--food-text);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.fooddelivery-shell textarea {
+  resize: vertical;
+}
+
+.fooddelivery-rolebtn,
+.fooddelivery-primary,
+.fooddelivery-secondary {
+  border: none;
+  cursor: pointer;
+  transition: transform 0.18s ease, background-color 0.18s ease, opacity 0.18s ease;
+}
+
+.fooddelivery-rolebtn {
+  padding: 0.8rem 1rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--food-text);
+  border: 1px solid var(--food-border);
+}
+
+.fooddelivery-rolebtn.active,
+.fooddelivery-primary {
+  background: var(--food-primary);
+  color: #fff;
+}
+
+.fooddelivery-secondary {
+  padding: 0.8rem 1rem;
+  border-radius: 14px;
+  background: rgba(173, 76, 29, 0.1);
+  color: var(--food-primary-dark);
+}
+
+.fooddelivery-primary {
+  padding: 0.9rem 1.1rem;
+  border-radius: 14px;
+}
+
+.fooddelivery-primary:hover,
+.fooddelivery-secondary:hover,
+.fooddelivery-rolebtn:hover,
+.fooddelivery-cardbutton:hover,
+.fooddelivery-menuitem:hover {
+  transform: translateY(-1px);
+}
+
+.fooddelivery-primary:disabled,
+.fooddelivery-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.fooddelivery-status {
+  margin: 0;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  background: rgba(34, 122, 73, 0.1);
+  color: var(--food-ok);
+  border: 1px solid rgba(34, 122, 73, 0.15);
+}
+
+.fooddelivery-list,
+.fooddelivery-orderlist {
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--food-muted);
+}
+
+.fooddelivery-list li + li,
+.fooddelivery-orderlist li + li {
+  margin-top: 0.55rem;
+}
+
+.fooddelivery-restaurantgrid,
+.fooddelivery-menulist,
+.fooddelivery-partnerlist,
+.fooddelivery-timeline {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.fooddelivery-restaurantgrid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.fooddelivery-restaurantcard {
+  overflow: hidden;
+}
+
+.fooddelivery-restaurantcard.selected {
+  outline: 2px solid rgba(173, 76, 29, 0.22);
+}
+
+.fooddelivery-cardbutton,
+.fooddelivery-menuitem {
+  width: 100%;
+  border: none;
+  text-align: left;
+  padding: 1rem;
+  background: transparent;
+  color: inherit;
+}
+
+.fooddelivery-cardbutton p,
+.fooddelivery-menuitem p,
+.fooddelivery-featurebox p,
+.fooddelivery-muted,
+.fooddelivery-cardmeta {
+  margin: 0.2rem 0 0;
+  color: var(--food-muted);
+}
+
+.fooddelivery-avatar {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(242, 181, 68, 0.9), rgba(173, 76, 29, 0.85));
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.fooddelivery-openstate {
+  font-weight: 700;
+}
+
+.fooddelivery-openstate.open {
+  color: var(--food-ok);
+}
+
+.fooddelivery-openstate.closed {
+  color: var(--food-warn);
+}
+
+.fooddelivery-menulist {
+  max-height: 320px;
+  overflow: auto;
+}
+
+.fooddelivery-menuitem {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.8rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid transparent;
+}
+
+.fooddelivery-menuitem.active {
+  border-color: rgba(173, 76, 29, 0.24);
+  background: rgba(173, 76, 29, 0.08);
+}
+
+.fooddelivery-featurebox {
+  padding: 1rem;
+}
+
+.fooddelivery-formgrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.fooddelivery-orderlist {
+  list-style: none;
+  padding: 0;
+}
+
+.fooddelivery-orderlist li,
+.fooddelivery-partnercard,
+.fooddelivery-step,
+.fooddelivery-summary > div,
+.fooddelivery-metriccard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.fooddelivery-orderlist li,
+.fooddelivery-partnercard,
+.fooddelivery-step {
+  padding: 0.95rem 1rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--food-border);
+}
+
+.fooddelivery-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid var(--food-border);
+}
+
+.fooddelivery-summary.mini {
+  gap: 0.9rem;
+}
+
+.fooddelivery-summary .total {
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--food-border);
+}
+
+.fooddelivery-step.complete {
+  border-color: rgba(34, 122, 73, 0.18);
+  background: rgba(34, 122, 73, 0.08);
+}
+
+.fooddelivery-metricgrid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.fooddelivery-metricgrid.compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.fooddelivery-metriccard {
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1rem;
+}
+
+.fooddelivery-metriccard strong {
+  font-size: 1.35rem;
+}
+
+.fooddelivery-metriccard span {
+  color: var(--food-muted);
+}
+
+.fooddelivery-partnercard {
+  align-items: flex-start;
+}
+
+.fooddelivery-actionrow {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.fooddelivery-cartactions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.fooddelivery-promoactions {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+@media (max-width: 1180px) {
+  .fooddelivery-hero,
+  .fooddelivery-layout,
+  .fooddelivery-overview,
+  .fooddelivery-requirements {
+    grid-template-columns: 1fr;
+  }
+
+  .fooddelivery-rail {
+    order: -1;
+  }
+}
+
+@media (max-width: 860px) {
+  .fooddelivery-grid2,
+  .fooddelivery-formgrid,
+  .fooddelivery-filters,
+  .fooddelivery-metricgrid,
+  .fooddelivery-metricgrid.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .fooddelivery-rolebar,
+  .fooddelivery-panelhead,
+  .fooddelivery-cardtop,
+  .fooddelivery-actionrow,
+  .fooddelivery-inlinepanel {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

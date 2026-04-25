@@ -1,0 +1,588 @@
+/* Navigation Bar */
+.navbar {
+  background: linear-gradient(135deg, #1a2332 0%, #0a1428 100%);
+  padding: 0.85rem 0 0.7rem;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px);
+  overflow-x: clip;
+}
+
+.nav-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+  display: grid;
+  gap: 0.85rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.nav-top-row,
+.nav-bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.nav-logo {
+  color: white;
+  font-size: 1.5rem;
+  font-weight: bold;
+  text-decoration: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.nav-logo:hover {
+  opacity: 0.8;
+  color: #FFD700;
+}
+
+.logo-image {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+}
+
+.nav-menu {
+  display: flex;
+  gap: 0.75rem;
+  flex: 1;
+  justify-content: flex-start;
+  overflow-x: auto;
+  padding: 0.2rem 0.05rem 0.45rem;
+  scrollbar-width: thin;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.nav-link {
+  color: white;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.25s ease, color 0.25s ease, transform 0.25s ease;
+  font-size: 0.92rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  padding: 0.62rem 1rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.nav-link:hover {
+  opacity: 1;
+  background: rgba(255, 215, 0, 0.16);
+  color: #ffe082;
+  transform: translateY(-1px);
+}
+
+.nav-link-active {
+  background: rgba(255, 215, 0, 0.2);
+  border-color: rgba(255, 215, 0, 0.5);
+  color: #fff1b8;
+  box-shadow: inset 0 0 0 1px rgba(255, 215, 0, 0.2);
+}
+
+.nav-right {
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cart-icon {
+  color: white;
+  font-weight: bold;
+  background: rgba(255, 255, 255, 0.14);
+  padding: 0.65rem 1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.cart-button {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.cart-button-active {
+  background: rgba(255, 215, 0, 0.18);
+  border-color: rgba(255, 215, 0, 0.45);
+  color: #ffe082;
+}
+
+.sos-alert-button {
+  color: white;
+  font-weight: bold;
+  background: linear-gradient(135deg, #ff4757 0%, #ee5a6f 100%);
+  padding: 0.65rem 1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  border: 1px solid rgba(255, 71, 87, 0.5);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3);
+}
+
+.sos-alert-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff5a67 0%, #ff3838 100%);
+  box-shadow: 0 6px 20px rgba(255, 71, 87, 0.5);
+  transform: scale(1.05);
+}
+
+.sos-alert-button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.sos-alert-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: white;
+  font-weight: 500;
+  position: relative;
+  cursor: pointer;
+  padding: 0.55rem 0.8rem;
+  border-radius: 999px;
+  transition: background 0.3s;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  max-width: 100%;
+}
+
+.user-profile:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.dropdown-icon {
+  font-size: 0.7rem;
+  transition: transform 0.3s;
+}
+
+.user-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 1rem));
+  z-index: 1001;
+  margin-top: 0.5rem;
+  overflow: hidden;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.user-menu-item {
+  padding: 0.75rem 1rem;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  font-size: 0.9rem;
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  color: #ff6b6b;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 600;
+  transition: all 0.3s;
+  font-family: inherit;
+}
+
+.logout-btn:hover {
+  background: #fee;
+}
+
+.user-avatar {
+  font-size: 1.2rem;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 215, 0, 0.18);
+  border-radius: 50%;
+}
+
+.user-name {
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.hamburger {
+  display: none;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: white;
+  font-size: 0.95rem;
+  padding: 0.65rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+/* Sidebar */
+.sidebar {
+  display: none;
+  position: fixed;
+  left: -300px;
+  top: 0;
+  width: 250px;
+  height: 100vh;
+  background: white;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+  z-index: 999;
+  transition: left 0.3s;
+  padding-top: 60px;
+}
+
+.sidebar.open {
+  display: block;
+  left: 0;
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid #eee;
+  background: linear-gradient(135deg, #1a2332 0%, #0a1428 100%);
+  color: white;
+  position: fixed;
+  top: 0;
+  width: 250px;
+}
+
+.sidebar-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.sidebar-menu {
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sidebar-link {
+  color: #333;
+  text-decoration: none;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  transition: background 0.3s;
+  font-weight: 500;
+  background: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.sidebar-link:hover {
+  background: #f0f0f0;
+  color: #FFD700;
+}
+
+.sidebar-link-active {
+  background: #fff5d0;
+  color: #8a6b00;
+  font-weight: 700;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .nav-top-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .nav-bottom-row {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .nav-menu {
+    display: none;
+  }
+
+  .hamburger {
+    display: block;
+  }
+
+  .nav-right {
+    gap: 1rem;
+  }
+
+  .cart-icon {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .nav-logo {
+    font-size: 1.2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav-container {
+    padding: 0 0.5rem;
+  }
+
+  .nav-top-row {
+    flex-wrap: wrap;
+  }
+
+  .nav-logo {
+    font-size: 1rem;
+  }
+
+  .nav-right {
+    gap: 0.5rem;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .user-profile {
+    margin-left: auto;
+  }
+
+  .cart-icon {
+    font-size: 0.75rem;
+    padding: 0.3rem 0.6rem;
+  }
+
+  .user-avatar {
+    font-size: 1.2rem;
+  }
+}
+
+/* SOS Alert Modal */
+.sos-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.sos-modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(255, 71, 87, 0.3);
+  animation: slideUp 0.3s ease;
+  overflow: hidden;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.sos-modal-header {
+  background: linear-gradient(135deg, #ff4757 0%, #ee5a6f 100%);
+  color: white;
+  padding: 20px;
+  text-align: center;
+  border-bottom: 3px solid #ff3838;
+}
+
+.sos-modal-header h2 {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.sos-modal-content {
+  padding: 30px;
+}
+
+.sos-warning {
+  color: #ff4757;
+  font-size: 1.1rem;
+  font-weight: bold;
+  margin: 0 0 15px;
+  text-align: center;
+}
+
+.sos-info {
+  color: #555;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  margin: 0 0 20px;
+  text-align: center;
+}
+
+.sos-details {
+  background: #f9f9f9;
+  padding: 15px;
+  border-radius: 8px;
+  margin: 20px 0;
+  border-left: 4px solid #ff4757;
+}
+
+.sos-details p {
+  margin: 8px 0;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.sos-confirmation {
+  color: #666;
+  font-weight: 600;
+  text-align: center;
+  margin: 20px 0 0;
+  font-size: 1rem;
+}
+
+.sos-modal-actions {
+  display: flex;
+  gap: 15px;
+  padding: 20px 30px 30px;
+  justify-content: center;
+}
+
+.sos-cancel-btn,
+.sos-send-btn {
+  padding: 12px 30px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  min-width: 150px;
+}
+
+.sos-cancel-btn {
+  background: #e9ecef;
+  color: #333;
+  border: 2px solid #dee2e6;
+}
+
+.sos-cancel-btn:hover:not(:disabled) {
+  background: #dee2e6;
+  border-color: #adb5bd;
+}
+
+.sos-send-btn {
+  background: linear-gradient(135deg, #ff4757 0%, #ee5a6f 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3);
+}
+
+.sos-send-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff5a67 0%, #ff3838 100%);
+  box-shadow: 0 6px 20px rgba(255, 71, 87, 0.5);
+  transform: translateY(-2px);
+}
+
+.sos-send-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.sos-cancel-btn:disabled,
+.sos-send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .sos-modal {
+    width: 95%;
+    border-radius: 8px;
+  }
+
+  .sos-modal-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .sos-modal-content {
+    padding: 20px;
+  }
+
+  .sos-modal-actions {
+    flex-direction: column;
+    padding: 15px 20px 20px;
+    gap: 10px;
+  }
+
+  .sos-cancel-btn,
+  .sos-send-btn {
+    min-width: 100%;
+  }
+}

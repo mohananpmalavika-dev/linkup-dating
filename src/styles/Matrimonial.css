@@ -1,0 +1,775 @@
+.matrimonial-shell {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+  color: #1b1f2a;
+  position: relative;
+}
+
+.matrimonial-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: clamp(5.5rem, 8vh, 7rem) 1rem 1.5rem;
+  background: rgba(27, 31, 42, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.matrimonial-modal {
+  width: min(100%, 760px);
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
+  border-radius: 24px;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at top left, rgba(211, 161, 91, 0.2), transparent 42%),
+    linear-gradient(145deg, #fffaf3 0%, #fff 100%);
+  border: 1px solid rgba(125, 86, 46, 0.14);
+  box-shadow: 0 24px 54px rgba(27, 31, 42, 0.24);
+}
+
+.matrimonial-modal h2 {
+  margin: 0;
+  color: #2d1b33;
+}
+
+.matrimonial-modal-copy {
+  margin: 0.85rem 0 0;
+  color: #625868;
+  line-height: 1.6;
+}
+
+.matrimonial-modal-form {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1.25rem;
+}
+
+.matrimonial-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.matrimonial-modal-form label {
+  display: grid;
+  gap: 0.35rem;
+  font-weight: 600;
+  color: #4f4654;
+}
+
+.matrimonial-modal-form input,
+.matrimonial-modal-form select,
+.matrimonial-modal-form textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #d9cfd8;
+  background: #fff;
+  padding: 0.8rem 0.9rem;
+  font: inherit;
+}
+
+.matrimonial-modal-form textarea {
+  resize: vertical;
+  min-height: 104px;
+}
+
+.matrimonial-form-error {
+  margin: 0;
+  color: #b23b3b;
+  font-weight: 600;
+}
+
+.matrimonial-toggle-grid {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.matrimonial-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  position: sticky;
+  bottom: 0;
+  padding-top: 0.8rem;
+  background: linear-gradient(180deg, rgba(255, 250, 243, 0), #fffaf3 45%);
+}
+
+.matrimonial-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.9fr);
+  gap: 1.5rem;
+  padding: 2rem;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top left, rgba(211, 161, 91, 0.28), transparent 36%),
+    linear-gradient(135deg, #fff8ee 0%, #f7efe3 45%, #f2e5ef 100%);
+  border: 1px solid rgba(125, 86, 46, 0.12);
+}
+
+.matrimonial-kicker {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8f5a2a;
+}
+
+.matrimonial-hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3.6vw, 3.3rem);
+  line-height: 1.05;
+  color: #2d1b33;
+}
+
+.matrimonial-subtitle {
+  max-width: 760px;
+  margin: 1rem 0 0;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: #5b5262;
+}
+
+.matrimonial-hero-card,
+.matrimonial-panel,
+.matrimonial-stat-card {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(72, 42, 76, 0.08);
+  box-shadow: 0 18px 42px rgba(63, 37, 60, 0.08);
+}
+
+.matrimonial-hero-card {
+  border-radius: 22px;
+  padding: 1.35rem;
+  align-self: start;
+}
+
+.matrimonial-hero-card strong {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 1.5rem;
+  color: #2d1b33;
+}
+
+.matrimonial-hero-card p,
+.matrimonial-stat-card p,
+.matrimonial-panel p,
+.matrimonial-request-card p,
+.matrimonial-message-card p {
+  color: #625868;
+  line-height: 1.6;
+}
+
+.matrimonial-hero-label,
+.matrimonial-stat-label {
+  display: inline-flex;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9a6d3b;
+}
+
+.matrimonial-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.matrimonial-stat-card {
+  border-radius: 20px;
+  padding: 1.2rem;
+}
+
+.matrimonial-stat-card strong {
+  display: block;
+  margin-top: 0.7rem;
+  font-size: 2rem;
+  color: #2d1b33;
+}
+
+.matrimonial-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1.5rem 0 1rem;
+}
+
+.matrimonial-tab {
+  border: 1px solid rgba(72, 42, 76, 0.12);
+  background: #fff;
+  color: #5a4d62;
+  border-radius: 999px;
+  padding: 0.75rem 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.matrimonial-tab.active,
+.matrimonial-tab:hover {
+  background: #2d1b33;
+  color: #fff;
+}
+
+.matrimonial-banner {
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  background: #fff6df;
+  border: 1px solid #efd39a;
+  color: #704d1d;
+  font-weight: 600;
+}
+
+.matrimonial-content-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.6fr) minmax(320px, 1fr);
+  gap: 1.25rem;
+}
+
+.matrimonial-sidebar,
+.matrimonial-main,
+.matrimonial-detail-rail {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+}
+
+.matrimonial-panel {
+  border-radius: 22px;
+  padding: 1.2rem;
+}
+
+.matrimonial-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.matrimonial-panel-heading h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: #2d1b33;
+}
+
+.matrimonial-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  background: #f4e6ef;
+  color: #7f486f;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.matrimonial-profile-summary,
+.matrimonial-detail-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.matrimonial-profile-summary dt,
+.matrimonial-detail-grid dt {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #a27d48;
+}
+
+.matrimonial-profile-summary dd,
+.matrimonial-detail-grid dd {
+  margin: 0.2rem 0 0;
+  color: #2d1b33;
+}
+
+.matrimonial-form-grid,
+.matrimonial-search-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.matrimonial-form-grid label,
+.matrimonial-search-grid label {
+  display: grid;
+  gap: 0.35rem;
+  color: #4f4654;
+  font-weight: 600;
+}
+
+.matrimonial-form-grid span,
+.matrimonial-search-grid span {
+  font-size: 0.9rem;
+}
+
+.matrimonial-form-grid input,
+.matrimonial-form-grid select,
+.matrimonial-search-grid input,
+.matrimonial-search-grid select {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #d9cfd8;
+  background: #fff;
+  padding: 0.8rem 0.9rem;
+  font: inherit;
+}
+
+.matrimonial-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding-top: 1.6rem;
+}
+
+.matrimonial-checkbox input {
+  width: auto;
+}
+
+.matrimonial-notification-list,
+.matrimonial-request-list,
+.matrimonial-message-list {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.matrimonial-shortlist-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.matrimonial-shortlist-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  border: 1px solid rgba(72, 42, 76, 0.08);
+  border-radius: 14px;
+  background: #fcf8fb;
+  padding: 0.85rem 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  color: #2d1b33;
+}
+
+.matrimonial-shortlist-item span {
+  color: #7f486f;
+  font-weight: 600;
+}
+
+.matrimonial-notification-list li,
+.matrimonial-request-card,
+.matrimonial-message-card,
+.matrimonial-admin-card {
+  border-radius: 16px;
+  background: #fcf8fb;
+  border: 1px solid rgba(72, 42, 76, 0.08);
+}
+
+.matrimonial-notification-list li {
+  padding: 0.85rem 0.9rem;
+}
+
+.matrimonial-match-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.matrimonial-match-card {
+  border-radius: 20px;
+  border: 1px solid rgba(72, 42, 76, 0.1);
+  background: #fff;
+  overflow: hidden;
+  box-shadow: 0 14px 28px rgba(63, 37, 60, 0.06);
+}
+
+.matrimonial-match-card.selected {
+  border-color: #bc8b53;
+  box-shadow: 0 18px 36px rgba(123, 79, 37, 0.14);
+}
+
+.matrimonial-card-hitbox {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 1rem;
+}
+
+.matrimonial-card-top,
+.matrimonial-detail-hero {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.matrimonial-card-top h3,
+.matrimonial-request-card h3,
+.matrimonial-message-card h3,
+.matrimonial-detail-card h3 {
+  margin: 0;
+  color: #2d1b33;
+}
+
+.matrimonial-card-top p,
+.matrimonial-detail-hero p {
+  margin: 0.25rem 0 0;
+}
+
+.matrimonial-avatar-wrap {
+  flex-shrink: 0;
+}
+
+.matrimonial-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 74px;
+  min-height: 74px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #e7c98d 0%, #d88fb6 100%);
+  color: #2d1b33;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.75rem;
+  text-align: center;
+}
+
+.matrimonial-avatar.large {
+  min-width: 92px;
+  min-height: 92px;
+}
+
+.matrimonial-card-meta,
+.matrimonial-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.9rem;
+}
+
+.matrimonial-card-meta span,
+.matrimonial-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  background: #f6edf5;
+  color: #684e68;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.matrimonial-tag.muted {
+  background: #f2efe8;
+  color: #7c6844;
+}
+
+.matrimonial-score-row,
+.matrimonial-request-card,
+.matrimonial-message-card,
+.matrimonial-request-meta,
+.matrimonial-message-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.matrimonial-score-row {
+  margin-top: 1rem;
+  color: #6b576f;
+}
+
+.matrimonial-bio-snippet,
+.matrimonial-detail-bio {
+  margin-top: 0.9rem;
+}
+
+.matrimonial-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  padding: 0 1rem 1rem;
+}
+
+.matrimonial-card-actions.vertical {
+  padding: 0;
+  margin-top: 1.2rem;
+  flex-direction: column;
+}
+
+.matrimonial-detail-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.matrimonial-detail-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.matrimonial-empty-state {
+  padding: 1rem 0 0.2rem;
+}
+
+.matrimonial-empty-state h3 {
+  margin: 0 0 0.5rem;
+  color: #2d1b33;
+}
+
+.matrimonial-request-card,
+.matrimonial-message-card {
+  padding: 1rem;
+}
+
+.matrimonial-request-meta,
+.matrimonial-message-meta {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.matrimonial-message-actions {
+  display: grid;
+  gap: 0.55rem;
+  width: 100%;
+}
+
+.matrimonial-message-actions input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #d9cfd8;
+  background: #fff;
+  padding: 0.75rem 0.85rem;
+  font: inherit;
+}
+
+.matrimonial-insights-card {
+  margin-top: 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(72, 42, 76, 0.08);
+  background: #fcf8fb;
+  padding: 1rem;
+}
+
+.matrimonial-insights-card h4 {
+  margin: 0;
+  color: #2d1b33;
+}
+
+.matrimonial-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.matrimonial-admin-card {
+  padding: 1rem;
+}
+
+.matrimonial-admin-card strong {
+  display: block;
+  font-size: 1.8rem;
+  color: #2d1b33;
+}
+
+@media (max-width: 1200px) {
+  .matrimonial-content-grid {
+    grid-template-columns: minmax(260px, 0.95fr) minmax(0, 1.4fr);
+  }
+
+  .matrimonial-detail-rail {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1024px) {
+  .matrimonial-hero,
+  .matrimonial-overview,
+  .matrimonial-content-grid,
+  .matrimonial-match-grid,
+  .matrimonial-admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .matrimonial-shell {
+    padding: 1rem 0.8rem 2rem;
+  }
+
+  .matrimonial-hero,
+  .matrimonial-panel,
+  .matrimonial-stat-card {
+    border-radius: 20px;
+    padding: 1rem;
+  }
+
+  .matrimonial-modal-backdrop {
+    padding: 5rem 0.75rem 1rem;
+  }
+
+  .matrimonial-modal {
+    max-height: calc(100vh - 6rem);
+    border-radius: 20px;
+    padding: 1rem;
+  }
+
+  .matrimonial-form-grid,
+  .matrimonial-search-grid,
+  .matrimonial-detail-grid,
+  .matrimonial-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .matrimonial-panel-heading,
+  .matrimonial-request-card,
+  .matrimonial-message-card,
+  .matrimonial-score-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .matrimonial-card-actions {
+    padding: 0 1rem 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .matrimonial-hero {
+    padding: 1.25rem;
+    gap: 1rem;
+  }
+
+  .matrimonial-hero-card,
+  .matrimonial-panel,
+  .matrimonial-stat-card,
+  .matrimonial-modal {
+    padding: 0.95rem;
+  }
+
+  .matrimonial-hero-card strong {
+    font-size: 1.25rem;
+  }
+
+  .matrimonial-hero h1 {
+    font-size: 2rem;
+  }
+
+  .matrimonial-subtitle,
+  .matrimonial-hero-card p,
+  .matrimonial-banner,
+  .matrimonial-panel p {
+    font-size: 0.95rem;
+  }
+
+  .matrimonial-tab {
+    padding: 0.6rem 0.9rem;
+    font-size: 0.9rem;
+  }
+
+  .matrimonial-content-grid,
+  .matrimonial-admin-grid,
+  .matrimonial-overview,
+  .matrimonial-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .matrimonial-admin-card {
+    padding: 0.9rem;
+  }
+
+  .matrimonial-message-card,
+  .matrimonial-request-card {
+    padding: 0.9rem;
+  }
+
+  .matrimonial-message-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .matrimonial-card-actions {
+    padding: 0.75rem 0.75rem 0.5rem;
+  }
+
+  .matrimonial-modal-backdrop {
+    padding: 3rem 0.75rem 1rem;
+  }
+}
+
+/* Profile Completion Progress Bar */
+.profile-completion-container {
+  width: 100%;
+  height: 8px;
+  background: #e5dce8;
+  border-radius: 4px;
+  margin: 1rem 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.profile-completion-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #a27d48 0%, #bc8b53 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.profile-completion-text {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #7f486f;
+  text-align: center;
+}
+
+.matrimonial-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding: 1rem 0;
+}
+
+.matrimonial-pagination button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d9cfd8;
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  transition: all 0.2s ease;
+}
+
+.matrimonial-pagination button:hover:not(:disabled) {
+  background: #f6edf5;
+  border-color: #bc8b53;
+}
+
+.matrimonial-pagination button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.matrimonial-pagination span {
+  font-weight: 600;
+  color: #2d1b33;
+}

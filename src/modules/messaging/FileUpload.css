@@ -1,0 +1,163 @@
+.file-upload-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.7);
+  z-index: 1000;
+}
+
+.file-upload-modal {
+  width: min(720px, calc(100vw - 32px));
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+  overflow: hidden;
+}
+
+.upload-header,
+.upload-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+}
+
+.upload-header {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.upload-content {
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.file-input {
+  display: none;
+}
+
+.file-input-label {
+  display: grid;
+  gap: 8px;
+  place-items: center;
+  padding: 28px 16px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 16px;
+  cursor: pointer;
+  color: #475569;
+}
+
+.upload-icon {
+  font-size: 1.8rem;
+}
+
+.file-limits {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.selected-files,
+.files-list {
+  display: grid;
+  gap: 12px;
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+}
+
+.file-info,
+.file-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-details {
+  display: grid;
+  gap: 4px;
+}
+
+.file-name {
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.file-size {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.upload-progress {
+  min-width: 120px;
+  position: relative;
+  background: #e2e8f0;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #2563eb;
+}
+
+.progress-text {
+  display: block;
+  margin-top: 12px;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.upload-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.btn-close,
+.btn-remove-file,
+.btn-cancel,
+.btn-upload {
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.btn-close,
+.btn-remove-file {
+  width: 36px;
+  height: 36px;
+  background: #f1f5f9;
+}
+
+.btn-cancel,
+.btn-upload {
+  padding: 10px 16px;
+}
+
+.btn-upload {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.btn-upload:disabled,
+.btn-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

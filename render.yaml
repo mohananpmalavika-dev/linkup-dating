@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: linkup-backend
+    runtime: node
+    buildCommand: cd backend && npm install --legacy-peer-deps
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: linkup-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        value: https://your-frontend.onrender.com
+    region: oregon
+    plan: free
+
+  - type: static_site
+    name: linkup-frontend
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    staticPublishPath: ./build
+    envVars:
+      - key: REACT_APP_API_URL
+        value: https://linkup-backend.onrender.com/api
+      - key: REACT_APP_BACKEND_URL
+        value: https://linkup-backend.onrender.com
+    region: oregon
+    routes:
+      - path: /
+        priority: 100
+
+databases:
+  - name: linkup-db
+    databaseName: linkup_dating
+    user: postgres
+    region: oregon
+    plan: free
