@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from '../router';
 import '../styles/Matches.css';
 import datingProfileService from '../services/datingProfileService';
 
@@ -17,6 +18,7 @@ const buildLikeProfileContext = (like) => ({
 });
 
 const Matches = ({ onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) => {
+  const location = useLocation();
   const [matches, setMatches] = useState([]);
   const [likesReceived, setLikesReceived] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -24,12 +26,27 @@ const Matches = ({ onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onSt
   const [likingBackUserId, setLikingBackUserId] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
+  const [navigationNotice, setNavigationNotice] = useState('');
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     loadMatches();
     loadLikesReceived();
   }, []);
+
+  useEffect(() => {
+    if (!location.state?.focusMessages) {
+      setNavigationNotice('');
+      return;
+    }
+
+    if (matches.length > 0) {
+      setNavigationNotice('Opening messages is available once you choose a match.');
+      return;
+    }
+
+    setNavigationNotice('No conversations yet. Match with someone first, then tap Messages to open the chat.');
+  }, [location.state?.focusMessages, location.state?.messagesRequestedAt, matches.length]);
 
   const loadMatches = async () => {
     setLoading(true);
@@ -178,6 +195,12 @@ const Matches = ({ onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onSt
         {actionError ? (
           <div className="likes-you-feedback" role="status">
             {actionError}
+          </div>
+        ) : null}
+
+        {navigationNotice ? (
+          <div className="matches-navigation-notice" role="status">
+            {navigationNotice}
           </div>
         ) : null}
 

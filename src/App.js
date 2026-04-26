@@ -474,7 +474,7 @@ const AppContent = () => {
     setIncomingCall(null);
   };
 
-  const handleNavigationChange = (page) => {
+  const handleNavigationChange = async (page) => {
     switch (page) {
       case 'browse':
         navigate('/browse');
@@ -483,13 +483,29 @@ const AppContent = () => {
         navigate('/matches');
         break;
       case 'messages':
-        // If there's a last opened match route, go to it
         if (lastOpenedMatchRoute) {
           navigate(lastOpenedMatchRoute);
-        } else {
-          // Otherwise navigate to matches to select a conversation
-          navigate('/matches', { state: { focusMessages: true } });
+          break;
         }
+
+        try {
+          const matchesData = await datingProfileService.getMatches(1);
+          const firstMatch = normalizeProfileContext(matchesData.matches?.[0]);
+
+          if (firstMatch?.matchId) {
+            handleOpenMessages(firstMatch, '/matches');
+            break;
+          }
+        } catch (messagesNavigationError) {
+          console.error('Failed to load a conversation for messages navigation:', messagesNavigationError);
+        }
+
+        navigate('/matches', {
+          state: {
+            focusMessages: true,
+            messagesRequestedAt: Date.now()
+          }
+        });
         break;
       case 'chatrooms':
         navigate('/chatrooms');

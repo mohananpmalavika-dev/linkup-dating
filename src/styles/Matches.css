@@ -150,6 +150,16 @@
   font-weight: 600;
 }
 
+.matches-navigation-notice {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #eef4ff;
+  color: #3150a6;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .like-card {
   display: flex;
   gap: 12px;
