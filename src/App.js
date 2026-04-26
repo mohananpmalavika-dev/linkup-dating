@@ -13,7 +13,7 @@ import Matches from './components/Matches';
 import DatingMessaging from './components/DatingMessaging';
 import DatingProfile from './components/DatingProfile';
 import VideoDating from './components/VideoDating';
-import { getStoredAuthToken, storeAuthToken, clearStoredAuthToken, storeUserData } from './utils/auth';
+import { getStoredAuthToken, storeAuthToken, clearStoredAuthToken, storeUserData, getStoredUserData } from './utils/auth';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -22,11 +22,22 @@ function App() {
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [videoCallActive, setVideoCallActive] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState(null);
+  const [userName, setUserName] = useState('');
 
   useEffect(() => {
     const token = getStoredAuthToken();
-    setIsAuthenticated(!!token);
-    setCurrentPage(token ? 'discover' : 'launch');
+    const authenticated = !!token;
+    setIsAuthenticated(authenticated);
+    setCurrentPage(authenticated ? 'discover' : 'launch');
+    
+    // Get user data if authenticated
+    if (authenticated) {
+      const userData = getStoredUserData();
+      if (userData) {
+        setUserName(userData.firstName || userData.username || userData.email || '');
+      }
+    }
+    
     setLoading(false);
   }, []);
 
@@ -110,6 +121,9 @@ function App() {
                       enabledModules={['dating']}
                       language="en"
                       onLanguageChange={() => {}}
+                      isAuthenticated={isAuthenticated}
+                      onLogout={handleLogout}
+                      userName={userName}
                     />
                   ) : currentPage === 'signup' ? (
                     <DatingSignUp
@@ -136,6 +150,9 @@ function App() {
                       enabledModules={['dating']}
                       language="en"
                       onLanguageChange={() => {}}
+                      isAuthenticated={isAuthenticated}
+                      onLogout={handleLogout}
+                      userName={userName}
                     />
                   )
                 ) : (
@@ -211,6 +228,9 @@ function App() {
                   enabledModules={['dating']}
                   language="en"
                   onLanguageChange={() => {}}
+                  isAuthenticated={isAuthenticated}
+                  onLogout={handleLogout}
+                  userName={userName}
                 />
               )
             } />
