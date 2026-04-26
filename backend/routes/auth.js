@@ -111,6 +111,52 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// CHECK USERNAME AVAILABILITY
+router.get('/check-username', async (req, res) => {
+  try {
+    const { username } = req.query;
+
+    if (!username) {
+      return res.status(400).json({ error: 'Username required' });
+    }
+
+    // Check if username exists in dating_profiles
+    const result = await db.query(
+      'SELECT id FROM dating_profiles WHERE first_name ILIKE $1 OR username ILIKE $1 LIMIT 1',
+      [username]
+    );
+
+    const available = result.rows.length === 0;
+    res.json({ available, username });
+  } catch (err) {
+    console.error('Check username error:', err);
+    res.status(500).json({ error: 'Failed to check username' });
+  }
+});
+
+// CHECK EMAIL AVAILABILITY
+router.get('/check-email', async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email required' });
+    }
+
+    // Check if email exists in users
+    const result = await db.query(
+      'SELECT id FROM users WHERE email ILIKE $1 LIMIT 1',
+      [email]
+    );
+
+    const available = result.rows.length === 0;
+    res.json({ available, email });
+  } catch (err) {
+    console.error('Check email error:', err);
+    res.status(500).json({ error: 'Failed to check email' });
+  }
+});
+
 // VERIFY TOKEN
 router.get('/verify', (req, res) => {
   const authHeader = req.headers['authorization'];

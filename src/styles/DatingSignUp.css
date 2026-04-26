@@ -135,6 +135,38 @@
   min-height: 80px;
 }
 
+/* Email Input Wrapper */
+.email-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.email-input-wrapper input {
+  flex: 1;
+}
+
+.email-input-wrapper .checking,
+.email-input-wrapper .available,
+.email-input-wrapper .unavailable {
+  position: absolute;
+  right: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.email-input-wrapper .checking {
+  color: #ffc107;
+}
+
+.email-input-wrapper .available {
+  color: #4caf50;
+}
+
+.email-input-wrapper .unavailable {
+  color: #ff6b6b;
+}
+
 /* Interests Grid */
 .interests-grid {
   display: grid;

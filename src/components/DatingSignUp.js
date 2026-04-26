@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { authService } from '../services/authService';
 import '../styles/DatingSignUp.css';
 
 /**
@@ -12,6 +13,9 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [emailAvailable, setEmailAvailable] = useState(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const emailCheckTimeoutRef = React.useRef(null);
 
   const [formData, setFormData] = useState({
     // Step 1: Auth
@@ -43,6 +47,25 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick }) => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+
+    // Check email availability with debounce
+    if (name === 'email' && value.includes('@')) {
+      setCheckingEmail(true);
+      if (emailCheckTimeoutRef.current) {
+        clearTimeout(emailCheckTimeoutRef.current);
+      }
+      emailCheckTimeoutRef.current = setTimeout(async () => {
+        try {
+          const result = await authService.checkEmail(value);
+          setEmailAvailable(result.available);
+        } catch (err) {
+          console.error('Failed to check email:', err);
+          setEmailAvailable(null);
+        } finally {
+          setCheckingEmail(false);
+        }
+      }, 500);
+    }
   };
 
   const handleInterestToggle = (interest) => {
@@ -72,6 +95,14 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick }) => {
       setError('Passwords do not match');
       return;
     }
+    if (emailAvailable === false) {
+      setError('This email is already registered');
+      return;
+    }
+    if (emailAvailable === null) {
+      setError('Please wait while we check your email availability');
+      return;
+    }
     setStep(2);
   };
 
@@ -89,36 +120,49 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick }) => {
     setError('');
 
     try {
-      const formDataToSend = new FormData();
-
-      // Auth info
-      formDataToSend.append('email', formData.email);
-      formDataToSend.append('password', formData.password);
-
-      // Profile info
-      formDataToSend.append('firstName', formData.firstName);
-      formDataToSend.append('age', formData.age);
-      formDataToSend.append('gender', formData.gender);
-      formDataToSend.append('city', formData.city);
-      formDataToSend.append('state', formData.state);
-      formDataToSend.append('country', formData.country);
-      formDataToSend.append('bio', formData.bio);
-      formDataToSend.append('relationshipGoals', formData.relationshipGoals);
-      formDataToSend.append('interests', JSON.stringify(formData.interests));
-      formDataToSend.append('height', formData.height);
-      formDataToSend.append('occupation', formData.occupation);
-      formDataToSend.append('education', formData.education);
-
-      // Photos
-      formData.photos.forEach((photo, idx) => {
-        formDataToSend.append(`photos`, photo);
+      // Step 1: Create user account via auth endpoint
+      const authResponse = await axios.post(`${API_BASE_URL}/auth/signup`, {
+        email: formData.email,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword
       });
 
-      const response = await axios.post(`${API_BASE_URL}/dating/signup`, formDataToSend, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const { token, user } = authResponse.data;
+
+      // Step 2: Create dating profile
+      const profileResponse = await axios.post(`${API_BASE_URL}/dating/profiles`, {
+        firstName: formData.firstName,
+        age: formData.age,
+        gender: formData.gender,
+        city: formData.city,
+        state: formData.state,
+        country: formData.country,
+        bio: formData.bio,
+        relationshipGoals: formData.relationshipGoals,
+        interests: formData.interests,
+        height: formData.height,
+        occupation: formData.occupation,
+        education: formData.education,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
-      onSignUpSuccess?.(response.data.token, response.data.user);
+      // Step 3: Upload photos if any
+      if (formData.photos.length > 0) {
+        const photoFormData = new FormData();
+        formData.photos.forEach((photo, idx) => {
+          photoFormData.append('photos', photo);
+        });
+
+        await axios.post(`${API_BASE_URL}/dating/profiles/me/photos`, photoFormData, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      }
+
+      onSignUpSuccess?.(token, user);
       setSuccess('Account created successfully!');
     } catch (err) {
       setError(err.response?.data?.error || 'Sign up failed');
@@ -150,13 +194,18 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick }) => {
             <h2>Create Your Account</h2>
             <div className="form-group">
               <label>Email</label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                placeholder="your@email.com"
-              />
+              <div className="email-input-wrapper">
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  placeholder="your@email.com"
+                />
+                {checkingEmail && <span className="checking">Checking...</span>}
+                {!checkingEmail && emailAvailable === true && <span className="available">✓ Available</span>}
+                {!checkingEmail && emailAvailable === false && <span className="unavailable">✗ Not Available</span>}
+              </div>
             </div>
             <div className="form-group">
               <label>Password</label>
