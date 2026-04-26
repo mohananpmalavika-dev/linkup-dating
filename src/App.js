@@ -93,128 +93,127 @@ function App() {
       <AppProvider onLogout={handleLogout}>
         <BrowserRouter>
           <Routes>
-            {!isAuthenticated ? (
-              <>
-                {currentPage === 'launch' && (
-                  <Route
-                    path="*"
-                    element={
-                      <LaunchPage
-                        onSelectRegistrationType={(type) => {
-                          if (type === 'login') {
-                            setCurrentPage('login');
-                          } else if (type === 'user') {
-                            setCurrentPage('signup');
-                          }
-                        }}
-                        enabledModules={['dating']}
-                        language="en"
-                        onLanguageChange={() => {}}
-                      />
-                    }
-                  />
-                )}
-                {currentPage === 'signup' && (
-                  <Route
-                    path="*"
-                    element={
-                      <DatingSignUp
-                        onSignUpSuccess={handleSignUpSuccess}
-                        onLoginClick={() => setCurrentPage('login')}
-                        onBackToLaunch={() => setCurrentPage('launch')}
-                      />
-                    }
-                  />
-                )}
-                {currentPage === 'login' && (
-                  <Route
-                    path="*"
-                    element={
-                      <Login
-                        registrationType="login"
-                        onLoginSuccess={handleLoginSuccess}
-                        onBackToLaunch={() => setCurrentPage('launch')}
-                        onSignUpClick={() => setCurrentPage('signup')}
-                      />
-                    }
-                  />
-                )}
-                {currentPage !== 'launch' && currentPage !== 'signup' && currentPage !== 'login' && (
-                  <Route
-                    path="*"
-                    element={
-                      <LaunchPage
-                        onSelectRegistrationType={(type) => {
-                          if (type === 'login') {
-                            setCurrentPage('login');
-                          } else if (type === 'user') {
-                            setCurrentPage('signup');
-                          }
-                        }}
-                        enabledModules={['dating']}
-                        language="en"
-                        onLanguageChange={() => {}}
-                      />
-                    }
-                  />
-                )}
-              </>
-            ) : (
-              <>
-                <div className="dating-app">
-                  {videoCallActive && matchedProfile ? (
-                    <VideoDating
-                      matchedProfile={matchedProfile}
-                      onEndCall={handleEndVideoCall}
+            {/* Unauthenticated Routes */}
+            <Route
+              path="/"
+              element={
+                !isAuthenticated ? (
+                  currentPage === 'launch' ? (
+                    <LaunchPage
+                      onSelectRegistrationType={(type) => {
+                        if (type === 'login') {
+                          setCurrentPage('login');
+                        } else if (type === 'user') {
+                          setCurrentPage('signup');
+                        }
+                      }}
+                      enabledModules={['dating']}
+                      language="en"
+                      onLanguageChange={() => {}}
+                    />
+                  ) : currentPage === 'signup' ? (
+                    <DatingSignUp
+                      onSignUpSuccess={handleSignUpSuccess}
+                      onLoginClick={() => setCurrentPage('login')}
+                      onBackToLaunch={() => setCurrentPage('launch')}
+                    />
+                  ) : currentPage === 'login' ? (
+                    <Login
+                      registrationType="login"
+                      onLoginSuccess={handleLoginSuccess}
+                      onBackToLaunch={() => setCurrentPage('launch')}
+                      onSignUpClick={() => setCurrentPage('signup')}
                     />
                   ) : (
-                    <>
-                      {/* Main Content */}
-                      <div className="app-content">
-                        {currentPage === 'discover' && (
-                          <DiscoveryCards
-                            onMatch={handleMatch}
-                            onProfileView={(profile) => setSelectedMatch(profile)}
-                          />
-                        )}
-                        {currentPage === 'browse' && (
-                          <BrowseProfiles
-                            onProfileSelect={setSelectedMatch}
-                            onMatch={handleMatch}
-                          />
-                        )}
-                        {currentPage === 'matches' && (
-                          <Matches
-                            onSelectMatch={(match) => {
-                              setSelectedMatch(match);
-                              setCurrentPage('messages');
-                            }}
-                            onUnmatch={() => setCurrentPage('discover')}
-                          />
-                        )}
-                        {currentPage === 'messages' && (
-                          <DatingMessaging
-                            matchedProfile={selectedMatch}
-                            onVideoCall={handleVideoCall}
-                          />
-                        )}
-                        {currentPage === 'profile' && (
-                          <DatingProfile onLogout={handleLogout} />
-                        )}
-                      </div>
-
-                      {/* Bottom Navigation */}
-                      <DatingNavigation
-                        currentPage={currentPage}
-                        onPageChange={setCurrentPage}
-                        unreadCount={0}
-                        matchCount={0}
+                    <LaunchPage
+                      onSelectRegistrationType={(type) => {
+                        if (type === 'login') {
+                          setCurrentPage('login');
+                        } else if (type === 'user') {
+                          setCurrentPage('signup');
+                        }
+                      }}
+                      enabledModules={['dating']}
+                      language="en"
+                      onLanguageChange={() => {}}
+                    />
+                  )
+                ) : (
+                  <div className="dating-app">
+                    {videoCallActive && matchedProfile ? (
+                      <VideoDating
+                        matchedProfile={matchedProfile}
+                        onEndCall={handleEndVideoCall}
                       />
-                    </>
-                  )}
+                    ) : (
+                      <>
+                        <div className="app-content">
+                          {currentPage === 'discover' && (
+                            <DiscoveryCards
+                              onMatch={handleMatch}
+                              onProfileView={(profile) => setSelectedMatch(profile)}
+                            />
+                          )}
+                          {currentPage === 'browse' && (
+                            <BrowseProfiles
+                              onProfileSelect={setSelectedMatch}
+                              onMatch={handleMatch}
+                            />
+                          )}
+                          {currentPage === 'matches' && (
+                            <Matches
+                              onSelectMatch={(match) => {
+                                setSelectedMatch(match);
+                                setCurrentPage('messages');
+                              }}
+                              onUnmatch={() => setCurrentPage('discover')}
+                            />
+                          )}
+                          {currentPage === 'messages' && (
+                            <DatingMessaging
+                              matchedProfile={selectedMatch}
+                              onVideoCall={handleVideoCall}
+                            />
+                          )}
+                          {currentPage === 'profile' && (
+                            <DatingProfile onLogout={handleLogout} />
+                          )}
+                        </div>
+
+                        <DatingNavigation
+                          currentPage={currentPage}
+                          onPageChange={setCurrentPage}
+                          unreadCount={0}
+                          matchCount={0}
+                        />
+                      </>
+                    )}
+                  </div>
+                )
+              }
+            />
+            {/* Catch-all route */}
+            <Route path="*" element={
+              isAuthenticated ? (
+                <div className="dating-app">
+                  <DiscoveryCards onMatch={handleMatch} onProfileView={(profile) => setSelectedMatch(profile)} />
+                  <DatingNavigation currentPage="discover" onPageChange={setCurrentPage} unreadCount={0} matchCount={0} />
                 </div>
-              </>
-            )}
+              ) : (
+                <LaunchPage
+                  onSelectRegistrationType={(type) => {
+                    if (type === 'login') {
+                      setCurrentPage('login');
+                    } else if (type === 'user') {
+                      setCurrentPage('signup');
+                    }
+                  }}
+                  enabledModules={['dating']}
+                  language="en"
+                  onLanguageChange={() => {}}
+                />
+              )
+            } />
           </Routes>
         </BrowserRouter>
       </AppProvider>
