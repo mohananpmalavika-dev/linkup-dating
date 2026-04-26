@@ -8,10 +8,6 @@ const moduleFallbacks = {
     title: "Local Market",
     description: "Discover local vendors, fresh produce, handmade goods, and neighborhood services.",
   },
-  astrology: {
-    title: "AstroNila",
-    description: "Daily horoscope, Vedic insights, and personalized astrology readings for all zodiac signs.",
-  },
 };
 
 const openExternalLink = (url) => {
@@ -54,7 +50,6 @@ const LaunchPage = ({
     VibeHub: "socialmedia",
     "ReminderAlert - Todo List": "reminderalert",
     "SOS Safety Center": "sosalert",
-    "AstroNila": "astrology",
   };
 
   const filteredFeatures = launch.features.filter(([name]) => enabledModules.includes(moduleMapping[name]));
@@ -145,7 +140,7 @@ const LaunchPage = ({
       )}
 
       <section className="launch-hero">
-        <div className="kerala-hero-art" aria-hidden="true" />
+        <div className="dating-hero-art" aria-hidden="true" />
         <div className="launch-hero-content">
           <div className="language-control">
             <label htmlFor="language-select">{launch.languageLabel}</label>

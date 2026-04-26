@@ -541,7 +541,7 @@ const Login = ({
         } else if (isAdminFlow || (isLoginFlow && isAdminEmail && loginRole === "entrepreneur")) {
           mergedUser = {
             ...response.data.user,
-            name: "NilaHub Admin",
+            name: "LinkUp Admin",
             email: ADMIN_EMAIL,
             avatar: "A",
             role: "admin",
