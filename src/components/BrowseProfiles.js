@@ -1,6 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import '../styles/BrowseProfiles.css';
 import datingProfileService from '../services/datingProfileService';
+
+const defaultFilters = {
+  ageRange: { min: 18, max: 65 },
+  locationRadius: 50,
+  relationshipGoals: ['dating', 'relationship'],
+  interests: [],
+  heightRange: { min: 150, max: 210 }
+};
 
 /**
  * BrowseProfiles Component
@@ -12,24 +20,14 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  const [filters, setFilters] = useState({
-    ageRange: { min: 18, max: 65 },
-    locationRadius: 50,
-    relationshipGoals: ['dating', 'relationship'],
-    interests: [],
-    heightRange: { min: 150, max: 210 },
-  });
+  const [filters, setFilters] = useState(defaultFilters);
 
   // Load profiles on mount or filter change
-  useEffect(() => {
-    searchProfiles();
-  }, []);
-
-  const searchProfiles = async () => {
+  const searchProfiles = useCallback(async (activeFilters) => {
     setLoading(true);
     setError('');
     try {
-      const data = await datingProfileService.searchProfiles(filters);
+      const data = await datingProfileService.searchProfiles(activeFilters);
       setProfiles(data.profiles || []);
     } catch (err) {
       setError('Failed to search profiles');
@@ -37,7 +35,11 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    searchProfiles(defaultFilters);
+  }, [searchProfiles]);
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({
@@ -64,7 +66,10 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
     try {
       const result = await datingProfileService.likeProfile(profile.userId);
       if (result.isMatch) {
-        onMatch?.(profile);
+        onMatch?.({
+          ...profile,
+          matchId: result.match?.id || profile.matchId || null
+        });
       }
     } catch (err) {
       console.error('Failed to like profile:', err);
@@ -72,7 +77,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   };
 
   const handleApplyFilters = () => {
-    searchProfiles();
+    searchProfiles(filters);
     setShowFilters(false);
   };
 
@@ -194,7 +199,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       {error && (
         <div className="error-container">
           <p>{error}</p>
-          <button onClick={searchProfiles}>Retry</button>
+          <button onClick={() => searchProfiles(filters)}>Retry</button>
         </div>
       )}
 

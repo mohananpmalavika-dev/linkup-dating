@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import '../styles/Matches.css';
 import datingProfileService from '../services/datingProfileService';
 
@@ -6,11 +6,11 @@ import datingProfileService from '../services/datingProfileService';
  * Matches Component
  * Display and manage user matches
  */
-const Matches = ({ onSelectMatch, onUnmatch }) => {
+const Matches = ({ onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) => {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState('all'); // all, recent, favorites
+  const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     loadMatches();
@@ -19,35 +19,49 @@ const Matches = ({ onSelectMatch, onUnmatch }) => {
   const loadMatches = async () => {
     setLoading(true);
     setError('');
+
     try {
       const data = await datingProfileService.getMatches(50);
       setMatches(data.matches || []);
-    } catch (err) {
+    } catch (loadError) {
       setError('Failed to load matches');
-      console.error(err);
+      console.error(loadError);
     } finally {
       setLoading(false);
     }
   };
 
   const handleUnmatch = async (matchId) => {
-    if (window.confirm('Unmatch with this person?')) {
-      try {
-        await datingProfileService.unmatch(matchId);
-        setMatches(matches.filter(m => m.id !== matchId));
-        onUnmatch?.(matchId);
-      } catch (err) {
-        console.error('Failed to unmatch:', err);
-      }
+    if (!window.confirm('Unmatch with this person?')) {
+      return;
+    }
+
+    try {
+      await datingProfileService.unmatch(matchId);
+      setMatches((currentMatches) => currentMatches.filter((match) => match.id !== matchId));
+      onUnmatch?.(matchId);
+    } catch (unmatchError) {
+      console.error('Failed to unmatch:', unmatchError);
     }
   };
 
-  const filteredMatches = matches.filter(match => {
-    if (filter === 'recent') {
-      return true; // Sort by recent
-    }
-    return true;
-  });
+  const filteredMatches = matches
+    .filter((match) => {
+      if (filter === 'unread') {
+        return (match.unreadCount || 0) > 0;
+      }
+
+      return true;
+    })
+    .sort((leftMatch, rightMatch) => {
+      if (filter === 'recent') {
+        const leftDate = leftMatch.lastMessageAt || leftMatch.matchedAt || leftMatch.createdAt || '';
+        const rightDate = rightMatch.lastMessageAt || rightMatch.matchedAt || rightMatch.createdAt || '';
+        return new Date(rightDate).getTime() - new Date(leftDate).getTime();
+      }
+
+      return 0;
+    });
 
   if (loading) {
     return (
@@ -85,10 +99,10 @@ const Matches = ({ onSelectMatch, onUnmatch }) => {
             Recent
           </button>
           <button
-            className={`filter-btn ${filter === 'favorites' ? 'active' : ''}`}
-            onClick={() => setFilter('favorites')}
+            className={`filter-btn ${filter === 'unread' ? 'active' : ''}`}
+            onClick={() => setFilter('unread')}
           >
-            Favorites
+            Unread
           </button>
         </div>
       </div>
@@ -96,7 +110,7 @@ const Matches = ({ onSelectMatch, onUnmatch }) => {
       {filteredMatches.length > 0 ? (
         <div className="matches-list">
           {filteredMatches.map((match) => (
-            <div key={match.userId} className="match-item">
+            <div key={match.id} className="match-item">
               <div
                 className="match-photo"
                 onClick={() => onSelectMatch?.(match)}
@@ -106,21 +120,23 @@ const Matches = ({ onSelectMatch, onUnmatch }) => {
                     : 'linear-gradient(135deg, #667eea, #764ba2)'
                 }}
               >
-                {match.profileVerified && (
+                {match.profileVerified ? (
                   <div className="verified-indicator">✓</div>
-                )}
+                ) : null}
               </div>
 
               <div className="match-info">
                 <div className="match-header-row">
                   <h3>{match.firstName}, {match.age}</h3>
-                  {match.lastMessage && (
-                    <span className="unread-badge">●</span>
-                  )}
+                  {(match.unreadCount || 0) > 0 ? (
+                    <span className="unread-badge">{match.unreadCount}</span>
+                  ) : null}
                 </div>
                 <p className="match-location">📍 {match.location?.city}</p>
                 <p className="last-message">
-                  {match.lastMessage?.text?.substring(0, 50)}...
+                  {match.lastMessage?.text
+                    ? `${match.lastMessage.text.substring(0, 50)}${match.lastMessage.text.length > 50 ? '...' : ''}`
+                    : 'Start the conversation'}
                 </p>
               </div>
 
@@ -134,6 +150,7 @@ const Matches = ({ onSelectMatch, onUnmatch }) => {
                 </button>
                 <button
                   className="btn-video"
+                  onClick={() => onStartVideoCall?.(match)}
                   title="Start Video Call"
                 >
                   📹
@@ -141,15 +158,15 @@ const Matches = ({ onSelectMatch, onUnmatch }) => {
                 <button
                   className="btn-more"
                   onClick={() => {
-                    const menu = document.querySelector(`#menu-${match.userId}`);
+                    const menu = document.querySelector(`#menu-${match.id}`);
                     menu?.classList.toggle('visible');
                   }}
                   title="More options"
                 >
                   ⋯
                 </button>
-                <div id={`menu-${match.userId}`} className="action-menu">
-                  <button onClick={() => onSelectMatch?.(match)}>
+                <div id={`menu-${match.id}`} className="action-menu">
+                  <button onClick={() => onViewProfile?.(match)}>
                     View Profile
                   </button>
                   <button onClick={() => handleUnmatch(match.id)}>

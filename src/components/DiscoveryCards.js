@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/DiscoveryCards.css';
 import datingProfileService from '../services/datingProfileService';
 
@@ -46,7 +46,10 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     try {
       const result = await datingProfileService.likeProfile(profile.userId);
       if (result.isMatch) {
-        onMatch?.(profile);
+        onMatch?.({
+          ...profile,
+          matchId: result.match?.id || profile.matchId || null
+        });
       }
       moveToNextCard();
     } catch (err) {

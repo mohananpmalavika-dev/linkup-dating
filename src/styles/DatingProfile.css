@@ -39,6 +39,36 @@
   flex-direction: column;
 }
 
+.profile-view-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 0;
+  background: white;
+}
+
+.btn-back-inline {
+  padding: 8px 14px;
+  border: none;
+  border-radius: 999px;
+  background: #f0f0f0;
+  color: #333;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-back-inline:hover {
+  background: #e0e0e0;
+}
+
+.profile-inline-error {
+  color: #d32f2f;
+  font-size: 13px;
+  font-weight: 500;
+}
+
 /* Header Section */
 .profile-header-section {
   background: white;
@@ -59,6 +89,16 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.profile-photo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 72px;
+  font-weight: 700;
 }
 
 .verified-badge {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import '../styles/DatingProfile.css';
 import datingProfileService from '../services/datingProfileService';
 
@@ -12,6 +12,11 @@ const DatingProfile = ({ onLogout }) => {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
   const [editData, setEditData] = useState(null);
+  const [stats, setStats] = useState({
+    likes: 0,
+    matches: 0,
+    completion: 0
+  });
 
   useEffect(() => {
     loadProfile();
@@ -20,12 +25,25 @@ const DatingProfile = ({ onLogout }) => {
   const loadProfile = async () => {
     try {
       setLoading(true);
-      const data = await datingProfileService.getMyProfile();
-      setProfile(data);
-      setEditData(data);
-    } catch (err) {
+      setError('');
+
+      const [profileData, matchesData, likesData, completionData] = await Promise.all([
+        datingProfileService.getMyProfile(),
+        datingProfileService.getMatches(100),
+        datingProfileService.getLikesReceived(100),
+        datingProfileService.getProfileCompletion()
+      ]);
+
+      setProfile(profileData);
+      setEditData(profileData);
+      setStats({
+        likes: Array.isArray(likesData) ? likesData.length : 0,
+        matches: matchesData.matches?.length || 0,
+        completion: completionData.profileCompletionPercent || profileData.profileCompletionPercent || 0
+      });
+    } catch (loadError) {
       setError('Failed to load profile');
-      console.error(err);
+      console.error(loadError);
     } finally {
       setLoading(false);
     }
@@ -33,12 +51,23 @@ const DatingProfile = ({ onLogout }) => {
 
   const handleSaveProfile = async () => {
     try {
-      await datingProfileService.updateProfile(editData);
-      setProfile(editData);
+      setError('');
+      const response = await datingProfileService.updateProfile({
+        bio: editData.bio,
+        interests: editData.interests,
+        relationshipGoals: editData.relationshipGoals
+      });
+
+      setProfile(response.profile);
+      setEditData(response.profile);
+      setStats((currentStats) => ({
+        ...currentStats,
+        completion: response.profile?.profileCompletionPercent || currentStats.completion
+      }));
       setEditing(false);
-    } catch (err) {
+    } catch (saveError) {
       setError('Failed to save profile');
-      console.error(err);
+      console.error(saveError);
     }
   };
 
@@ -62,14 +91,13 @@ const DatingProfile = ({ onLogout }) => {
   return (
     <div className="dating-profile-container">
       {editing ? (
-        // Edit Mode
         <div className="profile-edit">
           <h2>Edit Profile</h2>
           <div className="form-group">
             <label>Bio</label>
             <textarea
-              value={editData.bio}
-              onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
+              value={editData.bio || ''}
+              onChange={(event) => setEditData({ ...editData, bio: event.target.value })}
               placeholder="Tell about yourself"
             ></textarea>
           </div>
@@ -77,8 +105,14 @@ const DatingProfile = ({ onLogout }) => {
             <label>Interests</label>
             <input
               type="text"
-              value={editData.interests?.join(', ')}
-              onChange={(e) => setEditData({ ...editData, interests: e.target.value.split(',').map(i => i.trim()) })}
+              value={editData.interests?.join(', ') || ''}
+              onChange={(event) => setEditData({
+                ...editData,
+                interests: event.target.value
+                  .split(',')
+                  .map((interest) => interest.trim())
+                  .filter(Boolean)
+              })}
               placeholder="Separate with commas"
             />
           </div>
@@ -88,115 +122,111 @@ const DatingProfile = ({ onLogout }) => {
           </div>
         </div>
       ) : (
-        // View Mode
         <div className="profile-view">
-          {/* Header */}
           <div className="profile-header-section">
-            {profile.photos && profile.photos.length > 0 && (
+            {profile.photos?.length > 0 ? (
               <div className="profile-photo-main">
                 <img src={profile.photos[0]} alt={profile.firstName} />
-                {profile.profileVerified && (
+                {profile.profileVerified ? (
                   <div className="verified-badge">✓ Verified</div>
-                )}
+                ) : null}
+              </div>
+            ) : (
+              <div className="profile-photo-main profile-photo-fallback">
+                <span>{profile.firstName?.charAt(0) || '?'}</span>
               </div>
             )}
             <h1>{profile.firstName}, {profile.age}</h1>
             <p className="location">📍 {profile.location?.city}, {profile.location?.state}</p>
           </div>
 
-          {/* Stats */}
           <div className="stats-grid">
             <div className="stat-item">
-              <span className="stat-value">27</span>
+              <span className="stat-value">{stats.likes}</span>
               <span className="stat-label">Likes</span>
             </div>
             <div className="stat-item">
-              <span className="stat-value">12</span>
+              <span className="stat-value">{stats.matches}</span>
               <span className="stat-label">Matches</span>
             </div>
             <div className="stat-item">
-              <span className="stat-value">89%</span>
+              <span className="stat-value">{stats.completion}%</span>
               <span className="stat-label">Profile</span>
             </div>
           </div>
 
-          {/* About */}
           <div className="profile-section">
             <h3>About</h3>
-            <p>{profile.bio}</p>
+            <p>{profile.bio || 'Add a bio so people can get to know you.'}</p>
 
             <div className="details-grid">
-              {profile.occupation && (
+              {profile.occupation ? (
                 <div className="detail">
                   <span className="label">Occupation</span>
                   <span className="value">{profile.occupation}</span>
                 </div>
-              )}
-              {profile.education && (
+              ) : null}
+              {profile.education ? (
                 <div className="detail">
                   <span className="label">Education</span>
                   <span className="value">{profile.education}</span>
                 </div>
-              )}
-              {profile.height && (
+              ) : null}
+              {profile.height ? (
                 <div className="detail">
                   <span className="label">Height</span>
                   <span className="value">{profile.height} cm</span>
                 </div>
-              )}
-              {profile.relationshipGoals && (
+              ) : null}
+              {profile.relationshipGoals ? (
                 <div className="detail">
                   <span className="label">Looking For</span>
                   <span className="value">{profile.relationshipGoals}</span>
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
 
-          {/* Interests */}
-          {profile.interests && profile.interests.length > 0 && (
+          {profile.interests?.length > 0 ? (
             <div className="profile-section">
               <h3>Interests</h3>
               <div className="interests-list">
-                {profile.interests.map((interest, idx) => (
-                  <span key={idx} className="interest-tag">{interest}</span>
+                {profile.interests.map((interest) => (
+                  <span key={interest} className="interest-tag">{interest}</span>
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
 
-          {/* Photos Gallery */}
-          {profile.photos && profile.photos.length > 1 && (
+          {profile.photos?.length > 1 ? (
             <div className="profile-section">
               <h3>Photos</h3>
               <div className="photos-gallery">
-                {profile.photos.map((photo, idx) => (
-                  <img key={idx} src={photo} alt={`Photo ${idx + 1}`} />
+                {profile.photos.map((photo, index) => (
+                  <img key={`${photo}-${index}`} src={photo} alt={`${profile.firstName} ${index + 1}`} />
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
 
-          {/* Verification Status */}
           <div className="profile-section">
             <h3>Verification</h3>
             <div className="verification-items">
-              {profile.verifications?.email && (
+              {profile.verifications?.email ? (
                 <div className="verification-item verified">
                   <span>✓ Email Verified</span>
                 </div>
-              )}
-              {profile.verifications?.phone && (
+              ) : null}
+              {profile.verifications?.phone ? (
                 <div className="verification-item verified">
                   <span>✓ Phone Verified</span>
                 </div>
-              )}
-              {profile.verifications?.id && (
+              ) : null}
+              {profile.verifications?.id ? (
                 <div className="verification-item verified">
                   <span>✓ ID Verified</span>
                 </div>
-              )}
-              {!profile.verifications?.id && (
+              ) : (
                 <div className="verification-item pending">
                   <span>⚠ Add ID Verification</span>
                 </div>
@@ -204,10 +234,12 @@ const DatingProfile = ({ onLogout }) => {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div className="profile-actions">
             <button onClick={() => setEditing(true)} className="btn-edit">
               Edit Profile
+            </button>
+            <button onClick={loadProfile} className="btn-cancel">
+              Refresh
             </button>
             <button onClick={onLogout} className="btn-logout">
               Log Out

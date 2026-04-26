@@ -313,6 +313,16 @@ const normalizeProfileRow = (profileRow) => {
 const normalizeMatchRow = (matchRow) => {
   const matchedProfile = matchRow.matched_user_profile || {};
   const photoDetails = normalizePhotoDetails(matchRow.matched_user_photos);
+  const lastMessage = matchRow.last_message
+    ? {
+        id: matchRow.last_message.id,
+        text: matchRow.last_message.text || '',
+        fromUserId: matchRow.last_message.from_user_id,
+        toUserId: matchRow.last_message.to_user_id,
+        createdAt: matchRow.last_message.created_at || null,
+        isRead: Boolean(matchRow.last_message.is_read)
+      }
+    : null;
 
   return {
     id: matchRow.id,
@@ -330,6 +340,7 @@ const normalizeMatchRow = (matchRow) => {
     createdAt: matchRow.created_at || null,
     lastMessageAt: matchRow.last_message_at || null,
     messageCount: matchRow.message_count || 0,
+    unreadCount: Number.parseInt(matchRow.unread_count, 10) || 0,
     status: matchRow.status,
     location: {
       city: matchedProfile.location_city || '',
@@ -337,7 +348,8 @@ const normalizeMatchRow = (matchRow) => {
       country: matchedProfile.location_country || ''
     },
     photos: photoDetails.map((photo) => photo.url),
-    photoDetails
+    photoDetails,
+    lastMessage
   };
 };
 
@@ -685,11 +697,21 @@ router.post('/interactions/like', async (req, res) => {
          RETURNING *`,
         [fromUserId, userId]
       );
+      const persistedMatch = matchResult.rows[0] || (
+        await db.query(
+          `SELECT *
+           FROM matches
+           WHERE user_id_1 = LEAST($1, $2)
+             AND user_id_2 = GREATEST($1, $2)
+           LIMIT 1`,
+          [fromUserId, userId]
+        )
+      ).rows[0];
 
       // Notify matched user
       if (req.io) {
         req.io.emit('new_match', {
-          match: matchResult.rows[0],
+          match: persistedMatch,
           user: { id: fromUserId }
         });
       }
@@ -697,7 +719,7 @@ router.post('/interactions/like', async (req, res) => {
       return res.json({
         message: 'Its a match!',
         isMatch: true,
-        match: matchResult.rows[0]
+        match: persistedMatch
       });
     }
 
@@ -761,7 +783,24 @@ router.get('/matches', async (req, res) => {
                WHERE user_id = CASE WHEN m.user_id_1 = $1 THEN m.user_id_2 ELSE m.user_id_1 END) as matched_user_profile,
               (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
                FROM profile_photos
-               WHERE user_id = CASE WHEN m.user_id_1 = $1 THEN m.user_id_2 ELSE m.user_id_1 END) as matched_user_photos
+               WHERE user_id = CASE WHEN m.user_id_1 = $1 THEN m.user_id_2 ELSE m.user_id_1 END) as matched_user_photos,
+              (SELECT json_build_object(
+                  'id', id,
+                  'text', message,
+                  'from_user_id', from_user_id,
+                  'to_user_id', to_user_id,
+                  'created_at', created_at,
+                  'is_read', is_read
+                )
+               FROM messages
+               WHERE match_id = m.id
+               ORDER BY created_at DESC
+               LIMIT 1) as last_message,
+              (SELECT COUNT(*)
+               FROM messages
+               WHERE match_id = m.id
+                 AND to_user_id = $1
+                 AND is_read = false) as unread_count
        FROM matches m
        WHERE (m.user_id_1 = $1 OR m.user_id_2 = $1) AND m.status = 'active'
        ORDER BY m.matched_at DESC

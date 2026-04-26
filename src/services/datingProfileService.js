@@ -184,6 +184,18 @@ export const datingProfileService = {
   },
 
   /**
+   * Get profile completion summary
+   */
+  getProfileCompletion: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/profiles/me/completion`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch completion';
+    }
+  },
+
+  /**
    * Verify identity
    */
   verifyIdentity: async (verificationData) => {

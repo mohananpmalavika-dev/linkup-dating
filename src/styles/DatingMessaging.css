@@ -15,10 +15,24 @@
   background: white;
 }
 
+.messaging-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .profile-info {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.profile-info-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
 }
 
 .profile-info img {
@@ -41,6 +55,18 @@
   display: block;
 }
 
+.profile-avatar-fallback {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
 .messaging-error {
   padding: 10px 15px;
   background: #fff1f2;
@@ -49,14 +75,26 @@
   font-size: 14px;
 }
 
+.btn-message-back {
+  border: 1px solid #ddd;
+  background: white;
+  color: #333;
+  border-radius: 18px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .btn-video-call {
-  width: 40px;
+  min-width: 72px;
   height: 40px;
-  border-radius: 50%;
+  border-radius: 20px;
   border: none;
   background: #667eea;
   color: white;
-  font-size: 18px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -133,6 +171,15 @@
   opacity: 0.7;
 }
 
+.typing-state {
+  align-self: flex-start;
+  padding: 8px 12px;
+  background: #ececec;
+  color: #666;
+  border-radius: 16px;
+  font-size: 12px;
+}
+
 /* Empty State */
 .messaging-empty {
   display: flex;
@@ -171,13 +218,14 @@
 }
 
 .btn-send {
-  width: 38px;
+  min-width: 62px;
   height: 38px;
-  border-radius: 50%;
+  border-radius: 20px;
   border: none;
   background: #667eea;
   color: white;
-  font-size: 16px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -202,6 +250,11 @@
   }
 
   .profile-info img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .profile-avatar-fallback {
     width: 40px;
     height: 40px;
   }
