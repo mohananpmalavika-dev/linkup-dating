@@ -474,7 +474,7 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                 name="height"
                 value={formData.height}
                 onChange={handleProfileInputChange}
-                placeholder="e.g., 5'8\""
+                placeholder="e.g., 5'8 inches"
               />
             </div>
             <div className="form-group">
