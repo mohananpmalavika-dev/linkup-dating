@@ -26,6 +26,7 @@ const Login = ({
 }) => {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
+  const [otpId, setOtpId] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -396,16 +397,17 @@ const Login = ({
 
       if (response.data.success) {
         setOtpSent(true);
+        setOtpId(response.data.otpId || "");
         setSuccess(response.data.message || "OTP sent to your email");
-        setDevOtp(response.data.devOtp || "");
+        setDevOtp(response.data.devOtp || response.data.otp || "");
       } else {
-        setError(response.data.message || "Failed to send OTP");
+        setError(response.data.message || response.data.error || "Failed to send OTP");
       }
     } catch (err) {
       if (!err.response) {
         setError("Backend is not running. Please start the API server and try again.");
       } else {
-        setError(err.response.data?.message || "Unable to send OTP. Please try again.");
+        setError(err.response.data?.message || err.response.data?.error || "Unable to send OTP. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -433,6 +435,7 @@ const Login = ({
       const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, {
         email,
         otp,
+        otpId,
       });
 
       if (response.data.success && response.data.token && response.data.user) {
@@ -546,13 +549,13 @@ const Login = ({
           mergedUser.registrationType === "admin" ? "admin" : isLoginFlow ? loginRole : mergedUser.registrationType
         );
       } else {
-        setError(response.data.message || "Failed to verify OTP");
+        setError(response.data.message || response.data.error || "Failed to verify OTP");
       }
     } catch (err) {
       if (!err.response) {
         setError("Backend is not running. Please start the API server and try again.");
       } else {
-        setError(err.response.data?.message || "Unable to verify OTP. Please try again.");
+        setError(err.response.data?.message || err.response.data?.error || "Unable to verify OTP. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -561,6 +564,7 @@ const Login = ({
 
   const resetOtpFlow = () => {
     setOtpSent(false);
+    setOtpId("");
     setOtp("");
     setError("");
     setSuccess("");
@@ -615,13 +619,13 @@ const Login = ({
           loginRole
         );
       } else {
-        setSetupUsernameError(response.data.message || "Failed to set username");
+        setSetupUsernameError(response.data.message || response.data.error || "Failed to set username");
       }
     } catch (err) {
       if (!err.response) {
         setSetupUsernameError("Backend is not running. Please start the API server and try again.");
       } else {
-        setSetupUsernameError(err.response.data?.message || "Unable to set username. Please try again.");
+        setSetupUsernameError(err.response.data?.message || err.response.data?.error || "Unable to set username. Please try again.");
       }
     } finally {
       setLoading(false);

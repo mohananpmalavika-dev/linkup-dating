@@ -22,6 +22,141 @@ const getEmailTransporter = () => {
 // OTP storage (in production, use database)
 const otpStorage = new Map();
 
+const normalizeRecipient = (value = '') => String(value || '').trim().toLowerCase();
+
+const buildDisplayNameFromEmail = (email = '') => {
+  const localPart = normalizeRecipient(email).split('@')[0] || 'linkup-user';
+  const words = localPart
+    .replace(/[._-]+/g, ' ')
+    .split(' ')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (words.length === 0) {
+    return 'LinkUp User';
+  }
+
+  return words
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+};
+
+const getUserWithProfileByEmail = async (email) => {
+  const normalizedEmail = normalizeRecipient(email);
+
+  return db.query(
+    `SELECT u.id, u.email, u.created_at, dp.username, dp.first_name
+     FROM users u
+     LEFT JOIN dating_profiles dp ON dp.user_id = u.id
+     WHERE LOWER(u.email) = LOWER($1)
+     LIMIT 1`,
+    [normalizedEmail]
+  );
+};
+
+const ensureUserForOtpLogin = async (email) => {
+  const normalizedEmail = normalizeRecipient(email);
+  const existingUserResult = await getUserWithProfileByEmail(normalizedEmail);
+
+  if (existingUserResult.rows.length > 0) {
+    await db.query(
+      `INSERT INTO user_preferences (user_id)
+       VALUES ($1)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [existingUserResult.rows[0].id]
+    );
+
+    return existingUserResult.rows[0];
+  }
+
+  const fallbackName = buildDisplayNameFromEmail(normalizedEmail);
+  const generatedPasswordHash = await hashPassword(uuidv4());
+  const createdUserResult = await db.query(
+    'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email, created_at',
+    [normalizedEmail, generatedPasswordHash]
+  );
+
+  const createdUser = createdUserResult.rows[0];
+
+  await db.query(
+    `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
+     VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+     ON CONFLICT (user_id) DO NOTHING`,
+    [createdUser.id, fallbackName, 18, 10]
+  );
+
+  await db.query(
+    `INSERT INTO user_preferences (user_id)
+     VALUES ($1)
+     ON CONFLICT (user_id) DO NOTHING`,
+    [createdUser.id]
+  );
+
+  const hydratedUserResult = await getUserWithProfileByEmail(normalizedEmail);
+  return hydratedUserResult.rows[0];
+};
+
+const findStoredOtpEntry = ({ otpId, email, phone }) => {
+  const requestedRecipient = normalizeRecipient(email || phone);
+
+  if (otpId) {
+    const storedData = otpStorage.get(otpId);
+
+    if (!storedData) {
+      return null;
+    }
+
+    if (requestedRecipient && storedData.recipient !== requestedRecipient) {
+      return null;
+    }
+
+    return { otpId, storedData };
+  }
+
+  if (!requestedRecipient) {
+    return null;
+  }
+
+  let latestMatch = null;
+
+  for (const [storedOtpId, storedData] of otpStorage.entries()) {
+    if (storedData.recipient !== requestedRecipient) {
+      continue;
+    }
+
+    if (!latestMatch || storedData.createdAt > latestMatch.storedData.createdAt) {
+      latestMatch = { otpId: storedOtpId, storedData };
+    }
+  }
+
+  return latestMatch;
+};
+
+const buildAuthUserPayload = (userRecord) => {
+  if (!userRecord) {
+    return null;
+  }
+
+  const displayName = userRecord.first_name || buildDisplayNameFromEmail(userRecord.email);
+
+  return {
+    id: userRecord.id,
+    email: userRecord.email,
+    username: userRecord.username || null,
+    name: displayName,
+    avatar: displayName.charAt(0).toUpperCase()
+  };
+};
+
+const methodNotAllowed = (expectedMethod) => (req, res) => {
+  const endpoint = `${req.baseUrl}${req.path}`;
+
+  res.status(405).json({
+    message: `Method ${req.method} not allowed for ${endpoint}. Use ${expectedMethod} ${endpoint}.`,
+    allowedMethods: [expectedMethod]
+  });
+};
+
 // Helper function to hash password
 const hashPassword = async (password) => {
   const salt = await bcrypt.genSalt(10);
@@ -344,6 +479,7 @@ router.post('/contact-means', (req, res) => {
 router.post('/send-otp', async (req, res) => {
   try {
     const { email, phone } = req.body;
+    const recipient = normalizeRecipient(email || phone);
 
     if (!email && !phone) {
       return res.status(400).json({ error: 'Email or phone number required' });
@@ -362,13 +498,17 @@ router.post('/send-otp', async (req, res) => {
     // Store OTP with 10-minute expiration
     otpStorage.set(otpId, {
       otp,
-      recipient: email || phone,
+      recipient,
       createdAt: Date.now(),
       expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
       attempts: 0
     });
 
     console.log(`OTP generated: ${otp} for ${email || phone}`);
+
+    const developmentOtpPayload = process.env.NODE_ENV === 'production'
+      ? {}
+      : { devOtp: otp };
 
     // Send OTP via email
     if (email) {
@@ -401,7 +541,8 @@ router.post('/send-otp', async (req, res) => {
         res.json({
           success: true,
           message: 'OTP sent successfully to your email',
-          otpId
+          otpId,
+          ...developmentOtpPayload
         });
       } catch (emailError) {
         console.error('❌ Email send error:', {
@@ -416,7 +557,8 @@ router.post('/send-otp', async (req, res) => {
           return res.status(500).json({ 
             error: 'Failed to send OTP',
             details: emailError.message,
-            otp: otp  // For development only
+            otpId,
+            devOtp: otp
           });
         }
 
@@ -429,7 +571,8 @@ router.post('/send-otp', async (req, res) => {
       res.json({
         success: true,
         message: 'OTP will be sent via SMS (feature coming soon)',
-        otpId
+        otpId,
+        ...developmentOtpPayload
       });
     }
   } catch (error) {
@@ -438,25 +581,27 @@ router.post('/send-otp', async (req, res) => {
   }
 });
 
+router.all('/send-otp', methodNotAllowed('POST'));
+
 // VERIFY OTP
 router.post('/verify-otp', async (req, res) => {
   try {
-    const { otpId, otp } = req.body;
+    const { otpId, otp, email, phone } = req.body;
 
-    if (!otpId || !otp) {
-      return res.status(400).json({ error: 'OTP ID and OTP required' });
+    if (!otp) {
+      return res.status(400).json({ error: 'OTP required' });
     }
 
-    // Check if OTP exists in storage
-    const storedData = otpStorage.get(otpId);
-
-    if (!storedData) {
-      return res.status(400).json({ error: 'Invalid or expired OTP ID' });
+    const otpEntry = findStoredOtpEntry({ otpId, email, phone });
+    if (!otpEntry) {
+      return res.status(400).json({ error: 'Invalid or expired OTP request' });
     }
+
+    const { otpId: matchedOtpId, storedData } = otpEntry;
 
     // Check if OTP has expired
     if (Date.now() > storedData.expiresAt) {
-      otpStorage.delete(otpId);
+      otpStorage.delete(matchedOtpId);
       return res.status(400).json({ error: 'OTP has expired' });
     }
 
@@ -466,7 +611,7 @@ router.post('/verify-otp', async (req, res) => {
       
       // Lock after 5 failed attempts
       if (storedData.attempts >= 5) {
-        otpStorage.delete(otpId);
+        otpStorage.delete(matchedOtpId);
         return res.status(429).json({ error: 'Too many attempts. Please request a new OTP.' });
       }
 
@@ -477,17 +622,123 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     // OTP verified successfully
-    otpStorage.delete(otpId); // Clear the OTP after successful verification
+    otpStorage.delete(matchedOtpId); // Clear the OTP after successful verification
+
+    const recipientEmail = storedData.recipient.includes('@')
+      ? storedData.recipient
+      : normalizeRecipient(email);
+
+    let authenticatedUser = null;
+    let token = null;
+    let needsUsernameSetup = false;
+
+    if (recipientEmail) {
+      const userRecord = await ensureUserForOtpLogin(recipientEmail);
+      authenticatedUser = buildAuthUserPayload(userRecord);
+      token = generateToken(userRecord.id);
+      needsUsernameSetup = !userRecord.username;
+    }
 
     res.json({
       success: true,
       message: 'OTP verified successfully',
-      verified: true
+      verified: true,
+      token,
+      user: authenticatedUser,
+      needsUsernameSetup
     });
   } catch (error) {
     console.error('Verify OTP error:', error);
     res.status(500).json({ error: 'Failed to verify OTP' });
   }
 });
+
+router.all('/verify-otp', methodNotAllowed('POST'));
+
+router.post('/set-username', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    const username = String(req.body.username || '').trim().toLowerCase();
+
+    if (!token) {
+      return res.status(401).json({ error: 'Access token required' });
+    }
+
+    if (!username) {
+      return res.status(400).json({ error: 'Username required' });
+    }
+
+    if (!/^[a-zA-Z0-9_-]{3,20}$/.test(username)) {
+      return res.status(400).json({
+        error: 'Username can only contain letters, numbers, underscores, and dashes (3-20 characters)'
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key');
+    const userId = decoded.userId || decoded.id;
+
+    const existingUsernameResult = await db.query(
+      'SELECT user_id FROM dating_profiles WHERE LOWER(username) = LOWER($1) LIMIT 1',
+      [username]
+    );
+
+    if (
+      existingUsernameResult.rows.length > 0 &&
+      existingUsernameResult.rows[0].user_id !== userId
+    ) {
+      return res.status(409).json({ error: 'Username is already taken' });
+    }
+
+    const userResult = await db.query(
+      'SELECT id, email FROM users WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const fallbackName = buildDisplayNameFromEmail(userResult.rows[0].email);
+    const profileResult = await db.query(
+      `INSERT INTO dating_profiles (user_id, username, first_name, age, last_active)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id)
+       DO UPDATE SET
+         username = EXCLUDED.username,
+         updated_at = CURRENT_TIMESTAMP,
+         last_active = CURRENT_TIMESTAMP
+       RETURNING user_id, username, first_name`,
+      [userId, username, fallbackName, 18]
+    );
+
+    await db.query(
+      `INSERT INTO user_preferences (user_id)
+       VALUES ($1)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Username saved successfully',
+      user: {
+        id: userId,
+        username: profileResult.rows[0].username,
+        name: profileResult.rows[0].first_name || fallbackName
+      }
+    });
+  } catch (error) {
+    console.error('Set username error:', error);
+
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+
+    res.status(500).json({ error: 'Failed to set username' });
+  }
+});
+
+router.all('/set-username', methodNotAllowed('POST'));
 
 module.exports = router;

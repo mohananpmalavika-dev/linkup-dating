@@ -96,7 +96,7 @@ app.get('/', (req, res) => {
     status: 'running',
     endpoints: {
       health: '/health',
-      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify',
+      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/check-username, /api/auth/check-email, /api/auth/send-otp, /api/auth/verify-otp, /api/auth/set-username, /api/auth/me, /api/auth/visibility, /api/auth/contact-means',
       dating: '/api/dating/* (requires auth)',
       messaging: '/api/messaging/* (requires auth)'
     }
@@ -123,7 +123,7 @@ app.use((req, res) => {
   res.status(404).json({
     message: `The endpoint ${req.method} ${req.path} does not exist`,
     availableEndpoints: {
-      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/me, /api/auth/visibility, /api/auth/contact-means',
+      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/check-username, /api/auth/check-email, /api/auth/send-otp, /api/auth/verify-otp, /api/auth/set-username, /api/auth/me, /api/auth/visibility, /api/auth/contact-means',
       products: '/api/products, /api/products/manage',
       orders: '/api/orders/*, /api/orders/mine, /api/orders/manage, /api/orders/payment-config',
       appData: '/api/app-data/public, /api/app-data/classifieds/*, /api/app-data/realestate/*',

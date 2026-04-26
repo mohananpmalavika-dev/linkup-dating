@@ -177,6 +177,7 @@ const mockAxiosForApp = ({
         data: {
           success: true,
           message: "OTP sent to your email",
+          otpId: "otp-1",
           devOtp: "123456",
         },
       });

@@ -39,3 +39,5 @@ coverage/
 # Misc
 .cache/
 .next/
+.android-sdk/
+.gradle-user/
