@@ -42,6 +42,7 @@ const init = async () => {
       CREATE TABLE IF NOT EXISTS dating_profiles (
         id SERIAL PRIMARY KEY,
         user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        username VARCHAR(100) UNIQUE,
         first_name VARCHAR(100) NOT NULL,
         age INTEGER NOT NULL,
         gender VARCHAR(50),
