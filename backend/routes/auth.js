@@ -6,14 +6,18 @@ const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 const db = require('../config/database');
 
-// Email transporter configuration
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'your_email@gmail.com',
-    pass: process.env.EMAIL_PASSWORD || 'your_app_password'
-  }
-});
+// Email transporter configuration - recreated on each request to ensure env vars are loaded
+const getEmailTransporter = () => {
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false, // Use TLS
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD
+    }
+  });
+};
 
 // OTP storage (in production, use database)
 const otpStorage = new Map();
@@ -345,6 +349,12 @@ router.post('/send-otp', async (req, res) => {
       return res.status(400).json({ error: 'Email or phone number required' });
     }
 
+    // Validate that email credentials are configured
+    if (email && !process.env.EMAIL_USER) {
+      console.error('EMAIL_USER environment variable not set');
+      return res.status(500).json({ error: 'Email service not configured. Please contact support.' });
+    }
+
     // Generate a random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpId = uuidv4();
@@ -358,18 +368,26 @@ router.post('/send-otp', async (req, res) => {
       attempts: 0
     });
 
+    console.log(`OTP generated: ${otp} for ${email || phone}`);
+
     // Send OTP via email
     if (email) {
       try {
-        await transporter.sendMail({
-          from: process.env.EMAIL_USER || 'noreply@linkup.com',
+        const transporter = getEmailTransporter();
+        
+        // Verify connection before sending
+        await transporter.verify();
+        console.log('Email transporter verified');
+
+        const mailResult = await transporter.sendMail({
+          from: process.env.EMAIL_USER,
           to: email,
           subject: 'Your LinkUp OTP Code',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <h2>LinkUp - Email Verification</h2>
               <p>Your One-Time Password (OTP) is:</p>
-              <h1 style="color: #6366f1; letter-spacing: 2px;">${otp}</h1>
+              <h1 style="color: #6366f1; letter-spacing: 2px; text-align: center;">${otp}</h1>
               <p>This OTP will expire in 10 minutes.</p>
               <p>If you didn't request this code, please ignore this email.</p>
               <hr />
@@ -377,24 +395,43 @@ router.post('/send-otp', async (req, res) => {
             </div>
           `
         });
-        console.log(`OTP sent to email: ${email}`);
-      } catch (emailError) {
-        console.error('Email send error:', emailError.message);
-        // Still return success so user can continue
-        return res.json({
+
+        console.log(`✓ OTP email sent successfully to ${email} (MessageID: ${mailResult.messageId})`);
+
+        res.json({
           success: true,
-          message: 'OTP sent successfully',
-          otpId,
-          debug: process.env.NODE_ENV === 'development' ? { otp } : undefined
+          message: 'OTP sent successfully to your email',
+          otpId
+        });
+      } catch (emailError) {
+        console.error('❌ Email send error:', {
+          message: emailError.message,
+          code: emailError.code,
+          response: emailError.response,
+          command: emailError.command
+        });
+
+        // Return error details in development mode for debugging
+        if (process.env.NODE_ENV === 'development') {
+          return res.status(500).json({ 
+            error: 'Failed to send OTP',
+            details: emailError.message,
+            otp: otp  // For development only
+          });
+        }
+
+        res.status(500).json({ 
+          error: 'Failed to send OTP. Please check your credentials and try again.' 
         });
       }
+    } else if (phone) {
+      // Phone OTP (SMS) - not implemented yet
+      res.json({
+        success: true,
+        message: 'OTP will be sent via SMS (feature coming soon)',
+        otpId
+      });
     }
-
-    res.json({
-      success: true,
-      message: 'OTP sent successfully',
-      otpId
-    });
   } catch (error) {
     console.error('Send OTP error:', error);
     res.status(500).json({ error: 'Failed to send OTP', details: error.message });
