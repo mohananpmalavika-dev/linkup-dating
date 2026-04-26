@@ -172,4 +172,51 @@ router.get('/verify', (req, res) => {
   });
 });
 
+// GET CURRENT USER
+router.get('/me', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ error: 'Access token required' });
+    }
+
+    // Verify and decode token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key');
+    const userId = decoded.userId || decoded.id;
+
+    // Get user data
+    const result = await db.query(
+      'SELECT id, email, created_at FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+
+    // Get dating profile if exists
+    const profileResult = await db.query(
+      'SELECT * FROM dating_profiles WHERE user_id = $1',
+      [userId]
+    );
+
+    res.json({
+      user: {
+        ...user,
+        profile: profileResult.rows[0] || null
+      }
+    });
+  } catch (err) {
+    console.error('Get user error:', err);
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+    res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
 module.exports = router;
