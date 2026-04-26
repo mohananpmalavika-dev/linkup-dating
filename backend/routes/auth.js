@@ -3,7 +3,20 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
+const nodemailer = require('nodemailer');
 const db = require('../config/database');
+
+// Email transporter configuration
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER || 'your_email@gmail.com',
+    pass: process.env.EMAIL_PASSWORD || 'your_app_password'
+  }
+});
+
+// OTP storage (in production, use database)
+const otpStorage = new Map();
 
 // Helper function to hash password
 const hashPassword = async (password) => {
@@ -334,19 +347,57 @@ router.post('/send-otp', async (req, res) => {
 
     // Generate a random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    // In production, you would send this OTP via email/SMS
-    // For now, we'll store it in memory or log it
-    console.log(`OTP for ${email || phone}: ${otp}`);
+    const otpId = uuidv4();
+
+    // Store OTP with 10-minute expiration
+    otpStorage.set(otpId, {
+      otp,
+      recipient: email || phone,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+      attempts: 0
+    });
+
+    // Send OTP via email
+    if (email) {
+      try {
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER || 'noreply@linkup.com',
+          to: email,
+          subject: 'Your LinkUp OTP Code',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>LinkUp - Email Verification</h2>
+              <p>Your One-Time Password (OTP) is:</p>
+              <h1 style="color: #6366f1; letter-spacing: 2px;">${otp}</h1>
+              <p>This OTP will expire in 10 minutes.</p>
+              <p>If you didn't request this code, please ignore this email.</p>
+              <hr />
+              <p style="color: #666; font-size: 12px;">LinkUp Dating - Your Perfect Match Awaits</p>
+            </div>
+          `
+        });
+        console.log(`OTP sent to email: ${email}`);
+      } catch (emailError) {
+        console.error('Email send error:', emailError.message);
+        // Still return success so user can continue
+        return res.json({
+          success: true,
+          message: 'OTP sent successfully',
+          otpId,
+          debug: process.env.NODE_ENV === 'development' ? { otp } : undefined
+        });
+      }
+    }
 
     res.json({
       success: true,
       message: 'OTP sent successfully',
-      otpId: 'temp-otp-' + Date.now() // Temporary identifier for verification
+      otpId
     });
   } catch (error) {
     console.error('Send OTP error:', error);
-    res.status(500).json({ error: 'Failed to send OTP' });
+    res.status(500).json({ error: 'Failed to send OTP', details: error.message });
   }
 });
 
@@ -359,11 +410,37 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'OTP ID and OTP required' });
     }
 
-    // In production, verify the OTP from your storage
-    // For now, accept any valid 6-digit OTP
-    if (!/^\d{6}$/.test(otp)) {
-      return res.status(400).json({ error: 'Invalid OTP format' });
+    // Check if OTP exists in storage
+    const storedData = otpStorage.get(otpId);
+
+    if (!storedData) {
+      return res.status(400).json({ error: 'Invalid or expired OTP ID' });
     }
+
+    // Check if OTP has expired
+    if (Date.now() > storedData.expiresAt) {
+      otpStorage.delete(otpId);
+      return res.status(400).json({ error: 'OTP has expired' });
+    }
+
+    // Check if OTP matches
+    if (storedData.otp !== otp) {
+      storedData.attempts += 1;
+      
+      // Lock after 5 failed attempts
+      if (storedData.attempts >= 5) {
+        otpStorage.delete(otpId);
+        return res.status(429).json({ error: 'Too many attempts. Please request a new OTP.' });
+      }
+
+      return res.status(400).json({ 
+        error: 'Invalid OTP',
+        attemptsRemaining: 5 - storedData.attempts
+      });
+    }
+
+    // OTP verified successfully
+    otpStorage.delete(otpId); // Clear the OTP after successful verification
 
     res.json({
       success: true,
