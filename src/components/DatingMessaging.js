@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import io from 'socket.io-client';
+import { useLocation } from '../router';
 import datingMessagingService from '../services/datingMessagingService';
 import datingProfileService from '../services/datingProfileService';
 import notificationService from '../services/notificationService';
@@ -77,12 +78,14 @@ const getReadReceiptLabel = (message) => {
 const DatingMessaging = ({
   matchedProfile,
   matchId,
+  onScheduleVideoCall,
   onVideoCall,
   onBack,
   onViewProfile,
   onConversationActivity
 }) => {
   const currentUser = getStoredUserData();
+  const location = useLocation();
   const currentUserId = currentUser?.id;
   const [conversationMatch, setConversationMatch] = useState(matchedProfile || null);
   const [loadingMatch, setLoadingMatch] = useState(Boolean(matchId) && !matchedProfile);
@@ -457,8 +460,16 @@ const DatingMessaging = ({
           ) : null}
 
           <button
+            className="btn-schedule-call"
+            onClick={() => onScheduleVideoCall?.(activeMatch, location.pathname)}
+            title="Schedule video call"
+          >
+            Plan
+          </button>
+
+          <button
             className="btn-video-call"
-            onClick={() => onVideoCall?.(activeMatch)}
+            onClick={() => onVideoCall?.(activeMatch, location.pathname)}
             title="Start video call"
           >
             Video

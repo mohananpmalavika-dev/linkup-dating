@@ -30,6 +30,7 @@ import AdminDashboard from './components/AdminDashboard';
 import datingProfileService from './services/datingProfileService';
 import datingMessagingService from './services/datingMessagingService';
 import notificationService from './services/notificationService';
+import videoCallService from './services/videoCallService';
 import { BACKEND_BASE_URL } from './utils/api';
 import {
   clearStoredAuthToken,
@@ -143,6 +144,7 @@ const MatchChatRoute = ({
   onConversationActivity,
   onNavigateToPath,
   onOpenProfile,
+  onScheduleVideoCall,
   onVideoCall
 }) => {
   const location = useLocation();
@@ -152,6 +154,7 @@ const MatchChatRoute = ({
     <DatingMessaging
       matchId={matchId}
       matchedProfile={normalizeProfileContext(location.state?.match)}
+      onScheduleVideoCall={onScheduleVideoCall}
       onVideoCall={onVideoCall}
       onBack={() => onNavigateToPath(location.state?.returnPath || DEFAULT_MESSAGES_ROUTE)}
       onViewProfile={(profile) => onOpenProfile(profile, location.pathname)}
@@ -163,6 +166,7 @@ const MatchChatRoute = ({
 const ProfileDetailRoute = ({
   onNavigateToPath,
   onOpenMessages,
+  onScheduleVideoCall,
   onVideoCall
 }) => {
   const location = useLocation();
@@ -174,6 +178,7 @@ const ProfileDetailRoute = ({
       profile={normalizeProfileContext(location.state?.profile)}
       onBack={() => onNavigateToPath(location.state?.returnPath || DEFAULT_AUTHENTICATED_ROUTE)}
       onMessage={(profile) => onOpenMessages(profile, location.pathname)}
+      onScheduleVideoCall={onScheduleVideoCall}
       onVideoCall={onVideoCall}
     />
   );
@@ -193,6 +198,10 @@ const MatchVideoRoute = ({
       callMode={location.state?.callMode || 'outgoing'}
       autoAccepted={Boolean(location.state?.autoAccepted)}
       callerName={location.state?.incomingCall?.fromUserName || ''}
+      incomingCall={location.state?.incomingCall || null}
+      startImmediately={location.state?.startImmediately !== false}
+      focusSchedule={Boolean(location.state?.focusSchedule)}
+      scheduledVideoDateId={location.state?.scheduledVideoDateId || null}
       onBack={() => onNavigateToPath(location.state?.returnPath || buildMatchRoute(matchId))}
       onOpenMessages={(profile) => onOpenMessages(profile, location.state?.returnPath || DEFAULT_MESSAGES_ROUTE)}
     />
@@ -280,6 +289,50 @@ const AppContent = () => {
 
     refreshDatingCounts();
   }, [isAdminSession, isAuthenticated, location.pathname, refreshDatingCounts]);
+
+  useEffect(() => {
+    if (!isAuthenticated || isAdminSession) {
+      return undefined;
+    }
+
+    let isDisposed = false;
+
+    const pollVideoCallReminders = async () => {
+      try {
+        const response = await videoCallService.deliverDueReminders();
+        const reminders = Array.isArray(response?.reminders) ? response.reminders : [];
+
+        if (isDisposed || reminders.length === 0) {
+          return;
+        }
+
+        if (notificationService.getPermissionStatus().canNotify) {
+          reminders.forEach(({ session }) => {
+            if (!session?.id) {
+              return;
+            }
+
+            notificationService.notify({
+              title: 'Video date reminder',
+              body: `${session.partner?.name || 'Your match'} is coming up soon.`,
+              tag: `video-call-reminder-${session.id}`,
+              requireInteraction: false
+            });
+          });
+        }
+      } catch (reminderError) {
+        console.error('Failed to poll video call reminders:', reminderError);
+      }
+    };
+
+    void pollVideoCallReminders();
+    const reminderInterval = window.setInterval(pollVideoCallReminders, 60 * 1000);
+
+    return () => {
+      isDisposed = true;
+      window.clearInterval(reminderInterval);
+    };
+  }, [isAdminSession, isAuthenticated]);
 
   useEffect(() => {
     if (/^\/matches\/[^/]+\/chat$/i.test(location.pathname)) {
@@ -424,7 +477,7 @@ const AppContent = () => {
     navigate(getDefaultAuthenticatedRouteForUser(nextUser), { replace: true });
   };
 
-  const handleVideoCall = (profile, returnPath = location.pathname) => {
+  const handleVideoCall = (profile, returnPath = location.pathname, options = {}) => {
     const nextMatchedProfile = normalizeProfileContext(profile);
 
     if (!nextMatchedProfile?.matchId) {
@@ -435,7 +488,10 @@ const AppContent = () => {
       state: {
         match: nextMatchedProfile,
         returnPath,
-        callMode: 'outgoing'
+        callMode: 'outgoing',
+        focusSchedule: Boolean(options.focusSchedule),
+        scheduledVideoDateId: options.scheduledVideoDateId || null,
+        startImmediately: options.startImmediately !== false
       }
     });
   };
@@ -703,6 +759,12 @@ const AppContent = () => {
                 <DatingMessaging
                   onBack={() => navigate('/matches')}
                   onViewProfile={(profile) => handleOpenProfile(profile, '/messages')}
+                  onScheduleVideoCall={(profile) =>
+                    handleVideoCall(profile, '/messages', {
+                      focusSchedule: true,
+                      startImmediately: false
+                    })
+                  }
                   onVideoCall={handleVideoCall}
                   onConversationActivity={handleConversationActivity}
                 />
@@ -717,6 +779,12 @@ const AppContent = () => {
                   onMatchCreated={refreshDatingCounts}
                   onUnmatch={handleUnmatch}
                   onViewProfile={(profile) => handleOpenProfile(profile, '/matches')}
+                  onScheduleVideoCall={(profile) =>
+                    handleVideoCall(profile, '/matches', {
+                      focusSchedule: true,
+                      startImmediately: false
+                    })
+                  }
                   onStartVideoCall={handleVideoCall}
                 />
               }
@@ -728,6 +796,12 @@ const AppContent = () => {
                   onConversationActivity={handleConversationActivity}
                   onNavigateToPath={(path) => navigate(path)}
                   onOpenProfile={handleOpenProfile}
+                  onScheduleVideoCall={(profile, returnPath) =>
+                    handleVideoCall(profile, returnPath, {
+                      focusSchedule: true,
+                      startImmediately: false
+                    })
+                  }
                   onVideoCall={handleVideoCall}
                 />
               }
@@ -747,6 +821,12 @@ const AppContent = () => {
                 <ProfileDetailRoute
                   onNavigateToPath={(path) => navigate(path)}
                   onOpenMessages={handleOpenMessages}
+                  onScheduleVideoCall={(profile, returnPath) =>
+                    handleVideoCall(profile, returnPath, {
+                      focusSchedule: true,
+                      startImmediately: false
+                    })
+                  }
                   onVideoCall={handleVideoCall}
                 />
               }

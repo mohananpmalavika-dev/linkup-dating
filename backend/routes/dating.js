@@ -1743,4 +1743,306 @@ router.post('/reports', async (req, res) => {
   }
 });
 
+// 27. GET USER PREFERENCES
+router.get('/preferences', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT * FROM user_preferences WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      // Return default preferences
+      return res.json({
+        ageRangeMin: 18,
+        ageRangeMax: 50,
+        locationRadius: 50,
+        genderPreferences: [],
+        relationshipGoals: [],
+        interests: [],
+        heightRangeMin: null,
+        heightRangeMax: null,
+        bodyTypes: [],
+        showMyProfile: true,
+        allowMessages: true,
+        notificationsEnabled: true
+      });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      ageRangeMin: row.age_range_min ?? 18,
+      ageRangeMax: row.age_range_max ?? 50,
+      locationRadius: row.location_radius ?? 50,
+      genderPreferences: row.gender_preferences || [],
+      relationshipGoals: row.relationship_goals || [],
+      interests: row.interests || [],
+      heightRangeMin: row.height_range_min,
+      heightRangeMax: row.height_range_max,
+      bodyTypes: row.body_types || [],
+      showMyProfile: row.show_my_profile ?? true,
+      allowMessages: row.allow_messages ?? true,
+      notificationsEnabled: row.notifications_enabled ?? true
+    });
+  } catch (err) {
+    console.error('Get preferences error:', err);
+    res.status(500).json({ error: 'Failed to get preferences' });
+  }
+});
+
+// 28. UPDATE USER PREFERENCES
+router.put('/preferences', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      ageRangeMin,
+      ageRangeMax,
+      locationRadius,
+      genderPreferences,
+      relationshipGoals,
+      interests,
+      heightRangeMin,
+      heightRangeMax,
+      bodyTypes,
+      showMyProfile,
+      allowMessages,
+      notificationsEnabled
+    } = req.body;
+
+    const result = await db.query(
+      `INSERT INTO user_preferences (
+         user_id, age_range_min, age_range_max, location_radius,
+         gender_preferences, relationship_goals, interests,
+         height_range_min, height_range_max, body_types,
+         show_my_profile, allow_messages, notifications_enabled
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       ON CONFLICT (user_id) DO UPDATE
+       SET age_range_min = EXCLUDED.age_range_min,
+           age_range_max = EXCLUDED.age_range_max,
+           location_radius = EXCLUDED.location_radius,
+           gender_preferences = EXCLUDED.gender_preferences,
+           relationship_goals = EXCLUDED.relationship_goals,
+           interests = EXCLUDED.interests,
+           height_range_min = EXCLUDED.height_range_min,
+           height_range_max = EXCLUDED.height_range_max,
+           body_types = EXCLUDED.body_types,
+           show_my_profile = EXCLUDED.show_my_profile,
+           allow_messages = EXCLUDED.allow_messages,
+           notifications_enabled = EXCLUDED.notifications_enabled,
+           updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [
+        userId,
+        normalizeInteger(ageRangeMin) ?? 18,
+        normalizeInteger(ageRangeMax) ?? 50,
+        normalizeInteger(locationRadius) ?? 50,
+        Array.isArray(genderPreferences) ? genderPreferences : [],
+        Array.isArray(relationshipGoals) ? relationshipGoals : [],
+        Array.isArray(interests) ? interests : [],
+        normalizeInteger(heightRangeMin),
+        normalizeInteger(heightRangeMax),
+        Array.isArray(bodyTypes) ? bodyTypes : [],
+        normalizeBoolean(showMyProfile),
+        normalizeBoolean(allowMessages),
+        normalizeBoolean(notificationsEnabled)
+      ]
+    );
+
+
+    const row = result.rows[0];
+    res.json({
+      message: 'Preferences updated',
+      preferences: {
+        ageRangeMin: row.age_range_min,
+        ageRangeMax: row.age_range_max,
+        locationRadius: row.location_radius,
+        genderPreferences: row.gender_preferences,
+        relationshipGoals: row.relationship_goals,
+        interests: row.interests,
+        heightRangeMin: row.height_range_min,
+        heightRangeMax: row.height_range_max,
+        bodyTypes: row.body_types,
+        showMyProfile: row.show_my_profile,
+        allowMessages: row.allow_messages,
+        notificationsEnabled: row.notifications_enabled
+      }
+    });
+  } catch (err) {
+    console.error('Update preferences error:', err);
+    res.status(500).json({ error: 'Failed to update preferences' });
+  }
+});
+
+// 29. SUPERLIKE PROFILE
+router.post('/interactions/superlike', async (req, res) => {
+  try {
+    const fromUserId = req.user.id;
+    const { toUserId, targetUserId } = req.body;
+    const userId = toUserId || targetUserId;
+    const requestMetadata = getRequestMetadata(req);
+
+    if (!userId) {
+      return res.status(400).json({ error: 'toUserId or targetUserId required' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const analyticsResult = await db.query(
+      `SELECT superlikes_used FROM user_analytics WHERE user_id = $1 AND date = $2`,
+      [fromUserId, today]
+    );
+
+    const superlikesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_used || 0) : 0;
+    const superlikeLimit = 1;
+    if (superlikesUsed >= superlikeLimit) {
+      return res.status(429).json({ error: 'Daily superlike limit reached', limit: superlikeLimit, used: superlikesUsed, remaining: 0 });
+    }
+
+    await db.query(
+      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type) VALUES ($1, $2, 'superlike') ON CONFLICT DO NOTHING`,
+      [fromUserId, userId]
+    );
+
+    await db.query(
+      `INSERT INTO user_analytics (user_id, date, superlikes_used) VALUES ($1, $2, 1) ON CONFLICT (user_id, date) DO UPDATE SET superlikes_used = user_analytics.superlikes_used + 1`,
+      [fromUserId, today]
+    );
+
+    spamFraudService.trackUserActivity({ userId: fromUserId, action: 'superlike_profile', analyticsUpdates: { superlikes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
+
+    const mutualResult = await db.query(
+      `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,
+      [userId, fromUserId]
+    );
+
+    if (mutualResult.rows.length > 0) {
+      const matchResult = await db.query(
+        `INSERT INTO matches (user_id_1, user_id_2) VALUES (LEAST($1, $2), GREATEST($1, $2)) ON CONFLICT DO NOTHING RETURNING *`,
+        [fromUserId, userId]
+      );
+      const persistedMatch = matchResult.rows[0] || (await db.query(`SELECT * FROM matches WHERE user_id_1 = LEAST($1, $2) AND user_id_2 = GREATEST($1, $2) LIMIT 1`, [fromUserId, userId])).rows[0];
+
+      if (typeof req.emitToUser === 'function') {
+        [fromUserId, userId].forEach((pid) => {
+          req.emitToUser(pid, 'new_match', { match: persistedMatch, user: { id: fromUserId }, matchedUserId: pid === fromUserId ? userId : fromUserId, createdAt: new Date().toISOString(), superlike: true });
+        });
+      }
+
+      await Promise.all([
+        userNotificationService.createNotification(fromUserId, { type: 'new_match', title: 'Super Like Match!', body: 'They liked you back! Start chatting now.', metadata: { matchId: persistedMatch.id, matchedUserId: userId } }),
+        userNotificationService.createNotification(userId, { type: 'new_match', title: 'Someone Super Liked You!', body: 'You matched with someone who super liked you!', metadata: { matchId: persistedMatch.id, matchedUserId: fromUserId } })
+      ]);
+
+      spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
+      spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
+      spamFraudService.refreshSystemMetrics();
+
+      return res.json({ message: 'Super Like Match!', isMatch: true, match: persistedMatch, superlike: true });
+    }
+
+    res.json({ message: 'Profile super liked', isMatch: false, superlike: true });
+  } catch (err) {
+    console.error('Superlike error:', err);
+    res.status(500).json({ error: 'Failed to superlike profile' });
+  }
+});
+
+// 30. GET DAILY LIMITS
+router.get('/daily-limits', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const today = new Date().toISOString().split('T')[0];
+
+    const analyticsResult = await db.query(`SELECT likes_used, superlikes_used FROM user_analytics WHERE user_id = $1 AND date = $2`, [userId, today]);
+
+    const likesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_used || 0) : 0;
+    const superlikesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_used || 0) : 0;
+
+    const likeLimit = 50;
+    const superlikeLimit = 1;
+
+    res.json({
+      likeLimit, superlikeLimit, likesUsed, superlikesUsed,
+      remainingLikes: Math.max(0, likeLimit - likesUsed),
+      remainingSuperlikes: Math.max(0, superlikeLimit - superlikesUsed),
+      resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    });
+  } catch (err) {
+    console.error('Get daily limits error:', err);
+    res.status(500).json({ error: 'Failed to get daily limits' });
+  }
+});
+
+// 31. LIKE PROFILE (with daily limit check)
+router.post('/interactions/like', async (req, res) => {
+  try {
+    const fromUserId = req.user.id;
+    const { toUserId, targetUserId } = req.body;
+    const userId = toUserId || targetUserId;
+    const requestMetadata = getRequestMetadata(req);
+
+    if (!userId) {
+      return res.status(400).json({ error: 'toUserId or targetUserId required' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const analyticsResult = await db.query(`SELECT likes_used FROM user_analytics WHERE user_id = $1 AND date = $2`, [fromUserId, today]);
+
+    const likesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_used || 0) : 0;
+    const likeLimit = 50;
+    if (likesUsed >= likeLimit) {
+      return res.status(429).json({ error: 'Daily like limit reached', limit: likeLimit, used: likesUsed, remaining: 0 });
+    }
+
+    await db.query(
+      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type) VALUES ($1, $2, 'like') ON CONFLICT DO NOTHING`,
+      [fromUserId, userId]
+    );
+
+    await db.query(
+      `INSERT INTO user_analytics (user_id, date, likes_used) VALUES ($1, $2, 1) ON CONFLICT (user_id, date) DO UPDATE SET likes_used = user_analytics.likes_used + 1`,
+      [fromUserId, today]
+    );
+
+    spamFraudService.trackUserActivity({ userId: fromUserId, action: 'like_profile', analyticsUpdates: { likes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
+
+    const mutualResult = await db.query(
+      `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,
+      [userId, fromUserId]
+    );
+
+    if (mutualResult.rows.length > 0) {
+      const matchResult = await db.query(
+        `INSERT INTO matches (user_id_1, user_id_2) VALUES (LEAST($1, $2), GREATEST($1, $2)) ON CONFLICT DO NOTHING RETURNING *`,
+        [fromUserId, userId]
+      );
+      const persistedMatch = matchResult.rows[0] || (await db.query(`SELECT * FROM matches WHERE user_id_1 = LEAST($1, $2) AND user_id_2 = GREATEST($1, $2) LIMIT 1`, [fromUserId, userId])).rows[0];
+
+      if (typeof req.emitToUser === 'function') {
+        [fromUserId, userId].forEach((pid) => {
+          req.emitToUser(pid, 'new_match', { match: persistedMatch, user: { id: fromUserId }, matchedUserId: pid === fromUserId ? userId : fromUserId, createdAt: new Date().toISOString() });
+        });
+      }
+
+      await Promise.all([
+        userNotificationService.createNotification(fromUserId, { type: 'new_match', title: 'You have a new match', body: 'Someone liked you back. Open the chat to say hello.', metadata: { matchId: persistedMatch.id, matchedUserId: userId } }),
+        userNotificationService.createNotification(userId, { type: 'new_match', title: 'It is a match', body: 'You matched with someone new. Start the conversation when you are ready.', metadata: { matchId: persistedMatch.id, matchedUserId: fromUserId } })
+      ]);
+
+      spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
+      spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
+      spamFraudService.refreshSystemMetrics();
+
+      return res.json({ message: 'Its a match!', isMatch: true, match: persistedMatch });
+    }
+
+    res.json({ message: 'Profile liked', isMatch: false });
+  } catch (err) {
+    console.error('Like error:', err);
+    res.status(500).json({ error: 'Failed to like profile' });
+  }
+});
+
 module.exports = router;

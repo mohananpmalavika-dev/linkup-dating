@@ -1,9 +1,18 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from '../router';
 import datingProfileService from '../services/datingProfileService';
 import BlockReportModal from './BlockReportModal';
 import '../styles/DatingProfile.css';
 
-const DatingProfileView = ({ profile: initialProfile, profileId, onBack, onMessage, onVideoCall }) => {
+const DatingProfileView = ({
+  profile: initialProfile,
+  profileId,
+  onBack,
+  onMessage,
+  onScheduleVideoCall,
+  onVideoCall
+}) => {
+  const location = useLocation();
   const [profile, setProfile] = useState(initialProfile || null);
   const [loading, setLoading] = useState(Boolean(initialProfile?.userId || profileId));
   const [error, setError] = useState('');
@@ -69,6 +78,8 @@ const DatingProfileView = ({ profile: initialProfile, profileId, onBack, onMessa
 
   const canMessage = typeof onMessage === 'function' && Boolean(profile.matchId);
   const canVideoCall = typeof onVideoCall === 'function' && Boolean(profile.matchId);
+  const canScheduleVideoCall =
+    typeof onScheduleVideoCall === 'function' && Boolean(profile.matchId);
 
   const handleBlockUser = async (userId) => {
     try {
@@ -180,8 +191,21 @@ const DatingProfileView = ({ profile: initialProfile, profileId, onBack, onMessa
               Open Chat
             </button>
           ) : null}
+          {canScheduleVideoCall ? (
+            <button
+              type="button"
+              className="btn-edit"
+              onClick={() => onScheduleVideoCall(profile, location.pathname)}
+            >
+              Schedule Call
+            </button>
+          ) : null}
           {canVideoCall ? (
-            <button type="button" className="btn-save" onClick={() => onVideoCall(profile)}>
+            <button
+              type="button"
+              className="btn-save"
+              onClick={() => onVideoCall(profile, location.pathname)}
+            >
               Start Video Call
             </button>
           ) : null}

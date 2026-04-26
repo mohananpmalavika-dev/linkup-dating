@@ -175,12 +175,37 @@ const init = async () => {
         match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
         user_id_1 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         user_id_2 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        session_type VARCHAR(30) DEFAULT 'instant',
+        scheduled_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        title VARCHAR(255),
+        note TEXT,
         scheduled_at TIMESTAMP,
+        reminder_minutes INTEGER DEFAULT 15,
+        reminder_sent_user_1_at TIMESTAMP,
+        reminder_sent_user_2_at TIMESTAMP,
         started_at TIMESTAMP,
+        answered_at TIMESTAMP,
         ended_at TIMESTAMP,
         status VARCHAR(50) DEFAULT 'scheduled',
         room_id VARCHAR(255),
         duration_seconds INTEGER,
+        user_1_joined_at TIMESTAMP,
+        user_2_joined_at TIMESTAMP,
+        user_1_left_at TIMESTAMP,
+        user_2_left_at TIMESTAMP,
+        no_show_status VARCHAR(50) DEFAULT 'pending',
+        ended_reason VARCHAR(100),
+        call_quality_preset VARCHAR(50) DEFAULT 'balanced',
+        recording_requested BOOLEAN DEFAULT FALSE,
+        recording_requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        recording_consented_user_1 BOOLEAN DEFAULT FALSE,
+        recording_consented_user_2 BOOLEAN DEFAULT FALSE,
+        recording_enabled BOOLEAN DEFAULT FALSE,
+        screen_share_enabled BOOLEAN DEFAULT FALSE,
+        screen_share_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        virtual_background_user_1 VARCHAR(50) DEFAULT 'none',
+        virtual_background_user_2 VARCHAR(50) DEFAULT 'none',
+        settings_snapshot JSONB DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -224,6 +249,45 @@ const init = async () => {
     await client.query(`
       ALTER TABLE profile_photos
       ALTER COLUMN photo_url TYPE TEXT;
+    `);
+
+    // Migration: enrich video call sessions with scheduling, consent, reminders, and QA metadata
+    await client.query(`
+      ALTER TABLE video_dates
+      ADD COLUMN IF NOT EXISTS session_type VARCHAR(30) DEFAULT 'instant',
+      ADD COLUMN IF NOT EXISTS scheduled_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS title VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS note TEXT,
+      ADD COLUMN IF NOT EXISTS reminder_minutes INTEGER DEFAULT 15,
+      ADD COLUMN IF NOT EXISTS reminder_sent_user_1_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS reminder_sent_user_2_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS answered_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS user_1_joined_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS user_2_joined_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS user_1_left_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS user_2_left_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS no_show_status VARCHAR(50) DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS ended_reason VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS call_quality_preset VARCHAR(50) DEFAULT 'balanced',
+      ADD COLUMN IF NOT EXISTS recording_requested BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS recording_requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS recording_consented_user_1 BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS recording_consented_user_2 BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS recording_enabled BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS screen_share_enabled BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS screen_share_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS virtual_background_user_1 VARCHAR(50) DEFAULT 'none',
+      ADD COLUMN IF NOT EXISTS virtual_background_user_2 VARCHAR(50) DEFAULT 'none',
+      ADD COLUMN IF NOT EXISTS settings_snapshot JSONB DEFAULT '{}';
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_video_dates_match_id ON video_dates(match_id);
+      CREATE INDEX IF NOT EXISTS idx_video_dates_status ON video_dates(status);
+      CREATE INDEX IF NOT EXISTS idx_video_dates_scheduled_at ON video_dates(scheduled_at);
+      CREATE INDEX IF NOT EXISTS idx_video_dates_session_type ON video_dates(session_type);
+      CREATE INDEX IF NOT EXISTS idx_video_dates_user_1 ON video_dates(user_id_1);
+      CREATE INDEX IF NOT EXISTS idx_video_dates_user_2 ON video_dates(user_id_2);
     `);
     // Create chatrooms table for group chats
     await client.query(`

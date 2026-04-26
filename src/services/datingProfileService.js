@@ -112,6 +112,30 @@ export const datingProfileService = {
   },
 
   /**
+   * Superlike/swipe up on a profile
+   */
+  superlikeProfile: async (userId) => {
+    try {
+      const response = await axios.post(`${API_URL}/interactions/superlike`, { toUserId: userId });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to superlike profile';
+    }
+  },
+
+  /**
+   * Get daily like/superlike limits
+   */
+  getDailyLimits: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/daily-limits`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch daily limits';
+    }
+  },
+
+  /**
    * Pass/swipe left on a profile
    */
   passProfile: async (userId) => {
@@ -388,6 +412,30 @@ export const datingProfileService = {
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to update notifications';
+    }
+  },
+
+  /**
+   * Get user preferences
+   */
+  getPreferences: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/preferences`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch preferences';
+    }
+  },
+
+  /**
+   * Update user preferences
+   */
+  updatePreferences: async (preferences) => {
+    try {
+      const response = await axios.put(`${API_URL}/preferences`, preferences);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to update preferences';
     }
   },
 };

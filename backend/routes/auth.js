@@ -5,6 +5,13 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 const db = require('../config/database');
+const { authenticateToken } = require('../middleware/auth');
+const spamFraudService = require('../services/spamFraudService');
+const {
+  getConfiguredAdminEmails,
+  isConfiguredAdminEmail,
+  syncConfiguredAdminForEmail
+} = require('../utils/adminAccess');
 const { storeOTP, getOTP, incrementOTPAttempts, deleteOTP, findOTPByRecipient, MAX_OTP_ATTEMPTS } = require('../utils/redis');
 
 // Email transporter configuration - recreated on each request to ensure env vars are loaded
@@ -16,7 +23,7 @@ const getEmailTransporter = () => {
     secure: process.env.EMAIL_SECURE === 'true' || false, // Use TLS
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS // Note: EMAIL_PASS not EMAIL_PASSWORD
+      pass: process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD
     }
   });
 };

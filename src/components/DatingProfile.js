@@ -55,6 +55,12 @@ const DatingProfile = ({ onLogout }) => {
     matches: 0,
     completion: 0
   });
+  const [dailyLimits, setDailyLimits] = useState({
+    remainingLikes: 50,
+    remainingSuperlikes: 1,
+    likeLimit: 50,
+    superlikeLimit: 1
+  });
 
   const completionChecklist = [
     {
@@ -109,12 +115,14 @@ const DatingProfile = ({ onLogout }) => {
         favoritesData,
         blockedUsersData,
         searchHistoryData,
-        notificationsData
+        notificationsData,
+        dailyLimitsData
       ] = await Promise.all([
         datingProfileService.getFavorites().catch(() => ({ favorites: [] })),
         datingProfileService.getBlockedUsers().catch(() => ({ blockedUsers: [] })),
         datingProfileService.getSearchHistory(8).catch(() => ({ history: [] })),
-        datingProfileService.getNotifications(10).catch(() => ({ notifications: [], unreadCount: 0 }))
+        datingProfileService.getNotifications(10).catch(() => ({ notifications: [], unreadCount: 0 })),
+        datingProfileService.getDailyLimits().catch(() => ({ remainingLikes: 50, remainingSuperlikes: 1, likeLimit: 50, superlikeLimit: 1 }))
       ]);
 
       setProfile(profileData);
@@ -129,6 +137,12 @@ const DatingProfile = ({ onLogout }) => {
       setSearchHistory(Array.isArray(searchHistoryData.history) ? searchHistoryData.history : []);
       setNotifications(Array.isArray(notificationsData.notifications) ? notificationsData.notifications : []);
       setUnreadNotificationCount(Number(notificationsData.unreadCount || 0));
+      setDailyLimits({
+        remainingLikes: dailyLimitsData.remainingLikes ?? 50,
+        remainingSuperlikes: dailyLimitsData.remainingSuperlikes ?? 1,
+        likeLimit: dailyLimitsData.likeLimit ?? 50,
+        superlikeLimit: dailyLimitsData.superlikeLimit ?? 1
+      });
       setStats({
         likes: Array.isArray(likesData) ? likesData.length : 0,
         matches: matchesData.matches?.length || 0,
@@ -336,6 +350,14 @@ const DatingProfile = ({ onLogout }) => {
             <div className="stat-item">
               <span className="stat-value">{stats.completion}%</span>
               <span className="stat-label">Profile</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">{dailyLimits.remainingLikes}</span>
+              <span className="stat-label">Likes Left</span>
+            </div>
+            <div className="stat-item">
+              <span className="stat-value">{dailyLimits.remainingSuperlikes}</span>
+              <span className="stat-label">Superlikes</span>
             </div>
           </div>
 

@@ -10,6 +10,7 @@ const DEFAULT_FILTERS = {
   ageMin: '',
   ageMax: '',
   distance: '',
+  gender: '',
   relationshipGoals: '',
   interests: ''
 };
@@ -27,6 +28,10 @@ const buildDiscoveryFilters = (filters) => {
 
   if (filters.distance !== '') {
     params.distance = Number(filters.distance);
+  }
+
+  if (filters.gender) {
+    params.gender = filters.gender;
   }
 
   if (filters.relationshipGoals.trim()) {
@@ -54,6 +59,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [favoriteUserIds, setFavoriteUserIds] = useState(new Set());
+  const [remainingLikes, setRemainingLikes] = useState(50);
+  const [remainingSuperlikes, setRemainingSuperlikes] = useState(1);
 
   const activeFilterCount = useMemo(() => (
     Object.values(appliedFilters).filter((value) => String(value).trim() !== '').length
@@ -61,6 +68,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
   useEffect(() => {
     loadProfiles(appliedFilters);
+    loadDailyLimits();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -95,14 +103,30 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     }
   };
 
+  const loadDailyLimits = async () => {
+    try {
+      const data = await datingProfileService.getDailyLimits();
+      setRemainingLikes(data.remainingLikes ?? 50);
+      setRemainingSuperlikes(data.remainingSuperlikes ?? 1);
+    } catch (err) {
+      console.error('Failed to load daily limits:', err);
+    }
+  };
+
   const getCurrentProfile = () => profiles[currentIndex];
 
   const handleLike = async () => {
     const profile = getCurrentProfile();
     if (!profile) return;
 
+    if (remainingLikes <= 0) {
+      setError('You have reached your daily like limit. Upgrade to premium for unlimited likes.');
+      return;
+    }
+
     try {
       const result = await datingProfileService.likeProfile(profile.userId);
+      setRemainingLikes((prev) => Math.max(0, prev - 1));
       if (result.isMatch) {
         onMatch?.({
           ...profile,
@@ -112,6 +136,32 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       moveToNextCard();
     } catch (err) {
       setError('Failed to like profile');
+      console.error(err);
+    }
+  };
+
+  const handleSuperlike = async () => {
+    const profile = getCurrentProfile();
+    if (!profile) return;
+
+    if (remainingSuperlikes <= 0) {
+      setError('You have used your daily superlike. Upgrade to premium for more.');
+      return;
+    }
+
+    try {
+      const result = await datingProfileService.superlikeProfile(profile.userId);
+      setRemainingSuperlikes((prev) => Math.max(0, prev - 1));
+      if (result.isMatch) {
+        onMatch?.({
+          ...profile,
+          matchId: result.match?.id || profile.matchId || null,
+          superlike: true
+        });
+      }
+      moveToNextCard();
+    } catch (err) {
+      setError('Failed to superlike profile');
       console.error(err);
     }
   };
@@ -182,6 +232,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       ageMin: filters.ageMin,
       ageMax: filters.ageMax,
       distance: filters.distance,
+      gender: filters.gender,
       relationshipGoals: filters.relationshipGoals,
       interests: filters.interests
     };
@@ -267,6 +318,19 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
                 />
               </label>
               <label className="filter-field">
+                <span>Gender</span>
+                <select
+                  value={filters.gender}
+                  onChange={(event) => handleFilterChange('gender', event.target.value)}
+                >
+                  <option value="">Any</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="non-binary">Non-binary</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <label className="filter-field">
                 <span>Relationship goal</span>
                 <select
                   value={filters.relationshipGoals}
@@ -315,6 +379,10 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
         >
           Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
         </button>
+        <div className="daily-limits">
+          <span title="Remaining likes today">❤️ {remainingLikes}</span>
+          <span title="Remaining superlikes today">⭐ {remainingSuperlikes}</span>
+        </div>
       </div>
 
       {showFilters ? (
@@ -367,6 +435,20 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
             </label>
 
             <label className="filter-field">
+              <span>Gender</span>
+              <select
+                value={filters.gender}
+                onChange={(event) => handleFilterChange('gender', event.target.value)}
+              >
+                <option value="">Any</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="non-binary">Non-binary</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+
+            <label className="filter-field">
               <span>Relationship goal</span>
               <select
                 value={filters.relationshipGoals}
@@ -403,6 +485,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           {appliedFilters.ageMin ? <span>Age {appliedFilters.ageMin}+</span> : null}
           {appliedFilters.ageMax ? <span>Up to {appliedFilters.ageMax}</span> : null}
           {appliedFilters.distance ? <span>{appliedFilters.distance} km</span> : null}
+          {appliedFilters.gender ? <span>{appliedFilters.gender}</span> : null}
           {appliedFilters.relationshipGoals ? <span>{appliedFilters.relationshipGoals}</span> : null}
           {appliedFilters.interests ? <span>{appliedFilters.interests}</span> : null}
         </div>
@@ -540,10 +623,20 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           ⓘ
         </button>
         <button
+          onClick={handleSuperlike}
+          className="btn-action btn-superlike"
+          title="Superlike"
+          aria-label="Superlike"
+          disabled={remainingSuperlikes <= 0}
+        >
+          ⭐
+        </button>
+        <button
           onClick={handleLike}
           className="btn-action btn-like"
           title="Like this profile"
           aria-label="Like"
+          disabled={remainingLikes <= 0}
         >
           ♥
         </button>

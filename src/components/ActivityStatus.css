@@ -1,0 +1,200 @@
+/**
+ * ActivityStatus Styles
+ */
+
+.activity-status {
+  display: inline-block;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+}
+
+.activity-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+
+  &:hover {
+    background-color: #efefef;
+    border-color: #bbb;
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
+}
+
+/* Active state */
+.activity-status.active .activity-button {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+  color: #1976d2;
+}
+
+.activity-status.active .activity-button:hover {
+  background-color: #bbdefb;
+}
+
+/* Activity emoji */
+.activity-emoji {
+  font-size: 16px;
+  display: inline-block;
+}
+
+/* Activity label */
+.activity-label {
+  white-space: nowrap;
+}
+
+/* Activity pulse animation */
+.activity-pulse {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  background-color: #2196f3;
+  border-radius: 50%;
+  transform: translateY(-50%);
+  animation: activity-pulse 1.5s infinite;
+}
+
+@keyframes activity-pulse {
+  0% {
+    transform: translateY(-50%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-50%) scale(2);
+    opacity: 0;
+  }
+}
+
+/* Error message */
+.activity-error {
+  padding: 6px 12px;
+  margin-top: 8px;
+  background-color: #ffebee;
+  border: 1px solid #ffcdd2;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #c62828;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Variants */
+.activity-status.viewing_profile .activity-button {
+  color: #d32f2f;
+
+  &:hover {
+    border-color: #d32f2f;
+  }
+}
+
+.activity-status.viewing_profile.active .activity-button {
+  background-color: #ffebee;
+  border-color: #d32f2f;
+  color: #d32f2f;
+}
+
+.activity-status.voice_calling .activity-button {
+  color: #388e3c;
+
+  &:hover {
+    border-color: #388e3c;
+  }
+}
+
+.activity-status.voice_calling.active .activity-button {
+  background-color: #e8f5e9;
+  border-color: #388e3c;
+  color: #388e3c;
+}
+
+.activity-status.video_calling .activity-button {
+  color: #f57c00;
+
+  &:hover {
+    border-color: #f57c00;
+  }
+}
+
+.activity-status.video_calling.active .activity-button {
+  background-color: #fff3e0;
+  border-color: #f57c00;
+  color: #f57c00;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .activity-button {
+    background-color: #333;
+    border-color: #555;
+    color: #fff;
+
+    &:hover {
+      background-color: #444;
+      border-color: #666;
+    }
+  }
+
+  .activity-status.active .activity-button {
+    background-color: #1a237e;
+    border-color: #2196f3;
+    color: #64b5f6;
+  }
+
+  .activity-status.active .activity-button:hover {
+    background-color: #283593;
+  }
+
+  .activity-error {
+    background-color: #330000;
+    border-color: #660000;
+    color: #ff6b6b;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .activity-button {
+    padding: 6px 12px;
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .activity-emoji {
+    font-size: 14px;
+  }
+
+  .activity-pulse {
+    width: 6px;
+    height: 6px;
+    right: 6px;
+  }
+
+  .activity-error {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+}

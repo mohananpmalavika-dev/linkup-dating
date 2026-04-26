@@ -1,0 +1,269 @@
+/**
+ * ConnectionStatus Styles
+ */
+
+.connection-status {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  background-color: #f5f5f5;
+}
+
+.connection-status.connected {
+  border-color: #4caf50;
+  background-color: #f1f8e9;
+}
+
+.connection-status.disconnected {
+  border-color: #f44336;
+  background-color: #ffebee;
+}
+
+.status-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.connection-status.connected .status-dot {
+  background-color: #4caf50;
+  box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+  animation: pulse 2s infinite;
+}
+
+.connection-status.disconnected .status-dot {
+  background-color: #f44336;
+  box-shadow: 0 0 0 2px rgba(244, 67, 54, 0.2);
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgba(76, 175, 80, 0);
+  }
+}
+
+.status-text {
+  flex: 1;
+  color: #333;
+}
+
+.connection-status.connected .status-text {
+  color: #2e7d32;
+}
+
+.connection-status.disconnected .status-text {
+  color: #c62828;
+}
+
+.latency-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background-color: rgba(255, 255, 255, 0.7);
+  border-radius: 6px;
+}
+
+.latency-value {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background-color: #fff;
+}
+
+.latency-value.excellent {
+  color: #2e7d32;
+  background-color: #e8f5e9;
+}
+
+.latency-value.good {
+  color: #558b2f;
+  background-color: #f1f8e9;
+}
+
+.latency-value.fair {
+  color: #e65100;
+  background-color: #fff3e0;
+}
+
+.latency-value.poor {
+  color: #c62828;
+  background-color: #ffebee;
+}
+
+.latency-value.unknown {
+  color: #999;
+  background-color: #f5f5f5;
+}
+
+.latency-label {
+  font-size: 12px;
+  color: #666;
+  flex: 1;
+}
+
+.last-check {
+  font-size: 11px;
+  color: #999;
+  text-align: right;
+}
+
+/* Compact variant */
+.connection-status-compact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  background-color: transparent;
+  border: 1px solid #e0e0e0;
+  transition: all 0.2s ease;
+}
+
+.connection-status-compact.connected {
+  border-color: #4caf50;
+  background-color: rgba(76, 175, 80, 0.05);
+}
+
+.connection-status-compact.disconnected {
+  border-color: #f44336;
+  background-color: rgba(244, 67, 54, 0.05);
+}
+
+.connection-status-compact .status-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.connection-status-compact.connected .status-dot {
+  background-color: #4caf50;
+  animation: pulse 2s infinite;
+}
+
+.connection-status-compact.disconnected .status-dot {
+  background-color: #f44336;
+}
+
+.latency {
+  font-weight: 600;
+  color: #333;
+}
+
+.connection-status-compact.connected .latency {
+  color: #2e7d32;
+}
+
+.connection-status-compact.disconnected .latency {
+  color: #c62828;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .connection-status {
+    background-color: #333;
+    border-color: #555;
+  }
+
+  .connection-status.connected {
+    border-color: #4caf50;
+    background-color: #1b5e20;
+  }
+
+  .connection-status.disconnected {
+    border-color: #f44336;
+    background-color: #b71c1c;
+  }
+
+  .status-text {
+    color: #ccc;
+  }
+
+  .latency-info {
+    background-color: rgba(0, 0, 0, 0.2);
+  }
+
+  .latency-value {
+    background-color: #444;
+    color: #ccc;
+  }
+
+  .latency-label {
+    color: #999;
+  }
+
+  .last-check {
+    color: #888;
+  }
+
+  .connection-status-compact {
+    background-color: rgba(128, 128, 128, 0.1);
+    border-color: #555;
+  }
+
+  .latency {
+    color: #ccc;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .connection-status {
+    padding: 10px;
+  }
+
+  .status-header {
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .latency-info {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .latency-value {
+    font-size: 12px;
+    padding: 3px 6px;
+  }
+
+  .latency-label {
+    font-size: 11px;
+  }
+
+  .last-check {
+    font-size: 10px;
+  }
+
+  .connection-status-compact {
+    gap: 4px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .connection-status-compact .status-dot {
+    width: 6px;
+    height: 6px;
+  }
+}

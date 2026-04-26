@@ -117,6 +117,23 @@
   transition: background 0.2s;
 }
 
+.btn-schedule-call {
+  min-width: 72px;
+  height: 40px;
+  border-radius: 20px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-schedule-call:hover {
+  background: #dbe4ff;
+}
+
 .btn-video-call:hover {
   background: #764ba2;
 }

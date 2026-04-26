@@ -1,0 +1,96 @@
+/**
+ * TypingIndicator Styles
+ */
+
+.typing-indicator-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #f5f5f5;
+  border-radius: 16px;
+  font-size: 13px;
+  color: #666;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.typing-text {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.typing-dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #999;
+  animation: typing 1.4s infinite;
+}
+
+.typing-dots .dot:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-dots .dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots .dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%,
+  60%,
+  100% {
+    opacity: 0.5;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-8px);
+  }
+}
+
+/* Dark mode variant */
+@media (prefers-color-scheme: dark) {
+  .typing-indicator-container {
+    background-color: #333;
+    color: #ccc;
+  }
+
+  .typing-dots .dot {
+    background-color: #999;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .typing-indicator-container {
+    padding: 6px 10px;
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .typing-dots .dot {
+    width: 5px;
+    height: 5px;
+  }
+}

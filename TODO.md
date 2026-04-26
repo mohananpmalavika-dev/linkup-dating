@@ -1,85 +1,127 @@
-# Dating App Model Improvements - TODO
+# Dating App Module - Functional Improvements TODO
 
-## Phase 1: Critical Infrastructure ✅ COMPLETE
+## Status: Phase 1 Partially Complete
 
-### Step 1: Install Dependencies
-- [x] Update backend/package.json with new dependencies
-- [x] Run npm install in backend/ (164 packages added)
+### ✅ Completed
 
-### Step 2: Sequelize ORM Setup
-- [x] Create backend/.sequelizerc (Sequelize CLI config)
-- [x] Create backend/config/sequelize.js (environment-based DB config)
-- [x] Create backend/models/index.js (Sequelize initialization)
-- [x] Create backend/models/User.js
-- [x] Create backend/models/DatingProfile.js
-- [x] Create backend/models/UserPreference.js
-- [x] Create backend/models/Interaction.js
-- [x] Create backend/models/Match.js
-- [x] Create backend/models/Message.js
-- [x] Create backend/models/ProfilePhoto.js
-- [x] Create backend/models/UserBlock.js
-- [x] Create backend/models/UserReport.js
-- [x] Create backend/models/Chatroom.js
-- [x] Create backend/models/ChatroomMember.js
-- [x] Create backend/models/ChatroomMessage.js
-- [x] Create backend/models/LobbyMessage.js
-- [x] Create backend/models/VideoDate.js
-- [x] Create backend/models/VerificationToken.js
-- [x] Create backend/models/MessageReaction.js
-- [x] Create backend/models/AdminAction.js
-- [x] Create backend/models/UserAnalytics.js
-- [x] Create backend/models/UserSessionLog.js
-- [x] Create backend/models/SpamFlag.js
-- [x] Create backend/models/FraudFlag.js
-- [x] Create backend/models/SystemMetric.js
+#### 1. Backend: User Preferences Endpoints
+- **File**: `backend/routes/dating.js`
+- **Added**:
+  - `GET /dating/preferences` - Retrieve user preferences with defaults
+  - `PUT /dating/preferences` - Update user preferences (upsert)
+- **Features**: Age range, location radius, gender preferences, relationship goals, interests, height range, body types, privacy settings
 
-### Step 3: Database Migrations
-- [ ] Initialize Sequelize CLI (`npx sequelize-cli init`)
-- [ ] Create migration for all tables
-- [ ] Create migration for indexes
+#### 2. Frontend Service: Preferences Methods
+- **File**: `src/services/datingProfileService.js`
+- **Added**:
+  - `getPreferences()` - Fetch user preferences
+  - `updatePreferences(preferences)` - Save user preferences
 
-### Step 4: Redis Setup
-- [x] Create backend/utils/redis.js (Redis client with OTP helpers)
-- [x] Update auth.js to use Redis for OTP (removed in-memory Map)
+### 🔄 Remaining Phase 1 Tasks
 
-### Step 5: Validation Middleware
-- [x] Create backend/middleware/validation.js (express-validator)
-- [x] Add validators for auth routes (signup, login, OTP, username)
-- [x] Add validators for dating routes (profile, photos, blocks, reports)
+#### 3. Frontend: Preferences UI Component
+- **Create**: `src/components/DatingPreferences.js`
+- **Features needed**:
+  - Tabbed interface in AccountSettings OR standalone component
+  - Age range slider/inputs
+  - Location radius slider
+  - Gender preference checkboxes
+  - Relationship goal checkboxes
+  - Interest selection
+  - Height range inputs
+  - Body type checkboxes
+  - Privacy toggles (show profile, allow messages, notifications)
 
-### Step 6: Rate Limiting
-- [x] Create backend/middleware/rateLimit.js (Redis-backed rate limiting)
-- [x] Apply to auth routes (5 attempts per 15 min)
-- [x] Apply to OTP routes (3 attempts per hour)
-- [x] Apply to API routes (100 requests per 15 min)
+#### 4. Backend: Discovery Location Filtering
+- **File**: `backend/routes/dating.js`
+- **Current issue**: Discovery query doesn't use `locationRadius` from preferences
+- **Fix needed**: Add geospatial distance calculation using lat/lng
 
-### Step 7: Logging
-- [x] Create backend/utils/logger.js (Winston logging)
-- [x] Integrate with Express (request logging middleware)
+#### 5. Backend: Gender Preference Filtering
+- **File**: `backend/routes/dating.js`
+- **Current issue**: Discovery doesn't filter by gender preferences
+- **Fix needed**: Add gender filter to discovery query
 
-### Step 8: Update Server
-- [x] Add request logging middleware
-- [x] Configure Helmet with CSP headers
-- [x] Add Sequelize sync (development mode)
-- [x] Integrate Winston error logging
+#### 6. Superlike Feature
+- **Backend**: Add `POST /interactions/superlike` endpoint
+- **Frontend**: Add superlike button to DiscoveryCards
+- **Limit**: 1/day free, 5/day premium
 
-## Phase 2: Database & Performance (Next)
-- [ ] Migrate photos to Cloudinary/S3 (remove base64 from DB)
-- [ ] Add geospatial indexes for location matching
-- [ ] Add missing database indexes (composite, GIN for JSONB)
-- [ ] Add database transactions for match creation
-- [ ] Add soft deletes for GDPR compliance
-- [ ] Redis caching for popular profiles
+#### 7. Daily Like Limits
+- **Backend**: Track daily likes in UserAnalytics
+- **Limit**: 50/day free, unlimited premium
+- **Frontend**: Show remaining likes counter
 
-## Phase 3: Dating Core Improvements (Next)
-- [ ] Fix discovery algorithm (respect preferences, exclude blocks)
-- [ ] Add geospatial queries (PostGIS/Earthdistance)
-- [ ] Improve compatibility scoring algorithm
-- [ ] Add user activity tracking
-- [ ] Create RecommendationService
+---
 
-## Phase 4: Safety & Moderation (Next)
-- [ ] Block-aware middleware for all routes
-- [ ] Auto-moderation for spam/fraud flagged users
-- [ ] Rate limit messaging per user
-- [ ] Content moderation queue
+## Phase 2: Engagement Features (Pending)
+
+### 8. Top Picks / Most Compatible
+- Daily curated list based on compatibility score
+- Premium refresh feature
+
+### 9. Rewind Feature (Undo Pass)
+- Store last 10 passes for undo
+- 3/day free limit
+
+### 10. Media Sharing in Chat
+- Image upload support
+- Voice notes
+- Backend message media support
+
+### 11. Daily Questions/Prompts
+- Profile prompts for better conversations
+- Display in profile view
+
+### 12. Enhanced Notifications
+- Per-type notification preferences
+- Email digest option
+
+---
+
+## Phase 3: Safety & Premium (Pending)
+
+### 13. Photo Verification
+- Selfie verification flow
+- "Photo verified" badge
+
+### 14. Premium Features
+- Unlimited likes, boosts, rewind
+- See who liked you
+- Stripe integration
+
+### 15. Message Requests
+- Non-match message requests
+- Accept/decline flow
+
+---
+
+## Phase 4: Performance (Pending)
+
+### 16. Redis Caching
+- Cache profiles (5min TTL)
+- Cache matches (2min TTL)
+
+### 17. Optimistic Updates
+- Instant like/pass feedback
+
+### 18. Offline Support
+- Service worker caching
+
+---
+
+## Files Modified
+
+| Date | File | Change |
+|------|------|--------|
+| Today | `backend/routes/dating.js` | Added GET/PUT /preferences endpoints |
+| Today | `src/services/datingProfileService.js` | Added getPreferences/updatePreferences methods |
+
+---
+
+## Next Steps
+
+1. **Complete DatingPreferences component** - Create proper JSX component with all closing tags
+2. **Integrate preferences into DiscoveryCards** - Use preferences for filtering
+3. **Add superlike button** - To DiscoveryCards component
+4. **Implement daily like limits** - Backend tracking + frontend display

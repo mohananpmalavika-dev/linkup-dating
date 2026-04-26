@@ -1,116 +1,122 @@
 const rateLimit = require('express-rate-limit');
-const RedisStore = require('rate-limit-redis');
 const { redis } = require('../utils/redis');
 
-// General API rate limiter
-const apiLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: 'rl:api:'
-  }),
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+let RedisStore = null;
+
+try {
+  const importedRedisStore = require('rate-limit-redis');
+  RedisStore = importedRedisStore.default || importedRedisStore;
+} catch (error) {
+  RedisStore = null;
+}
+
+const userOrIpKeyGenerator = (req) => req.user?.id || req.ip;
+
+const buildStore = (prefix) => {
+  if (!RedisStore || !redis) {
+    return undefined;
+  }
+
+  try {
+    return new RedisStore({
+      client: redis,
+      prefix
+    });
+  } catch (error) {
+    console.warn(`Rate limiter store fallback enabled for ${prefix}: ${error.message}`);
+    return undefined;
+  }
+};
+
+const buildRateLimitConfig = (options, prefix) => {
+  const config = { ...options };
+  const store = buildStore(prefix);
+
+  if (store) {
+    config.store = store;
+  }
+
+  return config;
+};
+
+const createRateLimiter = (options, prefix) =>
+  rateLimit(buildRateLimitConfig(options, prefix));
+
+const apiLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: {
     error: 'Too many requests from this IP, please try again later.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
-});
+  legacyHeaders: false
+}, 'rl:api:');
 
-// Strict limiter for auth endpoints
-const authLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: 'rl:auth:'
-  }),
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per windowMs
+const authLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
   skipSuccessfulRequests: true,
   message: {
-    error: 'Too many authentication attempts, please try again after 15 minutes.'
+    error: 'Too many login attempts. Please try again later.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
-});
+  legacyHeaders: false
+}, 'rl:auth:');
 
-// OTP rate limiter
-const otpLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: 'rl:otp:'
-  }),
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // limit each IP to 3 OTP requests per hour
+const otpLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 3,
+  skipSuccessfulRequests: true,
   message: {
-    error: 'Too many OTP requests, please try again after an hour.'
+    error: 'Too many OTP requests. Please try again later.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
-});
+  legacyHeaders: false
+}, 'rl:otp:');
 
-// Message rate limiter
-const messageLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: 'rl:msg:'
-  }),
-  windowMs: 60 * 1000, // 1 minute
-  max: 30, // limit each IP to 30 messages per minute
-  keyGenerator: (req) => req.user?.id || req.ip,
+const messageLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyGenerator: userOrIpKeyGenerator,
   message: {
     error: 'Too many messages sent, please slow down.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
-});
+  legacyHeaders: false
+}, 'rl:msg:');
 
-// Profile view rate limiter (prevent scraping)
-const profileViewLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: 'rl:profile:'
-  }),
-  windowMs: 60 * 1000, // 1 minute
-  max: 60, // limit each user to 60 profile views per minute
-  keyGenerator: (req) => req.user?.id || req.ip,
+const profileViewLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 60,
+  keyGenerator: userOrIpKeyGenerator,
   message: {
     error: 'Too many profile views, please slow down.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
-});
+  legacyHeaders: false
+}, 'rl:profile:');
 
-// Like/pass rate limiter
-const interactionLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: 'rl:interaction:'
-  }),
-  windowMs: 60 * 1000, // 1 minute
-  max: 50, // limit each user to 50 interactions per minute
-  keyGenerator: (req) => req.user?.id || req.ip,
+const interactionLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 50,
+  keyGenerator: userOrIpKeyGenerator,
   message: {
     error: 'Too many interactions, please slow down.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
-});
+  legacyHeaders: false
+}, 'rl:interaction:');
 
-// Report rate limiter
-const reportLimiter = rateLimit({
-  store: new RedisStore({
-    client: redis,
-    prefix: 'rl:report:'
-  }),
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // limit each user to 5 reports per hour
-  keyGenerator: (req) => req.user?.id || req.ip,
+const reportLimiter = createRateLimiter({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  keyGenerator: userOrIpKeyGenerator,
   message: {
     error: 'Too many reports submitted, please try again later.'
   },
   standardHeaders: true,
-  legacyHeaders: false,
-});
+  legacyHeaders: false
+}, 'rl:report:');
 
 module.exports = {
   apiLimiter,

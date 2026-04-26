@@ -17,7 +17,15 @@ const buildLikeProfileContext = (like) => ({
   }
 });
 
-const Matches = ({ pageLabel = 'Matches', onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) => {
+const Matches = ({
+  pageLabel = 'Matches',
+  onMatchCreated,
+  onScheduleVideoCall,
+  onSelectMatch,
+  onUnmatch,
+  onViewProfile,
+  onStartVideoCall
+}) => {
   const location = useLocation();
   const [matches, setMatches] = useState([]);
   const [likesReceived, setLikesReceived] = useState([]);
@@ -302,7 +310,7 @@ const Matches = ({ pageLabel = 'Matches', onMatchCreated, onSelectMatch, onUnmat
                 </button>
                 <button
                   className="btn-video"
-                  onClick={() => onStartVideoCall?.(match)}
+                  onClick={() => onStartVideoCall?.(match, location.pathname)}
                   title="Start Video Call"
                 >
                   📹
@@ -320,6 +328,9 @@ const Matches = ({ pageLabel = 'Matches', onMatchCreated, onSelectMatch, onUnmat
                 <div id={`menu-${match.id}`} className="action-menu">
                   <button onClick={() => onViewProfile?.(match)}>
                     View Profile
+                  </button>
+                  <button onClick={() => onScheduleVideoCall?.(match, location.pathname)}>
+                    Schedule Video Call
                   </button>
                   <button onClick={() => handleUnmatch(match.id)}>
                     Unmatch

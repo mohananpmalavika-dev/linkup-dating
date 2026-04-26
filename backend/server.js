@@ -8,7 +8,6 @@ require('dotenv').config();
 const db = require('./config/database');
 const { logger, logRequest } = require('./utils/logger');
 const { apiLimiter, authLimiter, otpLimiter } = require('./middleware/rateLimit');
-const dbModels = require('./models');
 const authRoutes = require('./routes/auth');
 const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
@@ -20,6 +19,7 @@ const ordersRoutes = require('./routes/orders');
 const appDataRoutes = require('./routes/app-data');
 const astrologyRoutes = require('./routes/astrology');
 const flashsalesRoutes = require('./routes/flashsales');
+const videoCallRoutes = require('./routes/video-calls');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
@@ -177,7 +177,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('call:invite', (data = {}) => {
-    const { callId, targetUserId, callType = 'video', matchId, fromUserName } = data;
+    const { callId, targetUserId, callType = 'video', matchId, fromUserName, videoDateId } = data;
 
     if (!targetUserId || !callId) {
       return;
@@ -186,6 +186,7 @@ io.on('connection', (socket) => {
     emitToUser(targetUserId, 'call:incoming', {
       callId,
       matchId,
+      videoDateId: videoDateId || null,
       callType,
       fromUserId: socket.data.userId || null,
       fromUserName: fromUserName || null,
@@ -269,6 +270,38 @@ io.on('connection', (socket) => {
     });
   });
 
+  socket.on('call:settings', (data = {}) => {
+    const {
+      callId,
+      targetUserId,
+      matchId,
+      videoDateId,
+      qualityPreset,
+      virtualBackground,
+      screenShareEnabled,
+      recordingRequested,
+      recordingEnabled,
+      recordingConsent
+    } = data;
+
+    if (!targetUserId || !callId) {
+      return;
+    }
+
+    emitToUser(targetUserId, 'call:settings', {
+      callId,
+      matchId,
+      videoDateId,
+      fromUserId: socket.data.userId || null,
+      qualityPreset: qualityPreset || null,
+      virtualBackground: virtualBackground || null,
+      screenShareEnabled: screenShareEnabled === undefined ? null : Boolean(screenShareEnabled),
+      recordingRequested: recordingRequested === undefined ? null : Boolean(recordingRequested),
+      recordingEnabled: recordingEnabled === undefined ? null : Boolean(recordingEnabled),
+      recordingConsent: recordingConsent === undefined ? null : Boolean(recordingConsent)
+    });
+  });
+
   socket.on('disconnect', () => {
     const offlineResult = markUserOffline(socket.id);
 
@@ -313,6 +346,7 @@ app.use('/api/orders', ordersRoutes);
 app.use('/api/app-data', appDataRoutes);
 app.use('/api/astrology', astrologyRoutes);
 app.use('/api/flashsales', flashsalesRoutes);
+app.use('/api/dating/video-calls', authenticateToken, videoCallRoutes);
 app.use('/api/dating', authenticateToken, datingRoutes);
 app.use('/api/messaging', authenticateToken, messagingRoutes);
 app.use('/api/chatrooms', authenticateToken, chatroomsRoutes);
@@ -358,27 +392,53 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Initialize database and start server
 const PORT = process.env.PORT || 5000;
 
-db.init().then(() => {
-  // Sync Sequelize models (alter: true for development, use migrations in production)
-  if (process.env.NODE_ENV !== 'production') {
-    dbModels.sequelize.sync({ alter: true }).then(() => {
-      logger.info('Sequelize models synchronized');
-    }).catch(err => {
-      logger.error('Sequelize sync error:', err.message);
-    });
+const startServer = () => {
+  if (server.listening) {
+    return;
   }
-  
+
   server.listen(PORT, () => {
     logger.info(`🚀 Dating app backend running on http://localhost:${PORT}`);
     logger.info(`📱 WebSocket enabled for real-time features`);
     logger.info(`🗄️  Database: ${process.env.DB_NAME || 'linkup_dating'}`);
   });
-}).catch(err => {
-  logger.error('Failed to start server:', err);
-  process.exit(1);
-});
+};
+
+// Initialize database and start server
+db.init()
+  .then(() => {
+    // Sync Sequelize models (alter: true for development, use migrations in production)
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const dbModels = require('./models');
+
+        dbModels.sequelize.sync({ alter: true }).then(() => {
+          logger.info('Sequelize models synchronized');
+        }).catch(err => {
+          logger.error('Sequelize sync error:', err.message);
+        });
+      } catch (err) {
+        logger.error('Failed to load Sequelize models for sync', {
+          message: err.message,
+          stack: err.stack
+        });
+      }
+    }
+
+    startServer();
+  })
+  .catch(err => {
+    logger.error('Failed to initialize database:', err);
+
+    if (process.env.NODE_ENV === 'production') {
+      logger.warn('Starting server without database initialization so the app can stay online.');
+      startServer();
+      return;
+    }
+
+    process.exit(1);
+  });
 
 module.exports = { app, server, io };
