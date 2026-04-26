@@ -8,7 +8,7 @@ import '../styles/DatingSignUp.css';
  * DatingSignUp Component
  * Sign up for dating app with profile creation
  */
-const DatingSignUp = ({ onSignUpSuccess, onLoginClick }) => {
+const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
   const [step, setStep] = useState(1); // 1: Email, 2: Profile, 3: Photos
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -174,6 +174,18 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick }) => {
   return (
     <div className="dating-signup-container">
       <div className="signup-card">
+        {onBackToLaunch && (
+          <div className="signup-topbar">
+            <button
+              type="button"
+              className="btn-back"
+              onClick={onBackToLaunch}
+              disabled={loading}
+            >
+              ← Back
+            </button>
+          </div>
+        )}
         <h1>Create Your Dating Profile</h1>
 
         {error && <div className="error-message">{error}</div>}

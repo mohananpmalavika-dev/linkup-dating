@@ -102,24 +102,16 @@ const LaunchPage = ({
               className="registration-option login-option"
               onClick={() => onSelectRegistrationType("login")}
             >
-              <span>{launch.login}</span>
-              <small>{launch.loginHelp}</small>
+              <span>{launch.login || "Sign In"}</span>
+              <small>{launch.loginHelp || "Already have an account?"}</small>
             </button>
             <button
               type="button"
               className="registration-option primary-option"
               onClick={() => onSelectRegistrationType("user")}
             >
-              <span>{launch.user}</span>
-              <small>{launch.userHelp}</small>
-            </button>
-            <button
-              type="button"
-              className="registration-option secondary-option"
-              onClick={() => onSelectRegistrationType("entrepreneur")}
-            >
-              <span>{launch.entrepreneur}</span>
-              <small>{launch.entrepreneurHelp}</small>
+              <span>{launch.user || "Sign Up"}</span>
+              <small>{launch.userHelp || "Create a new dating profile"}</small>
             </button>
           </div>
         </div>

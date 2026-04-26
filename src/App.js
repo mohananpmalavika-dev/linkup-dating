@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import './App.css';
 import { AppProvider } from './contexts/AppContext';
 import ErrorBoundary from './components/ErrorBoundary';
+import LaunchPage from './components/LaunchPage';
 import DatingSignUp from './components/DatingSignUp';
 import Login from './components/Login';
 import DatingNavigation from './components/DatingNavigation';
@@ -12,12 +13,12 @@ import Matches from './components/Matches';
 import DatingMessaging from './components/DatingMessaging';
 import DatingProfile from './components/DatingProfile';
 import VideoDating from './components/VideoDating';
-import { getStoredAuthToken, storeAuthToken, clearStoredAuthToken } from './utils/auth';
+import { getStoredAuthToken, storeAuthToken, clearStoredAuthToken, storeUserData } from './utils/auth';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState('discover'); // discover, browse, matches, messages, profile
+  const [currentPage, setCurrentPage] = useState('launch'); // launch, login, signup, discover, browse, matches, messages, profile
   const [selectedMatch, setSelectedMatch] = useState(null);
   const [videoCallActive, setVideoCallActive] = useState(false);
   const [matchedProfile, setMatchedProfile] = useState(null);
@@ -25,11 +26,20 @@ function App() {
   useEffect(() => {
     const token = getStoredAuthToken();
     setIsAuthenticated(!!token);
+    setCurrentPage(token ? 'discover' : 'launch');
     setLoading(false);
   }, []);
 
-  const handleLogin = (token, userData) => {
+  const handleLoginSuccess = (userData, token) => {
+    if (!token) {
+      return;
+    }
+
     storeAuthToken(token);
+    if (userData) {
+      storeUserData(userData);
+    }
+
     setIsAuthenticated(true);
     setCurrentPage('discover');
   };
@@ -37,11 +47,19 @@ function App() {
   const handleLogout = () => {
     clearStoredAuthToken();
     setIsAuthenticated(false);
-    setCurrentPage('login');
+    setCurrentPage('launch');
   };
 
   const handleSignUpSuccess = (token, userData) => {
+    if (!token) {
+      return;
+    }
+
     storeAuthToken(token);
+    if (userData) {
+      storeUserData(userData);
+    }
+
     setIsAuthenticated(true);
     setCurrentPage('discover');
   };
@@ -77,23 +95,65 @@ function App() {
           <Routes>
             {!isAuthenticated ? (
               <>
-                {currentPage === 'signup' ? (
+                {currentPage === 'launch' && (
+                  <Route
+                    path="*"
+                    element={
+                      <LaunchPage
+                        onSelectRegistrationType={(type) => {
+                          if (type === 'login') {
+                            setCurrentPage('login');
+                          } else if (type === 'user') {
+                            setCurrentPage('signup');
+                          }
+                        }}
+                        enabledModules={['dating']}
+                        language="en"
+                        onLanguageChange={() => {}}
+                      />
+                    }
+                  />
+                )}
+                {currentPage === 'signup' && (
                   <Route
                     path="*"
                     element={
                       <DatingSignUp
                         onSignUpSuccess={handleSignUpSuccess}
                         onLoginClick={() => setCurrentPage('login')}
+                        onBackToLaunch={() => setCurrentPage('launch')}
                       />
                     }
                   />
-                ) : (
+                )}
+                {currentPage === 'login' && (
                   <Route
                     path="*"
                     element={
                       <Login
-                        onLogin={handleLogin}
+                        registrationType="login"
+                        onLoginSuccess={handleLoginSuccess}
+                        onBackToLaunch={() => setCurrentPage('launch')}
                         onSignUpClick={() => setCurrentPage('signup')}
+                      />
+                    }
+                  />
+                )}
+                {currentPage !== 'launch' && currentPage !== 'signup' && currentPage !== 'login' && (
+                  <Route
+                    path="*"
+                    element={
+                      <LaunchPage
+                        onSelectRegistrationType={(type) => {
+                          if (type === 'login') {
+                            setCurrentPage('login');
+                          } else if (type === 'user') {
+                            setCurrentPage('signup');
+                          }
+                        }}
+                        enabledModules={['dating']}
+                        language="en"
+                        onLanguageChange={() => {}}
                       />
                     }
                   />

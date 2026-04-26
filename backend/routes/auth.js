@@ -148,6 +148,69 @@ const buildAuthUserPayload = (userRecord) => {
   };
 };
 
+const createHttpError = (status, message) => {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+};
+
+const applyOtpRegistrationProfile = async (userId, email, registrationData = {}) => {
+  const normalizedUsername = String(registrationData.username || '').trim().toLowerCase();
+  const fullName = String(registrationData.fullName || '').trim() || buildDisplayNameFromEmail(email);
+  const locationCity = String(registrationData.location || registrationData.city || '').trim() || null;
+  const locationState = String(registrationData.state || '').trim() || null;
+  const locationCountry = String(registrationData.country || '').trim() || null;
+  const bio = String(registrationData.bio || '').trim() || null;
+
+  if (normalizedUsername && !/^[a-zA-Z0-9_-]{3,20}$/.test(normalizedUsername)) {
+    throw createHttpError(
+      400,
+      'Username can only contain letters, numbers, underscores, and dashes (3-20 characters)'
+    );
+  }
+
+  if (normalizedUsername) {
+    const existingUsernameResult = await db.query(
+      'SELECT user_id FROM dating_profiles WHERE LOWER(username) = LOWER($1) LIMIT 1',
+      [normalizedUsername]
+    );
+
+    if (
+      existingUsernameResult.rows.length > 0 &&
+      existingUsernameResult.rows[0].user_id !== userId
+    ) {
+      throw createHttpError(409, 'Username is already taken');
+    }
+  }
+
+  const result = await db.query(
+    `UPDATE dating_profiles
+     SET username = COALESCE($1, username),
+         first_name = COALESCE($2, first_name),
+         location_city = COALESCE($3, location_city),
+         location_state = COALESCE($4, location_state),
+         location_country = COALESCE($5, location_country),
+         bio = COALESCE($6, bio),
+         profile_completion_percent = GREATEST(COALESCE(profile_completion_percent, 0), $7),
+         last_active = CURRENT_TIMESTAMP,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE user_id = $8
+     RETURNING *`,
+    [
+      normalizedUsername || null,
+      fullName || null,
+      locationCity,
+      locationState,
+      locationCountry,
+      bio,
+      normalizedUsername || locationCity || bio ? 35 : 20,
+      userId
+    ]
+  );
+
+  return result.rows[0] || null;
+};
+
 const methodNotAllowed = (expectedMethod) => (req, res) => {
   const endpoint = `${req.baseUrl}${req.path}`;
 
@@ -586,7 +649,7 @@ router.all('/send-otp', methodNotAllowed('POST'));
 // VERIFY OTP
 router.post('/verify-otp', async (req, res) => {
   try {
-    const { otpId, otp, email, phone } = req.body;
+    const { otpId, otp, email, phone, fullName, username, location, city, state, country, bio } = req.body;
 
     if (!otp) {
       return res.status(400).json({ error: 'OTP required' });
@@ -634,9 +697,23 @@ router.post('/verify-otp', async (req, res) => {
 
     if (recipientEmail) {
       const userRecord = await ensureUserForOtpLogin(recipientEmail);
-      authenticatedUser = buildAuthUserPayload(userRecord);
+      const profileRecord = await applyOtpRegistrationProfile(userRecord.id, recipientEmail, {
+        fullName,
+        username,
+        location,
+        city,
+        state,
+        country,
+        bio
+      });
+
+      authenticatedUser = buildAuthUserPayload({
+        ...userRecord,
+        username: profileRecord?.username || userRecord.username,
+        first_name: profileRecord?.first_name || userRecord.first_name
+      });
       token = generateToken(userRecord.id);
-      needsUsernameSetup = !userRecord.username;
+      needsUsernameSetup = !(profileRecord?.username || userRecord.username);
     }
 
     res.json({
@@ -649,7 +726,7 @@ router.post('/verify-otp', async (req, res) => {
     });
   } catch (error) {
     console.error('Verify OTP error:', error);
-    res.status(500).json({ error: 'Failed to verify OTP' });
+    res.status(error.status || 500).json({ error: error.message || 'Failed to verify OTP' });
   }
 });
 

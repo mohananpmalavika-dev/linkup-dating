@@ -23,6 +23,7 @@ const Login = ({
   onBackToLaunch,
   onLoginSuccess,
   onRegistrationSubmit,
+  onSignUpClick,
 }) => {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -432,11 +433,23 @@ const Login = ({
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, {
+      const verifyPayload = {
         email,
         otp,
         otpId,
-      });
+      };
+
+      if (isUserRegistrationFlow || isEntrepreneurRegistrationFlow) {
+        verifyPayload.fullName = registrationForm.fullName.trim();
+        verifyPayload.username = registrationForm.username.trim().toLowerCase();
+        verifyPayload.phone = registrationForm.phone.trim();
+      }
+
+      if (isEntrepreneurRegistrationFlow) {
+        verifyPayload.location = registrationForm.location.trim();
+      }
+
+      const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, verifyPayload);
 
       if (response.data.success && response.data.token && response.data.user) {
         // Check if username setup is needed for first-time login users
@@ -543,7 +556,7 @@ const Login = ({
           };
         }
 
-        onLoginSuccess(
+        onLoginSuccess?.(
           mergedUser,
           response.data.token,
           mergedUser.registrationType === "admin" ? "admin" : isLoginFlow ? loginRole : mergedUser.registrationType
@@ -613,7 +626,7 @@ const Login = ({
           registrationType: loginRole,
         };
 
-        onLoginSuccess(
+        onLoginSuccess?.(
           mergedUser,
           verifiedToken,
           loginRole
@@ -1296,6 +1309,27 @@ const Login = ({
 
         <div className="login-footer">
           <p className="security-info">{loginCopy.footer}</p>
+          {isLoginFlow && onSignUpClick && !otpSent && (
+            <p className="signup-prompt">
+              Don't have an account?{" "}
+              <button
+                type="button"
+                className="signup-link"
+                onClick={onSignUpClick}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#FF6B6B",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  padding: 0,
+                  font: "inherit",
+                }}
+              >
+                Sign Up
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>
