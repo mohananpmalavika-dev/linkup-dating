@@ -41,7 +41,6 @@ const LaunchPage = ({
       }
     }
   }, [isAuthenticated, displayName]);
-  const [displayName, setDisplayName] = useState(userName);
 
   const moduleMapping = {
     GlobeMart: "ecommerce",
