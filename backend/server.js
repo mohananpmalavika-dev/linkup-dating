@@ -10,6 +10,10 @@ const authRoutes = require('./routes/auth');
 const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
 const productsRoutes = require('./routes/products');
+const ordersRoutes = require('./routes/orders');
+const appDataRoutes = require('./routes/app-data');
+const astrologyRoutes = require('./routes/astrology');
+const flashsalesRoutes = require('./routes/flashsales');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
@@ -101,7 +105,11 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/products', productsRoutes); // Products endpoint doesn't require auth for public listing
+app.use('/api/products', productsRoutes);
+app.use('/api/orders', ordersRoutes);
+app.use('/api/app-data', appDataRoutes);
+app.use('/api/astrology', astrologyRoutes);
+app.use('/api/flashsales', flashsalesRoutes);
 app.use('/api/dating', authenticateToken, datingRoutes);
 app.use('/api/messaging', authenticateToken, messagingRoutes);
 
@@ -112,8 +120,12 @@ app.get('/health', (req, res) => {
 
 // 404 Handler for undefined routes
 app.use((req, res) => {
-  res.status(404).json({
-    error: `Not Found`,
+  res.status(404).json(* (signup, login, verify, me, visibility, contact-means)',
+      products: '/api/products, /api/products/manage',
+      orders: '/api/orders/*, /api/orders/mine, /api/orders/manage, /api/orders/payment-config',
+      appData: '/api/app-data/public, /api/app-data/classifieds/*, /api/app-data/realestate/*',
+      astrology: '/api/astrology/signs, /api/astrology/daily/{sign}, /api/astrology/profile',
+      flashsales: '/api/flashsales, /api/flashsales/reserve/bulk
     message: `The endpoint ${req.method} ${req.path} does not exist`,
     availableEndpoints: {
       auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/me',

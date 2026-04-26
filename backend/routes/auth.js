@@ -219,4 +219,102 @@ router.get('/me', async (req, res) => {
   }
 });
 
+// GET VISIBILITY SETTINGS
+router.get('/visibility', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key', (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    
+    res.json({
+      success: true,
+      data: {
+        visibleViaPhone: true,
+        visibleViaEmail: true,
+        visibleViaUsername: true
+      }
+    });
+  });
+});
+
+// SET VISIBILITY SETTINGS
+router.post('/visibility', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key', (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    
+    const { visibleViaPhone, visibleViaEmail, visibleViaUsername } = req.body;
+    
+    res.json({
+      success: true,
+      message: 'Visibility settings updated',
+      data: {
+        visibleViaPhone: visibleViaPhone !== undefined ? visibleViaPhone : true,
+        visibleViaEmail: visibleViaEmail !== undefined ? visibleViaEmail : true,
+        visibleViaUsername: visibleViaUsername !== undefined ? visibleViaUsername : true
+      }
+    });
+  });
+});
+
+// GET CONTACT MEANS (Chat, Voice, Video availability)
+router.get('/contact-means', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key', (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    
+    res.json({
+      success: true,
+      data: {
+        availableForChat: true,
+        availableForVoiceCall: false,
+        availableForVideoCall: false
+      }
+    });
+  });
+});
+
+// SET CONTACT MEANS
+router.post('/contact-means', (req, res) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key', (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    
+    const { availableForChat, availableForVoiceCall, availableForVideoCall } = req.body;
+    
+    res.json({
+      success: true,
+      message: 'Contact means updated',
+      data: {
+        availableForChat: availableForChat !== undefined ? availableForChat : true,
+        availableForVoiceCall: availableForVoiceCall !== undefined ? availableForVoiceCall : false,
+        availableForVideoCall: availableForVideoCall !== undefined ? availableForVideoCall : false
+      }
+    });
+  });
+});
+
 module.exports = router;
