@@ -215,16 +215,23 @@ router.post('/search', async (req, res) => {
 router.get('/discovery', async (req, res) => {
   try {
     const userId = req.user.id;
-    const limit = req.query.limit || 10;
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found in token' });
+    }
+
+    console.log('Discovery request from user:', userId);
 
     const result = await db.query(
-      `SELECT dp.*, 
+      `SELECT dp.id, dp.user_id, dp.username, dp.first_name, dp.age, dp.gender, 
+              dp.location_city, dp.location_state, dp.bio, dp.interests,
+              dp.relationship_goals, dp.created_at,
               (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position))
                FROM profile_photos WHERE user_id = dp.user_id ORDER BY position) as photos
        FROM dating_profiles dp
        WHERE dp.user_id != $1
          AND dp.is_active = true
-         AND dp.profile_verified = true
          AND dp.user_id NOT IN (
            SELECT CASE 
              WHEN from_user_id = $1 THEN to_user_id 
@@ -237,10 +244,11 @@ router.get('/discovery', async (req, res) => {
       [userId, limit]
     );
 
-    res.json(result.rows);
+    console.log('Discovery profiles found:', result.rows.length);
+    res.json({ profiles: result.rows });
   } catch (err) {
     console.error('Discovery error:', err);
-    res.status(500).json({ error: 'Failed to get discovery profiles' });
+    res.status(500).json({ error: 'Failed to get discovery profiles', details: err.message });
   }
 });
 
