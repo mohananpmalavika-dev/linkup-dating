@@ -120,16 +120,15 @@ app.get('/health', (req, res) => {
 
 // 404 Handler for undefined routes
 app.use((req, res) => {
-  res.status(404).json(* (signup, login, verify, me, visibility, contact-means)',
+  res.status(404).json({
+    message: `The endpoint ${req.method} ${req.path} does not exist`,
+    availableEndpoints: {
+      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/me, /api/auth/visibility, /api/auth/contact-means',
       products: '/api/products, /api/products/manage',
       orders: '/api/orders/*, /api/orders/mine, /api/orders/manage, /api/orders/payment-config',
       appData: '/api/app-data/public, /api/app-data/classifieds/*, /api/app-data/realestate/*',
       astrology: '/api/astrology/signs, /api/astrology/daily/{sign}, /api/astrology/profile',
-      flashsales: '/api/flashsales, /api/flashsales/reserve/bulk
-    message: `The endpoint ${req.method} ${req.path} does not exist`,
-    availableEndpoints: {
-      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/me',
-      products: '/api/products, /api/products/manage (requires auth)',
+      flashsales: '/api/flashsales, /api/flashsales/reserve/bulk',
       dating: '/api/dating/* (requires auth)',
       messaging: '/api/messaging/* (requires auth)',
       health: '/health'
