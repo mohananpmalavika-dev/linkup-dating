@@ -26,20 +26,29 @@ import VideoDating from './components/VideoDating';
 import ChatRooms from './components/ChatRooms';
 import ChatRoomView from './components/ChatRoomView';
 import LobbyChat from './components/LobbyChat';
+import AdminDashboard from './components/AdminDashboard';
 import datingProfileService from './services/datingProfileService';
 import datingMessagingService from './services/datingMessagingService';
 import notificationService from './services/notificationService';
 import { BACKEND_BASE_URL } from './utils/api';
 import {
   clearStoredAuthToken,
+  clearStoredUserData,
   getStoredAuthToken,
   getStoredUserData,
   storeAuthToken,
   storeUserData
 } from './utils/auth';
 
+const ADMIN_DASHBOARD_ROUTE = '/admin-dashboard';
 const DEFAULT_AUTHENTICATED_ROUTE = '/discover';
-const DEFAULT_MESSAGES_ROUTE = '/matches';
+const DEFAULT_MESSAGES_ROUTE = '/messages';
+
+const isAdminUser = (user) =>
+  Boolean(user && (user.isAdmin || user.is_admin || user.role === 'admin' || user.registrationType === 'admin'));
+
+const getDefaultAuthenticatedRouteForUser = (user) =>
+  isAdminUser(user) ? ADMIN_DASHBOARD_ROUTE : DEFAULT_AUTHENTICATED_ROUTE;
 
 const normalizeProfileContext = (profile) => {
   if (!profile) {
@@ -65,6 +74,10 @@ const inferNavigationPage = (pathname, returnPath = '') => {
   }
 
   if (/^\/matches\/[^/]+\/chat$/i.test(targetPath)) {
+    return 'messages';
+  }
+
+  if (targetPath.startsWith('/messages')) {
     return 'messages';
   }
 
@@ -203,6 +216,7 @@ const ChatRoomDetailRoute = ({
 const AppContent = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [currentUser, setCurrentUser] = useState(() => getStoredUserData());
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
@@ -211,20 +225,20 @@ const AppContent = () => {
   const [lastOpenedMatchRoute, setLastOpenedMatchRoute] = useState('');
   const [incomingCall, setIncomingCall] = useState(null);
   const appSocketRef = useRef(null);
+  const isAdminSession = isAdminUser(currentUser);
+  const defaultAuthenticatedRoute = getDefaultAuthenticatedRouteForUser(currentUser);
 
-  const loadStoredUserName = useCallback(() => {
-    const userData = getStoredUserData();
-
+  const loadStoredUserName = useCallback((userData = currentUser) => {
     if (userData) {
-      setUserName(userData.firstName || userData.username || userData.email || '');
+      setUserName(userData.firstName || userData.username || userData.name || userData.email || '');
       return;
     }
 
     setUserName('');
-  }, []);
+  }, [currentUser]);
 
   const refreshDatingCounts = useCallback(async () => {
-    if (!getStoredAuthToken()) {
+    if (!getStoredAuthToken() || isAdminSession) {
       setUnreadCount(0);
       setMatchCount(0);
       return;
@@ -241,15 +255,17 @@ const AppContent = () => {
     } catch (countError) {
       console.error('Failed to refresh dating counts:', countError);
     }
-  }, []);
+  }, [isAdminSession]);
 
   useEffect(() => {
     const token = getStoredAuthToken();
     const authenticated = Boolean(token);
+    const storedUser = getStoredUserData();
 
+    setCurrentUser(storedUser);
     setIsAuthenticated(authenticated);
     if (authenticated) {
-      loadStoredUserName();
+      loadStoredUserName(storedUser);
     } else {
       setUserName('');
     }
@@ -258,12 +274,12 @@ const AppContent = () => {
   }, [loadStoredUserName]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isAdminSession) {
       return;
     }
 
     refreshDatingCounts();
-  }, [isAuthenticated, location.pathname, refreshDatingCounts]);
+  }, [isAdminSession, isAuthenticated, location.pathname, refreshDatingCounts]);
 
   useEffect(() => {
     if (/^\/matches\/[^/]+\/chat$/i.test(location.pathname)) {
@@ -272,14 +288,13 @@ const AppContent = () => {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || isAdminSession) {
       appSocketRef.current?.disconnect();
       appSocketRef.current = null;
       setIncomingCall(null);
       return undefined;
     }
 
-    const currentUser = getStoredUserData();
     if (!currentUser?.id) {
       return undefined;
     }
@@ -342,7 +357,7 @@ const AppContent = () => {
         appSocketRef.current = null;
       }
     };
-  }, [isAuthenticated, refreshDatingCounts]);
+  }, [currentUser, isAdminSession, isAuthenticated, refreshDatingCounts]);
 
   const handleLoginSuccess = (userData, token) => {
     if (!token) {
@@ -354,14 +369,26 @@ const AppContent = () => {
       storeUserData(userData);
     }
 
+    const nextUser = userData || null;
+
+    setCurrentUser(nextUser);
     setIsAuthenticated(true);
-    loadStoredUserName();
-    refreshDatingCounts();
-    navigate(DEFAULT_AUTHENTICATED_ROUTE, { replace: true });
+    loadStoredUserName(nextUser);
+
+    if (isAdminUser(nextUser)) {
+      setUnreadCount(0);
+      setMatchCount(0);
+    } else {
+      refreshDatingCounts();
+    }
+
+    navigate(getDefaultAuthenticatedRouteForUser(nextUser), { replace: true });
   };
 
   const handleLogout = () => {
     clearStoredAuthToken();
+    clearStoredUserData();
+    setCurrentUser(null);
     setIsAuthenticated(false);
     setUnreadCount(0);
     setMatchCount(0);
@@ -381,10 +408,20 @@ const AppContent = () => {
       storeUserData(userData);
     }
 
+    const nextUser = userData || null;
+
+    setCurrentUser(nextUser);
     setIsAuthenticated(true);
-    loadStoredUserName();
-    refreshDatingCounts();
-    navigate(DEFAULT_AUTHENTICATED_ROUTE, { replace: true });
+    loadStoredUserName(nextUser);
+
+    if (isAdminUser(nextUser)) {
+      setUnreadCount(0);
+      setMatchCount(0);
+    } else {
+      refreshDatingCounts();
+    }
+
+    navigate(getDefaultAuthenticatedRouteForUser(nextUser), { replace: true });
   };
 
   const handleVideoCall = (profile, returnPath = location.pathname) => {
@@ -510,24 +547,7 @@ const AppContent = () => {
         navigate('/matches');
         break;
       case 'messages':
-        if (lastOpenedMatchRoute) {
-          navigate(lastOpenedMatchRoute);
-          break;
-        }
-
-        try {
-          const matchesData = await datingProfileService.getMatches(1);
-          const firstMatch = normalizeProfileContext(matchesData.matches?.[0]);
-
-          if (firstMatch?.matchId) {
-            handleOpenMessages(firstMatch, '/matches');
-            break;
-          }
-        } catch (messagesNavigationError) {
-          console.error('Failed to load a conversation for messages navigation:', messagesNavigationError);
-        }
-
-        navigate('/matches', {
+        navigate('/messages', {
           state: {
             focusMessages: true,
             messagesRequestedAt: Date.now()
@@ -563,7 +583,7 @@ const AppContent = () => {
     <ErrorBoundary>
       <AppProvider
         onLogout={handleLogout}
-        loggedInUser={getStoredUserData()}
+        loggedInUser={currentUser}
         authToken={getStoredAuthToken()}
       >
         <Routes>
@@ -587,7 +607,7 @@ const AppContent = () => {
                   userName={userName}
                 />
               ) : (
-                <Navigate to={DEFAULT_AUTHENTICATED_ROUTE} replace />
+                <Navigate to={defaultAuthenticatedRoute} replace />
               )
             }
           />
@@ -602,7 +622,7 @@ const AppContent = () => {
                   onSignUpClick={() => navigate('/signup')}
                 />
               ) : (
-                <Navigate to={DEFAULT_AUTHENTICATED_ROUTE} replace />
+                <Navigate to={defaultAuthenticatedRoute} replace />
               )
             }
           />
@@ -616,19 +636,35 @@ const AppContent = () => {
                   onBackToLaunch={() => navigate('/')}
                 />
               ) : (
-                <Navigate to={DEFAULT_AUTHENTICATED_ROUTE} replace />
+                <Navigate to={defaultAuthenticatedRoute} replace />
+              )
+            }
+          />
+          <Route
+            path="/admin-dashboard"
+            element={
+              isAuthenticated ? (
+                isAdminSession ? (
+                  <AdminDashboard onLogout={handleLogout} />
+                ) : (
+                  <Navigate to={DEFAULT_AUTHENTICATED_ROUTE} replace />
+                )
+              ) : (
+                <Navigate to="/" replace />
               )
             }
           />
           <Route
             path="/*"
             element={
-              isAuthenticated ? (
+              isAuthenticated && !isAdminSession ? (
                 <AuthenticatedDatingLayout
                   matchCount={matchCount}
                   onPageChange={handleNavigationChange}
                   unreadCount={unreadCount}
                 />
+              ) : isAuthenticated ? (
+                <Navigate to={defaultAuthenticatedRoute} replace />
               ) : (
                 <Navigate to="/" replace />
               )
@@ -662,9 +698,21 @@ const AppContent = () => {
               }
             />
             <Route
+              path="messages"
+              element={
+                <DatingMessaging
+                  onBack={() => navigate('/matches')}
+                  onViewProfile={(profile) => handleOpenProfile(profile, '/messages')}
+                  onVideoCall={handleVideoCall}
+                  onConversationActivity={handleConversationActivity}
+                />
+              }
+            />
+            <Route
               path="matches"
               element={
                 <Matches
+                  pageLabel="Matches"
                   onSelectMatch={(match) => handleOpenMessages(match, '/matches')}
                   onMatchCreated={refreshDatingCounts}
                   onUnmatch={handleUnmatch}

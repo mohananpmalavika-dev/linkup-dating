@@ -5,6 +5,28 @@ const db = require('../config/database');
  * Monitors user behavior for suspicious patterns
  */
 
+const SUSPICIOUS_MESSAGE_KEYWORDS = [
+  'whatsapp',
+  'telegram',
+  'bitcoin',
+  'crypto',
+  'investment',
+  'cashapp',
+  'gift card',
+  'sugar daddy',
+  'onlyfans',
+  'escort'
+];
+const MESSAGE_URL_PATTERN = /(https?:\/\/|www\.)/gi;
+const REPEATED_CHARACTER_PATTERN = /(.)\1{7,}/;
+const toCount = (value) => Number.parseInt(value, 10) || 0;
+const getMetricDate = () => new Date().toISOString().split('T')[0];
+const getClientIpAddress = (value = '') =>
+  String(value || '')
+    .split(',')[0]
+    .trim()
+    .slice(0, 45) || null;
+
 const spamFraudService = {
   /**
    * Check user for spam behavior
@@ -199,6 +221,107 @@ const spamFraudService = {
   },
 
   /**
+   * Filter and score an outgoing message for spam
+   */
+  evaluateMessageForSpam: async (userId, messageText) => {
+    try {
+      const normalizedMessage = String(messageText || '').trim();
+
+      if (!normalizedMessage) {
+        return { blocked: false, flagged: false, score: 0, reasons: [] };
+      }
+
+      const loweredMessage = normalizedMessage.toLowerCase();
+      const detectedLinks = normalizedMessage.match(MESSAGE_URL_PATTERN) || [];
+      const keywordHits = SUSPICIOUS_MESSAGE_KEYWORDS.filter((keyword) =>
+        loweredMessage.includes(keyword)
+      );
+      const duplicateMessages = await db.query(
+        `SELECT COUNT(*) as count
+         FROM messages
+         WHERE from_user_id = $1
+           AND LOWER(message) = LOWER($2)
+           AND created_at > NOW() - INTERVAL '30 minutes'`,
+        [userId, normalizedMessage]
+      );
+
+      let spamScore = 0;
+      const reasons = [];
+
+      if (detectedLinks.length >= 2) {
+        spamScore += 45;
+        reasons.push('multiple_links');
+      } else if (detectedLinks.length === 1) {
+        spamScore += 20;
+        reasons.push('contains_link');
+      }
+
+      if (keywordHits.length >= 2) {
+        spamScore += 35;
+        reasons.push('high_risk_keywords');
+      } else if (keywordHits.length === 1) {
+        spamScore += 15;
+        reasons.push('suspicious_keyword');
+      }
+
+      if (REPEATED_CHARACTER_PATTERN.test(normalizedMessage)) {
+        spamScore += 15;
+        reasons.push('repeated_characters');
+      }
+
+      const duplicateCount = toCount(duplicateMessages.rows[0]?.count);
+      if (duplicateCount >= 3) {
+        spamScore += 45;
+        reasons.push('duplicate_message_burst');
+      } else if (duplicateCount >= 1) {
+        spamScore += 20;
+        reasons.push('duplicate_message');
+      }
+
+      if (normalizedMessage.length > 500) {
+        spamScore += 10;
+        reasons.push('very_long_message');
+      }
+
+      if (spamScore >= 70) {
+        await spamFraudService.flagAsSpam(
+          userId,
+          'message_spam_blocked',
+          `Blocked outgoing message. Reasons: ${reasons.join(', ') || 'unspecified'}`,
+          'high'
+        );
+
+        return {
+          blocked: true,
+          flagged: true,
+          score: spamScore,
+          reasons,
+          message: 'Message blocked by the spam filter'
+        };
+      }
+
+      if (spamScore >= 40) {
+        await spamFraudService.flagAsSpam(
+          userId,
+          'message_spam_suspected',
+          `Suspicious outgoing message. Reasons: ${reasons.join(', ') || 'unspecified'}`,
+          'medium'
+        );
+      }
+
+      return {
+        blocked: false,
+        flagged: spamScore >= 40,
+        score: spamScore,
+        reasons
+      };
+    } catch (err) {
+      console.error('Message spam evaluation error:', err);
+      return { blocked: false, flagged: false, score: 0, reasons: [], error: err.message };
+    }
+  },
+
+  /**
    * Flag user as spam
    */
   flagAsSpam: async (userId, reason, description, severity = 'low') => {
@@ -264,7 +387,7 @@ const spamFraudService = {
       await db.query(
         `INSERT INTO user_session_logs (user_id, session_id, ip_address, user_agent, action)
          VALUES ($1, $2, $3, $4, $5)`,
-        [userId, sessionId, ipAddress, userAgent, action]
+        [userId, sessionId, getClientIpAddress(ipAddress), userAgent || null, action]
       );
 
       return sessionId;
@@ -316,6 +439,147 @@ const spamFraudService = {
       }
     } catch (err) {
       console.error('Update analytics error:', err);
+    }
+  },
+
+  /**
+   * Track a user action in analytics/session logs and refresh platform metrics
+   */
+  trackUserActivity: async ({
+    userId,
+    action,
+    analyticsUpdates = {},
+    ipAddress = null,
+    userAgent = null,
+    runSpamCheck = false,
+    runFraudCheck = false
+  }) => {
+    try {
+      if (!userId) {
+        return;
+      }
+
+      await Promise.all([
+        spamFraudService.logSessionActivity(userId, action, ipAddress, userAgent),
+        spamFraudService.updateUserAnalytics(userId, analyticsUpdates)
+      ]);
+
+      if (runSpamCheck) {
+        await spamFraudService.checkForSpam(userId);
+      }
+
+      if (runFraudCheck) {
+        await spamFraudService.checkForFraud(userId);
+      }
+
+      await spamFraudService.refreshSystemMetrics();
+    } catch (err) {
+      console.error('Track user activity error:', err);
+    }
+  },
+
+  /**
+   * Refresh aggregate system metrics for the admin dashboard
+   */
+  refreshSystemMetrics: async (metricDate = getMetricDate()) => {
+    try {
+      const [
+        dailyActiveUsersResult,
+        monthlyActiveUsersResult,
+        totalMessagesResult,
+        totalMatchesResult,
+        newUsersResult,
+        reportsResult,
+        spamFlagsResult,
+        fraudFlagsResult
+      ] = await Promise.all([
+        db.query(
+          `SELECT COUNT(DISTINCT user_id) as count
+           FROM user_analytics
+           WHERE activity_date = $1`,
+          [metricDate]
+        ),
+        db.query(
+          `SELECT COUNT(DISTINCT user_id) as count
+           FROM user_analytics
+           WHERE activity_date >= $1::date - INTERVAL '29 days'`,
+          [metricDate]
+        ),
+        db.query(
+          `SELECT COUNT(*) as count
+           FROM messages
+           WHERE created_at::date = $1`,
+          [metricDate]
+        ),
+        db.query(
+          `SELECT COUNT(*) as count
+           FROM matches
+           WHERE matched_at::date = $1`,
+          [metricDate]
+        ),
+        db.query(
+          `SELECT COUNT(*) as count
+           FROM users
+           WHERE created_at::date = $1`,
+          [metricDate]
+        ),
+        db.query(
+          `SELECT COUNT(*) as count
+           FROM user_reports
+           WHERE created_at::date = $1`,
+          [metricDate]
+        ),
+        db.query(
+          `SELECT COUNT(*) as count
+           FROM spam_flags
+           WHERE created_at::date = $1`,
+          [metricDate]
+        ),
+        db.query(
+          `SELECT COUNT(*) as count
+           FROM fraud_flags
+           WHERE created_at::date = $1`,
+          [metricDate]
+        )
+      ]);
+
+      await db.query(
+        `INSERT INTO system_metrics (
+           metric_date,
+           daily_active_users,
+           monthly_active_users,
+           total_messages,
+           total_matches,
+           new_users,
+           reported_users,
+           spam_flagged_users,
+           fraud_flagged_users
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (metric_date)
+         DO UPDATE SET
+           daily_active_users = EXCLUDED.daily_active_users,
+           monthly_active_users = EXCLUDED.monthly_active_users,
+           total_messages = EXCLUDED.total_messages,
+           total_matches = EXCLUDED.total_matches,
+           new_users = EXCLUDED.new_users,
+           reported_users = EXCLUDED.reported_users,
+           spam_flagged_users = EXCLUDED.spam_flagged_users,
+           fraud_flagged_users = EXCLUDED.fraud_flagged_users`,
+        [
+          metricDate,
+          toCount(dailyActiveUsersResult.rows[0]?.count),
+          toCount(monthlyActiveUsersResult.rows[0]?.count),
+          toCount(totalMessagesResult.rows[0]?.count),
+          toCount(totalMatchesResult.rows[0]?.count),
+          toCount(newUsersResult.rows[0]?.count),
+          toCount(reportsResult.rows[0]?.count),
+          toCount(spamFlagsResult.rows[0]?.count),
+          toCount(fraudFlagsResult.rows[0]?.count)
+        ]
+      );
+    } catch (err) {
+      console.error('Refresh system metrics error:', err);
     }
   }
 };

@@ -84,6 +84,16 @@ const Login = ({
   const isLoginFlow = registrationType === "login";
   const registeredAccount = registeredAccounts.find((account) => account.email === normalizedEmail);
   const businessCategoryCount = businessCategories.length;
+  const isServerMarkedAdmin = (userRecord) =>
+    Boolean(
+      userRecord &&
+      (
+        userRecord.isAdmin ||
+        userRecord.is_admin ||
+        userRecord.role === "admin" ||
+        userRecord.registrationType === "admin"
+      )
+    );
 
   const selectedCategoryRecords = useMemo(
     () => businessCategories.filter((category) => registrationForm.selectedBusinessCategories.includes(category.id)),
@@ -446,6 +456,9 @@ const Login = ({
       const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, verifyPayload);
 
       if (response.data.success && response.data.token && response.data.user) {
+        const authenticatedAdmin =
+          isServerMarkedAdmin(response.data.user) || normalizedEmail === ADMIN_EMAIL;
+
         // Check if username setup is needed for first-time login users
         if (response.data.needsUsernameSetup && isLoginFlow) {
           setVerifiedUser(response.data.user);
@@ -540,6 +553,17 @@ const Login = ({
             avatar: "A",
             role: "admin",
             registrationType: "admin",
+            isAdmin: true,
+          };
+        } else if (authenticatedAdmin) {
+          mergedUser = {
+            ...response.data.user,
+            name: response.data.user.name || "LinkUp Admin",
+            email: response.data.user.email || ADMIN_EMAIL,
+            avatar: response.data.user.avatar || "A",
+            role: "admin",
+            registrationType: "admin",
+            isAdmin: true,
           };
         } else if (isLoginFlow) {
           mergedUser = {
@@ -612,18 +636,25 @@ const Login = ({
       );
 
       if (response.data.success) {
+        const authenticatedAdmin =
+          isServerMarkedAdmin(response.data.user) ||
+          isServerMarkedAdmin(verifiedUser) ||
+          normalizedEmail === ADMIN_EMAIL;
         const mergedUser = {
           ...verifiedUser,
           username: response.data.user.username,
-          name: registeredAccount?.name || response.data.user.name,
-          role: "user",
-          registrationType: "user",
+          name: authenticatedAdmin
+            ? response.data.user.name || verifiedUser?.name || "LinkUp Admin"
+            : registeredAccount?.name || response.data.user.name,
+          role: authenticatedAdmin ? "admin" : "user",
+          registrationType: authenticatedAdmin ? "admin" : "user",
+          isAdmin: authenticatedAdmin,
         };
 
         onLoginSuccess?.(
           mergedUser,
           verifiedToken,
-          "user"
+          authenticatedAdmin ? "admin" : "user"
         );
       } else {
         setSetupUsernameError(response.data.message || response.data.error || "Failed to set username");

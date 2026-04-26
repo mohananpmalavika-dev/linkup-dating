@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const spamFraudService = require('../services/spamFraudService');
+const userNotificationService = require('../services/userNotificationService');
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MULTIPART_FORM_DATA_PATTERN = /^multipart\/form-data/i;
@@ -13,6 +15,51 @@ const normalizeOptionalText = (value) => {
   const normalizedValue = String(value).trim();
   return normalizedValue ? normalizedValue : null;
 };
+
+const getRequestMetadata = (req) => ({
+  ipAddress: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
+  userAgent: req.headers['user-agent'] || null
+});
+
+const countRowValue = (value) => Number.parseInt(value, 10) || 0;
+
+const hasMeaningfulFilters = (filters = {}) =>
+  Object.values(filters).some((value) => {
+    if (Array.isArray(value)) {
+      return value.length > 0;
+    }
+
+    if (value && typeof value === 'object') {
+      return hasMeaningfulFilters(value);
+    }
+
+    return value !== undefined && value !== null && String(value).trim() !== '';
+  });
+
+const recordSearchHistory = async ({ userId, source = 'search', filters = {}, resultCount = 0 }) => {
+  if (!userId || !hasMeaningfulFilters(filters)) {
+    return;
+  }
+
+  try {
+    await db.query(
+      `INSERT INTO user_search_history (user_id, source, filters, result_count)
+       VALUES ($1, $2, $3, $4)`,
+      [userId, source, JSON.stringify(filters), resultCount]
+    );
+  } catch (error) {
+    console.error('Search history record error:', error);
+  }
+};
+
+const normalizeSearchHistoryRow = (row = {}) => ({
+  id: row.id,
+  userId: row.user_id,
+  source: row.source,
+  filters: row.filters || {},
+  resultCount: row.result_count || 0,
+  createdAt: row.created_at
+});
 
 const normalizeInteger = (value) => {
   if (value === undefined || value === null || value === '') {
@@ -597,6 +644,7 @@ router.get('/profiles/me', async (req, res) => {
 // 3. GET PROFILE BY ID
 router.get('/profiles/:userId', async (req, res) => {
   try {
+    const currentUserId = req.user.id;
     const { userId } = req.params;
     const result = await db.query(
       `SELECT dp.*, 
@@ -609,6 +657,19 @@ router.get('/profiles/:userId', async (req, res) => {
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    if (Number(currentUserId) !== Number(userId)) {
+      const requestMetadata = getRequestMetadata(req);
+      spamFraudService.trackUserActivity({
+        userId: currentUserId,
+        action: 'profile_view',
+        analyticsUpdates: { profiles_viewed: 1 },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        runSpamCheck: true,
+        runFraudCheck: true
+      });
     }
 
     res.json(normalizeProfileRow(result.rows[0]));
@@ -743,6 +804,18 @@ router.post('/search', async (req, res) => {
     query += ' ORDER BY dp.updated_at DESC LIMIT 20';
 
     const result = await db.query(query, params);
+    await recordSearchHistory({
+      userId,
+      source: 'browse_search',
+      filters: {
+        ageRange: ageRange || {},
+        relationshipGoals: Array.isArray(relationshipGoals) ? relationshipGoals : [],
+        heightRange: heightRange || {},
+        interests: normalizedInterests
+      },
+      resultCount: result.rows.length
+    });
+
     res.json({
       profiles: result.rows.map(normalizeProfileRow),
       totalCount: result.rows.length > 0
@@ -760,6 +833,13 @@ router.get('/discovery', async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = parseInt(req.query.limit, 10) || 10;
+    const discoveryFilters = {
+      ageMin: normalizeInteger(req.query.ageMin),
+      ageMax: normalizeInteger(req.query.ageMax),
+      relationshipGoals: normalizeOptionalText(req.query.relationshipGoals),
+      interests: normalizeOptionalText(req.query.interests),
+      distance: normalizeInteger(req.query.distance)
+    };
 
     if (!userId) {
       return res.status(401).json({ error: 'User ID not found in token' });
@@ -809,6 +889,23 @@ router.get('/discovery', async (req, res) => {
       .sort((leftProfile, rightProfile) => rightProfile.compatibilityScore - leftProfile.compatibilityScore)
       .slice(0, limit);
 
+    const requestMetadata = getRequestMetadata(req);
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'discovery_feed_view',
+      analyticsUpdates: {},
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
+    await recordSearchHistory({
+      userId,
+      source: 'discovery',
+      filters: discoveryFilters,
+      resultCount: profiles.length
+    });
+
     res.json({ profiles });
   } catch (err) {
     console.error('Discovery error:', err);
@@ -822,6 +919,7 @@ router.post('/interactions/like', async (req, res) => {
     const fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
     const userId = toUserId || targetUserId;
+    const requestMetadata = getRequestMetadata(req);
 
     if (!userId) {
       return res.status(400).json({ error: 'toUserId or targetUserId required' });
@@ -834,6 +932,16 @@ router.post('/interactions/like', async (req, res) => {
        ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING`,
       [fromUserId, userId]
     );
+
+    spamFraudService.trackUserActivity({
+      userId: fromUserId,
+      action: 'like_profile',
+      analyticsUpdates: { likes_sent: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
 
     // Check if mutual like exists
     const mutualResult = await db.query(
@@ -874,6 +982,31 @@ router.post('/interactions/like', async (req, res) => {
           });
         });
       }
+
+      await Promise.all([
+        userNotificationService.createNotification(fromUserId, {
+          type: 'new_match',
+          title: 'You have a new match',
+          body: 'Someone liked you back. Open the chat to say hello.',
+          metadata: {
+            matchId: persistedMatch.id,
+            matchedUserId: userId
+          }
+        }),
+        userNotificationService.createNotification(userId, {
+          type: 'new_match',
+          title: 'It is a match',
+          body: 'You matched with someone new. Start the conversation when you are ready.',
+          metadata: {
+            matchId: persistedMatch.id,
+            matchedUserId: fromUserId
+          }
+        })
+      ]);
+
+      spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
+      spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
+      spamFraudService.refreshSystemMetrics();
 
       return res.json({
         message: 'Its a match!',
@@ -1234,6 +1367,16 @@ const verifyIdentityHandler = async (req, res) => {
       ]
     );
 
+    await userNotificationService.createNotification(userId, {
+      type: 'verification_complete',
+      title: 'Verification updated',
+      body: `${verificationType} verification has been added to your profile.`,
+      metadata: {
+        verificationType,
+        profileVerified: true
+      }
+    });
+
     res.json({ message: 'Profile verified', profile: normalizeProfileRow(result.rows[0]) });
   } catch (err) {
     console.error('Verification error:', err);
@@ -1278,7 +1421,186 @@ router.get('/profiles/me/completion', async (req, res) => {
   }
 });
 
-// 17. BLOCK A USER
+// 17. FAVORITE A PROFILE
+router.post('/favorites', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const favoriteUserId = normalizeInteger(req.body.favoriteUserId || req.body.userId);
+
+    if (!favoriteUserId) {
+      return res.status(400).json({ error: 'Favorite user ID is required' });
+    }
+
+    if (Number(userId) === Number(favoriteUserId)) {
+      return res.status(400).json({ error: 'You cannot favorite your own profile' });
+    }
+
+    const userExists = await db.query('SELECT id FROM users WHERE id = $1 LIMIT 1', [favoriteUserId]);
+    if (userExists.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await db.query(
+      `INSERT INTO favorite_profiles (user_id, favorite_user_id)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id, favorite_user_id) DO NOTHING`,
+      [userId, favoriteUserId]
+    );
+
+    res.json({ success: true, message: 'Profile saved to favorites' });
+  } catch (err) {
+    console.error('Favorite profile error:', err);
+    res.status(500).json({ error: 'Failed to save favorite profile' });
+  }
+});
+
+// 18. GET FAVORITE PROFILES
+router.get('/favorites', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT fp.created_at as favorited_at,
+              dp.*,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos
+               WHERE user_id = dp.user_id) as photos
+       FROM favorite_profiles fp
+       INNER JOIN dating_profiles dp ON dp.user_id = fp.favorite_user_id
+       WHERE fp.user_id = $1
+       ORDER BY fp.created_at DESC`,
+      [userId]
+    );
+
+    res.json({
+      favorites: result.rows.map((row) => ({
+        ...normalizeProfileRow(row),
+        favoritedAt: row.favorited_at
+      }))
+    });
+  } catch (err) {
+    console.error('Get favorites error:', err);
+    res.status(500).json({ error: 'Failed to fetch favorite profiles' });
+  }
+});
+
+// 19. REMOVE FAVORITE PROFILE
+router.delete('/favorites/:favoriteUserId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const favoriteUserId = normalizeInteger(req.params.favoriteUserId);
+
+    await db.query(
+      `DELETE FROM favorite_profiles
+       WHERE user_id = $1 AND favorite_user_id = $2`,
+      [userId, favoriteUserId]
+    );
+
+    res.json({ success: true, message: 'Favorite removed' });
+  } catch (err) {
+    console.error('Remove favorite error:', err);
+    res.status(500).json({ error: 'Failed to remove favorite profile' });
+  }
+});
+
+// 20. GET SEARCH HISTORY
+router.get('/search-history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(normalizeInteger(req.query.limit) || 20, 100);
+
+    const result = await db.query(
+      `SELECT *
+       FROM user_search_history
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [userId, limit]
+    );
+
+    res.json({
+      history: result.rows.map(normalizeSearchHistoryRow)
+    });
+  } catch (err) {
+    console.error('Get search history error:', err);
+    res.status(500).json({ error: 'Failed to fetch search history' });
+  }
+});
+
+// 21. CLEAR SEARCH HISTORY
+router.delete('/search-history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    await db.query(
+      `DELETE FROM user_search_history
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    res.json({ success: true, message: 'Search history cleared' });
+  } catch (err) {
+    console.error('Clear search history error:', err);
+    res.status(500).json({ error: 'Failed to clear search history' });
+  }
+});
+
+// 22. GET USER NOTIFICATIONS
+router.get('/notifications', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(normalizeInteger(req.query.limit) || 25, 100);
+    const notifications = await userNotificationService.getNotificationsForUser(userId, { limit });
+    const unreadCount = await userNotificationService.getUnreadCount(userId);
+
+    res.json({ notifications, unreadCount });
+  } catch (err) {
+    console.error('Get notifications error:', err);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// 23. GET UNREAD NOTIFICATION COUNT
+router.get('/notifications/unread-count', async (req, res) => {
+  try {
+    const unreadCount = await userNotificationService.getUnreadCount(req.user.id);
+    res.json({ unreadCount });
+  } catch (err) {
+    console.error('Get unread notification count error:', err);
+    res.status(500).json({ error: 'Failed to fetch unread notification count' });
+  }
+});
+
+// 24. MARK NOTIFICATION AS READ
+router.post('/notifications/:notificationId/read', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const notificationId = normalizeInteger(req.params.notificationId);
+    const notification = await userNotificationService.markAsRead(userId, notificationId);
+
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    res.json({ success: true, notification });
+  } catch (err) {
+    console.error('Mark notification read error:', err);
+    res.status(500).json({ error: 'Failed to update notification' });
+  }
+});
+
+// 25. MARK ALL NOTIFICATIONS AS READ
+router.post('/notifications/read-all', async (req, res) => {
+  try {
+    await userNotificationService.markAllAsRead(req.user.id);
+    res.json({ success: true, message: 'All notifications marked as read' });
+  } catch (err) {
+    console.error('Mark all notifications read error:', err);
+    res.status(500).json({ error: 'Failed to update notifications' });
+  }
+});
+
+// 26. BLOCK A USER
 router.post('/blocks', async (req, res) => {
   try {
     const userId = req.user.id;
@@ -1374,6 +1696,7 @@ router.post('/reports', async (req, res) => {
   try {
     const userId = req.user.id;
     const { reportedUserId, reason, description } = req.body;
+    const requestMetadata = getRequestMetadata(req);
 
     if (!reportedUserId || !reason) {
       return res.status(400).json({ error: 'Reported user ID and reason are required' });
@@ -1396,6 +1719,17 @@ router.post('/reports', async (req, res) => {
        RETURNING id, created_at`,
       [userId, reportedUserId, reason, description || null]
     );
+
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'report_submitted',
+      analyticsUpdates: {},
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runFraudCheck: false
+    });
+    spamFraudService.checkForFraud(reportedUserId);
+    spamFraudService.refreshSystemMetrics();
 
     res.json({ 
       success: true, 

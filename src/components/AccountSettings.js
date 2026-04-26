@@ -1,17 +1,25 @@
 import React, { useState } from 'react';
-import authService from '../services/authService';
+import { authService } from '../services/authService';
+import { getStoredUserData } from '../utils/auth';
 import '../styles/AccountSettings.css';
 
 const AccountSettings = ({ onBack, onLogout }) => {
+  const currentUser = getStoredUserData();
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [resetId, setResetId] = useState('');
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [devResetCode, setDevResetCode] = useState('');
 
   const handleDeleteAccount = async () => {
-    if (!deletePassword) {
-      setError('Please enter your password to confirm deletion');
+    if (deleteConfirmationText.trim().toUpperCase() !== 'DELETE') {
+      setError('Type DELETE to confirm account deletion');
       return;
     }
 
@@ -19,9 +27,9 @@ const AccountSettings = ({ onBack, onLogout }) => {
     setError('');
 
     try {
-      // In a real implementation, you might want to verify the password first
-      // For now, we'll just call the delete account endpoint
-      await authService.deleteAccount();
+      await authService.deleteAccount({
+        confirmationText: deleteConfirmationText.trim()
+      });
       setSuccess('Account deleted successfully. You will be logged out.');
       
       // Log out after a short delay
@@ -31,9 +39,62 @@ const AccountSettings = ({ onBack, onLogout }) => {
         }
       }, 2000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete account');
+      setError(err?.error || err.response?.data?.error || 'Failed to delete account');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRequestPasswordReset = async () => {
+    if (!currentUser?.email) {
+      setError('Unable to determine your account email');
+      return;
+    }
+
+    setResetLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await authService.requestPasswordReset(currentUser.email);
+      setResetId(response.resetId || '');
+      setDevResetCode(response.devResetCode || '');
+      setSuccess(response.message || 'Password reset code sent');
+    } catch (err) {
+      setError(err?.error || err || 'Failed to request password reset');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
+  const handleCompletePasswordReset = async () => {
+    if (!resetId || !resetCode || !newPassword || !confirmPassword) {
+      setError('Complete all password reset fields first');
+      return;
+    }
+
+    setResetLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await authService.resetPassword({
+        email: currentUser?.email,
+        resetId,
+        resetCode,
+        newPassword,
+        confirmPassword
+      });
+
+      setSuccess(response.message || 'Password reset successfully');
+      setResetCode('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setDevResetCode('');
+    } catch (err) {
+      setError(err?.error || err || 'Failed to reset password');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -46,6 +107,85 @@ const AccountSettings = ({ onBack, onLogout }) => {
       </div>
 
       <div className="settings-content">
+        <div className="settings-section">
+          <h2>Security</h2>
+
+          <div className="settings-item">
+            <div className="setting-info">
+              <h3>Password Reset</h3>
+              <p>Send a reset code to {currentUser?.email || 'your email'} and choose a new password.</p>
+            </div>
+            <button
+              className="btn-delete-account"
+              onClick={handleRequestPasswordReset}
+              disabled={resetLoading}
+            >
+              {resetLoading ? 'Sending...' : 'Send Reset Code'}
+            </button>
+          </div>
+
+          {resetId ? (
+            <div className="form-group">
+              <label htmlFor="reset-code">Reset code</label>
+              <input
+                id="reset-code"
+                type="text"
+                value={resetCode}
+                onChange={(event) => setResetCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Enter the 6-digit code"
+                className="form-input"
+                disabled={resetLoading}
+              />
+            </div>
+          ) : null}
+
+          {resetId ? (
+            <div className="form-group">
+              <label htmlFor="new-password">New password</label>
+              <input
+                id="new-password"
+                type="password"
+                value={newPassword}
+                onChange={(event) => setNewPassword(event.target.value)}
+                placeholder="At least 8 characters"
+                className="form-input"
+                disabled={resetLoading}
+              />
+            </div>
+          ) : null}
+
+          {resetId ? (
+            <div className="form-group">
+              <label htmlFor="confirm-password">Confirm new password</label>
+              <input
+                id="confirm-password"
+                type="password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Repeat your new password"
+                className="form-input"
+                disabled={resetLoading}
+              />
+            </div>
+          ) : null}
+
+          {devResetCode ? (
+            <div className="settings-success">
+              Development reset code: <strong>{devResetCode}</strong>
+            </div>
+          ) : null}
+
+          {resetId ? (
+            <button
+              className="btn-delete-account"
+              onClick={handleCompletePasswordReset}
+              disabled={resetLoading || !resetCode || !newPassword || !confirmPassword}
+            >
+              {resetLoading ? 'Resetting...' : 'Update Password'}
+            </button>
+          ) : null}
+        </div>
+
         <div className="settings-section">
           <h2>Account Management</h2>
           
@@ -99,15 +239,15 @@ const AccountSettings = ({ onBack, onLogout }) => {
                 </ul>
 
                 <div className="form-group">
-                  <label htmlFor="delete-password">
-                    Enter your password to confirm deletion
+                  <label htmlFor="delete-confirmation">
+                    Type DELETE to confirm permanent deletion
                   </label>
                   <input
-                    id="delete-password"
-                    type="password"
-                    value={deletePassword}
-                    onChange={e => setDeletePassword(e.target.value)}
-                    placeholder="Your password"
+                    id="delete-confirmation"
+                    type="text"
+                    value={deleteConfirmationText}
+                    onChange={e => setDeleteConfirmationText(e.target.value)}
+                    placeholder="DELETE"
                     disabled={loading}
                     className="form-input"
                   />
@@ -118,7 +258,7 @@ const AccountSettings = ({ onBack, onLogout }) => {
                     className="btn btn-cancel-delete"
                     onClick={() => {
                       setShowDeleteConfirmation(false);
-                      setDeletePassword('');
+                      setDeleteConfirmationText('');
                       setError('');
                     }}
                     disabled={loading}
@@ -128,7 +268,7 @@ const AccountSettings = ({ onBack, onLogout }) => {
                   <button
                     className="btn btn-confirm-delete"
                     onClick={handleDeleteAccount}
-                    disabled={loading || !deletePassword}
+                    disabled={loading || deleteConfirmationText.trim().toUpperCase() !== 'DELETE'}
                   >
                     {loading ? 'Deleting...' : 'Delete My Account'}
                   </button>

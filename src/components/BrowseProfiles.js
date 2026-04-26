@@ -58,6 +58,26 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState(defaultFilters);
+  const [favoriteUserIds, setFavoriteUserIds] = useState(new Set());
+  const [searchHistory, setSearchHistory] = useState([]);
+
+  const loadSavedState = useCallback(async () => {
+    try {
+      const [favoritesData, historyData] = await Promise.all([
+        datingProfileService.getFavorites(),
+        datingProfileService.getSearchHistory(5)
+      ]);
+
+      const favoriteIds = new Set(
+        (favoritesData.favorites || []).map((favorite) => String(favorite.userId))
+      );
+
+      setFavoriteUserIds(favoriteIds);
+      setSearchHistory(Array.isArray(historyData.history) ? historyData.history : []);
+    } catch (savedStateError) {
+      console.error('Failed to load saved browse state:', savedStateError);
+    }
+  }, []);
 
   const searchProfiles = useCallback(async (activeFilters) => {
     setLoading(true);
@@ -76,7 +96,8 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
 
   useEffect(() => {
     searchProfiles(defaultFilters);
-  }, [searchProfiles]);
+    loadSavedState();
+  }, [loadSavedState, searchProfiles]);
 
   const handleAgeChange = (min, max) => {
     setFilters((prev) => ({
@@ -115,6 +136,27 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
     }
   };
 
+  const handleToggleFavorite = async (profile) => {
+    const userId = String(profile.userId);
+    const nextFavoriteIds = new Set(favoriteUserIds);
+
+    try {
+      if (nextFavoriteIds.has(userId)) {
+        await datingProfileService.removeFavorite(profile.userId);
+        nextFavoriteIds.delete(userId);
+      } else {
+        await datingProfileService.favoriteProfile(profile.userId);
+        nextFavoriteIds.add(userId);
+      }
+
+      setFavoriteUserIds(nextFavoriteIds);
+      await loadSavedState();
+    } catch (favoriteError) {
+      console.error('Failed to update favorite profile:', favoriteError);
+      setError('Failed to update favorites');
+    }
+  };
+
   const handleApplyFilters = () => {
     searchProfiles(filters);
     setShowFilters(false);
@@ -124,6 +166,31 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
     setFilters(defaultFilters);
     searchProfiles(defaultFilters);
     setShowFilters(false);
+  };
+
+  const handleApplyHistoryEntry = async (entry) => {
+    const nextFilters = {
+      ageRange: entry.filters?.ageRange || defaultFilters.ageRange,
+      relationshipGoals: Array.isArray(entry.filters?.relationshipGoals)
+        ? entry.filters.relationshipGoals
+        : defaultFilters.relationshipGoals,
+      interests: Array.isArray(entry.filters?.interests)
+        ? entry.filters.interests
+        : defaultFilters.interests,
+      heightRange: entry.filters?.heightRange || defaultFilters.heightRange
+    };
+
+    setFilters(nextFilters);
+    await searchProfiles(nextFilters);
+  };
+
+  const handleClearSearchHistory = async () => {
+    try {
+      await datingProfileService.clearSearchHistory();
+      setSearchHistory([]);
+    } catch (historyError) {
+      console.error('Failed to clear search history:', historyError);
+    }
   };
 
   return (
@@ -255,6 +322,33 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
         </div>
       )}
 
+      {searchHistory.length > 0 ? (
+        <div className="filters-panel">
+          <div className="section-header-row">
+            <div>
+              <label>Recent Searches</label>
+              <p className="filter-hint">Reuse the filters that worked for you last time.</p>
+            </div>
+            <button type="button" className="btn-reset" onClick={handleClearSearchHistory}>
+              Clear
+            </button>
+          </div>
+          <div className="search-history-list">
+            {searchHistory.map((entry) => (
+              <button
+                type="button"
+                key={entry.id}
+                className="search-history-item"
+                onClick={() => handleApplyHistoryEntry(entry)}
+              >
+                <strong>{entry.source === 'browse_search' ? 'Browse search' : 'Discovery'}</strong>
+                <span>{entry.resultCount} results • {new Date(entry.createdAt).toLocaleString()}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {loading && (
         <div className="loading-container">
           <div className="spinner"></div>
@@ -308,6 +402,13 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
                     onClick={() => onProfileSelect?.(profile)}
                   >
                     View Profile
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-view-profile"
+                    onClick={() => handleToggleFavorite(profile)}
+                  >
+                    {favoriteUserIds.has(String(profile.userId)) ? 'Unfavorite' : 'Favorite'}
                   </button>
                   <button
                     type="button"

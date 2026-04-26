@@ -6,6 +6,9 @@ const socketIO = require('socket.io');
 require('dotenv').config();
 
 const db = require('./config/database');
+const { logger, logRequest } = require('./utils/logger');
+const { apiLimiter, authLimiter, otpLimiter } = require('./middleware/rateLimit');
+const dbModels = require('./models');
 const authRoutes = require('./routes/auth');
 const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
@@ -29,14 +32,37 @@ const io = socketIO(server, {
   }
 });
 
-// Middleware
-app.use(helmet());
+// Security Middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: ["'self'", process.env.FRONTEND_URL || 'http://localhost:3000'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Request Logging Middleware
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  res.on('finish', () => {
+    logRequest(req, res, startTime);
+  });
+  next();
+});
+
+// Apply general API rate limiting
+app.use('/api/', apiLimiter);
 
 // Store active users for real-time features.
 // Each user can have multiple active sockets (multiple tabs/devices).
@@ -279,8 +305,9 @@ app.get('/', (req, res) => {
   });
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
+// Routes with specific rate limiting
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/auth/send-otp', otpLimiter); // Override with stricter OTP limit
 app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/app-data', appDataRoutes);
@@ -319,7 +346,13 @@ app.use((req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Error:', err.message);
+  logger.error('Unhandled error', {
+    message: err.message,
+    stack: err.stack,
+    url: req.originalUrl,
+    method: req.method,
+    userId: req.user?.id
+  });
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error'
   });
@@ -329,12 +362,22 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 db.init().then(() => {
+  // Sync Sequelize models (alter: true for development, use migrations in production)
+  if (process.env.NODE_ENV !== 'production') {
+    dbModels.sequelize.sync({ alter: true }).then(() => {
+      logger.info('Sequelize models synchronized');
+    }).catch(err => {
+      logger.error('Sequelize sync error:', err.message);
+    });
+  }
+  
   server.listen(PORT, () => {
-    console.log(`🚀 Dating app backend running on http://localhost:${PORT}`);
-    console.log(`📱 WebSocket enabled for real-time features`);
+    logger.info(`🚀 Dating app backend running on http://localhost:${PORT}`);
+    logger.info(`📱 WebSocket enabled for real-time features`);
+    logger.info(`🗄️  Database: ${process.env.DB_NAME || 'linkup_dating'}`);
   });
 }).catch(err => {
-  console.error('Failed to start server:', err);
+  logger.error('Failed to start server:', err);
   process.exit(1);
 });
 

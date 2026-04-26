@@ -407,6 +407,44 @@ const init = async () => {
       );
     `);
 
+    // Create favorite_profiles table for saved dating profiles
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS favorite_profiles (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        favorite_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, favorite_user_id)
+      );
+    `);
+
+    // Create user_search_history table for dating search history
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_search_history (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        source VARCHAR(50) DEFAULT 'search',
+        filters JSONB DEFAULT '{}',
+        result_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create user_notifications table for in-app notification center
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        notification_type VARCHAR(100) DEFAULT 'general',
+        title VARCHAR(255) NOT NULL,
+        body TEXT,
+        metadata JSONB DEFAULT '{}',
+        is_read BOOLEAN DEFAULT FALSE,
+        read_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Create indices for analytics tables
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_admin_actions_admin_user_id ON admin_actions(admin_user_id);
@@ -421,6 +459,13 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_fraud_flags_user_id ON fraud_flags(user_id);
       CREATE INDEX IF NOT EXISTS idx_fraud_flags_created_at ON fraud_flags(created_at);
       CREATE INDEX IF NOT EXISTS idx_system_metrics_metric_date ON system_metrics(metric_date);
+      CREATE INDEX IF NOT EXISTS idx_favorite_profiles_user_id ON favorite_profiles(user_id);
+      CREATE INDEX IF NOT EXISTS idx_favorite_profiles_favorite_user_id ON favorite_profiles(favorite_user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_search_history_user_id ON user_search_history(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_search_history_created_at ON user_search_history(created_at);
+      CREATE INDEX IF NOT EXISTS idx_user_notifications_user_id ON user_notifications(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_notifications_is_read ON user_notifications(is_read);
+      CREATE INDEX IF NOT EXISTS idx_user_notifications_created_at ON user_notifications(created_at);
     `);
 
       console.log('✓ Database schema initialized');

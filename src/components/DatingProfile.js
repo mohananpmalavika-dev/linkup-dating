@@ -1,26 +1,97 @@
 import React, { useEffect, useState } from 'react';
-import '../styles/DatingProfile.css';
+import AccountSettings from './AccountSettings';
 import datingProfileService from '../services/datingProfileService';
+import '../styles/DatingProfile.css';
 
-/**
- * DatingProfile Component
- * User's profile view and edit
- */
+const defaultVerificationForm = {
+  verificationType: 'id',
+  verificationValue: '',
+  document: null
+};
+
+const formatSearchHistoryLabel = (entry) => {
+  const filters = entry?.filters || {};
+  const parts = [];
+
+  if (filters.ageRange?.min || filters.ageRange?.max) {
+    parts.push(`Age ${filters.ageRange?.min || 18}-${filters.ageRange?.max || 99}`);
+  }
+
+  if (filters.heightRange?.min || filters.heightRange?.max) {
+    parts.push(`Height ${filters.heightRange?.min || '?'}-${filters.heightRange?.max || '?'}`);
+  }
+
+  if (Array.isArray(filters.relationshipGoals) && filters.relationshipGoals.length > 0) {
+    parts.push(filters.relationshipGoals.join(', '));
+  } else if (filters.relationshipGoals) {
+    parts.push(String(filters.relationshipGoals));
+  }
+
+  if (Array.isArray(filters.interests) && filters.interests.length > 0) {
+    parts.push(filters.interests.join(', '));
+  } else if (filters.interests) {
+    parts.push(String(filters.interests));
+  }
+
+  return parts.length > 0 ? parts.join(' • ') : 'General discovery refresh';
+};
+
 const DatingProfile = ({ onLogout }) => {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState('');
   const [editData, setEditData] = useState(null);
+  const [showAccountSettings, setShowAccountSettings] = useState(false);
+  const [verificationForm, setVerificationForm] = useState(defaultVerificationForm);
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [favorites, setFavorites] = useState([]);
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [searchHistory, setSearchHistory] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [stats, setStats] = useState({
     likes: 0,
     matches: 0,
     completion: 0
   });
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  const completionChecklist = [
+    {
+      key: 'bio',
+      label: 'Add a bio',
+      done: Boolean(profile?.bio && profile.bio.trim()),
+      hint: 'Write a short intro so matches can get a feel for your personality.'
+    },
+    {
+      key: 'photos',
+      label: 'Add at least 3 photos',
+      done: Array.isArray(profile?.photos) && profile.photos.length >= 3,
+      hint: 'Profiles with multiple clear photos usually get more attention.'
+    },
+    {
+      key: 'interests',
+      label: 'Add interests',
+      done: Array.isArray(profile?.interests) && profile.interests.length > 0,
+      hint: 'Interests help us suggest better matches and conversation starters.'
+    },
+    {
+      key: 'goals',
+      label: 'Set relationship goals',
+      done: Boolean(profile?.relationshipGoals),
+      hint: 'Tell people what you are looking for to improve match quality.'
+    },
+    {
+      key: 'verification',
+      label: 'Complete verification',
+      done: Boolean(profile?.verifications?.email && profile?.verifications?.phone && profile?.verifications?.id),
+      hint: 'Verified profiles build more trust and can improve response rates.'
+    }
+  ];
+
+  const completedSteps = completionChecklist.filter((item) => item.done).length;
+  const completionPercent = Math.round((completedSteps / completionChecklist.length) * 100);
+  const missingSteps = completionChecklist.filter((item) => !item.done);
 
   const loadProfile = async () => {
     try {
@@ -34,8 +105,30 @@ const DatingProfile = ({ onLogout }) => {
         datingProfileService.getProfileCompletion()
       ]);
 
+      const [
+        favoritesData,
+        blockedUsersData,
+        searchHistoryData,
+        notificationsData
+      ] = await Promise.all([
+        datingProfileService.getFavorites().catch(() => ({ favorites: [] })),
+        datingProfileService.getBlockedUsers().catch(() => ({ blockedUsers: [] })),
+        datingProfileService.getSearchHistory(8).catch(() => ({ history: [] })),
+        datingProfileService.getNotifications(10).catch(() => ({ notifications: [], unreadCount: 0 }))
+      ]);
+
       setProfile(profileData);
-      setEditData(profileData);
+      setEditData({
+        ...profileData,
+        bio: profileData.bio || '',
+        interests: Array.isArray(profileData.interests) ? profileData.interests : [],
+        relationshipGoals: profileData.relationshipGoals || ''
+      });
+      setFavorites(Array.isArray(favoritesData.favorites) ? favoritesData.favorites : []);
+      setBlockedUsers(Array.isArray(blockedUsersData.blockedUsers) ? blockedUsersData.blockedUsers : []);
+      setSearchHistory(Array.isArray(searchHistoryData.history) ? searchHistoryData.history : []);
+      setNotifications(Array.isArray(notificationsData.notifications) ? notificationsData.notifications : []);
+      setUnreadNotificationCount(Number(notificationsData.unreadCount || 0));
       setStats({
         likes: Array.isArray(likesData) ? likesData.length : 0,
         matches: matchesData.matches?.length || 0,
@@ -49,9 +142,14 @@ const DatingProfile = ({ onLogout }) => {
     }
   };
 
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
   const handleSaveProfile = async () => {
     try {
       setError('');
+
       const response = await datingProfileService.updateProfile({
         bio: editData.bio,
         interests: editData.interests,
@@ -59,7 +157,12 @@ const DatingProfile = ({ onLogout }) => {
       });
 
       setProfile(response.profile);
-      setEditData(response.profile);
+      setEditData({
+        ...response.profile,
+        bio: response.profile?.bio || '',
+        interests: Array.isArray(response.profile?.interests) ? response.profile.interests : [],
+        relationshipGoals: response.profile?.relationshipGoals || ''
+      });
       setStats((currentStats) => ({
         ...currentStats,
         completion: response.profile?.profileCompletionPercent || currentStats.completion
@@ -70,6 +173,75 @@ const DatingProfile = ({ onLogout }) => {
       console.error(saveError);
     }
   };
+
+  const handleVerifyIdentity = async () => {
+    setVerificationLoading(true);
+    setError('');
+
+    try {
+      await datingProfileService.verifyIdentity({
+        verificationType: verificationForm.verificationType,
+        verificationValue: verificationForm.verificationValue,
+        document: verificationForm.document
+      });
+      setVerificationForm(defaultVerificationForm);
+      await loadProfile();
+    } catch (verificationError) {
+      setError(verificationError || 'Failed to submit verification');
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  const handleUnblockUser = async (userId) => {
+    try {
+      await datingProfileService.unblockUser(userId);
+      await loadProfile();
+    } catch (unblockError) {
+      setError(unblockError || 'Failed to unblock user');
+    }
+  };
+
+  const handleClearSearchHistory = async () => {
+    try {
+      await datingProfileService.clearSearchHistory();
+      setSearchHistory([]);
+    } catch (historyError) {
+      setError(historyError || 'Failed to clear search history');
+    }
+  };
+
+  const handleMarkNotificationRead = async (notificationId) => {
+    try {
+      await datingProfileService.markNotificationRead(notificationId);
+      setNotifications((currentNotifications) =>
+        currentNotifications.map((notification) =>
+          notification.id === notificationId
+            ? { ...notification, isRead: true }
+            : notification
+        )
+      );
+      setUnreadNotificationCount((currentCount) => Math.max(0, currentCount - 1));
+    } catch (notificationError) {
+      setError(notificationError || 'Failed to update notification');
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async () => {
+    try {
+      await datingProfileService.markAllNotificationsRead();
+      setNotifications((currentNotifications) =>
+        currentNotifications.map((notification) => ({ ...notification, isRead: true }))
+      );
+      setUnreadNotificationCount(0);
+    } catch (notificationError) {
+      setError(notificationError || 'Failed to update notifications');
+    }
+  };
+
+  if (showAccountSettings) {
+    return <AccountSettings onBack={() => setShowAccountSettings(false)} onLogout={onLogout} />;
+  }
 
   if (loading) {
     return (
@@ -98,7 +270,7 @@ const DatingProfile = ({ onLogout }) => {
             <textarea
               value={editData.bio || ''}
               onChange={(event) => setEditData({ ...editData, bio: event.target.value })}
-              placeholder="Tell about yourself"
+              placeholder="Tell people about yourself"
             ></textarea>
           </div>
           <div className="form-group">
@@ -113,7 +285,16 @@ const DatingProfile = ({ onLogout }) => {
                   .map((interest) => interest.trim())
                   .filter(Boolean)
               })}
-              placeholder="Separate with commas"
+              placeholder="Separate interests with commas"
+            />
+          </div>
+          <div className="form-group">
+            <label>Relationship Goals</label>
+            <input
+              type="text"
+              value={editData.relationshipGoals || ''}
+              onChange={(event) => setEditData({ ...editData, relationshipGoals: event.target.value })}
+              placeholder="dating, relationship, marriage"
             />
           </div>
           <div className="button-group">
@@ -128,7 +309,7 @@ const DatingProfile = ({ onLogout }) => {
               <div className="profile-photo-main">
                 <img src={profile.photos[0]} alt={profile.firstName} />
                 {profile.profileVerified ? (
-                  <div className="verified-badge">✓ Verified</div>
+                  <div className="verified-badge">Verified</div>
                 ) : null}
               </div>
             ) : (
@@ -137,7 +318,10 @@ const DatingProfile = ({ onLogout }) => {
               </div>
             )}
             <h1>{profile.firstName}, {profile.age}</h1>
-            <p className="location">📍 {profile.location?.city}, {profile.location?.state}</p>
+            <p className="location">
+              {profile.location?.city || 'Unknown city'}
+              {profile.location?.state ? `, ${profile.location.state}` : ''}
+            </p>
           </div>
 
           <div className="stats-grid">
@@ -153,6 +337,42 @@ const DatingProfile = ({ onLogout }) => {
               <span className="stat-value">{stats.completion}%</span>
               <span className="stat-label">Profile</span>
             </div>
+          </div>
+
+          <div className="profile-section completion-section">
+            <div className="completion-header">
+              <div>
+                <h3>Profile completion</h3>
+                <p>
+                  {completionPercent >= 100
+                    ? 'Your profile is fully ready for discovery.'
+                    : `You have completed ${completedSteps} of ${completionChecklist.length} recommended steps.`}
+                </p>
+              </div>
+              <div className="completion-pill">{completionPercent}%</div>
+            </div>
+
+            <div className="completion-bar" aria-hidden="true">
+              <div className="completion-bar-fill" style={{ width: `${completionPercent}%` }}></div>
+            </div>
+
+            {missingSteps.length > 0 ? (
+              <div className="completion-list">
+                {missingSteps.map((item) => (
+                  <div key={item.key} className="completion-item">
+                    <div className="completion-item-icon">•</div>
+                    <div className="completion-item-copy">
+                      <strong>{item.label}</strong>
+                      <span>{item.hint}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="completion-all-done">
+                Nice work. All profile recommendations are complete.
+              </div>
+            )}
           </div>
 
           <div className="profile-section">
@@ -214,29 +434,210 @@ const DatingProfile = ({ onLogout }) => {
             <div className="verification-items">
               {profile.verifications?.email ? (
                 <div className="verification-item verified">
-                  <span>✓ Email Verified</span>
+                  <span>Email verified</span>
                 </div>
               ) : null}
               {profile.verifications?.phone ? (
                 <div className="verification-item verified">
-                  <span>✓ Phone Verified</span>
+                  <span>Phone verified</span>
                 </div>
               ) : null}
               {profile.verifications?.id ? (
                 <div className="verification-item verified">
-                  <span>✓ ID Verified</span>
+                  <span>ID verified</span>
                 </div>
               ) : (
                 <div className="verification-item pending">
-                  <span>⚠ Add ID Verification</span>
+                  <span>Add ID verification</span>
                 </div>
               )}
             </div>
+
+            {!profile.verifications?.id ? (
+              <div className="verification-form">
+                <div className="form-group">
+                  <label htmlFor="verification-type">Verification Type</label>
+                  <select
+                    id="verification-type"
+                    value={verificationForm.verificationType}
+                    onChange={(event) =>
+                      setVerificationForm((currentForm) => ({
+                        ...currentForm,
+                        verificationType: event.target.value
+                      }))
+                    }
+                  >
+                    <option value="id">Government ID</option>
+                    <option value="phone">Phone Number</option>
+                    <option value="email">Email</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="verification-value">Reference Value</label>
+                  <input
+                    id="verification-value"
+                    type="text"
+                    value={verificationForm.verificationValue}
+                    onChange={(event) =>
+                      setVerificationForm((currentForm) => ({
+                        ...currentForm,
+                        verificationValue: event.target.value
+                      }))
+                    }
+                    placeholder="Enter ID number, phone, or email"
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="verification-document">Upload supporting document</label>
+                  <input
+                    id="verification-document"
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(event) =>
+                      setVerificationForm((currentForm) => ({
+                        ...currentForm,
+                        document: event.target.files?.[0] || null
+                      }))
+                    }
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="btn-save"
+                  onClick={handleVerifyIdentity}
+                  disabled={verificationLoading}
+                >
+                  {verificationLoading ? 'Submitting verification...' : 'Submit Verification'}
+                </button>
+              </div>
+            ) : null}
           </div>
+
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Notification Center</h3>
+                <p>{unreadNotificationCount} unread</p>
+              </div>
+              {notifications.length > 0 ? (
+                <button type="button" className="section-link-btn" onClick={handleMarkAllNotificationsRead}>
+                  Mark all as read
+                </button>
+              ) : null}
+            </div>
+            {notifications.length > 0 ? (
+              <div className="notification-listing">
+                {notifications.map((notification) => (
+                  <button
+                    type="button"
+                    key={notification.id}
+                    className={`notification-card ${notification.isRead ? 'read' : 'unread'}`}
+                    onClick={() => !notification.isRead && handleMarkNotificationRead(notification.id)}
+                  >
+                    <div className="notification-card-header">
+                      <strong>{notification.title}</strong>
+                      <span>{new Date(notification.createdAt).toLocaleString()}</span>
+                    </div>
+                    <p>{notification.body}</p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p>No notifications yet. Matches, messages, and verification updates will appear here.</p>
+            )}
+          </div>
+
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Favorite Profiles</h3>
+                <p>{favorites.length} saved</p>
+              </div>
+            </div>
+            {favorites.length > 0 ? (
+              <div className="compact-profile-list">
+                {favorites.map((favorite) => (
+                  <div key={favorite.userId} className="compact-profile-card">
+                    <div className="compact-profile-copy">
+                      <strong>{favorite.firstName}{favorite.age ? `, ${favorite.age}` : ''}</strong>
+                      <span>{favorite.location?.city || 'Location unavailable'}</span>
+                    </div>
+                    <span className="compact-meta">
+                      Saved {new Date(favorite.favoritedAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>Save profiles from discovery or browse to keep them handy here.</p>
+            )}
+          </div>
+
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Recent Search History</h3>
+                <p>Quick recap of your latest discovery filters.</p>
+              </div>
+              {searchHistory.length > 0 ? (
+                <button type="button" className="section-link-btn" onClick={handleClearSearchHistory}>
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            {searchHistory.length > 0 ? (
+              <div className="search-history-list">
+                {searchHistory.map((entry) => (
+                  <div key={entry.id} className="search-history-item">
+                    <strong>{formatSearchHistoryLabel(entry)}</strong>
+                    <span>
+                      {entry.resultCount} results • {new Date(entry.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>Your recent searches will show up here once you start browsing with filters.</p>
+            )}
+          </div>
+
+          <div className="profile-section">
+            <h3>Blocked Users</h3>
+            {blockedUsers.length > 0 ? (
+              <div className="compact-profile-list">
+                {blockedUsers.map((blockedUser) => (
+                  <div key={blockedUser.id} className="compact-profile-card">
+                    <div className="compact-profile-copy">
+                      <strong>{blockedUser.firstName}{blockedUser.age ? `, ${blockedUser.age}` : ''}</strong>
+                      <span>{blockedUser.location?.city || 'Location unavailable'}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="section-link-btn"
+                      onClick={() => handleUnblockUser(blockedUser.id)}
+                    >
+                      Unblock
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>You have not blocked anyone yet.</p>
+            )}
+          </div>
+
+          {error ? (
+            <div className="profile-section">
+              <p className="profile-inline-error">{error}</p>
+            </div>
+          ) : null}
 
           <div className="profile-actions">
             <button onClick={() => setEditing(true)} className="btn-edit">
               Edit Profile
+            </button>
+            <button onClick={() => setShowAccountSettings(true)} className="btn-save">
+              Account Settings
             </button>
             <button onClick={loadProfile} className="btn-cancel">
               Refresh

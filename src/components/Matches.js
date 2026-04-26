@@ -17,7 +17,7 @@ const buildLikeProfileContext = (like) => ({
   }
 });
 
-const Matches = ({ onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) => {
+const Matches = ({ pageLabel = 'Matches', onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) => {
   const location = useLocation();
   const [matches, setMatches] = useState([]);
   const [likesReceived, setLikesReceived] = useState([]);
@@ -28,6 +28,7 @@ const Matches = ({ onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onSt
   const [actionError, setActionError] = useState('');
   const [navigationNotice, setNavigationNotice] = useState('');
   const [filter, setFilter] = useState('all');
+  const isMessagesPage = pageLabel === 'Messages';
 
   useEffect(() => {
     loadMatches();
@@ -158,7 +159,7 @@ const Matches = ({ onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onSt
   return (
     <div className="matches-container">
       <div className="matches-header">
-        <h2>My Matches ({matches.length})</h2>
+        <h2>{isMessagesPage ? 'Messages' : 'My Matches'} ({matches.length})</h2>
         <div className="filter-tabs">
           <button
             className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
@@ -206,7 +207,11 @@ const Matches = ({ onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onSt
 
         {loadingLikes ? (
           <div className="likes-you-empty">
-            <p>Loading likes...</p>
+            <p>
+              {isMessagesPage
+                ? 'No conversations yet. Start swiping to find someone!'
+                : 'No matches yet. Start swiping to find someone!'}
+            </p>
           </div>
         ) : likesReceived.length > 0 ? (
           <div className="likes-you-list">

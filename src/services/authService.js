@@ -86,12 +86,38 @@ export const authService = {
   /**
    * Delete user account
    */
-  deleteAccount: async () => {
+  deleteAccount: async (payload = {}) => {
     try {
-      const response = await axios.delete(`${API_URL}/account`);
+      const response = await axios.delete(`${API_URL}/account`, {
+        data: payload
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data || { error: 'Failed to delete account' };
+    }
+  },
+
+  /**
+   * Request a password reset code
+   */
+  requestPasswordReset: async (email) => {
+    try {
+      const response = await axios.post(`${API_URL}/request-password-reset`, { email });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to request password reset';
+    }
+  },
+
+  /**
+   * Reset password with code
+   */
+  resetPassword: async (payload) => {
+    try {
+      const response = await axios.post(`${API_URL}/reset-password`, payload);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to reset password';
     }
   }
 };

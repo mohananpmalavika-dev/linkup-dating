@@ -5,8 +5,10 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 const db = require('../config/database');
+const { storeOTP, getOTP, incrementOTPAttempts, deleteOTP, findOTPByRecipient, MAX_OTP_ATTEMPTS } = require('../utils/redis');
 
 // Email transporter configuration - recreated on each request to ensure env vars are loaded
+
 const getEmailTransporter = () => {
   return nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
@@ -19,10 +21,32 @@ const getEmailTransporter = () => {
   });
 };
 
-// OTP storage (in production, use database)
-const otpStorage = new Map();
+const passwordResetStorage = new Map();
 
 const normalizeRecipient = (value = '') => String(value || '').trim().toLowerCase();
+
+const getAuthRole = (userRecord) =>
+  Boolean(userRecord?.is_admin || userRecord?.isAdmin) ? 'admin' : 'user';
+
+const getRegistrationType = (userRecord) =>
+  getAuthRole(userRecord) === 'admin' ? 'admin' : 'user';
+
+const syncAdminPrivilegesForEmail = async (email) => {
+  const normalizedEmail = normalizeRecipient(email);
+
+  if (!normalizedEmail) {
+    return;
+  }
+
+  await syncConfiguredAdminForEmail(db, normalizedEmail);
+};
+
+const getRequestMetadata = (req) => ({
+  ipAddress: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
+  userAgent: req.headers['user-agent'] || null
+});
+
+const isStrongPassword = (value = '') => String(value || '').length >= 8;
 
 const buildDisplayNameFromEmail = (email = '') => {
   const localPart = normalizeRecipient(email).split('@')[0] || 'linkup-user';
@@ -45,7 +69,7 @@ const getUserWithProfileByEmail = async (email) => {
   const normalizedEmail = normalizeRecipient(email);
 
   return db.query(
-    `SELECT u.id, u.email, u.created_at, dp.username, dp.first_name
+    `SELECT u.id, u.email, u.created_at, u.is_admin, dp.username, dp.first_name
      FROM users u
      LEFT JOIN dating_profiles dp ON dp.user_id = u.id
      WHERE LOWER(u.email) = LOWER($1)
@@ -56,6 +80,7 @@ const getUserWithProfileByEmail = async (email) => {
 
 const ensureUserForOtpLogin = async (email) => {
   const normalizedEmail = normalizeRecipient(email);
+  await syncAdminPrivilegesForEmail(normalizedEmail);
   const existingUserResult = await getUserWithProfileByEmail(normalizedEmail);
 
   if (existingUserResult.rows.length > 0) {
@@ -72,7 +97,7 @@ const ensureUserForOtpLogin = async (email) => {
   const fallbackName = buildDisplayNameFromEmail(normalizedEmail);
   const generatedPasswordHash = await hashPassword(uuidv4());
   const createdUserResult = await db.query(
-    'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email, created_at',
+    'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email, created_at, is_admin',
     [normalizedEmail, generatedPasswordHash]
   );
 
@@ -92,15 +117,16 @@ const ensureUserForOtpLogin = async (email) => {
     [createdUser.id]
   );
 
+  await syncAdminPrivilegesForEmail(normalizedEmail);
   const hydratedUserResult = await getUserWithProfileByEmail(normalizedEmail);
   return hydratedUserResult.rows[0];
 };
 
-const findStoredOtpEntry = ({ otpId, email, phone }) => {
+const findStoredOtpEntry = async ({ otpId, email, phone }) => {
   const requestedRecipient = normalizeRecipient(email || phone);
 
   if (otpId) {
-    const storedData = otpStorage.get(otpId);
+    const storedData = await getOTP(otpId);
 
     if (!storedData) {
       return null;
@@ -117,15 +143,39 @@ const findStoredOtpEntry = ({ otpId, email, phone }) => {
     return null;
   }
 
+  return await findOTPByRecipient(requestedRecipient);
+};
+
+const findStoredPasswordResetEntry = ({ resetId, email }) => {
+  const requestedRecipient = normalizeRecipient(email);
+
+  if (resetId) {
+    const storedData = passwordResetStorage.get(resetId);
+
+    if (!storedData) {
+      return null;
+    }
+
+    if (requestedRecipient && storedData.recipient !== requestedRecipient) {
+      return null;
+    }
+
+    return { resetId, storedData };
+  }
+
+  if (!requestedRecipient) {
+    return null;
+  }
+
   let latestMatch = null;
 
-  for (const [storedOtpId, storedData] of otpStorage.entries()) {
+  for (const [storedResetId, storedData] of passwordResetStorage.entries()) {
     if (storedData.recipient !== requestedRecipient) {
       continue;
     }
 
     if (!latestMatch || storedData.createdAt > latestMatch.storedData.createdAt) {
-      latestMatch = { otpId: storedOtpId, storedData };
+      latestMatch = { resetId: storedResetId, storedData };
     }
   }
 
@@ -138,13 +188,17 @@ const buildAuthUserPayload = (userRecord) => {
   }
 
   const displayName = userRecord.first_name || buildDisplayNameFromEmail(userRecord.email);
+  const isAdmin = Boolean(userRecord.is_admin || userRecord.isAdmin);
 
   return {
     id: userRecord.id,
     email: userRecord.email,
     username: userRecord.username || null,
     name: displayName,
-    avatar: displayName.charAt(0).toUpperCase()
+    avatar: displayName.charAt(0).toUpperCase(),
+    isAdmin,
+    role: getAuthRole(userRecord),
+    registrationType: getRegistrationType(userRecord)
   };
 };
 
@@ -227,9 +281,22 @@ const hashPassword = async (password) => {
 };
 
 // Helper function to generate JWT
-const generateToken = (userId) => {
+const generateToken = (userRecordOrId) => {
+  const userId =
+    typeof userRecordOrId === 'object' && userRecordOrId !== null
+      ? userRecordOrId.id || userRecordOrId.userId
+      : userRecordOrId;
+  const email =
+    typeof userRecordOrId === 'object' && userRecordOrId !== null
+      ? userRecordOrId.email || null
+      : null;
+  const isAdmin =
+    typeof userRecordOrId === 'object' && userRecordOrId !== null
+      ? Boolean(userRecordOrId.is_admin || userRecordOrId.isAdmin)
+      : false;
+
   return jwt.sign(
-    { userId, id: userId },
+    { userId, id: userId, email, isAdmin },
     process.env.JWT_SECRET || 'your_secret_key',
     { expiresIn: process.env.JWT_EXPIRE || '7d' }
   );
@@ -239,8 +306,9 @@ const generateToken = (userId) => {
 router.post('/signup', async (req, res) => {
   try {
     const { email, password, confirmPassword } = req.body;
+    const normalizedEmail = normalizeRecipient(email);
 
-    if (!email || !password || !confirmPassword) {
+    if (!normalizedEmail || !password || !confirmPassword) {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
@@ -249,7 +317,7 @@ router.post('/signup', async (req, res) => {
     }
 
     // Check if user exists
-    const existingUser = await db.query('SELECT id FROM users WHERE email = $1', [email]);
+    const existingUser = await db.query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
     if (existingUser.rows.length > 0) {
       return res.status(409).json({ error: 'User already exists' });
     }
@@ -258,19 +326,19 @@ router.post('/signup', async (req, res) => {
     const hashedPassword = await hashPassword(password);
 
     // Create user
-    const result = await db.query(
-      'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email',
-      [email, hashedPassword]
+    const createdUserResult = await db.query(
+      'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email, is_admin',
+      [normalizedEmail, hashedPassword]
     );
 
-    const userId = result.rows[0].id;
+    const userId = createdUserResult.rows[0].id;
 
     // Create empty dating profile
     await db.query(
       `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO NOTHING`,
-      [userId, buildDisplayNameFromEmail(email), 18, 10]
+      [userId, buildDisplayNameFromEmail(normalizedEmail), 18, 10]
     );
 
     // Create user preferences
@@ -279,12 +347,28 @@ router.post('/signup', async (req, res) => {
       [userId]
     );
 
-    const token = generateToken(userId);
+    await syncAdminPrivilegesForEmail(normalizedEmail);
+
+    const persistedUserResult = await db.query(
+      `SELECT id, email, is_admin
+       FROM users
+       WHERE id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const persistedUser = persistedUserResult.rows[0];
+    const token = generateToken(persistedUser);
 
     res.status(201).json({
       message: 'User created successfully',
       token,
-      user: { id: userId, email }
+      user: {
+        id: persistedUser.id,
+        email: persistedUser.email,
+        isAdmin: Boolean(persistedUser.is_admin),
+        role: getAuthRole(persistedUser),
+        registrationType: getRegistrationType(persistedUser)
+      }
     });
   } catch (err) {
     console.error('Signup error:', err);
@@ -296,13 +380,20 @@ router.post('/signup', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = normalizeRecipient(email);
+    const requestMetadata = getRequestMetadata(req);
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
+    await syncAdminPrivilegesForEmail(normalizedEmail);
+
     // Find user
-    const result = await db.query('SELECT id, password FROM users WHERE email = $1', [email]);
+    const result = await db.query(
+      'SELECT id, email, password, is_admin FROM users WHERE email = $1',
+      [normalizedEmail]
+    );
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -315,12 +406,27 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = generateToken(user.id);
+    const token = generateToken(user);
+
+    spamFraudService.trackUserActivity({
+      userId: user.id,
+      action: 'password_login',
+      analyticsUpdates: { session_count: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runFraudCheck: true
+    });
 
     res.json({
       message: 'Login successful',
       token,
-      user: { id: user.id, email }
+      user: {
+        id: user.id,
+        email: user.email,
+        isAdmin: Boolean(user.is_admin),
+        role: getAuthRole(user),
+        registrationType: getRegistrationType(user)
+      }
     });
   } catch (err) {
     console.error('Login error:', err);
@@ -386,7 +492,7 @@ router.get('/check-email', async (req, res) => {
 });
 
 // VERIFY TOKEN
-router.get('/verify', (req, res) => {
+router.get('/verify', async (req, res) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
@@ -394,9 +500,44 @@ router.get('/verify', (req, res) => {
     return res.status(401).json({ valid: false });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key', (err, user) => {
+  jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key', async (err, decodedUser) => {
     if (err) return res.status(401).json({ valid: false });
-    res.json({ valid: true, user });
+
+    try {
+      const userId = decodedUser.userId || decodedUser.id;
+      const result = await db.query(
+        `SELECT id, email, is_admin
+         FROM users
+         WHERE id = $1
+         LIMIT 1`,
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ valid: false });
+      }
+
+      const userRecord = result.rows[0];
+
+      if (!userRecord.is_admin && isConfiguredAdminEmail(userRecord.email)) {
+        await syncAdminPrivilegesForEmail(userRecord.email);
+        userRecord.is_admin = true;
+      }
+
+      res.json({
+        valid: true,
+        user: {
+          id: userRecord.id,
+          email: userRecord.email,
+          isAdmin: Boolean(userRecord.is_admin),
+          role: getAuthRole(userRecord),
+          registrationType: getRegistrationType(userRecord)
+        }
+      });
+    } catch (lookupError) {
+      console.error('Verify token error:', lookupError);
+      res.status(500).json({ valid: false, error: 'Failed to verify token' });
+    }
   });
 });
 
@@ -416,7 +557,7 @@ router.get('/me', async (req, res) => {
 
     // Get user data
     const result = await db.query(
-      'SELECT id, email, created_at FROM users WHERE id = $1',
+      'SELECT id, email, created_at, is_admin FROM users WHERE id = $1',
       [userId]
     );
 
@@ -425,6 +566,11 @@ router.get('/me', async (req, res) => {
     }
 
     const user = result.rows[0];
+
+    if (!user.is_admin && isConfiguredAdminEmail(user.email)) {
+      await syncAdminPrivilegesForEmail(user.email);
+      user.is_admin = true;
+    }
 
     // Get dating profile if exists
     const profileResult = await db.query(
@@ -435,6 +581,9 @@ router.get('/me', async (req, res) => {
     res.json({
       user: {
         ...user,
+        isAdmin: Boolean(user.is_admin),
+        role: getAuthRole(user),
+        registrationType: getRegistrationType(user),
         profile: profileResult.rows[0] || null
       }
     });
@@ -476,7 +625,7 @@ router.patch('/me', async (req, res) => {
        SET storefront_data = COALESCE(storefront_data, '{}')::jsonb || $1::jsonb,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
-       RETURNING id, email, created_at, storefront_data`,
+       RETURNING id, email, created_at, storefront_data, is_admin`,
       [JSON.stringify(storefrontData), userId]
     );
 
@@ -485,6 +634,11 @@ router.patch('/me', async (req, res) => {
     }
 
     const user = result.rows[0];
+
+    if (!user.is_admin && isConfiguredAdminEmail(user.email)) {
+      await syncAdminPrivilegesForEmail(user.email);
+      user.is_admin = true;
+    }
 
     // Get dating profile if exists
     const profileResult = await db.query(
@@ -497,6 +651,9 @@ router.patch('/me', async (req, res) => {
       message: 'User data updated successfully',
       user: {
         ...user,
+        isAdmin: Boolean(user.is_admin),
+        role: getAuthRole(user),
+        registrationType: getRegistrationType(user),
         profile: profileResult.rows[0] || null
       }
     });
@@ -627,13 +784,11 @@ router.post('/send-otp', async (req, res) => {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpId = uuidv4();
 
-    // Store OTP with 10-minute expiration
-    otpStorage.set(otpId, {
+    // Store OTP with 10-minute expiration in Redis
+    await storeOTP(otpId, {
       otp,
       recipient,
-      createdAt: Date.now(),
-      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
-      attempts: 0
+      createdAt: Date.now()
     });
 
     console.log(`OTP generated: ${otp} for ${email || phone}`);
@@ -719,42 +874,37 @@ router.all('/send-otp', methodNotAllowed('POST'));
 router.post('/verify-otp', async (req, res) => {
   try {
     const { otpId, otp, email, phone, fullName, username, location, city, state, country, bio } = req.body;
+    const requestMetadata = getRequestMetadata(req);
 
     if (!otp) {
       return res.status(400).json({ error: 'OTP required' });
     }
 
-    const otpEntry = findStoredOtpEntry({ otpId, email, phone });
+    const otpEntry = await findStoredOtpEntry({ otpId, email, phone });
     if (!otpEntry) {
       return res.status(400).json({ error: 'Invalid or expired OTP request' });
     }
 
     const { otpId: matchedOtpId, storedData } = otpEntry;
 
-    // Check if OTP has expired
-    if (Date.now() > storedData.expiresAt) {
-      otpStorage.delete(matchedOtpId);
-      return res.status(400).json({ error: 'OTP has expired' });
-    }
-
     // Check if OTP matches
     if (storedData.otp !== otp) {
-      storedData.attempts += 1;
+      const updatedData = await incrementOTPAttempts(matchedOtpId);
       
-      // Lock after 5 failed attempts
-      if (storedData.attempts >= 5) {
-        otpStorage.delete(matchedOtpId);
+      // Lock after max failed attempts
+      if (!updatedData || updatedData.attempts >= MAX_OTP_ATTEMPTS) {
+        await deleteOTP(matchedOtpId);
         return res.status(429).json({ error: 'Too many attempts. Please request a new OTP.' });
       }
 
       return res.status(400).json({ 
         error: 'Invalid OTP',
-        attemptsRemaining: 5 - storedData.attempts
+        attemptsRemaining: MAX_OTP_ATTEMPTS - updatedData.attempts
       });
     }
 
     // OTP verified successfully
-    otpStorage.delete(matchedOtpId); // Clear the OTP after successful verification
+    await deleteOTP(matchedOtpId); // Clear the OTP after successful verification
 
     const recipientEmail = storedData.recipient.includes('@')
       ? storedData.recipient
@@ -781,8 +931,17 @@ router.post('/verify-otp', async (req, res) => {
         username: profileRecord?.username || userRecord.username,
         first_name: profileRecord?.first_name || userRecord.first_name
       });
-      token = generateToken(userRecord.id);
+      token = generateToken(userRecord);
       needsUsernameSetup = !(profileRecord?.username || userRecord.username);
+
+      spamFraudService.trackUserActivity({
+        userId: userRecord.id,
+        action: 'otp_login',
+        analyticsUpdates: { session_count: 1 },
+        ipAddress: requestMetadata.ipAddress,
+        userAgent: requestMetadata.userAgent,
+        runFraudCheck: true
+      });
     }
 
     res.json({
@@ -800,6 +959,170 @@ router.post('/verify-otp', async (req, res) => {
 });
 
 router.all('/verify-otp', methodNotAllowed('POST'));
+
+// REQUEST PASSWORD RESET
+router.post('/request-password-reset', async (req, res) => {
+  try {
+    const normalizedEmail = normalizeRecipient(req.body.email);
+
+    if (!normalizedEmail) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const userResult = await db.query(
+      `SELECT id, email
+       FROM users
+       WHERE LOWER(email) = LOWER($1)
+       LIMIT 1`,
+      [normalizedEmail]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: 'If that email exists, a reset code has been sent.'
+      });
+    }
+
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetId = uuidv4();
+
+    passwordResetStorage.set(resetId, {
+      code: resetCode,
+      recipient: normalizedEmail,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 15 * 60 * 1000,
+      attempts: 0
+    });
+
+    const developmentPayload = process.env.NODE_ENV === 'production'
+      ? {}
+      : { devResetCode: resetCode };
+
+    if (process.env.EMAIL_USER) {
+      try {
+        const transporter = getEmailTransporter();
+        await transporter.verify();
+        await transporter.sendMail({
+          from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+          to: normalizedEmail,
+          subject: 'Your LinkUp password reset code',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>LinkUp password reset</h2>
+              <p>Use this code to reset your password:</p>
+              <h1 style="letter-spacing: 2px; text-align: center;">${resetCode}</h1>
+              <p>This code expires in 15 minutes.</p>
+            </div>
+          `
+        });
+      } catch (mailError) {
+        console.error('Password reset email error:', mailError);
+
+        if (process.env.NODE_ENV === 'production') {
+          return res.status(500).json({ error: 'Failed to send password reset email' });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'If that email exists, a reset code has been sent.',
+      resetId,
+      ...developmentPayload
+    });
+  } catch (error) {
+    console.error('Request password reset error:', error);
+    res.status(500).json({ error: 'Failed to request password reset' });
+  }
+});
+
+router.all('/request-password-reset', methodNotAllowed('POST'));
+
+// RESET PASSWORD
+router.post('/reset-password', async (req, res) => {
+  try {
+    const {
+      email,
+      resetId,
+      resetCode,
+      newPassword,
+      confirmPassword
+    } = req.body;
+    const normalizedEmail = normalizeRecipient(email);
+
+    if (!normalizedEmail || !resetCode || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: 'Email, reset code, and new password are required' });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+
+    const resetEntry = findStoredPasswordResetEntry({ resetId, email: normalizedEmail });
+    if (!resetEntry) {
+      return res.status(400).json({ error: 'Invalid or expired password reset request' });
+    }
+
+    const { resetId: matchedResetId, storedData } = resetEntry;
+
+    if (Date.now() > storedData.expiresAt) {
+      passwordResetStorage.delete(matchedResetId);
+      return res.status(400).json({ error: 'Password reset code has expired' });
+    }
+
+    if (storedData.code !== String(resetCode).trim()) {
+      storedData.attempts += 1;
+
+      if (storedData.attempts >= 5) {
+        passwordResetStorage.delete(matchedResetId);
+        return res.status(429).json({ error: 'Too many attempts. Request a new reset code.' });
+      }
+
+      return res.status(400).json({
+        error: 'Invalid reset code',
+        attemptsRemaining: 5 - storedData.attempts
+      });
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+    const result = await db.query(
+      `UPDATE users
+       SET password = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE LOWER(email) = LOWER($2)
+       RETURNING id, email, is_admin`,
+      [hashedPassword, normalizedEmail]
+    );
+
+    passwordResetStorage.delete(matchedResetId);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Password reset successfully',
+      user: {
+        id: result.rows[0].id,
+        email: result.rows[0].email,
+        isAdmin: Boolean(result.rows[0].is_admin),
+        role: getAuthRole(result.rows[0]),
+        registrationType: getRegistrationType(result.rows[0])
+      }
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+router.all('/reset-password', methodNotAllowed('POST'));
 
 router.post('/set-username', async (req, res) => {
   try {
@@ -837,7 +1160,7 @@ router.post('/set-username', async (req, res) => {
     }
 
     const userResult = await db.query(
-      'SELECT id, email FROM users WHERE id = $1 LIMIT 1',
+      'SELECT id, email, is_admin FROM users WHERE id = $1 LIMIT 1',
       [userId]
     );
 
@@ -871,7 +1194,10 @@ router.post('/set-username', async (req, res) => {
       user: {
         id: userId,
         username: profileResult.rows[0].username,
-        name: profileResult.rows[0].first_name || fallbackName
+        name: profileResult.rows[0].first_name || fallbackName,
+        isAdmin: Boolean(userResult.rows[0].is_admin),
+        role: getAuthRole(userResult.rows[0]),
+        registrationType: getRegistrationType(userResult.rows[0])
       }
     });
   } catch (error) {
@@ -888,18 +1214,33 @@ router.post('/set-username', async (req, res) => {
 router.all('/set-username', methodNotAllowed('POST'));
 
 // DELETE ACCOUNT
-router.delete('/account', async (req, res) => {
+router.delete('/account', authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
+    const confirmationText = String(req.body?.confirmationText || req.query?.confirmationText || '').trim();
+    const currentPassword = String(req.body?.currentPassword || '').trim();
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     // Check if user exists
-    const userExists = await db.query('SELECT id FROM users WHERE id = $1', [userId]);
+    const userExists = await db.query('SELECT id, password, email FROM users WHERE id = $1', [userId]);
     if (userExists.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    const userRecord = userExists.rows[0];
+    let isConfirmed = confirmationText.toUpperCase() === 'DELETE';
+
+    if (!isConfirmed && currentPassword) {
+      isConfirmed = await bcrypt.compare(currentPassword, userRecord.password);
+    }
+
+    if (!isConfirmed) {
+      return res.status(400).json({
+        error: 'Confirm account deletion with the word DELETE or your current password'
+      });
     }
 
     // Delete user and all associated data (cascading deletes will handle related records)
@@ -935,14 +1276,25 @@ router.all('/account', methodNotAllowed('DELETE'));
 router.post('/set-admin', async (req, res) => {
   try {
     const { email } = req.body;
+    const normalizedEmail = normalizeRecipient(email);
 
-    if (!email) {
+    if (!normalizedEmail) {
       return res.status(400).json({ error: 'Email is required' });
     }
 
+    if (!isConfiguredAdminEmail(normalizedEmail)) {
+      return res.status(403).json({
+        error: `Only configured admin emails can be promoted with this endpoint. Allowed: ${Array.from(getConfiguredAdminEmails()).join(', ')}`
+      });
+    }
+
     const result = await db.query(
-      `UPDATE users SET is_admin = TRUE WHERE email = $1 RETURNING id, email, is_admin`,
-      [email]
+      `UPDATE users
+       SET is_admin = TRUE,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE LOWER(email) = LOWER($1)
+       RETURNING id, email, is_admin`,
+      [normalizedEmail]
     );
 
     if (result.rows.length === 0) {
@@ -951,8 +1303,13 @@ router.post('/set-admin', async (req, res) => {
 
     res.json({
       success: true,
-      message: `${email} is now an admin`,
-      user: result.rows[0]
+      message: `${normalizedEmail} is now an admin`,
+      user: {
+        ...result.rows[0],
+        isAdmin: Boolean(result.rows[0].is_admin),
+        role: 'admin',
+        registrationType: 'admin'
+      }
     });
   } catch (err) {
     console.error('Set admin error:', err);

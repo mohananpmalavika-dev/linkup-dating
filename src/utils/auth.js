@@ -19,6 +19,10 @@ export const clearStoredAuthToken = () => {
   localStorage.removeItem(LEGACY_AUTH_TOKEN_STORAGE_KEY);
 };
 
+export const clearStoredUserData = () => {
+  localStorage.removeItem(USER_DATA_KEY);
+};
+
 export const storeUserData = (userData) => {
   try {
     localStorage.setItem(USER_DATA_KEY, JSON.stringify(userData));

@@ -1,8 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const spamFraudService = require('../services/spamFraudService');
+const userNotificationService = require('../services/userNotificationService');
 
 const ALLOWED_MESSAGE_REACTIONS = new Set(['❤️', '👍', '😂', '🔥', '👏']);
+
+const getRequestMetadata = (req) => ({
+  ipAddress: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
+  userAgent: req.headers['user-agent'] || null
+});
 
 const getMatchForUser = async (matchId, userId) => {
   const matchCheck = await db.query(
@@ -52,6 +59,7 @@ router.get('/matches/:matchId/messages', async (req, res) => {
   try {
     const { matchId } = req.params;
     const userId = req.user.id;
+    const requestMetadata = getRequestMetadata(req);
     const limit = Number.parseInt(req.query.limit, 10) || 50;
     const offset = Number.parseInt(req.query.offset, 10) || 0;
 
@@ -115,6 +123,14 @@ router.get('/matches/:matchId/messages', async (req, res) => {
       });
     }
 
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'conversation_view',
+      analyticsUpdates: {},
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent
+    });
+
     res.json(result.rows.reverse());
   } catch (err) {
     console.error('Get messages error:', err);
@@ -128,6 +144,7 @@ router.post('/matches/:matchId/messages', async (req, res) => {
     const { matchId } = req.params;
     const userId = req.user.id;
     const normalizedMessage = String(req.body.message || '').trim();
+    const requestMetadata = getRequestMetadata(req);
 
     if (!normalizedMessage) {
       return res.status(400).json({ error: 'Message text required' });
@@ -137,6 +154,17 @@ router.post('/matches/:matchId/messages', async (req, res) => {
 
     if (!match) {
       return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const spamEvaluation = await spamFraudService.evaluateMessageForSpam(userId, normalizedMessage);
+
+    if (spamEvaluation.blocked) {
+      await spamFraudService.refreshSystemMetrics();
+
+      return res.status(422).json({
+        error: spamEvaluation.message || 'Message blocked by spam filter',
+        reason: spamEvaluation.reasons?.join(', ') || 'spam_detected'
+      });
     }
 
     const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : match.user_id_1;
@@ -181,6 +209,30 @@ router.post('/matches/:matchId/messages', async (req, res) => {
         reactions: []
       });
     }
+
+    await userNotificationService.createNotification(toUserId, {
+      type: 'new_message',
+      title: `New message from ${fromUserName}`,
+      body: normalizedMessage.length > 90
+        ? `${normalizedMessage.slice(0, 87)}...`
+        : normalizedMessage,
+      metadata: {
+        matchId: Number.parseInt(matchId, 10),
+        messageId: createdMessage.id,
+        fromUserId: userId,
+        fromUserName
+      }
+    });
+
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'message_sent',
+      analyticsUpdates: { messages_sent: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
 
     res.json({ message: 'Message sent', data: createdMessage });
   } catch (err) {

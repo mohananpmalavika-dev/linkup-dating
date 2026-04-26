@@ -53,6 +53,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
+  const [favoriteUserIds, setFavoriteUserIds] = useState(new Set());
 
   const activeFilterCount = useMemo(() => (
     Object.values(appliedFilters).filter((value) => String(value).trim() !== '').length
@@ -61,6 +62,19 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   useEffect(() => {
     loadProfiles(appliedFilters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const loadFavorites = async () => {
+      try {
+        const favoritesData = await datingProfileService.getFavorites();
+        setFavoriteUserIds(new Set((favoritesData.favorites || []).map((favorite) => String(favorite.userId))));
+      } catch (favoriteError) {
+        console.error('Failed to load favorites:', favoriteError);
+      }
+    };
+
+    loadFavorites();
   }, []);
 
   const loadProfiles = async (nextFilters = appliedFilters) => {
@@ -112,6 +126,32 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     } catch (err) {
       setError('Failed to pass profile');
       console.error(err);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    const profile = getCurrentProfile();
+
+    if (!profile?.userId) {
+      return;
+    }
+
+    const userId = String(profile.userId);
+    const nextFavoriteIds = new Set(favoriteUserIds);
+
+    try {
+      if (nextFavoriteIds.has(userId)) {
+        await datingProfileService.removeFavorite(profile.userId);
+        nextFavoriteIds.delete(userId);
+      } else {
+        await datingProfileService.favoriteProfile(profile.userId);
+        nextFavoriteIds.add(userId);
+      }
+
+      setFavoriteUserIds(nextFavoriteIds);
+    } catch (favoriteError) {
+      setError('Failed to update favorites');
+      console.error(favoriteError);
     }
   };
 

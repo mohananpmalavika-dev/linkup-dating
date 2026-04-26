@@ -280,6 +280,116 @@ export const datingProfileService = {
       throw error.response?.data?.error || 'Failed to report user';
     }
   },
+
+  /**
+   * Save a profile to favorites
+   */
+  favoriteProfile: async (userId) => {
+    try {
+      const response = await axios.post(`${API_URL}/favorites`, {
+        favoriteUserId: userId
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to save favorite';
+    }
+  },
+
+  /**
+   * Get favorite profiles
+   */
+  getFavorites: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/favorites`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch favorites';
+    }
+  },
+
+  /**
+   * Remove a profile from favorites
+   */
+  removeFavorite: async (userId) => {
+    try {
+      const response = await axios.delete(`${API_URL}/favorites/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to remove favorite';
+    }
+  },
+
+  /**
+   * Get search history
+   */
+  getSearchHistory: async (limit = 20) => {
+    try {
+      const response = await axios.get(`${API_URL}/search-history`, { params: { limit } });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch search history';
+    }
+  },
+
+  /**
+   * Clear search history
+   */
+  clearSearchHistory: async () => {
+    try {
+      const response = await axios.delete(`${API_URL}/search-history`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to clear search history';
+    }
+  },
+
+  /**
+   * Get in-app notifications
+   */
+  getNotifications: async (limit = 25) => {
+    try {
+      const response = await axios.get(`${API_URL}/notifications`, { params: { limit } });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch notifications';
+    }
+  },
+
+  /**
+   * Get unread notification count
+   */
+  getUnreadNotificationCount: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/notifications/unread-count`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch notification count';
+    }
+  },
+
+  /**
+   * Mark one notification as read
+   */
+  markNotificationRead: async (notificationId) => {
+    try {
+      const response = await axios.post(`${API_URL}/notifications/${notificationId}/read`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to update notification';
+    }
+  },
+
+  /**
+   * Mark all notifications as read
+   */
+  markAllNotificationsRead: async () => {
+    try {
+      const response = await axios.post(`${API_URL}/notifications/read-all`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to update notifications';
+    }
+  },
 };
 
 export default datingProfileService;
