@@ -61,6 +61,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [favoriteUserIds, setFavoriteUserIds] = useState(new Set());
   const [remainingLikes, setRemainingLikes] = useState(50);
   const [remainingSuperlikes, setRemainingSuperlikes] = useState(1);
+  const [remainingRewinds, setRemainingRewinds] = useState(3);
+  const [discoveryMode, setDiscoveryMode] = useState('regular'); // 'regular' | 'topPicks'
 
   const activeFilterCount = useMemo(() => (
     Object.values(appliedFilters).filter((value) => String(value).trim() !== '').length
@@ -108,8 +110,56 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       const data = await datingProfileService.getDailyLimits();
       setRemainingLikes(data.remainingLikes ?? 50);
       setRemainingSuperlikes(data.remainingSuperlikes ?? 1);
+      setRemainingRewinds(data.remainingRewinds ?? 3);
     } catch (err) {
       console.error('Failed to load daily limits:', err);
+    }
+  };
+
+  const loadTopPicks = async () => {
+    setLoading(true);
+    setError('');
+
+    try {
+      const data = await datingProfileService.getTopPicks(10);
+      const nextProfiles = data.profiles || [];
+      setProfiles(nextProfiles);
+      setCurrentIndex(0);
+      setNoMoreProfiles(nextProfiles.length === 0);
+      setDiscoveryMode('topPicks');
+    } catch (err) {
+      setError('Failed to load top picks. Please try again.');
+      console.error('Top picks loading error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRewind = async () => {
+    if (remainingRewinds <= 0) {
+      return;
+    }
+
+    try {
+      const result = await datingProfileService.rewindPass();
+      setRemainingRewinds(result.rewindsRemaining ?? 0);
+      if (result.restoredProfile) {
+        setProfiles((current) => [result.restoredProfile, ...current]);
+        setCurrentIndex(0);
+        setNoMoreProfiles(false);
+      }
+    } catch (err) {
+      setError('Failed to rewind pass');
+      console.error(err);
+    }
+  };
+
+  const toggleDiscoveryMode = () => {
+    if (discoveryMode === 'regular') {
+      loadTopPicks();
+    } else {
+      loadProfiles(appliedFilters);
+      setDiscoveryMode('regular');
     }
   };
 
@@ -372,16 +422,27 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   return (
     <div className="discovery-container">
       <div className="discovery-toolbar">
-        <button
-          type="button"
-          className="btn-filter-toggle"
-          onClick={() => setShowFilters((current) => !current)}
-        >
-          Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
-        </button>
+        <div className="toolbar-left">
+          <button
+            type="button"
+            className="btn-filter-toggle"
+            onClick={() => setShowFilters((current) => !current)}
+          >
+            Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
+          </button>
+          <button
+            type="button"
+            className={`btn-mode-toggle ${discoveryMode === 'topPicks' ? 'active' : ''}`}
+            onClick={toggleDiscoveryMode}
+            title={discoveryMode === 'topPicks' ? 'Switch to regular discovery' : 'Show top picks'}
+          >
+            {discoveryMode === 'topPicks' ? '🏆 Top Picks' : '🔥 Top Picks'}
+          </button>
+        </div>
         <div className="daily-limits">
           <span title="Remaining likes today">❤️ {remainingLikes}</span>
           <span title="Remaining superlikes today">⭐ {remainingSuperlikes}</span>
+          <span title="Remaining rewinds today">↩️ {remainingRewinds}</span>
         </div>
       </div>
 
@@ -613,6 +674,15 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           aria-label="Pass"
         >
           ✕
+        </button>
+        <button
+          onClick={handleRewind}
+          className="btn-action btn-rewind"
+          title="Undo last pass"
+          aria-label="Rewind"
+          disabled={remainingRewinds <= 0}
+        >
+          ↩️
         </button>
         <button
           onClick={() => onProfileView?.(currentProfile)}

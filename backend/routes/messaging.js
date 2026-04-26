@@ -356,4 +356,123 @@ router.get('/unread-count', async (req, res) => {
   }
 });
 
+// SEND MEDIA MESSAGE (image or voice)
+router.post('/matches/:matchId/media', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const userId = req.user.id;
+    const mediaType = String(req.body.mediaType || req.query.mediaType || 'image');
+    const duration = Number.parseInt(req.body.duration, 10) || null;
+    const requestMetadata = getRequestMetadata(req);
+
+    if (!['image', 'voice'].includes(mediaType)) {
+      return res.status(400).json({ error: 'Invalid media type' });
+    }
+
+    const match = await getMatchForUser(matchId, userId);
+
+    if (!match) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : match.user_id_1;
+
+    // Handle file upload - collect from multipart or base64
+    const MAX_MEDIA_BYTES = mediaType === 'image' ? 5 * 1024 * 1024 : 2 * 1024 * 1024;
+    let mediaUrl = null;
+
+    if (req.body?.mediaBase64) {
+      mediaUrl = req.body.mediaBase64;
+    } else if (req.files?.media || req.file) {
+      const file = req.files?.media || req.file;
+      const base64Data = file.data?.toString('base64') || file.buffer?.toString('base64');
+      if (base64Data) {
+        mediaUrl = `data:${file.mimetype || 'application/octet-stream'};base64,${base64Data}`;
+      }
+    }
+
+    if (!mediaUrl) {
+      return res.status(400).json({ error: 'Media file required' });
+    }
+
+    // Limit base64 size
+    const base64Size = mediaUrl.length * 0.75;
+    if (base64Size > MAX_MEDIA_BYTES) {
+      return res.status(413).json({ error: `Media too large. Max ${mediaType === 'image' ? '5MB' : '2MB'}` });
+    }
+
+    const result = await db.query(
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [matchId, userId, toUserId, `[${mediaType}]`, mediaType, mediaUrl, duration]
+    );
+
+    await db.query(
+      `UPDATE matches
+       SET last_message_at = CURRENT_TIMESTAMP,
+           message_count = message_count + 1
+       WHERE id = $1`,
+      [matchId]
+    );
+
+    const senderProfile = await db.query(
+      `SELECT COALESCE(NULLIF(first_name, ''), username, 'Someone') AS display_name
+       FROM dating_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const fromUserName = senderProfile.rows[0]?.display_name || 'Someone';
+
+    const createdMessage = {
+      ...result.rows[0],
+      reactions: []
+    };
+
+    if (typeof req.emitToUser === 'function') {
+      req.emitToUser(toUserId, 'new_message', {
+        matchId: Number.parseInt(matchId, 10),
+        messageId: createdMessage.id,
+        fromUserId: userId,
+        fromUserName,
+        message: `[${mediaType}]`,
+        timestamp: createdMessage.created_at,
+        mediaType,
+        mediaUrl,
+        duration,
+        reactions: []
+      });
+    }
+
+    await userNotificationService.createNotification(toUserId, {
+      type: 'new_message',
+      title: `New ${mediaType === 'voice' ? 'voice note' : 'image'} from ${fromUserName}`,
+      body: mediaType === 'voice' ? 'Voice message' : 'Shared an image',
+      metadata: {
+        matchId: Number.parseInt(matchId, 10),
+        messageId: createdMessage.id,
+        fromUserId: userId,
+        fromUserName,
+        mediaType
+      }
+    });
+
+    spamFraudService.trackUserActivity({
+      userId,
+      action: `${mediaType}_sent`,
+      analyticsUpdates: { messages_sent: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
+
+    res.json({ message: 'Media sent', data: createdMessage });
+  } catch (err) {
+    console.error('Send media error:', err);
+    res.status(500).json({ error: 'Failed to send media' });
+  }
+});
+
 module.exports = router;

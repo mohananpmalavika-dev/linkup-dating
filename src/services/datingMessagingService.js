@@ -47,6 +47,35 @@ const datingMessagingService = {
     } catch (error) {
       throw error.response?.data?.error || 'Failed to load unread count';
     }
+  },
+
+  sendMediaMessage: async (matchId, file, mediaType = 'image') => {
+    try {
+      const formData = new FormData();
+      formData.append('media', file);
+      formData.append('mediaType', mediaType);
+      const response = await axios.post(`${API_URL}/matches/${matchId}/media`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to send media';
+    }
+  },
+
+  sendVoiceNote: async (matchId, audioBlob, duration = 0) => {
+    try {
+      const formData = new FormData();
+      formData.append('media', audioBlob, 'voice-note.webm');
+      formData.append('mediaType', 'voice');
+      formData.append('duration', String(duration));
+      const response = await axios.post(`${API_URL}/matches/${matchId}/media`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to send voice note';
+    }
   }
 };
 

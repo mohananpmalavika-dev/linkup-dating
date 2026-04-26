@@ -865,9 +865,9 @@ router.get('/discovery', async (req, res) => {
        WHERE dp.user_id != $1
          AND dp.is_active = true
          AND dp.user_id NOT IN (
-           SELECT CASE 
-             WHEN from_user_id = $1 THEN to_user_id 
-             ELSE from_user_id 
+           SELECT CASE
+             WHEN from_user_id = $1 THEN to_user_id
+             ELSE from_user_id
            END as excluded_user
            FROM interactions WHERE (from_user_id = $1 OR to_user_id = $1)
          )
@@ -1890,7 +1890,7 @@ router.post('/interactions/superlike', async (req, res) => {
 
     const today = new Date().toISOString().split('T')[0];
     const analyticsResult = await db.query(
-      `SELECT superlikes_used FROM user_analytics WHERE user_id = $1 AND date = $2`,
+      `SELECT superlikes_used FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
       [fromUserId, today]
     );
 
@@ -1906,7 +1906,10 @@ router.post('/interactions/superlike', async (req, res) => {
     );
 
     await db.query(
-      `INSERT INTO user_analytics (user_id, date, superlikes_used) VALUES ($1, $2, 1) ON CONFLICT (user_id, date) DO UPDATE SET superlikes_used = user_analytics.superlikes_used + 1`,
+      `INSERT INTO user_analytics (user_id, activity_date, superlikes_used)
+       VALUES ($1, $2, 1)
+       ON CONFLICT (user_id, activity_date) DO UPDATE
+       SET superlikes_used = user_analytics.superlikes_used + 1`,
       [fromUserId, today]
     );
 
@@ -1955,18 +1958,26 @@ router.get('/daily-limits', async (req, res) => {
     const userId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
 
-    const analyticsResult = await db.query(`SELECT likes_used, superlikes_used FROM user_analytics WHERE user_id = $1 AND date = $2`, [userId, today]);
+    const analyticsResult = await db.query(
+      `SELECT likes_used, superlikes_used, rewinds_used
+       FROM user_analytics
+       WHERE user_id = $1 AND activity_date = $2`,
+      [userId, today]
+    );
 
     const likesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_used || 0) : 0;
     const superlikesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_used || 0) : 0;
+    const rewindsUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_used || 0) : 0;
 
     const likeLimit = 50;
     const superlikeLimit = 1;
+    const rewindLimit = 3;
 
     res.json({
-      likeLimit, superlikeLimit, likesUsed, superlikesUsed,
+      likeLimit, superlikeLimit, rewindLimit, likesUsed, superlikesUsed, rewindsUsed,
       remainingLikes: Math.max(0, likeLimit - likesUsed),
       remainingSuperlikes: Math.max(0, superlikeLimit - superlikesUsed),
+      remainingRewinds: Math.max(0, rewindLimit - rewindsUsed),
       resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     });
   } catch (err) {
@@ -1988,7 +1999,10 @@ router.post('/interactions/like', async (req, res) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    const analyticsResult = await db.query(`SELECT likes_used FROM user_analytics WHERE user_id = $1 AND date = $2`, [fromUserId, today]);
+    const analyticsResult = await db.query(
+      `SELECT likes_used FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
+      [fromUserId, today]
+    );
 
     const likesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_used || 0) : 0;
     const likeLimit = 50;
@@ -2002,7 +2016,10 @@ router.post('/interactions/like', async (req, res) => {
     );
 
     await db.query(
-      `INSERT INTO user_analytics (user_id, date, likes_used) VALUES ($1, $2, 1) ON CONFLICT (user_id, date) DO UPDATE SET likes_used = user_analytics.likes_used + 1`,
+      `INSERT INTO user_analytics (user_id, activity_date, likes_used)
+       VALUES ($1, $2, 1)
+       ON CONFLICT (user_id, activity_date) DO UPDATE
+       SET likes_used = user_analytics.likes_used + 1`,
       [fromUserId, today]
     );
 
@@ -2042,6 +2059,474 @@ router.post('/interactions/like', async (req, res) => {
   } catch (err) {
     console.error('Like error:', err);
     res.status(500).json({ error: 'Failed to like profile' });
+  }
+});
+
+// 32. GET TOP PICKS (Most Compatible Profiles)
+router.get('/top-picks', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
+
+    // Get current user's profile and preferences
+    const currentProfileResult = await db.query(
+      `SELECT dp.*, up.gender_preferences, up.age_range_min, up.age_range_max, up.location_radius,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       WHERE dp.user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const currentProfile = normalizeProfileRow(currentProfileResult.rows[0] || null);
+
+    if (!currentProfile) {
+      return res.status(404).json({ error: 'Profile not found. Complete your profile first.' });
+    }
+
+    // Get candidates excluding already interacted users
+    const result = await db.query(
+      `SELECT dp.*,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       WHERE dp.user_id != $1
+         AND dp.is_active = true
+         AND dp.user_id NOT IN (
+           SELECT CASE
+             WHEN from_user_id = $1 THEN to_user_id
+             ELSE from_user_id
+           END as excluded_user
+           FROM interactions WHERE (from_user_id = $1 OR to_user_id = $1)
+         )
+       ORDER BY dp.updated_at DESC
+       LIMIT 100`,
+      [userId]
+    );
+
+    // Score and rank profiles
+    const scoredProfiles = result.rows
+      .map((profileRow) => {
+        const normalizedProfile = normalizeProfileRow(profileRow);
+        const compatibility = buildCompatibilitySuggestion(currentProfile, normalizedProfile);
+
+        return {
+          ...normalizedProfile,
+          ...compatibility,
+          topPickScore: compatibility.compatibilityScore
+        };
+      })
+      .sort((leftProfile, rightProfile) => rightProfile.topPickScore - leftProfile.topPickScore)
+      .slice(0, limit);
+
+    // Record analytics
+    const requestMetadata = getRequestMetadata(req);
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'top_picks_view',
+      analyticsUpdates: {},
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
+
+    res.json({
+      profiles: scoredProfiles,
+      generatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    });
+  } catch (err) {
+    console.error('Top picks error:', err);
+    res.status(500).json({ error: 'Failed to get top picks' });
+  }
+});
+
+// 33. REWIND PASS (Undo last pass)
+router.post('/interactions/rewind', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const requestMetadata = getRequestMetadata(req);
+
+    // Check daily rewind limit
+    const today = new Date().toISOString().split('T')[0];
+    const analyticsResult = await db.query(
+      `SELECT rewinds_used FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
+      [userId, today]
+    );
+
+    const rewindsUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_used || 0) : 0;
+    const rewindLimit = 3; // Free tier: 3/day
+
+    if (rewindsUsed >= rewindLimit) {
+      return res.status(429).json({
+        error: 'Daily rewind limit reached',
+        limit: rewindLimit,
+        used: rewindsUsed,
+        remaining: 0
+      });
+    }
+
+    // Find most recent pass interaction
+    const passResult = await db.query(
+      `SELECT * FROM interactions
+       WHERE from_user_id = $1 AND interaction_type = 'pass'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (passResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No passes to rewind' });
+    }
+
+    const lastPass = passResult.rows[0];
+
+    // Delete the pass interaction
+    await db.query(
+      `DELETE FROM interactions
+       WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type = 'pass'`,
+      [userId, lastPass.to_user_id]
+    );
+
+    // Update rewind count
+    await db.query(
+      `INSERT INTO user_analytics (user_id, activity_date, rewinds_used)
+       VALUES ($1, $2, 1)
+       ON CONFLICT (user_id, activity_date) DO UPDATE
+       SET rewinds_used = user_analytics.rewinds_used + 1`,
+      [userId, today]
+    );
+
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'rewind_pass',
+      analyticsUpdates: { rewinds_used: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
+
+    // Get the restored profile
+    const restoredProfileResult = await db.query(
+      `SELECT dp.*,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       WHERE dp.user_id = $1`,
+      [lastPass.to_user_id]
+    );
+
+    res.json({
+      message: 'Pass rewound successfully',
+      restoredProfile: normalizeProfileRow(restoredProfileResult.rows[0] || null),
+      rewindsUsed: rewindsUsed + 1,
+      rewindsRemaining: Math.max(0, rewindLimit - (rewindsUsed + 1))
+    });
+  } catch (err) {
+    console.error('Rewind error:', err);
+    res.status(500).json({ error: 'Failed to rewind pass' });
+  }
+});
+
+// 34. GET DAILY PROMPTS
+const DAILY_PROMPTS = [
+  {
+    id: 'prompt-1',
+    category: 'personality',
+    text: 'What is something you are passionate about that most people do not know?',
+    icon: '💭'
+  },
+  {
+    id: 'prompt-2',
+    category: 'lifestyle',
+    text: 'My perfect Sunday looks like...',
+    icon: '☀️'
+  },
+  {
+    id: 'prompt-3',
+    category: 'goals',
+    text: 'A goal I am currently working towards...',
+    icon: '🎯'
+  },
+  {
+    id: 'prompt-4',
+    category: 'fun',
+    text: 'Two truths and a lie about me...',
+    icon: '🎲'
+  },
+  {
+    id: 'prompt-5',
+    category: 'personality',
+    text: 'The way to my heart is...',
+    icon: '❤️'
+  },
+  {
+    id: 'prompt-6',
+    category: 'lifestyle',
+    text: 'My ideal travel destination and why...',
+    icon: '✈️'
+  },
+  {
+    id: 'prompt-7',
+    category: 'preferences',
+    text: 'I am looking for someone who...',
+    icon: '🔍'
+  },
+  {
+    id: 'prompt-8',
+    category: 'fun',
+    text: 'My most controversial opinion is...',
+    icon: '🔥'
+  },
+  {
+    id: 'prompt-9',
+    category: 'personality',
+    text: 'A book or movie that changed my perspective...',
+    icon: '📚'
+  },
+  {
+    id: 'prompt-10',
+    category: 'lifestyle',
+    text: 'My happy place is...',
+    icon: '🏖️'
+  }
+];
+
+router.get('/daily-prompts', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get user's answered prompts
+    const answeredResult = await db.query(
+      `SELECT prompt_id, response FROM daily_prompt_responses WHERE user_id = $1`,
+      [userId]
+    );
+
+    const answeredPromptIds = new Set(answeredResult.rows.map(row => row.prompt_id));
+
+    // Return prompts with answered status
+    const prompts = DAILY_PROMPTS.map(prompt => ({
+      ...prompt,
+      isAnswered: answeredPromptIds.has(prompt.id),
+      response: answeredResult.rows.find(row => row.prompt_id === prompt.id)?.response || null
+    }));
+
+    res.json({ prompts });
+  } catch (err) {
+    console.error('Get daily prompts error:', err);
+    res.status(500).json({ error: 'Failed to get daily prompts' });
+  }
+});
+
+// 35. ANSWER DAILY PROMPT
+router.post('/daily-prompts/:promptId/answer', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { promptId } = req.params;
+    const { response } = req.body;
+
+    if (!response || !response.trim()) {
+      return res.status(400).json({ error: 'Response is required' });
+    }
+
+    if (response.trim().length > 500) {
+      return res.status(400).json({ error: 'Response must be 500 characters or less' });
+    }
+
+    const prompt = DAILY_PROMPTS.find(p => p.id === promptId);
+    if (!prompt) {
+      return res.status(404).json({ error: 'Prompt not found' });
+    }
+
+    await db.query(
+      `INSERT INTO daily_prompt_responses (user_id, prompt_id, response)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, prompt_id) DO UPDATE
+       SET response = EXCLUDED.response,
+           updated_at = CURRENT_TIMESTAMP`,
+      [userId, promptId, response.trim()]
+    );
+
+    res.json({
+      message: 'Prompt answered',
+      prompt: {
+        ...prompt,
+        isAnswered: true,
+        response: response.trim()
+      }
+    });
+  } catch (err) {
+    console.error('Answer prompt error:', err);
+    res.status(500).json({ error: 'Failed to answer prompt' });
+  }
+});
+
+// 36. DELETE DAILY PROMPT ANSWER
+router.delete('/daily-prompts/:promptId/answer', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { promptId } = req.params;
+
+    await db.query(
+      `DELETE FROM daily_prompt_responses WHERE user_id = $1 AND prompt_id = $2`,
+      [userId, promptId]
+    );
+
+    res.json({ message: 'Prompt answer removed' });
+  } catch (err) {
+    console.error('Delete prompt answer error:', err);
+    res.status(500).json({ error: 'Failed to remove prompt answer' });
+  }
+});
+
+// 37. GET USER ANSWERED PROMPTS (for profile display)
+router.get('/profiles/me/prompts', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT dpr.prompt_id, dpr.response, dpr.created_at
+       FROM daily_prompt_responses dpr
+       WHERE dpr.user_id = $1
+       ORDER BY dpr.created_at DESC`,
+      [userId]
+    );
+
+    const answeredPrompts = result.rows.map(row => {
+      const prompt = DAILY_PROMPTS.find(p => p.id === row.prompt_id);
+      return {
+        ...prompt,
+        response: row.response,
+        answeredAt: row.created_at
+      };
+    }).filter(Boolean);
+
+    res.json({ prompts: answeredPrompts });
+  } catch (err) {
+    console.error('Get profile prompts error:', err);
+    res.status(500).json({ error: 'Failed to get profile prompts' });
+  }
+});
+
+// 38. UPDATE NOTIFICATION PREFERENCES
+router.put('/notification-preferences', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      newMatch,
+      newMessage,
+      likeReceived,
+      superlikeReceived,
+      profileViewed,
+      dailyDigest,
+      weeklyDigest,
+      pushEnabled,
+      emailEnabled
+    } = req.body;
+
+    const result = await db.query(
+      `INSERT INTO notification_preferences (
+         user_id,
+         new_match,
+         new_message,
+         like_received,
+         superlike_received,
+         profile_viewed,
+         daily_digest,
+         weekly_digest,
+         push_enabled,
+         email_enabled
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (user_id) DO UPDATE
+       SET new_match = EXCLUDED.new_match,
+           new_message = EXCLUDED.new_message,
+           like_received = EXCLUDED.like_received,
+           superlike_received = EXCLUDED.superlike_received,
+           profile_viewed = EXCLUDED.profile_viewed,
+           daily_digest = EXCLUDED.daily_digest,
+           weekly_digest = EXCLUDED.weekly_digest,
+           push_enabled = EXCLUDED.push_enabled,
+           email_enabled = EXCLUDED.email_enabled,
+           updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [
+        userId,
+        normalizeBoolean(newMatch),
+        normalizeBoolean(newMessage),
+        normalizeBoolean(likeReceived),
+        normalizeBoolean(superlikeReceived),
+        normalizeBoolean(profileViewed),
+        normalizeBoolean(dailyDigest),
+        normalizeBoolean(weeklyDigest),
+        normalizeBoolean(pushEnabled),
+        normalizeBoolean(emailEnabled)
+      ]
+    );
+
+    const row = result.rows[0];
+    res.json({
+      message: 'Notification preferences updated',
+      preferences: {
+        newMatch: row.new_match,
+        newMessage: row.new_message,
+        likeReceived: row.like_received,
+        superlikeReceived: row.superlike_received,
+        profileViewed: row.profile_viewed,
+        dailyDigest: row.daily_digest,
+        weeklyDigest: row.weekly_digest,
+        pushEnabled: row.push_enabled,
+        emailEnabled: row.email_enabled
+      }
+    });
+  } catch (err) {
+    console.error('Update notification preferences error:', err);
+    res.status(500).json({ error: 'Failed to update notification preferences' });
+  }
+});
+
+// 39. GET NOTIFICATION PREFERENCES
+router.get('/notification-preferences', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT * FROM notification_preferences WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        newMatch: true,
+        newMessage: true,
+        likeReceived: true,
+        superlikeReceived: true,
+        profileViewed: false,
+        dailyDigest: false,
+        weeklyDigest: true,
+        pushEnabled: true,
+        emailEnabled: false
+      });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      newMatch: row.new_match,
+      newMessage: row.new_message,
+      likeReceived: row.like_received,
+      superlikeReceived: row.superlike_received,
+      profileViewed: row.profile_viewed,
+      dailyDigest: row.daily_digest,
+      weeklyDigest: row.weekly_digest,
+      pushEnabled: row.push_enabled,
+      emailEnabled: row.email_enabled
+    });
+  } catch (err) {
+    console.error('Get notification preferences error:', err);
+    res.status(500).json({ error: 'Failed to get notification preferences' });
   }
 });
 

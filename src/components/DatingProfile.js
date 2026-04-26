@@ -61,6 +61,22 @@ const DatingProfile = ({ onLogout }) => {
     likeLimit: 50,
     superlikeLimit: 1
   });
+  const [dailyPrompts, setDailyPrompts] = useState([]);
+  const [answeredPrompts, setAnsweredPrompts] = useState([]);
+  const [showPromptsEditor, setShowPromptsEditor] = useState(false);
+  const [promptDraft, setPromptDraft] = useState({});
+  const [notificationPreferences, setNotificationPreferences] = useState({
+    newMatch: true,
+    newMessage: true,
+    likeReceived: true,
+    superlikeReceived: true,
+    profileViewed: false,
+    dailyDigest: false,
+    weeklyDigest: true,
+    pushEnabled: true,
+    emailEnabled: false
+  });
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
 
   const completionChecklist = [
     {
@@ -143,6 +159,21 @@ const DatingProfile = ({ onLogout }) => {
         likeLimit: dailyLimitsData.likeLimit ?? 50,
         superlikeLimit: dailyLimitsData.superlikeLimit ?? 1
       });
+
+      // Load daily prompts and notification preferences
+      const [promptsData, profilePromptsData, notifPrefsData] = await Promise.all([
+        datingProfileService.getDailyPrompts().catch(() => ({ prompts: [] })),
+        datingProfileService.getProfilePrompts().catch(() => ({ prompts: [] })),
+        datingProfileService.getNotificationPreferences().catch(() => ({
+          newMatch: true, newMessage: true, likeReceived: true, superlikeReceived: true,
+          profileViewed: false, dailyDigest: false, weeklyDigest: true,
+          pushEnabled: true, emailEnabled: false
+        }))
+      ]);
+
+      setDailyPrompts(promptsData.prompts || []);
+      setAnsweredPrompts(profilePromptsData.prompts || []);
+      setNotificationPreferences(notifPrefsData);
       setStats({
         likes: Array.isArray(likesData) ? likesData.length : 0,
         matches: matchesData.matches?.length || 0,
@@ -250,6 +281,44 @@ const DatingProfile = ({ onLogout }) => {
       setUnreadNotificationCount(0);
     } catch (notificationError) {
       setError(notificationError || 'Failed to update notifications');
+    }
+  };
+
+  const handleAnswerPrompt = async (promptId) => {
+    const response = promptDraft[promptId]?.trim();
+    if (!response) return;
+
+    try {
+      await datingProfileService.answerDailyPrompt(promptId, response);
+      const updatedPrompts = await datingProfileService.getProfilePrompts();
+      setAnsweredPrompts(updatedPrompts.prompts || []);
+      setPromptDraft((current) => ({ ...current, [promptId]: '' }));
+    } catch (err) {
+      setError('Failed to save prompt answer');
+      console.error(err);
+    }
+  };
+
+  const handleDeletePromptAnswer = async (promptId) => {
+    try {
+      await datingProfileService.deleteDailyPromptAnswer(promptId);
+      const updatedPrompts = await datingProfileService.getProfilePrompts();
+      setAnsweredPrompts(updatedPrompts.prompts || []);
+    } catch (err) {
+      setError('Failed to delete prompt answer');
+      console.error(err);
+    }
+  };
+
+  const handleUpdateNotificationPreferences = async (updates) => {
+    const nextPreferences = { ...notificationPreferences, ...updates };
+    setNotificationPreferences(nextPreferences);
+
+    try {
+      await datingProfileService.updateNotificationPreferences(nextPreferences);
+    } catch (err) {
+      setError('Failed to update notification preferences');
+      console.error(err);
     }
   };
 
@@ -645,6 +714,227 @@ const DatingProfile = ({ onLogout }) => {
               </div>
             ) : (
               <p>You have not blocked anyone yet.</p>
+            )}
+          </div>
+
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Daily Prompts</h3>
+                <p>Answer prompts to show your personality on your profile.</p>
+              </div>
+              <button
+                type="button"
+                className="section-link-btn"
+                onClick={() => setShowPromptsEditor((current) => !current)}
+              >
+                {showPromptsEditor ? 'Done' : 'Edit'}
+              </button>
+            </div>
+
+            {answeredPrompts.length > 0 ? (
+              <div className="answered-prompts-list">
+                {answeredPrompts.map((prompt) => (
+                  <div key={prompt.id} className="prompt-card">
+                    <div className="prompt-header">
+                      <span className="prompt-icon">{prompt.icon}</span>
+                      <span className="prompt-text">{prompt.text}</span>
+                    </div>
+                    <p className="prompt-response">{prompt.response}</p>
+                    {showPromptsEditor ? (
+                      <button
+                        type="button"
+                        className="section-link-btn"
+                        onClick={() => handleDeletePromptAnswer(prompt.id)}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p>No prompts answered yet. Add some to help matches start conversations.</p>
+            )}
+
+            {showPromptsEditor ? (
+              <div className="prompts-editor">
+                <h4>Choose a prompt to answer</h4>
+                {dailyPrompts
+                  .filter((prompt) => !answeredPrompts.some((answered) => answered.id === prompt.id))
+                  .map((prompt) => (
+                    <div key={prompt.id} className="prompt-editor-item">
+                      <div className="prompt-header">
+                        <span className="prompt-icon">{prompt.icon}</span>
+                        <span className="prompt-text">{prompt.text}</span>
+                      </div>
+                      <textarea
+                        value={promptDraft[prompt.id] || ''}
+                        onChange={(event) =>
+                          setPromptDraft((current) => ({
+                            ...current,
+                            [prompt.id]: event.target.value
+                          }))
+                        }
+                        placeholder="Your answer..."
+                        maxLength={500}
+                        rows={2}
+                      />
+                      <div className="prompt-editor-actions">
+                        <span className="char-count">
+                          {(promptDraft[prompt.id] || '').length}/500
+                        </span>
+                        <button
+                          type="button"
+                          className="btn-save"
+                          onClick={() => handleAnswerPrompt(prompt.id)}
+                          disabled={!promptDraft[prompt.id]?.trim()}
+                        >
+                          Save Answer
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                {dailyPrompts.filter(
+                  (prompt) => !answeredPrompts.some((answered) => answered.id === prompt.id)
+                ).length === 0 ? (
+                  <p>You have answered all available prompts.</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Notification Settings</h3>
+                <p>Control what notifications you receive and how.</p>
+              </div>
+              <button
+                type="button"
+                className="section-link-btn"
+                onClick={() => setShowNotificationSettings((current) => !current)}
+              >
+                {showNotificationSettings ? 'Done' : 'Configure'}
+              </button>
+            </div>
+
+            {showNotificationSettings ? (
+              <div className="notification-settings">
+                <div className="settings-group">
+                  <h4>Push Notifications</h4>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.newMatch}
+                      onChange={(event) =>
+                        handleUpdateNotificationPreferences({ newMatch: event.target.checked })
+                      }
+                    />
+                    New matches
+                  </label>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.newMessage}
+                      onChange={(event) =>
+                        handleUpdateNotificationPreferences({ newMessage: event.target.checked })
+                      }
+                    />
+                    New messages
+                  </label>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.likeReceived}
+                      onChange={(event) =>
+                        handleUpdateNotificationPreferences({ likeReceived: event.target.checked })
+                      }
+                    />
+                    Likes received
+                  </label>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.superlikeReceived}
+                      onChange={(event) =>
+                        handleUpdateNotificationPreferences({ superlikeReceived: event.target.checked })
+                      }
+                    />
+                    Superlikes received
+                  </label>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.profileViewed}
+                      onChange={(event) =>
+                        handleUpdateNotificationPreferences({ profileViewed: event.target.checked })
+                      }
+                    />
+                    Profile views
+                  </label>
+                </div>
+
+                <div className="settings-group">
+                  <h4>Email Digests</h4>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.dailyDigest}
+                      onChange={(event) =>
+                        handleUpdateNotificationPreferences({ dailyDigest: event.target.checked })
+                      }
+                    />
+                    Daily digest
+                  </label>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.weeklyDigest}
+                      onChange={(event) =>
+                        handleUpdateNotificationPreferences({ weeklyDigest: event.target.checked })
+                      }
+                    />
+                    Weekly digest
+                  </label>
+                </div>
+
+                <div className="settings-group">
+                  <h4>Channels</h4>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.pushEnabled}
+                      onChange={(event) =>
+                        handleUpdateNotificationPreferences({ pushEnabled: event.target.checked })
+                      }
+                    />
+                    Push notifications enabled
+                  </label>
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={notificationPreferences.emailEnabled}
+                      onChange={(event) =>
+                        handleUpdateNotificationPreferences({ emailEnabled: event.target.checked })
+                      }
+                    />
+                    Email notifications enabled
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="notification-summary">
+                <span>
+                  {notificationPreferences.pushEnabled ? '🔔 Push on' : '🔕 Push off'}
+                </span>
+                <span>
+                  {notificationPreferences.emailEnabled ? '📧 Email on' : '📪 Email off'}
+                </span>
+                <span>
+                  {notificationPreferences.weeklyDigest ? '📅 Weekly digest' : 'No digests'}
+                </span>
+              </div>
             )}
           </div>
 

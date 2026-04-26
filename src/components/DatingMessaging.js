@@ -18,6 +18,9 @@ const normalizeMessage = (message, currentUserId) => ({
   timestamp: message.created_at || message.createdAt || message.timestamp || new Date().toISOString(),
   isRead: Boolean(message.is_read ?? message.isRead),
   readAt: message.read_at || message.readAt || null,
+  mediaType: message.media_type || message.mediaType || null,
+  mediaUrl: message.media_url || message.mediaUrl || null,
+  duration: message.duration ?? null,
   reactions: Array.isArray(message.reactions)
     ? message.reactions.map((reaction) => ({
         emoji: reaction.emoji,
@@ -101,10 +104,16 @@ const DatingMessaging = ({
   );
   const [activeReactionPickerMessageId, setActiveReactionPickerMessageId] = useState(null);
   const [reactionLoadingMessageId, setReactionLoadingMessageId] = useState(null);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [voiceRecordingDuration, setVoiceRecordingDuration] = useState(0);
+  const [sendingMedia, setSendingMedia] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const mediaInputRef = useRef(null);
+  const voiceRecorderRef = useRef(null);
+  const voiceIntervalRef = useRef(null);
   const activeMatch = conversationMatch || matchedProfile || null;
   const activeMatchId = activeMatch?.matchId || matchId || null;
   const activeMatchUserId = activeMatch?.userId || null;
@@ -398,6 +407,92 @@ const DatingMessaging = ({
     }
   };
 
+  const handleImageSelect = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !activeMatchId) return;
+
+    setSendingMedia(true);
+    setError('');
+
+    try {
+      const response = await datingMessagingService.sendMediaMessage(activeMatchId, file, 'image');
+      const createdMessage = normalizeMessage(response.data, currentUserId);
+      setMessages((currentMessages) => [...currentMessages, createdMessage]);
+      notifyConversationActivity();
+    } catch (sendError) {
+      setError(typeof sendError === 'string' ? sendError : 'Failed to send image');
+    } finally {
+      setSendingMedia(false);
+      if (mediaInputRef.current) {
+        mediaInputRef.current.value = '';
+      }
+    }
+  };
+
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+        const duration = voiceRecordingDuration;
+
+        setSendingMedia(true);
+        try {
+          const response = await datingMessagingService.sendVoiceNote(activeMatchId, audioBlob, duration);
+          const createdMessage = normalizeMessage(response.data, currentUserId);
+          setMessages((currentMessages) => [...currentMessages, createdMessage]);
+          notifyConversationActivity();
+        } catch (sendError) {
+          setError(typeof sendError === 'string' ? sendError : 'Failed to send voice note');
+        } finally {
+          setSendingMedia(false);
+        }
+
+        stream.getTracks().forEach((track) => track.stop());
+        setIsRecordingVoice(false);
+        setVoiceRecordingDuration(0);
+      };
+
+      voiceRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecordingVoice(true);
+      setVoiceRecordingDuration(0);
+
+      voiceIntervalRef.current = setInterval(() => {
+        setVoiceRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      setError('Could not access microphone. Please check permissions.');
+      console.error(err);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (voiceIntervalRef.current) {
+      clearInterval(voiceIntervalRef.current);
+      voiceIntervalRef.current = null;
+    }
+
+    if (voiceRecorderRef.current && voiceRecorderRef.current.state !== 'inactive') {
+      voiceRecorderRef.current.stop();
+    }
+  };
+
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (loadingMatch && !activeMatch) {
     return (
       <div className="messaging-empty">
@@ -511,7 +606,25 @@ const DatingMessaging = ({
             <div key={message.id} className={`message ${message.isOwn ? 'own' : 'other'}`}>
               <div className="message-stack">
                 <div className="message-content">
-                  <p>{message.text}</p>
+                  {message.mediaType === 'image' && message.mediaUrl ? (
+                    <div className="message-media">
+                      <img
+                        src={message.mediaUrl}
+                        alt="Shared"
+                        className="message-image"
+                        onClick={() => window.open(message.mediaUrl, '_blank')}
+                      />
+                    </div>
+                  ) : message.mediaType === 'voice' && message.mediaUrl ? (
+                    <div className="message-media voice-message">
+                      <audio controls src={message.mediaUrl} className="voice-audio" />
+                      {message.duration ? (
+                        <span className="voice-duration">{formatDuration(message.duration)}</span>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <p>{message.text}</p>
+                  )}
                   <div className="message-meta">
                     <span className="message-time">
                       {new Date(message.timestamp).toLocaleTimeString([], {
@@ -586,6 +699,49 @@ const DatingMessaging = ({
 
       <div className="message-input-container">
         <input
+          ref={mediaInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleImageSelect}
+          style={{ display: 'none' }}
+        />
+
+        <button
+          type="button"
+          className="btn-media"
+          onClick={() => mediaInputRef.current?.click()}
+          disabled={sendingMedia || isRecordingVoice || loadingMatch}
+          title="Send image"
+        >
+          📷
+        </button>
+
+        {isRecordingVoice ? (
+          <div className="voice-recording-indicator">
+            <span className="recording-dot" />
+            <span className="recording-time">{formatDuration(voiceRecordingDuration)}</span>
+            <button
+              type="button"
+              className="btn-stop-recording"
+              onClick={stopVoiceRecording}
+              title="Stop recording"
+            >
+              ⏹️
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="btn-voice"
+            onClick={startVoiceRecording}
+            disabled={sendingMedia || loadingMatch}
+            title="Record voice note"
+          >
+            🎤
+          </button>
+        )}
+
+        <input
           ref={inputRef}
           type="text"
           placeholder="Say something nice..."
@@ -597,14 +753,14 @@ const DatingMessaging = ({
               handleSendMessage();
             }
           }}
-          disabled={loadingMatch || loadingMessages || sendingMessage}
+          disabled={loadingMatch || loadingMessages || sendingMessage || isRecordingVoice}
         />
         <button
           onClick={handleSendMessage}
-          disabled={!inputMessage.trim() || loadingMatch || sendingMessage || loadingMessages}
+          disabled={!inputMessage.trim() || loadingMatch || sendingMessage || loadingMessages || isRecordingVoice}
           className="btn-send"
         >
-          Send
+          {sendingMedia ? '...' : 'Send'}
         </button>
       </div>
     </div>

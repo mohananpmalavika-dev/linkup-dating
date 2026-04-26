@@ -438,6 +438,102 @@ export const datingProfileService = {
       throw error.response?.data?.error || 'Failed to update preferences';
     }
   },
+
+  /**
+   * Get top picks (most compatible profiles)
+   */
+  getTopPicks: async (limit = 10) => {
+    try {
+      const response = await axios.get(`${API_URL}/top-picks`, { params: { limit } });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch top picks';
+    }
+  },
+
+  /**
+   * Rewind last pass (undo swipe left)
+   */
+  rewindPass: async () => {
+    try {
+      const response = await axios.post(`${API_URL}/interactions/rewind`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to rewind pass';
+    }
+  },
+
+  /**
+   * Get daily prompts
+   */
+  getDailyPrompts: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/daily-prompts`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch daily prompts';
+    }
+  },
+
+  /**
+   * Answer a daily prompt
+   */
+  answerDailyPrompt: async (promptId, response) => {
+    try {
+      const result = await axios.post(`${API_URL}/daily-prompts/${promptId}/answer`, { response });
+      return result.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to answer prompt';
+    }
+  },
+
+  /**
+   * Delete a daily prompt answer
+   */
+  deleteDailyPromptAnswer: async (promptId) => {
+    try {
+      const response = await axios.delete(`${API_URL}/daily-prompts/${promptId}/answer`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to delete prompt answer';
+    }
+  },
+
+  /**
+   * Get user's answered prompts
+   */
+  getProfilePrompts: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/profiles/me/prompts`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch profile prompts';
+    }
+  },
+
+  /**
+   * Get notification preferences
+   */
+  getNotificationPreferences: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/notification-preferences`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch notification preferences';
+    }
+  },
+
+  /**
+   * Update notification preferences
+   */
+  updateNotificationPreferences: async (preferences) => {
+    try {
+      const response = await axios.put(`${API_URL}/notification-preferences`, preferences);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to update notification preferences';
+    }
+  },
 };
 
 export default datingProfileService;

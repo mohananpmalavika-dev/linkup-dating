@@ -237,14 +237,14 @@ const AppContent = () => {
   const isAdminSession = isAdminUser(currentUser);
   const defaultAuthenticatedRoute = getDefaultAuthenticatedRouteForUser(currentUser);
 
-  const loadStoredUserName = useCallback((userData = currentUser) => {
+  const loadStoredUserName = useCallback((userData) => {
     if (userData) {
       setUserName(userData.firstName || userData.username || userData.name || userData.email || '');
       return;
     }
 
     setUserName('');
-  }, [currentUser]);
+  }, []);
 
   const refreshDatingCounts = useCallback(async () => {
     if (!getStoredAuthToken() || isAdminSession) {
@@ -353,7 +353,11 @@ const AppContent = () => {
     }
 
     const socket = io(BACKEND_BASE_URL, {
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 8,
+      reconnectionDelay: 1500,
+      reconnectionDelayMax: 5000,
+      timeout: 10000
     });
 
     appSocketRef.current = socket;

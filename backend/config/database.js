@@ -428,12 +428,32 @@ const init = async () => {
         messages_sent INTEGER DEFAULT 0,
         profiles_viewed INTEGER DEFAULT 0,
         likes_sent INTEGER DEFAULT 0,
+        likes_used INTEGER DEFAULT 0,
+        superlikes_used INTEGER DEFAULT 0,
+        rewinds_used INTEGER DEFAULT 0,
         matches_made INTEGER DEFAULT 0,
         video_call_duration_seconds INTEGER DEFAULT 0,
         last_active TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, activity_date)
       );
+    `);
+
+    await client.query(`
+      ALTER TABLE user_analytics
+      ADD COLUMN IF NOT EXISTS likes_used INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS superlikes_used INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS rewinds_used INTEGER DEFAULT 0;
+    `);
+
+    await client.query(`
+      UPDATE user_analytics
+      SET likes_used = COALESCE(likes_used, 0),
+          superlikes_used = COALESCE(superlikes_used, 0),
+          rewinds_used = COALESCE(rewinds_used, 0)
+      WHERE likes_used IS NULL
+         OR superlikes_used IS NULL
+         OR rewinds_used IS NULL;
     `);
 
     // Create user_session_logs table for tracking activity
