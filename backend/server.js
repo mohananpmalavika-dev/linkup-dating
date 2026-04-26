@@ -108,6 +108,20 @@ app.get('/health', (req, res) => {
   res.json({ status: 'Backend is running', timestamp: new Date() });
 });
 
+// 404 Handler for undefined routes
+app.use((req, res) => {
+  res.status(404).json({
+    error: `Not Found`,
+    message: `The endpoint ${req.method} ${req.path} does not exist`,
+    availableEndpoints: {
+      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/me',
+      dating: '/api/dating/* (requires auth)',
+      messaging: '/api/messaging/* (requires auth)',
+      health: '/health'
+    }
+  });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err.message);
