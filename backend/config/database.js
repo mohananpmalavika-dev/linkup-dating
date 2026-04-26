@@ -194,6 +194,12 @@ const init = async () => {
       ADD COLUMN IF NOT EXISTS username VARCHAR(100) UNIQUE;
     `);
 
+    // Migration: Add storefront_data column for cart, favorites, saved addresses
+    await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS storefront_data JSONB DEFAULT '{"cart": [], "favorites": [], "savedAddresses": []}';
+    `);
+
     client.release();
     console.log('✓ Database schema initialized');
   } catch (err) {

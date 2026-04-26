@@ -327,9 +327,11 @@ router.post('/login', async (req, res) => {
 });
 
 // CHECK USERNAME AVAILABILITY
-router.get('/check-username', async (req, res) => {
+// Check username availability (both GET and POST)
+const checkUsernameAvailability = async (req, res) => {
   try {
-    const { username } = req.query;
+    // Support both GET query params and POST body
+    const username = req.query.username || req.body?.username;
 
     if (!username) {
       return res.status(400).json({ error: 'Username required' });
@@ -348,12 +350,15 @@ router.get('/check-username', async (req, res) => {
     
     // If column doesn't exist, return available as true for now
     if (err.message.includes('column "username" does not exist')) {
-      return res.json({ available: true, username: req.query.username });
+      return res.json({ available: true, username: req.query.username || req.body?.username });
     }
     
     res.status(500).json({ error: 'Failed to check username', details: err.message });
   }
-});
+};
+
+router.get('/check-username', checkUsernameAvailability);
+router.post('/check-username', checkUsernameAvailability);
 
 // CHECK EMAIL AVAILABILITY
 router.get('/check-email', async (req, res) => {
@@ -437,6 +442,68 @@ router.get('/me', async (req, res) => {
       return res.status(403).json({ error: 'Invalid token' });
     }
     res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+// UPDATE CURRENT USER
+router.patch('/me', async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(401).json({ error: 'Access token required' });
+    }
+
+    // Verify and decode token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_secret_key');
+    const userId = decoded.userId || decoded.id;
+
+    // Extract storefront data
+    const { cart, favorites, savedAddresses } = req.body;
+
+    // Build storefront_data object
+    const storefrontData = {};
+    if (cart !== undefined) storefrontData.cart = cart;
+    if (favorites !== undefined) storefrontData.favorites = favorites;
+    if (savedAddresses !== undefined) storefrontData.savedAddresses = savedAddresses;
+
+    // Update user with storefront data
+    const result = await db.query(
+      `UPDATE users
+       SET storefront_data = COALESCE(storefront_data, '{}')::jsonb || $1::jsonb,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING id, email, created_at, storefront_data`,
+      [JSON.stringify(storefrontData), userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+
+    // Get dating profile if exists
+    const profileResult = await db.query(
+      'SELECT * FROM dating_profiles WHERE user_id = $1',
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'User data updated successfully',
+      user: {
+        ...user,
+        profile: profileResult.rows[0] || null
+      }
+    });
+  } catch (err) {
+    console.error('Update user error:', err);
+    if (err.name === 'JsonWebTokenError') {
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+    res.status(500).json({ error: 'Failed to update user' });
   }
 });
 
