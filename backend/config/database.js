@@ -233,6 +233,31 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_message_reactions_user_id ON message_reactions(user_id);
     `);
 
+      // Migration: backfill legacy users columns expected by auth and profile flows
+      await client.query(`
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      ALTER TABLE users
+      ALTER COLUMN is_admin SET DEFAULT FALSE,
+      ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP,
+      ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      UPDATE users
+      SET is_admin = COALESCE(is_admin, FALSE),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE is_admin IS NULL
+         OR created_at IS NULL
+         OR updated_at IS NULL;
+    `);
+
       // Migration: Add username column if it doesn't exist
       await client.query(`
       ALTER TABLE dating_profiles
