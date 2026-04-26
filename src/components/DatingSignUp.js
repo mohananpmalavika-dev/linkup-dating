@@ -258,15 +258,28 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
 
       // Upload photos if any
       if (formData.photos.length > 0) {
-        const photoFormData = new FormData();
-        formData.photos.forEach((photo) => {
-          photoFormData.append('photos', photo);
+        // Convert File objects to base64 data URLs
+        const photoPromises = formData.photos.map((photo, index) => {
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              resolve({
+                url: reader.result, // base64 data URL
+                position: index
+              });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(photo);
+          });
         });
 
-        await axios.post(`${API_BASE_URL}/dating/profiles/me/photos`, photoFormData, {
+        const photoUrls = await Promise.all(photoPromises);
+
+        await axios.post(`${API_BASE_URL}/dating/profiles/me/photos`, {
+          photos: photoUrls
+        }, {
           headers: {
-            Authorization: `Bearer ${verifiedToken}`,
-            'Content-Type': 'multipart/form-data'
+            Authorization: `Bearer ${verifiedToken}`
           }
         });
       }
@@ -274,6 +287,7 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
       setSuccess('Account created successfully!');
       onSignUpSuccess?.(verifiedToken, verifiedUser);
     } catch (err) {
+      console.error('Signup error:', err);
       setError(err.response?.data?.error || 'Failed to create profile');
     } finally {
       setLoading(false);

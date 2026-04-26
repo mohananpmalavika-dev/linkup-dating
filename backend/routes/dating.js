@@ -147,11 +147,12 @@ router.post('/profiles/me/photos', async (req, res) => {
     // Insert new photos
     const photoUrls = [];
     for (let i = 0; i < photos.length; i++) {
+      const position = photos[i].position !== undefined ? photos[i].position : i;
       const result = await db.query(
         `INSERT INTO profile_photos (user_id, photo_url, position, is_primary)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [userId, photos[i].url, i, i === 0]
+        [userId, photos[i].url, position, i === 0]
       );
       photoUrls.push(result.rows[0]);
     }
