@@ -109,7 +109,7 @@ const DEFAULT_MESSAGE_PAGINATION = {
   total: 0,
   limit: MESSAGE_PAGE_SIZE,
 };
-const EMERGENCY_CALL_STORAGE_KEY = 'malabarbazaar-emergency-call';
+const EMERGENCY_CALL_STORAGE_KEY = 'linkup-emergency-call';
 
 const readPendingEmergencyCall = () => {
   if (typeof window === 'undefined') {
@@ -614,10 +614,10 @@ const Messaging = () => {
     };
 
     applyPendingEmergencyCall();
-    window.addEventListener('malabarbazaar:emergency-call', handleEmergencyCallEvent);
+    window.addEventListener('linkup:emergency-call', handleEmergencyCallEvent);
 
     return () => {
-      window.removeEventListener('malabarbazaar:emergency-call', handleEmergencyCallEvent);
+      window.removeEventListener('linkup:emergency-call', handleEmergencyCallEvent);
     };
   }, [activateEmergencyIncomingCall]);
 

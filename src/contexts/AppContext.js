@@ -4,7 +4,7 @@ import { API_BASE_URL } from "../utils/api";
 import { showServiceWorkerNotification } from "../pwaConfig";
 
 const AppContext = createContext();
-const STOREFRONT_STORAGE_KEY = "malabarbazaar-storefront";
+const STOREFRONT_STORAGE_KEY = "linkup-storefront";
 const DEFAULT_PRODUCTS_LIMIT = 12;
 const DEFAULT_MANAGED_PRODUCTS_LIMIT = 12;
 const DEFAULT_ORDERS_LIMIT = 10;

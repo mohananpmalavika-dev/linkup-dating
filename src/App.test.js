@@ -293,7 +293,7 @@ test("renders the launch screen when the backend reports no active session", asy
 
 test("shows saved custom links on the launch page next to enabled categories", async () => {
   localStorage.setItem(
-    "malabarbazaar-custom-links",
+    "linkup-custom-links",
     JSON.stringify([
       {
         id: "custom-link-facebook",
@@ -414,7 +414,7 @@ test("logout returns an authenticated user to the launch page", async () => {
 
 test("shows saved custom links on the dashboard for logged in users", async () => {
   localStorage.setItem(
-    "malabarbazaar-custom-links",
+    "linkup-custom-links",
     JSON.stringify([
       {
         id: "custom-link-gmail",

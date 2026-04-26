@@ -1,4 +1,4 @@
-export const CUSTOM_LINKS_STORAGE_KEY = "malabarbazaar-custom-links";
+export const CUSTOM_LINKS_STORAGE_KEY = "linkup-custom-links";
 
 export const LINK_PRESETS = {
   custom: {

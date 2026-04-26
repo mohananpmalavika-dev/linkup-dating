@@ -81,7 +81,7 @@ beforeEach(() => {
 
 test('hydrates a pending emergency video call from session storage', async () => {
   window.sessionStorage.setItem(
-    'malabarbazaar-emergency-call',
+    'linkup-emergency-call',
     JSON.stringify({
       _id: 'call-1',
       callId: 'call-1',

@@ -78,7 +78,7 @@ const Navigation = ({ onLogout, loggedInUser, enabledModules = [] }) => {
     setIsSidebarOpen(false);
 
     window.setTimeout(() => {
-      window.dispatchEvent(new CustomEvent("malabarbazaar:sos-requested"));
+      window.dispatchEvent(new CustomEvent("linkup:sos-requested"));
     }, currentModule === "sosalert" ? 0 : 150);
   };
 
