@@ -177,8 +177,8 @@ router.post('/search', async (req, res) => {
 
     let query = `
       SELECT dp.*, COUNT(*) OVER() as total_count,
-             (SELECT json_agg(photo_url ORDER BY position) 
-              FROM profile_photos WHERE user_id = dp.user_id LIMIT 1) as photos
+             (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position) 
+              FROM profile_photos WHERE user_id = dp.user_id) as photos
       FROM dating_profiles dp
       WHERE dp.user_id != $1
         AND dp.is_active = true
