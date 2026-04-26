@@ -1,14 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import '../styles/ChatRooms.css';
+import React, { useCallback, useEffect, useState } from 'react';
+import '../styles/Chatrooms.css';
 import chatroomService from '../services/chatroomService';
-import { getStoredUserData } from '../utils/auth';
 
 /**
  * ChatRooms Component
  * Display and manage group chatrooms
  */
 const ChatRooms = ({ onSelectChatroom, onBack }) => {
-  const currentUser = getStoredUserData();
   const [chatrooms, setChatrooms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -18,11 +16,7 @@ const ChatRooms = ({ onSelectChatroom, onBack }) => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
-  useEffect(() => {
-    loadChatrooms();
-  }, [page]);
-
-  const loadChatrooms = async () => {
+  const loadChatrooms = useCallback(async () => {
     setLoading(true);
     setError('');
 
@@ -40,7 +34,11 @@ const ChatRooms = ({ onSelectChatroom, onBack }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page]);
+
+  useEffect(() => {
+    loadChatrooms();
+  }, [loadChatrooms]);
 
   const handleCreateChatroom = async () => {
     if (!newChatroomName.trim()) {
@@ -55,7 +53,7 @@ const ChatRooms = ({ onSelectChatroom, onBack }) => {
         true,
         100
       );
-      setChatrooms([newRoom, ...chatrooms]);
+      setChatrooms((currentChatrooms) => [newRoom, ...currentChatrooms]);
       setNewChatroomName('');
       setNewChatroomDesc('');
       setShowCreateModal(false);
