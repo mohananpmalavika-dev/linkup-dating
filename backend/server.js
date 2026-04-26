@@ -101,7 +101,7 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/products', authenticateToken, productsRoutes);
+app.use('/api/products', productsRoutes); // Products endpoint doesn't require auth for public listing
 app.use('/api/dating', authenticateToken, datingRoutes);
 app.use('/api/messaging', authenticateToken, messagingRoutes);
 

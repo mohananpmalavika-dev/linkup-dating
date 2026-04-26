@@ -1,26 +1,36 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { authenticateToken } = require('../middleware/auth');
 
-// GET MANAGED PRODUCTS (products owned by the current user)
-router.get('/manage', async (req, res) => {
+// GET MANAGED PRODUCTS (products owned by the current user) - REQUIRES AUTH
+router.get('/manage', authenticateToken, async (req, res) => {
   try {
+    // Extract user ID from JWT token (set by authenticateToken middleware)
     const userId = req.user?.userId || req.user?.id;
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 12;
     const offset = (page - 1) * limit;
 
+    // Debug log for authentication
+    console.log('Products manage request - User:', userId, 'User object:', req.user);
+
     if (!userId) {
-      return res.status(401).json({ error: 'User not authenticated' });
+      return res.status(401).json({ 
+        error: 'User not authenticated',
+        message: 'Please login to view your managed products'
+      });
     }
 
-    // Check if products table exists and has data for this user
-    const productsExist = await db.query(`
+    // Check if products table exists
+    const tablesResult = await db.query(`
       SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'products')
     `);
+    
+    const productsTableExists = tablesResult.rows[0]?.exists || false;
 
     // If products table doesn't exist, return empty paginated response
-    if (!productsExist.rows[0].exists) {
+    if (!productsTableExists) {
       return res.json({
         success: true,
         products: [],
