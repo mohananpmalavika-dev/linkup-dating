@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
 import datingMessagingService from '../services/datingMessagingService';
+import datingProfileService from '../services/datingProfileService';
 import { getStoredUserData } from '../utils/auth';
 import { BACKEND_BASE_URL } from '../utils/api';
 import '../styles/DatingMessaging.css';
@@ -13,9 +14,18 @@ const normalizeMessage = (message, currentUserId) => ({
   isOwn: Number(message.from_user_id ?? message.fromUserId ?? message.senderId) === Number(currentUserId)
 });
 
-const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, onConversationActivity }) => {
+const DatingMessaging = ({
+  matchedProfile,
+  matchId,
+  onVideoCall,
+  onBack,
+  onViewProfile,
+  onConversationActivity
+}) => {
   const currentUser = getStoredUserData();
   const currentUserId = currentUser?.id;
+  const [conversationMatch, setConversationMatch] = useState(matchedProfile || null);
+  const [loadingMatch, setLoadingMatch] = useState(Boolean(matchId) && !matchedProfile);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -26,13 +36,64 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const activeMatch = conversationMatch || matchedProfile || null;
+  const activeMatchId = activeMatch?.matchId || matchId || null;
+  const activeMatchUserId = activeMatch?.userId || null;
 
   const notifyConversationActivity = useCallback(() => {
     onConversationActivity?.();
   }, [onConversationActivity]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadConversationMatch = async () => {
+      if (matchedProfile && (!matchId || String(matchedProfile.matchId) === String(matchId))) {
+        setConversationMatch(matchedProfile);
+        setLoadingMatch(false);
+        return;
+      }
+
+      if (!matchId) {
+        setConversationMatch(matchedProfile || null);
+        setLoadingMatch(false);
+        return;
+      }
+
+      setConversationMatch(null);
+      setLoadingMatch(true);
+      setError('');
+
+      try {
+        const resolvedMatch = await datingProfileService.getMatchById(matchId);
+        if (!cancelled) {
+          setConversationMatch(resolvedMatch);
+        }
+      } catch (matchError) {
+        if (!cancelled) {
+          setError(typeof matchError === 'string' ? matchError : 'Failed to load conversation');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingMatch(false);
+        }
+      }
+    };
+
+    loadConversationMatch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId, matchedProfile]);
+
+  useEffect(() => {
+    setOtherUserOnline(false);
+    setOtherUserTyping(false);
+  }, [activeMatchId]);
+
   const loadMessages = useCallback(async (showLoader = true) => {
-    if (!matchedProfile?.matchId || !currentUserId) {
+    if (!activeMatchId || !currentUserId) {
       setMessages([]);
       return;
     }
@@ -44,7 +105,7 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
     setError('');
 
     try {
-      const response = await datingMessagingService.getMessages(matchedProfile.matchId);
+      const response = await datingMessagingService.getMessages(activeMatchId);
       setMessages((response || []).map((message) => normalizeMessage(message, currentUserId)));
       notifyConversationActivity();
     } catch (loadError) {
@@ -54,15 +115,15 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
         setLoadingMessages(false);
       }
     }
-  }, [currentUserId, matchedProfile?.matchId, notifyConversationActivity]);
+  }, [activeMatchId, currentUserId, notifyConversationActivity]);
 
   useEffect(() => {
-    if (matchedProfile?.matchId && currentUserId) {
+    if (activeMatchId && currentUserId) {
       loadMessages();
     } else {
       setMessages([]);
     }
-  }, [currentUserId, loadMessages, matchedProfile?.matchId]);
+  }, [activeMatchId, currentUserId, loadMessages]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -84,13 +145,13 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
     });
 
     socket.on('user_status', ({ userId, online }) => {
-      if (Number(userId) === Number(matchedProfile?.userId)) {
+      if (Number(userId) === Number(activeMatchUserId)) {
         setOtherUserOnline(Boolean(online));
       }
     });
 
     socket.on('new_message', (payload) => {
-      if (Number(payload.matchId) !== Number(matchedProfile?.matchId)) {
+      if (Number(payload.matchId) !== Number(activeMatchId)) {
         return;
       }
 
@@ -125,7 +186,7 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [currentUserId, loadMessages, matchedProfile?.matchId, matchedProfile?.userId]);
+  }, [activeMatchId, activeMatchUserId, currentUserId, loadMessages]);
 
   const stopTypingSignal = () => {
     if (typingTimeoutRef.current) {
@@ -133,9 +194,9 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
       typingTimeoutRef.current = null;
     }
 
-    if (socketRef.current && matchedProfile?.userId) {
+    if (socketRef.current && activeMatchUserId) {
       socketRef.current.emit('typing', {
-        toUserId: matchedProfile.userId,
+        toUserId: activeMatchUserId,
         isTyping: false
       });
     }
@@ -144,7 +205,7 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
   const handleSendMessage = async () => {
     const trimmedMessage = inputMessage.trim();
 
-    if (!trimmedMessage || !matchedProfile?.matchId) {
+    if (!trimmedMessage || !activeMatchId) {
       return;
     }
 
@@ -152,7 +213,7 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
     setError('');
 
     try {
-      const response = await datingMessagingService.sendMessage(matchedProfile.matchId, trimmedMessage);
+      const response = await datingMessagingService.sendMessage(activeMatchId, trimmedMessage);
       const createdMessage = normalizeMessage(response.data, currentUserId);
 
       setMessages((currentMessages) => [...currentMessages, createdMessage]);
@@ -170,12 +231,12 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
     const { value } = event.target;
     setInputMessage(value);
 
-    if (!socketRef.current || !matchedProfile?.userId) {
+    if (!socketRef.current || !activeMatchUserId) {
       return;
     }
 
     socketRef.current.emit('typing', {
-      toUserId: matchedProfile.userId,
+      toUserId: activeMatchUserId,
       isTyping: true
     });
 
@@ -188,10 +249,23 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
     }, 1500);
   };
 
-  if (!matchedProfile) {
+  if (loadingMatch && !activeMatch) {
     return (
       <div className="messaging-empty">
-        <p>Select a match to start messaging</p>
+        <p>Loading conversation...</p>
+      </div>
+    );
+  }
+
+  if (!activeMatch) {
+    return (
+      <div className="messaging-empty">
+        <p>{error || 'Select a match to start messaging'}</p>
+        {onBack ? (
+          <button type="button" className="btn-message-back" onClick={onBack}>
+            Back
+          </button>
+        ) : null}
       </div>
     );
   }
@@ -209,15 +283,15 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
           <button
             type="button"
             className="profile-info profile-info-button"
-            onClick={() => onViewProfile?.(matchedProfile)}
+            onClick={() => onViewProfile?.(activeMatch)}
           >
-            {matchedProfile.photos?.[0] ? (
-              <img src={matchedProfile.photos[0]} alt={matchedProfile.firstName} />
+            {activeMatch.photos?.[0] ? (
+              <img src={activeMatch.photos[0]} alt={activeMatch.firstName} />
             ) : (
-              <div className="profile-avatar-fallback">{matchedProfile.firstName?.charAt(0) || '?'}</div>
+              <div className="profile-avatar-fallback">{activeMatch.firstName?.charAt(0) || '?'}</div>
             )}
             <div>
-              <h3>{matchedProfile.firstName}</h3>
+              <h3>{activeMatch.firstName}</h3>
               <span className="online-status">
                 {otherUserTyping ? 'Typing...' : otherUserOnline ? 'Online' : 'Chat ready'}
               </span>
@@ -227,7 +301,7 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
 
         <button
           className="btn-video-call"
-          onClick={() => onVideoCall?.(matchedProfile)}
+          onClick={() => onVideoCall?.(activeMatch)}
           title="Start video call"
         >
           Video
@@ -247,7 +321,7 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
           </div>
         ) : messages.length === 0 ? (
           <div className="empty-messages">
-            <p>Say hello to {matchedProfile.firstName}!</p>
+            <p>Say hello to {activeMatch.firstName}!</p>
           </div>
         ) : (
           messages.map((message) => (
@@ -284,11 +358,11 @@ const DatingMessaging = ({ matchedProfile, onVideoCall, onBack, onViewProfile, o
               handleSendMessage();
             }
           }}
-          disabled={loadingMessages || sendingMessage}
+          disabled={loadingMatch || loadingMessages || sendingMessage}
         />
         <button
           onClick={handleSendMessage}
-          disabled={!inputMessage.trim() || sendingMessage || loadingMessages}
+          disabled={!inputMessage.trim() || loadingMatch || sendingMessage || loadingMessages}
           className="btn-send"
         >
           Send

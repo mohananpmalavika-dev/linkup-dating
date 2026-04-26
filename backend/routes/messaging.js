@@ -84,16 +84,13 @@ router.post('/matches/:matchId/messages', async (req, res) => {
     );
 
     // Emit real-time notification via WebSocket
-    if (req.io) {
-      const receiverSocketId = req.activeUsers.get(toUserId);
-      if (receiverSocketId) {
-        req.io.to(receiverSocketId).emit('new_message', {
-          matchId,
-          fromUserId: userId,
-          message,
-          timestamp: result.rows[0].created_at
-        });
-      }
+    if (typeof req.emitToUser === 'function') {
+      req.emitToUser(toUserId, 'new_message', {
+        matchId,
+        fromUserId: userId,
+        message,
+        timestamp: result.rows[0].created_at
+      });
     }
 
     res.json({ message: 'Message sent', data: result.rows[0] });

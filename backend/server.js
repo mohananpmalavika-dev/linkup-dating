@@ -9,6 +9,8 @@ const db = require('./config/database');
 const authRoutes = require('./routes/auth');
 const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
+const chatroomsRoutes = require('./routes/chatrooms');
+const lobbyRoutes = require('./routes/lobby');
 const productsRoutes = require('./routes/products');
 const ordersRoutes = require('./routes/orders');
 const appDataRoutes = require('./routes/app-data');
@@ -35,48 +37,217 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Store active users for real-time features
+// Store active users for real-time features.
+// Each user can have multiple active sockets (multiple tabs/devices).
 const activeUsers = new Map();
+
+const normalizeUserKey = (userId) => String(userId);
+
+const getSocketIdsForUser = (userId) => {
+  const userSockets = activeUsers.get(normalizeUserKey(userId));
+  return userSockets ? Array.from(userSockets) : [];
+};
+
+const emitToUser = (userId, eventName, payload) => {
+  const socketIds = getSocketIdsForUser(userId);
+
+  socketIds.forEach((socketId) => {
+    io.to(socketId).emit(eventName, payload);
+  });
+
+  return socketIds.length > 0;
+};
+
+const markUserOnline = (userId, socketId) => {
+  const userKey = normalizeUserKey(userId);
+  let userSockets = activeUsers.get(userKey);
+  const wasOffline = !userSockets || userSockets.size === 0;
+
+  if (!userSockets) {
+    userSockets = new Set();
+    activeUsers.set(userKey, userSockets);
+  }
+
+  userSockets.add(socketId);
+  return wasOffline;
+};
+
+const markUserOffline = (socketId) => {
+  for (const [userKey, userSockets] of activeUsers.entries()) {
+    if (!userSockets.has(socketId)) {
+      continue;
+    }
+
+    userSockets.delete(socketId);
+
+    if (userSockets.size === 0) {
+      activeUsers.delete(userKey);
+      return { userId: userKey, becameOffline: true };
+    }
+
+    return { userId: userKey, becameOffline: false };
+  }
+
+  return null;
+};
 
 // WebSocket Connection
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
   socket.on('user_online', (userId) => {
-    activeUsers.set(userId, socket.id);
-    io.emit('user_status', { userId, online: true });
+    if (!userId) {
+      return;
+    }
+
+    socket.data.userId = normalizeUserKey(userId);
+    const wasOffline = markUserOnline(userId, socket.id);
+
+    if (wasOffline) {
+      io.emit('user_status', { userId, online: true });
+    }
   });
 
   socket.on('send_message', (data) => {
     const { fromUserId, toUserId, message, matchId } = data;
-    const receiverSocketId = activeUsers.get(toUserId);
-    
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('receive_message', {
-        fromUserId,
-        matchId,
-        message,
-        timestamp: new Date()
-      });
-    }
+
+    emitToUser(toUserId, 'receive_message', {
+      fromUserId,
+      matchId,
+      message,
+      timestamp: new Date()
+    });
   });
 
   socket.on('typing', (data) => {
     const { toUserId, isTyping } = data;
-    const receiverSocketId = activeUsers.get(toUserId);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit('user_typing', { isTyping });
+
+    emitToUser(toUserId, 'user_typing', { isTyping });
+  });
+
+  socket.on('join_chatroom', (chatroomId) => {
+    if (!chatroomId) {
+      return;
     }
+
+    socket.join(`chatroom_${chatroomId}`);
+  });
+
+  socket.on('leave_chatroom', (chatroomId) => {
+    if (!chatroomId) {
+      return;
+    }
+
+    socket.leave(`chatroom_${chatroomId}`);
+  });
+
+  socket.on('join_lobby', () => {
+    socket.join('lobby');
+  });
+
+  socket.on('leave_lobby', () => {
+    socket.leave('lobby');
+  });
+
+  socket.on('call:invite', (data = {}) => {
+    const { callId, targetUserId, callType = 'video', matchId, fromUserName } = data;
+
+    if (!targetUserId || !callId) {
+      return;
+    }
+
+    emitToUser(targetUserId, 'call:incoming', {
+      callId,
+      matchId,
+      callType,
+      fromUserId: socket.data.userId || null,
+      fromUserName: fromUserName || null,
+      createdAt: new Date().toISOString()
+    });
+  });
+
+  socket.on('call:accept', (data = {}) => {
+    const { callId, targetUserId, matchId } = data;
+
+    if (!targetUserId || !callId) {
+      return;
+    }
+
+    emitToUser(targetUserId, 'call:accepted', {
+      callId,
+      matchId,
+      fromUserId: socket.data.userId || null,
+      acceptedAt: new Date().toISOString()
+    });
+  });
+
+  socket.on('call:decline', (data = {}) => {
+    const { callId, targetUserId, matchId } = data;
+
+    if (!targetUserId || !callId) {
+      return;
+    }
+
+    emitToUser(targetUserId, 'call:declined', {
+      callId,
+      matchId,
+      fromUserId: socket.data.userId || null,
+      declinedAt: new Date().toISOString()
+    });
+  });
+
+  socket.on('call:end', (data = {}) => {
+    const { callId, targetUserId, matchId, reason = 'ended' } = data;
+
+    if (!targetUserId || !callId) {
+      return;
+    }
+
+    emitToUser(targetUserId, 'call:ended', {
+      callId,
+      matchId,
+      fromUserId: socket.data.userId || null,
+      reason,
+      endedAt: new Date().toISOString()
+    });
+  });
+
+  socket.on('call:ready', (data = {}) => {
+    const { callId, targetUserId, matchId } = data;
+
+    if (!targetUserId || !callId) {
+      return;
+    }
+
+    emitToUser(targetUserId, 'call:ready', {
+      callId,
+      matchId,
+      fromUserId: socket.data.userId || null
+    });
+  });
+
+  socket.on('call:signal', (data = {}) => {
+    const { callId, targetUserId, matchId, description, candidate } = data;
+
+    if (!targetUserId || !callId) {
+      return;
+    }
+
+    emitToUser(targetUserId, 'call:signal', {
+      callId,
+      matchId,
+      fromUserId: socket.data.userId || null,
+      description: description || null,
+      candidate: candidate || null
+    });
   });
 
   socket.on('disconnect', () => {
-    for (let [userId, socketId] of activeUsers.entries()) {
-      if (socketId === socket.id) {
-        activeUsers.delete(userId);
-        io.emit('user_status', { userId, online: false });
-        console.log('User offline:', userId);
-        break;
-      }
+    const offlineResult = markUserOffline(socket.id);
+
+    if (offlineResult?.becameOffline) {
+      io.emit('user_status', { userId: offlineResult.userId, online: false });
+      console.log('User offline:', offlineResult.userId);
     }
   });
 });
@@ -85,6 +256,8 @@ io.on('connection', (socket) => {
 app.use((req, res, next) => {
   req.io = io;
   req.activeUsers = activeUsers;
+  req.emitToUser = emitToUser;
+  req.getOnlineUserCount = () => activeUsers.size;
   next();
 });
 
@@ -98,7 +271,9 @@ app.get('/', (req, res) => {
       health: '/health',
       auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/check-username, /api/auth/check-email, /api/auth/send-otp, /api/auth/verify-otp, /api/auth/set-username, /api/auth/me, /api/auth/visibility, /api/auth/contact-means',
       dating: '/api/dating/* (requires auth)',
-      messaging: '/api/messaging/* (requires auth)'
+      messaging: '/api/messaging/* (requires auth)',
+      chatrooms: '/api/chatrooms/* (requires auth)',
+      lobby: '/api/lobby/* (requires auth)'
     }
   });
 });
@@ -112,6 +287,8 @@ app.use('/api/astrology', astrologyRoutes);
 app.use('/api/flashsales', flashsalesRoutes);
 app.use('/api/dating', authenticateToken, datingRoutes);
 app.use('/api/messaging', authenticateToken, messagingRoutes);
+app.use('/api/chatrooms', authenticateToken, chatroomsRoutes);
+app.use('/api/lobby', authenticateToken, lobbyRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -131,6 +308,8 @@ app.use((req, res) => {
       flashsales: '/api/flashsales, /api/flashsales/reserve/bulk',
       dating: '/api/dating/* (requires auth)',
       messaging: '/api/messaging/* (requires auth)',
+      chatrooms: '/api/chatrooms/* (requires auth)',
+      lobby: '/api/lobby/* (requires auth)',
       health: '/health'
     }
   });

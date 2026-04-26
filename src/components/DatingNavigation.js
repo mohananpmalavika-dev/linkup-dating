@@ -47,6 +47,24 @@ const DatingNavigation = ({ currentPage, onPageChange, unreadCount = 0, matchCou
       </button>
 
       <button
+        className={`nav-btn ${currentPage === 'chatrooms' ? 'active' : ''}`}
+        onClick={() => onPageChange('chatrooms')}
+        title="Chat Rooms"
+      >
+        <span className="nav-icon">🛋️</span>
+        <span className="nav-label">Rooms</span>
+      </button>
+
+      <button
+        className={`nav-btn ${currentPage === 'lobby' ? 'active' : ''}`}
+        onClick={() => onPageChange('lobby')}
+        title="Lobby"
+      >
+        <span className="nav-icon">🌍</span>
+        <span className="nav-label">Lobby</span>
+      </button>
+
+      <button
         className={`nav-btn ${currentPage === 'profile' ? 'active' : ''}`}
         onClick={() => onPageChange('profile')}
         title="Profile"

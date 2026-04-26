@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "../router";
 import { useApp } from "../contexts/AppContext";
 import useI18n from "../hooks/useI18n";
 import { getPathForModule, getProtectedModuleFromPathname } from "../utils/moduleRoutes";

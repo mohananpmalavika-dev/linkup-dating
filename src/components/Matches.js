@@ -6,28 +6,56 @@ import datingProfileService from '../services/datingProfileService';
  * Matches Component
  * Display and manage user matches
  */
-const Matches = ({ onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) => {
+const buildLikeProfileContext = (like) => ({
+  userId: like.from_user_id,
+  firstName: like.first_name || '',
+  age: like.age ?? null,
+  photos: like.photo_url ? [like.photo_url] : [],
+  location: {
+    city: like.location_city || ''
+  }
+});
+
+const Matches = ({ onMatchCreated, onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) => {
   const [matches, setMatches] = useState([]);
+  const [likesReceived, setLikesReceived] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [loadingLikes, setLoadingLikes] = useState(false);
+  const [likingBackUserId, setLikingBackUserId] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [filter, setFilter] = useState('all');
 
   useEffect(() => {
     loadMatches();
+    loadLikesReceived();
   }, []);
 
   const loadMatches = async () => {
     setLoading(true);
-    setError('');
+    setLoadError('');
 
     try {
       const data = await datingProfileService.getMatches(50);
       setMatches(data.matches || []);
     } catch (loadError) {
-      setError('Failed to load matches');
+      setLoadError('Failed to load matches');
       console.error(loadError);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadLikesReceived = async () => {
+    setLoadingLikes(true);
+
+    try {
+      const data = await datingProfileService.getLikesReceived(20);
+      setLikesReceived(Array.isArray(data) ? data : []);
+    } catch (loadError) {
+      console.error('Failed to load likes received:', loadError);
+    } finally {
+      setLoadingLikes(false);
     }
   };
 
@@ -42,6 +70,35 @@ const Matches = ({ onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) 
       onUnmatch?.(matchId);
     } catch (unmatchError) {
       console.error('Failed to unmatch:', unmatchError);
+    }
+  };
+
+  const handleLikeBack = async (like) => {
+    if (!like?.from_user_id) {
+      return;
+    }
+
+    setLikingBackUserId(like.from_user_id);
+    setActionError('');
+
+    try {
+      const result = await datingProfileService.likeProfile(like.from_user_id);
+
+      if (!result.isMatch) {
+        setActionError('Like sent. We will show the match here once it is mutual.');
+        return;
+      }
+
+      setLikesReceived((currentLikes) => (
+        currentLikes.filter((currentLike) => currentLike.from_user_id !== like.from_user_id)
+      ));
+      await loadMatches();
+      onMatchCreated?.();
+    } catch (likeError) {
+      setActionError('Failed to like this profile back');
+      console.error('Failed to like back:', likeError);
+    } finally {
+      setLikingBackUserId(null);
     }
   };
 
@@ -72,10 +129,10 @@ const Matches = ({ onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) 
     );
   }
 
-  if (error) {
+  if (loadError) {
     return (
       <div className="matches-container error">
-        <p>{error}</p>
+        <p>{loadError}</p>
         <button onClick={loadMatches}>Retry</button>
       </div>
     );
@@ -105,6 +162,73 @@ const Matches = ({ onSelectMatch, onUnmatch, onViewProfile, onStartVideoCall }) 
             Unread
           </button>
         </div>
+      </div>
+
+      <div className="likes-you-section">
+        <div className="likes-you-header">
+          <div>
+            <h3>Likes You</h3>
+            <p>People who already showed interest in you.</p>
+          </div>
+          <button type="button" className="likes-refresh-btn" onClick={loadLikesReceived}>
+            Refresh
+          </button>
+        </div>
+
+        {actionError ? (
+          <div className="likes-you-feedback" role="status">
+            {actionError}
+          </div>
+        ) : null}
+
+        {loadingLikes ? (
+          <div className="likes-you-empty">
+            <p>Loading likes...</p>
+          </div>
+        ) : likesReceived.length > 0 ? (
+          <div className="likes-you-list">
+            {likesReceived.map((like) => (
+              <div key={`${like.from_user_id}-${like.created_at}`} className="like-card">
+                <div
+                  className="like-card-photo"
+                  style={{
+                    backgroundImage: like.photo_url
+                      ? `url(${like.photo_url})`
+                      : 'linear-gradient(135deg, #f97316, #fb7185)'
+                  }}
+                />
+                <div className="like-card-body">
+                  <h4>
+                    {like.first_name}
+                    {like.age ? `, ${like.age}` : ''}
+                  </h4>
+                  <p>{like.location_city || 'Nearby'}</p>
+                  <div className="like-card-actions">
+                    <button
+                      type="button"
+                      className="like-card-secondary"
+                      onClick={() => onViewProfile?.(buildLikeProfileContext(like))}
+                    >
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      className="like-card-primary"
+                      onClick={() => handleLikeBack(like)}
+                      disabled={likingBackUserId === like.from_user_id}
+                    >
+                      {likingBackUserId === like.from_user_id ? 'Matching...' : 'Like Back'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="likes-you-empty">
+            <p>No likes yet. Keep your profile active and check back soon.</p>
+          </div>
+        )}
       </div>
 
       {filteredMatches.length > 0 ? (

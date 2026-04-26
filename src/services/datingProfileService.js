@@ -136,6 +136,18 @@ export const datingProfileService = {
   },
 
   /**
+   * Get a single match by match ID
+   */
+  getMatchById: async (matchId) => {
+    try {
+      const response = await axios.get(`${API_URL}/matches/by-id/${matchId}`);
+      return response.data.match;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch match';
+    }
+  },
+
+  /**
    * Check if there's a mutual match with a user
    */
   checkMatch: async (userId) => {

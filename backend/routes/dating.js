@@ -580,7 +580,10 @@ router.post('/profiles/me/photos', async (req, res) => {
 router.post('/search', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { ageRange, relationshipGoals } = req.body;
+    const { ageRange, relationshipGoals, heightRange, interests } = req.body;
+    const normalizedInterests = Array.isArray(interests)
+      ? interests.map((interest) => normalizeOptionalText(interest)).filter(Boolean)
+      : [];
 
     let query = `
       SELECT dp.*, COUNT(*) OVER() as total_count,
@@ -606,6 +609,18 @@ router.post('/search', async (req, res) => {
     if (relationshipGoals?.length > 0) {
       query += ` AND dp.relationship_goals = ANY($${paramIndex++})`;
       params.push(relationshipGoals);
+    }
+    if (heightRange?.min) {
+      query += ` AND dp.height >= $${paramIndex++}`;
+      params.push(heightRange.min);
+    }
+    if (heightRange?.max) {
+      query += ` AND dp.height <= $${paramIndex++}`;
+      params.push(heightRange.max);
+    }
+    if (normalizedInterests.length > 0) {
+      query += ` AND COALESCE(dp.interests, ARRAY[]::text[]) && $${paramIndex++}::text[]`;
+      params.push(normalizedInterests);
     }
 
     query += ' ORDER BY dp.updated_at DESC LIMIT 20';
@@ -816,6 +831,68 @@ router.get('/matches', async (req, res) => {
 });
 
 // 11. CHECK MATCH
+router.get('/matches/by-id/:matchId', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT m.*,
+              CASE WHEN m.user_id_1 = $1 THEN m.user_id_2 ELSE m.user_id_1 END as matched_user_id,
+              (SELECT json_build_object(
+                  'first_name', first_name,
+                  'age', age,
+                  'bio', bio,
+                  'occupation', occupation,
+                  'education', education,
+                  'relationship_goals', relationship_goals,
+                  'interests', interests,
+                  'location_city', location_city,
+                  'location_state', location_state,
+                  'location_country', location_country,
+                  'profile_verified', profile_verified
+                )
+               FROM dating_profiles
+               WHERE user_id = CASE WHEN m.user_id_1 = $1 THEN m.user_id_2 ELSE m.user_id_1 END) as matched_user_profile,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos
+               WHERE user_id = CASE WHEN m.user_id_1 = $1 THEN m.user_id_2 ELSE m.user_id_1 END) as matched_user_photos,
+              (SELECT json_build_object(
+                  'id', id,
+                  'text', message,
+                  'from_user_id', from_user_id,
+                  'to_user_id', to_user_id,
+                  'created_at', created_at,
+                  'is_read', is_read
+                )
+               FROM messages
+               WHERE match_id = m.id
+               ORDER BY created_at DESC
+               LIMIT 1) as last_message,
+              (SELECT COUNT(*)
+               FROM messages
+               WHERE match_id = m.id
+                 AND to_user_id = $1
+                 AND is_read = false) as unread_count
+       FROM matches m
+       WHERE m.id = $2
+         AND (m.user_id_1 = $1 OR m.user_id_2 = $1)
+         AND m.status = 'active'
+       LIMIT 1`,
+      [userId, matchId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    res.json({ match: normalizeMatchRow(result.rows[0]) });
+  } catch (err) {
+    console.error('Get match by id error:', err);
+    res.status(500).json({ error: 'Failed to fetch match' });
+  }
+});
+
 router.get('/matches/:userId', async (req, res) => {
   try {
     const { userId } = req.params;

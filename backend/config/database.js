@@ -211,7 +211,62 @@ const init = async () => {
       ALTER TABLE profile_photos
       ALTER COLUMN photo_url TYPE TEXT;
     `);
+    // Create chatrooms table for group chats
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chatrooms (
+        id SERIAL PRIMARY KEY,
+        created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        avatar_url TEXT,
+        is_public BOOLEAN DEFAULT TRUE,
+        max_members INTEGER DEFAULT 100,
+        member_count INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
+    // Create chatroom_members junction table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chatroom_members (
+        id SERIAL PRIMARY KEY,
+        chatroom_id INTEGER NOT NULL REFERENCES chatrooms(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(chatroom_id, user_id)
+      );
+    `);
+
+    // Create chatroom_messages table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chatroom_messages (
+        id SERIAL PRIMARY KEY,
+        chatroom_id INTEGER NOT NULL REFERENCES chatrooms(id) ON DELETE CASCADE,
+        from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create lobby_messages table for public global chat
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS lobby_messages (
+        id SERIAL PRIMARY KEY,
+        from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create indices for chatroom queries
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_chatroom_members_chatroom_id ON chatroom_members(chatroom_id);
+      CREATE INDEX IF NOT EXISTS idx_chatroom_members_user_id ON chatroom_members(user_id);
+      CREATE INDEX IF NOT EXISTS idx_chatroom_messages_chatroom_id ON chatroom_messages(chatroom_id);
+      CREATE INDEX IF NOT EXISTS idx_chatroom_messages_created_at ON chatroom_messages(created_at);
+      CREATE INDEX IF NOT EXISTS idx_lobby_messages_created_at ON lobby_messages(created_at);
+    `);
       console.log('✓ Database schema initialized');
       return true;
     } finally {

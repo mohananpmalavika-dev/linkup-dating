@@ -1,266 +1,401 @@
 .video-dating-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
   width: 100%;
-  background: #000;
-  position: relative;
+  background:
+    radial-gradient(circle at top, rgba(255, 123, 172, 0.25), transparent 38%),
+    linear-gradient(180deg, #180d20 0%, #0f1117 100%);
+  color: #f8fafc;
 }
 
-/* Main Video Area */
+.video-loading-state,
+.call-ended {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+}
+
+.video-loading-state {
+  flex-direction: column;
+  gap: 12px;
+}
+
+.call-end-content {
+  width: min(420px, 100%);
+  padding: 32px 28px;
+  border-radius: 28px;
+  text-align: center;
+  background: rgba(10, 14, 25, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+}
+
+.call-end-content h2 {
+  margin: 0 0 10px;
+  font-size: 30px;
+  line-height: 1.1;
+}
+
+.call-end-content p {
+  margin: 0;
+  color: rgba(241, 245, 249, 0.78);
+  line-height: 1.5;
+}
+
+.call-end-actions {
+  margin-top: 22px;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-back,
+.btn-secondary {
+  min-width: 132px;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.btn-back {
+  background: linear-gradient(135deg, #ff6f91 0%, #f97316 100%);
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(249, 115, 22, 0.24);
+}
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.btn-back:hover,
+.btn-secondary:hover,
+.call-header-back:hover,
+.control-btn:hover {
+  transform: translateY(-1px);
+}
+
+.call-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  background: rgba(6, 10, 19, 0.72);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.call-header-back {
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.call-header-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.call-header-meta h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.call-header-meta p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.call-duration {
+  min-width: 56px;
+  text-align: right;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.call-error-banner {
+  margin: 14px 22px 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(127, 29, 29, 0.72);
+  color: #fee2e2;
+  font-size: 14px;
+}
+
 .video-main {
   flex: 1;
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #1a1a1a;
+  padding: 18px;
+  min-height: 0;
 }
 
-/* Remote Video */
 .remote-video {
+  position: relative;
+  height: 100%;
+  min-height: calc(100vh - 220px);
+  border-radius: 30px;
+  overflow: hidden;
+  background: rgba(6, 10, 19, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.remote-video-element,
+.local-video-element {
   width: 100%;
   height: 100%;
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: none;
+  object-fit: cover;
+  background: #05070d;
+}
+
+.remote-video-element.visible,
+.local-video-element.visible {
+  display: block;
 }
 
 .video-placeholder {
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  font-size: 60px;
-  position: relative;
-  overflow: hidden;
+  gap: 16px;
+  background:
+    linear-gradient(180deg, rgba(12, 16, 28, 0.35), rgba(12, 16, 28, 0.88)),
+    linear-gradient(135deg, #ff6f91 0%, #6d28d9 100%);
 }
 
 .video-placeholder img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0.54;
 }
 
-/* Remote Info */
-.remote-info {
+.placeholder-avatar {
+  width: 82px;
+  height: 82px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  z-index: 1;
+}
+
+.video-placeholder-local p {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(248, 250, 252, 0.92);
+  z-index: 1;
+}
+
+.remote-waiting-card {
   position: absolute;
-  bottom: 20px;
-  left: 20px;
-  color: white;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  left: 28px;
+  bottom: 28px;
+  z-index: 1;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background: rgba(12, 16, 28, 0.72);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
 }
 
-.remote-info h3 {
+.remote-waiting-card h3 {
   margin: 0;
   font-size: 24px;
-  font-weight: 600;
 }
 
-.online-indicator {
-  margin: 4px 0 0 0;
-  font-size: 14px;
-  opacity: 0.9;
+.remote-waiting-card p {
+  margin: 6px 0 10px;
+  color: rgba(241, 245, 249, 0.82);
 }
 
-/* Local Video (Picture-in-Picture) */
+.presence-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.presence-pill.online {
+  background: rgba(22, 163, 74, 0.22);
+  color: #bbf7d0;
+}
+
+.presence-pill.offline {
+  background: rgba(148, 163, 184, 0.16);
+  color: #e2e8f0;
+}
+
 .local-video {
   position: absolute;
-  bottom: 80px;
-  right: 15px;
-  width: 100px;
-  height: 150px;
-  border-radius: 8px;
+  right: 32px;
+  bottom: 36px;
+  width: min(28vw, 240px);
+  min-width: 160px;
+  height: min(34vw, 310px);
+  min-height: 200px;
+  border-radius: 24px;
   overflow: hidden;
-  border: 2px solid white;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  background: #333;
+  background: rgba(8, 12, 20, 0.88);
+  box-shadow:
+    0 24px 44px rgba(0, 0, 0, 0.32),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
-.local-video .video-placeholder {
-  width: 100%;
-  height: 100%;
-}
-
-.local-video .label {
+.local-video-label {
   position: absolute;
-  bottom: 5px;
-  right: 5px;
-  color: white;
-  font-size: 11px;
-  font-weight: 600;
-  background: rgba(0, 0, 0, 0.5);
-  padding: 2px 6px;
-  border-radius: 3px;
+  left: 14px;
+  bottom: 12px;
   margin: 0;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(4, 7, 12, 0.72);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-/* Call Header */
-.call-header {
-  padding: 15px;
-  display: flex;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.7);
-}
-
-.call-duration {
-  color: white;
-  font-size: 18px;
-  font-weight: 600;
-  font-family: 'Courier New', monospace;
-  letter-spacing: 2px;
-}
-
-/* Call Controls */
 .call-controls {
   display: flex;
   justify-content: center;
-  align-items: center;
-  gap: 15px;
-  padding: 15px;
-  background: rgba(0, 0, 0, 0.8);
+  gap: 14px;
+  padding: 18px 22px 24px;
+  background: rgba(6, 10, 19, 0.72);
+  backdrop-filter: blur(18px);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .control-btn {
-  width: 55px;
-  height: 55px;
-  border-radius: 50%;
+  min-width: 102px;
   border: none;
-  background: #667eea;
-  color: white;
-  font-size: 24px;
+  border-radius: 999px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: transform 0.2s ease, background 0.2s ease;
 }
 
-.control-btn:hover {
-  transform: scale(1.1);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
-}
-
-.control-btn:active {
-  transform: scale(0.95);
-}
-
-/* Mute Button */
-.control-btn.muted {
-  background: #ff6b6b;
-}
-
-.control-btn.muted:hover {
-  background: #ff5252;
-  box-shadow: 0 6px 16px rgba(255, 107, 107, 0.5);
-}
-
-/* Video Off Button */
+.control-btn.muted,
 .control-btn.off {
-  background: #ff9800;
+  background: rgba(245, 158, 11, 0.22);
+  color: #fde68a;
 }
 
-.control-btn.off:hover {
-  background: #f57c00;
-  box-shadow: 0 6px 16px rgba(255, 152, 0, 0.5);
-}
-
-/* Chat Button */
 .control-btn.chat {
-  background: #764ba2;
+  background: rgba(59, 130, 246, 0.24);
+  color: #dbeafe;
 }
 
-.control-btn.chat:hover {
-  background: #6a3b8b;
-  box-shadow: 0 6px 16px rgba(118, 75, 162, 0.5);
-}
-
-/* End Call Button */
 .control-btn.end-call {
-  background: #ff6b6b;
+  background: linear-gradient(135deg, #fb7185 0%, #ef4444 100%);
+  color: #fff;
 }
 
-.control-btn.end-call:hover {
-  background: #ff5252;
-  box-shadow: 0 6px 16px rgba(255, 107, 107, 0.5);
-}
-
-/* Call Ended */
-.call-ended {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.call-end-content {
-  text-align: center;
-  color: white;
-}
-
-.call-end-content h2 {
-  margin: 0 0 10px 0;
-  font-size: 32px;
-}
-
-.call-end-content p {
-  margin: 0 0 20px 0;
-  font-size: 18px;
-  opacity: 0.9;
-}
-
-.btn-back {
-  padding: 12px 30px;
-  background: white;
-  color: #667eea;
-  border: none;
-  border-radius: 25px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-back:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-/* Responsive */
-@media (max-width: 480px) {
-  .remote-video .video-placeholder {
-    font-size: 40px;
-  }
-
-  .remote-info h3 {
-    font-size: 18px;
+@media (max-width: 900px) {
+  .remote-video {
+    min-height: calc(100vh - 240px);
   }
 
   .local-video {
-    width: 80px;
-    height: 120px;
-    bottom: 70px;
-    right: 10px;
+    width: 172px;
+    height: 224px;
+    right: 24px;
+    bottom: 24px;
   }
 
-  .call-duration {
+  .remote-waiting-card h3 {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .call-header {
+    padding: 16px;
+  }
+
+  .call-header-meta h2 {
     font-size: 16px;
   }
 
-  .control-btn {
-    width: 50px;
-    height: 50px;
-    font-size: 20px;
-    gap: 12px;
+  .call-duration {
+    font-size: 14px;
+  }
+
+  .video-main {
+    padding: 12px;
+  }
+
+  .remote-video {
+    min-height: calc(100vh - 258px);
+    border-radius: 22px;
+  }
+
+  .remote-waiting-card {
+    left: 18px;
+    right: 18px;
+    bottom: 18px;
+    padding: 16px;
+  }
+
+  .local-video {
+    width: 132px;
+    min-width: 132px;
+    height: 184px;
+    min-height: 184px;
+    right: 18px;
+    bottom: 18px;
+    border-radius: 18px;
   }
 
   .call-controls {
-    gap: 12px;
-    padding: 12px;
+    flex-wrap: wrap;
+    padding: 16px;
+  }
+
+  .control-btn {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 0;
+  }
+
+  .call-end-content {
+    padding: 28px 22px;
   }
 }

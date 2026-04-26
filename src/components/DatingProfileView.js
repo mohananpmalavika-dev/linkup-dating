@@ -2,16 +2,17 @@ import React, { useEffect, useState } from 'react';
 import datingProfileService from '../services/datingProfileService';
 import '../styles/DatingProfile.css';
 
-const DatingProfileView = ({ profile: initialProfile, onBack, onMessage, onVideoCall }) => {
+const DatingProfileView = ({ profile: initialProfile, profileId, onBack, onMessage, onVideoCall }) => {
   const [profile, setProfile] = useState(initialProfile || null);
-  const [loading, setLoading] = useState(!initialProfile);
+  const [loading, setLoading] = useState(Boolean(initialProfile?.userId || profileId));
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
+    const resolvedProfileId = initialProfile?.userId || profileId;
 
     const loadProfile = async () => {
-      if (!initialProfile?.userId) {
+      if (!resolvedProfileId) {
         setLoading(false);
         return;
       }
@@ -20,12 +21,12 @@ const DatingProfileView = ({ profile: initialProfile, onBack, onMessage, onVideo
       setError('');
 
       try {
-        const latestProfile = await datingProfileService.getProfileById(initialProfile.userId);
+        const latestProfile = await datingProfileService.getProfileById(resolvedProfileId);
         if (!cancelled) {
           setProfile((currentProfile) => ({
             ...(currentProfile || {}),
             ...latestProfile,
-            matchId: currentProfile?.matchId || initialProfile.matchId || latestProfile.matchId || null
+            matchId: currentProfile?.matchId || initialProfile?.matchId || latestProfile.matchId || null
           }));
         }
       } catch (loadError) {
@@ -45,7 +46,7 @@ const DatingProfileView = ({ profile: initialProfile, onBack, onMessage, onVideo
     return () => {
       cancelled = true;
     };
-  }, [initialProfile]);
+  }, [initialProfile, profileId]);
 
   if (loading && !profile) {
     return (

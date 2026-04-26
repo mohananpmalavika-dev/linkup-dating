@@ -24,6 +24,12 @@
   color: #333;
 }
 
+.browse-subtitle {
+  margin: 6px 0 0;
+  color: #666;
+  font-size: 13px;
+}
+
 .btn-filter-toggle {
   padding: 10px 20px;
   background: #667eea;
@@ -100,6 +106,17 @@
   gap: 10px;
 }
 
+.filters-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.filter-hint {
+  margin: 0;
+  color: #666;
+  font-size: 13px;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
@@ -129,6 +146,17 @@
 
 .btn-apply:hover {
   transform: translateY(-2px);
+}
+
+.btn-reset {
+  padding: 12px;
+  background: #f3f4f6;
+  color: #333;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 /* Loading & Error */
@@ -220,6 +248,11 @@
   cursor: pointer;
 }
 
+.profile-image-button {
+  border: none;
+  padding: 0;
+}
+
 .profile-image:hover {
   opacity: 0.9;
 }
@@ -228,16 +261,15 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 28px;
-  height: 28px;
   background: #667eea;
   color: white;
-  border-radius: 50%;
+  border-radius: 999px;
+  padding: 6px 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
-  font-size: 16px;
+  font-weight: 700;
+  font-size: 11px;
 }
 
 /* Profile Card Info */
@@ -309,13 +341,14 @@
 }
 
 .btn-like-small {
-  width: 36px;
+  min-width: 52px;
   height: 36px;
   border-radius: 6px;
   border: 2px solid #ff6b9d;
   background: white;
   color: #ff6b9d;
-  font-size: 18px;
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
 }
