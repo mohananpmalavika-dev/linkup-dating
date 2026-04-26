@@ -5,7 +5,7 @@
 
 class NotificationService {
   constructor() {
-    this.permission = Notification.permission;
+    this.permission = typeof Notification !== 'undefined' ? Notification.permission : 'default';
     this.socket = null;
     this.activeReminders = new Map();
   }
@@ -14,7 +14,7 @@ class NotificationService {
    * Initialize notification permissions
    */
   async requestPermission() {
-    if (!('Notification' in window)) {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
       console.log('Browser does not support notifications');
       return false;
     }
@@ -90,7 +90,6 @@ class NotificationService {
       title,
       note,
       reminderAt,
-      onNotificationClick = null,
     } = reminder;
 
     const body = note
@@ -230,7 +229,7 @@ class NotificationService {
     return {
       permission: this.permission,
       canNotify: this.permission === 'granted',
-      available: 'Notification' in window,
+      available: typeof window !== 'undefined' && 'Notification' in window,
     };
   }
 

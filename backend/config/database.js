@@ -38,6 +38,7 @@ const init = async () => {
         id SERIAL PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
+        is_admin BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -156,6 +157,17 @@ const init = async () => {
       );
     `);
 
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS message_reactions (
+        id SERIAL PRIMARY KEY,
+        message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        emoji VARCHAR(16) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(message_id, user_id, emoji)
+      );
+    `);
+
       // Create video_dates table
       await client.query(`
       CREATE TABLE IF NOT EXISTS video_dates (
@@ -192,6 +204,8 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_interactions_users ON interactions(from_user_id, to_user_id);
       CREATE INDEX IF NOT EXISTS idx_messages_match_id ON messages(match_id);
       CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+      CREATE INDEX IF NOT EXISTS idx_message_reactions_message_id ON message_reactions(message_id);
+      CREATE INDEX IF NOT EXISTS idx_message_reactions_user_id ON message_reactions(user_id);
     `);
 
       // Migration: Add username column if it doesn't exist
@@ -299,6 +313,114 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked_user_id ON user_blocks(blocked_user_id);
       CREATE INDEX IF NOT EXISTS idx_user_reports_reporting_user_id ON user_reports(reporting_user_id);
       CREATE INDEX IF NOT EXISTS idx_user_reports_reported_user_id ON user_reports(reported_user_id);
+    `);
+
+    // Create admin_actions table for moderation activities
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS admin_actions (
+        id SERIAL PRIMARY KEY,
+        admin_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        action_type VARCHAR(100) NOT NULL,
+        target_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        reason TEXT,
+        details JSONB DEFAULT '{}',
+        status VARCHAR(50) DEFAULT 'completed',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create user_analytics table for DAU, MAU, engagement metrics
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_analytics (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        activity_date DATE NOT NULL,
+        session_count INTEGER DEFAULT 1,
+        messages_sent INTEGER DEFAULT 0,
+        profiles_viewed INTEGER DEFAULT 0,
+        likes_sent INTEGER DEFAULT 0,
+        matches_made INTEGER DEFAULT 0,
+        video_call_duration_seconds INTEGER DEFAULT 0,
+        last_active TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, activity_date)
+      );
+    `);
+
+    // Create user_session_logs table for tracking activity
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_session_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        session_id VARCHAR(255) NOT NULL,
+        ip_address VARCHAR(45),
+        user_agent TEXT,
+        action VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create spam_flags table for spam detection
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS spam_flags (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        flagged_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        reason VARCHAR(255),
+        severity VARCHAR(50) DEFAULT 'low',
+        description TEXT,
+        is_resolved BOOLEAN DEFAULT FALSE,
+        resolved_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create fraud_flags table for fraud detection
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS fraud_flags (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        flag_type VARCHAR(100) NOT NULL,
+        description TEXT,
+        confidence_score DECIMAL(3, 2),
+        is_resolved BOOLEAN DEFAULT FALSE,
+        action_taken VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create system_metrics table for overall platform analytics
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS system_metrics (
+        id SERIAL PRIMARY KEY,
+        metric_date DATE NOT NULL,
+        daily_active_users INTEGER DEFAULT 0,
+        monthly_active_users INTEGER DEFAULT 0,
+        total_messages INTEGER DEFAULT 0,
+        total_matches INTEGER DEFAULT 0,
+        new_users INTEGER DEFAULT 0,
+        reported_users INTEGER DEFAULT 0,
+        spam_flagged_users INTEGER DEFAULT 0,
+        fraud_flagged_users INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(metric_date)
+      );
+    `);
+
+    // Create indices for analytics tables
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_admin_actions_admin_user_id ON admin_actions(admin_user_id);
+      CREATE INDEX IF NOT EXISTS idx_admin_actions_target_user_id ON admin_actions(target_user_id);
+      CREATE INDEX IF NOT EXISTS idx_admin_actions_created_at ON admin_actions(created_at);
+      CREATE INDEX IF NOT EXISTS idx_user_analytics_user_id ON user_analytics(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_analytics_activity_date ON user_analytics(activity_date);
+      CREATE INDEX IF NOT EXISTS idx_user_session_logs_user_id ON user_session_logs(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_session_logs_created_at ON user_session_logs(created_at);
+      CREATE INDEX IF NOT EXISTS idx_spam_flags_user_id ON spam_flags(user_id);
+      CREATE INDEX IF NOT EXISTS idx_spam_flags_created_at ON spam_flags(created_at);
+      CREATE INDEX IF NOT EXISTS idx_fraud_flags_user_id ON fraud_flags(user_id);
+      CREATE INDEX IF NOT EXISTS idx_fraud_flags_created_at ON fraud_flags(created_at);
+      CREATE INDEX IF NOT EXISTS idx_system_metrics_metric_date ON system_metrics(metric_date);
     `);
 
       console.log('✓ Database schema initialized');

@@ -11,6 +11,7 @@ const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
 const chatroomsRoutes = require('./routes/chatrooms');
 const lobbyRoutes = require('./routes/lobby');
+const adminRoutes = require('./routes/admin');
 const productsRoutes = require('./routes/products');
 const ordersRoutes = require('./routes/orders');
 const appDataRoutes = require('./routes/app-data');
@@ -289,6 +290,7 @@ app.use('/api/dating', authenticateToken, datingRoutes);
 app.use('/api/messaging', authenticateToken, messagingRoutes);
 app.use('/api/chatrooms', authenticateToken, chatroomsRoutes);
 app.use('/api/lobby', authenticateToken, lobbyRoutes);
+app.use('/api/admin', authenticateToken, adminRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

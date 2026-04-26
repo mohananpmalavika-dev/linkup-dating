@@ -28,6 +28,7 @@ import ChatRoomView from './components/ChatRoomView';
 import LobbyChat from './components/LobbyChat';
 import datingProfileService from './services/datingProfileService';
 import datingMessagingService from './services/datingMessagingService';
+import notificationService from './services/notificationService';
 import { BACKEND_BASE_URL } from './utils/api';
 import {
   clearStoredAuthToken,
@@ -309,13 +310,39 @@ const AppContent = () => {
       ));
     });
 
+    socket.on('new_message', (payload) => {
+      refreshDatingCounts();
+
+      if (document.hidden && notificationService.getPermissionStatus().canNotify) {
+        notificationService.notify({
+          title: `New message from ${payload?.fromUserName || 'your match'}`,
+          body: payload?.message || 'Open LinkUp to reply.',
+          tag: `dating-message-${payload?.matchId || 'inbox'}`,
+          requireInteraction: false
+        });
+      }
+    });
+
+    socket.on('new_match', () => {
+      refreshDatingCounts();
+
+      if (document.hidden && notificationService.getPermissionStatus().canNotify) {
+        notificationService.notify({
+          title: 'New match on LinkUp',
+          body: 'Someone liked you back. Open the app to start chatting.',
+          tag: 'dating-match',
+          requireInteraction: false
+        });
+      }
+    });
+
     return () => {
       socket.disconnect();
       if (appSocketRef.current === socket) {
         appSocketRef.current = null;
       }
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, refreshDatingCounts]);
 
   const handleLoginSuccess = (userData, token) => {
     if (!token) {
@@ -613,6 +640,15 @@ const AppContent = () => {
                 <DiscoveryCards
                   onMatch={handleMatch}
                   onProfileView={(profile) => handleOpenProfile(profile, '/discover')}
+                />
+              }
+            />
+            <Route
+              path="dating"
+              element={
+                <DiscoveryCards
+                  onMatch={handleMatch}
+                  onProfileView={(profile) => handleOpenProfile(profile, '/dating')}
                 />
               }
             />

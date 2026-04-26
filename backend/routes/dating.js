@@ -264,6 +264,123 @@ const normalizePhotoDetails = (photos) => {
     .sort((leftPhoto, rightPhoto) => leftPhoto.position - rightPhoto.position);
 };
 
+const normalizeInterestList = (interests = []) =>
+  (Array.isArray(interests) ? interests : [])
+    .map((interest) => String(interest || '').trim())
+    .filter(Boolean);
+
+const buildIcebreakerSuggestions = (profile, sharedInterests = []) => {
+  const suggestions = [];
+  const firstSharedInterest = sharedInterests[0];
+  const firstInterest = normalizeInterestList(profile?.interests)[0];
+
+  if (firstSharedInterest) {
+    suggestions.push(`I noticed we both like ${firstSharedInterest}. What got you into it?`);
+  }
+
+  if (profile?.occupation) {
+    suggestions.push(`What's something you genuinely enjoy about working in ${profile.occupation}?`);
+  }
+
+  if (profile?.relationshipGoals) {
+    suggestions.push(`What does a great ${profile.relationshipGoals} connection look like to you?`);
+  }
+
+  if (profile?.location?.city) {
+    suggestions.push(`What do you enjoy most about living in ${profile.location.city}?`);
+  }
+
+  if (firstInterest && firstInterest !== firstSharedInterest) {
+    suggestions.push(`If I wanted to learn more about ${firstInterest}, where should I start?`);
+  }
+
+  suggestions.push('What kind of conversation always keeps you interested?');
+  suggestions.push('What is something simple that can make your whole day better?');
+
+  return [...new Set(suggestions)].slice(0, 4);
+};
+
+const buildCompatibilitySuggestion = (currentProfile, candidateProfile) => {
+  if (!candidateProfile) {
+    return {
+      compatibilityScore: 0,
+      compatibilityReasons: [],
+      icebreakers: []
+    };
+  }
+
+  if (!currentProfile) {
+    return {
+      compatibilityScore: 60,
+      compatibilityReasons: ['Complete your profile to unlock smarter match suggestions.'],
+      icebreakers: buildIcebreakerSuggestions(candidateProfile)
+    };
+  }
+
+  const currentInterests = normalizeInterestList(currentProfile.interests);
+  const candidateInterests = normalizeInterestList(candidateProfile.interests);
+  const currentInterestLookup = new Set(currentInterests.map((interest) => interest.toLowerCase()));
+  const sharedInterests = candidateInterests.filter((interest) =>
+    currentInterestLookup.has(interest.toLowerCase())
+  );
+
+  let score = 48;
+  const reasons = [];
+
+  if (sharedInterests.length > 0) {
+    score += Math.min(24, sharedInterests.length * 8);
+    reasons.push(`Shared interests: ${sharedInterests.slice(0, 2).join(' and ')}`);
+  }
+
+  if (
+    currentProfile.relationshipGoals &&
+    candidateProfile.relationshipGoals &&
+    currentProfile.relationshipGoals === candidateProfile.relationshipGoals
+  ) {
+    score += 18;
+    reasons.push(`Both of you are looking for ${candidateProfile.relationshipGoals}`);
+  }
+
+  const currentCity = currentProfile.location?.city?.toLowerCase?.() || '';
+  const candidateCity = candidateProfile.location?.city?.toLowerCase?.() || '';
+  const currentState = currentProfile.location?.state?.toLowerCase?.() || '';
+  const candidateState = candidateProfile.location?.state?.toLowerCase?.() || '';
+
+  if (currentCity && candidateCity && currentCity === candidateCity) {
+    score += 12;
+    reasons.push(`You are both in ${candidateProfile.location.city}`);
+  } else if (currentState && candidateState && currentState === candidateState) {
+    score += 7;
+    reasons.push(`You are in the same region`);
+  }
+
+  if (Number.isFinite(currentProfile.age) && Number.isFinite(candidateProfile.age)) {
+    const ageGap = Math.abs(currentProfile.age - candidateProfile.age);
+
+    if (ageGap <= 2) {
+      score += 10;
+    } else if (ageGap <= 5) {
+      score += 7;
+    } else if (ageGap <= 8) {
+      score += 4;
+    }
+  }
+
+  if (candidateProfile.profileVerified) {
+    score += 5;
+  }
+
+  if (candidateProfile.bio) {
+    score += 3;
+  }
+
+  return {
+    compatibilityScore: Math.max(52, Math.min(99, score)),
+    compatibilityReasons: reasons.slice(0, 3),
+    icebreakers: buildIcebreakerSuggestions(candidateProfile, sharedInterests)
+  };
+};
+
 const normalizeProfileRow = (profileRow) => {
   if (!profileRow) {
     return null;
@@ -642,13 +759,23 @@ router.post('/search', async (req, res) => {
 router.get('/discovery', async (req, res) => {
   try {
     const userId = req.user.id;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit, 10) || 10;
 
     if (!userId) {
       return res.status(401).json({ error: 'User ID not found in token' });
     }
 
-    console.log('Discovery request from user:', userId);
+    const currentProfileResult = await db.query(
+      `SELECT dp.*,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos
+               WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       WHERE dp.user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const currentProfile = normalizeProfileRow(currentProfileResult.rows[0] || null);
 
     const result = await db.query(
       `SELECT dp.*,
@@ -664,13 +791,25 @@ router.get('/discovery', async (req, res) => {
            END as excluded_user
            FROM interactions WHERE (from_user_id = $1 OR to_user_id = $1)
          )
-       ORDER BY RANDOM()
-       LIMIT $2`,
-      [userId, limit]
+       ORDER BY dp.updated_at DESC
+       LIMIT 100`,
+      [userId]
     );
 
-    console.log('Discovery profiles found:', result.rows.length);
-    res.json({ profiles: result.rows.map(normalizeProfileRow) });
+    const profiles = result.rows
+      .map((profileRow) => {
+        const normalizedProfile = normalizeProfileRow(profileRow);
+        const compatibility = buildCompatibilitySuggestion(currentProfile, normalizedProfile);
+
+        return {
+          ...normalizedProfile,
+          ...compatibility
+        };
+      })
+      .sort((leftProfile, rightProfile) => rightProfile.compatibilityScore - leftProfile.compatibilityScore)
+      .slice(0, limit);
+
+    res.json({ profiles });
   } catch (err) {
     console.error('Discovery error:', err);
     res.status(500).json({ error: 'Failed to get discovery profiles', details: err.message });
@@ -723,11 +862,16 @@ router.post('/interactions/like', async (req, res) => {
         )
       ).rows[0];
 
-      // Notify matched user
-      if (req.io) {
-        req.io.emit('new_match', {
-          match: persistedMatch,
-          user: { id: fromUserId }
+      if (typeof req.emitToUser === 'function') {
+        const participantIds = [fromUserId, userId];
+
+        participantIds.forEach((participantId) => {
+          req.emitToUser(participantId, 'new_match', {
+            match: persistedMatch,
+            user: { id: fromUserId },
+            matchedUserId: participantId === fromUserId ? userId : fromUserId,
+            createdAt: new Date().toISOString()
+          });
         });
       }
 

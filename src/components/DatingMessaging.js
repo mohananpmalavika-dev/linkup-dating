@@ -1,18 +1,78 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import io from 'socket.io-client';
 import datingMessagingService from '../services/datingMessagingService';
 import datingProfileService from '../services/datingProfileService';
+import notificationService from '../services/notificationService';
 import { getStoredUserData } from '../utils/auth';
 import { BACKEND_BASE_URL } from '../utils/api';
 import '../styles/DatingMessaging.css';
+
+const REACTION_OPTIONS = ['❤️', '👍', '😂', '🔥', '👏'];
 
 const normalizeMessage = (message, currentUserId) => ({
   id: message.id,
   text: message.message || message.text || '',
   senderId: message.from_user_id ?? message.fromUserId ?? message.senderId,
+  toUserId: message.to_user_id ?? message.toUserId ?? null,
   timestamp: message.created_at || message.createdAt || message.timestamp || new Date().toISOString(),
+  isRead: Boolean(message.is_read ?? message.isRead),
+  readAt: message.read_at || message.readAt || null,
+  reactions: Array.isArray(message.reactions)
+    ? message.reactions.map((reaction) => ({
+        emoji: reaction.emoji,
+        count: Number.parseInt(reaction.count, 10) || 0,
+        reactedByCurrentUser: Boolean(
+          reaction.reactedByCurrentUser ?? reaction.reacted_by_current_user
+        )
+      }))
+    : [],
   isOwn: Number(message.from_user_id ?? message.fromUserId ?? message.senderId) === Number(currentUserId)
 });
+
+const buildIcebreakers = (match = {}) => {
+  const interestList = Array.isArray(match.interests) ? match.interests.filter(Boolean) : [];
+  const suggestions = [];
+
+  if (interestList[0]) {
+    suggestions.push(`I saw you're into ${interestList[0]}. What do you enjoy most about it?`);
+  }
+
+  if (match.occupation) {
+    suggestions.push(`What do you enjoy most about working in ${match.occupation}?`);
+  }
+
+  if (match.relationshipGoals) {
+    suggestions.push(`What does a great ${match.relationshipGoals} connection look like to you?`);
+  }
+
+  if (match.location?.city) {
+    suggestions.push(`What's something fun to do in ${match.location.city}?`);
+  }
+
+  suggestions.push('What usually makes a conversation feel easy for you?');
+  suggestions.push('What is something simple that always improves your day?');
+
+  return [...new Set(suggestions)].slice(0, 4);
+};
+
+const getReadReceiptLabel = (message) => {
+  if (!message?.isOwn) {
+    return '';
+  }
+
+  if (!message.isRead) {
+    return 'Sent';
+  }
+
+  if (!message.readAt) {
+    return 'Read';
+  }
+
+  return `Read ${new Date(message.readAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit'
+  })}`;
+};
 
 const DatingMessaging = ({
   matchedProfile,
@@ -33,12 +93,20 @@ const DatingMessaging = ({
   const [error, setError] = useState('');
   const [otherUserTyping, setOtherUserTyping] = useState(false);
   const [otherUserOnline, setOtherUserOnline] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState(() =>
+    notificationService.getPermissionStatus().permission
+  );
+  const [activeReactionPickerMessageId, setActiveReactionPickerMessageId] = useState(null);
+  const [reactionLoadingMessageId, setReactionLoadingMessageId] = useState(null);
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const activeMatch = conversationMatch || matchedProfile || null;
   const activeMatchId = activeMatch?.matchId || matchId || null;
   const activeMatchUserId = activeMatch?.userId || null;
+  const notificationsAvailable = notificationService.getPermissionStatus().available;
+  const icebreakers = useMemo(() => buildIcebreakers(activeMatch), [activeMatch]);
 
   const notifyConversationActivity = useCallback(() => {
     onConversationActivity?.();
@@ -90,6 +158,7 @@ const DatingMessaging = ({
   useEffect(() => {
     setOtherUserOnline(false);
     setOtherUserTyping(false);
+    setActiveReactionPickerMessageId(null);
   }, [activeMatchId]);
 
   const loadMessages = useCallback(async (showLoader = true) => {
@@ -157,10 +226,11 @@ const DatingMessaging = ({
 
       const nextMessage = normalizeMessage(
         {
-          id: `${payload.matchId}-${payload.fromUserId}-${payload.timestamp}`,
+          id: payload.messageId || `${payload.matchId}-${payload.fromUserId}-${payload.timestamp}`,
           text: payload.message,
           fromUserId: payload.fromUserId,
-          createdAt: payload.timestamp
+          createdAt: payload.timestamp,
+          reactions: payload.reactions || []
         },
         currentUserId
       );
@@ -176,6 +246,43 @@ const DatingMessaging = ({
 
     socket.on('user_typing', ({ isTyping }) => {
       setOtherUserTyping(Boolean(isTyping));
+    });
+
+    socket.on('messages_read', (payload = {}) => {
+      if (Number(payload.matchId) !== Number(activeMatchId)) {
+        return;
+      }
+
+      const readMessageIds = new Set((payload.messageIds || []).map((messageId) => String(messageId)));
+
+      setMessages((currentMessages) =>
+        currentMessages.map((message) => (
+          readMessageIds.has(String(message.id))
+            ? {
+                ...message,
+                isRead: true,
+                readAt: payload.readAt || message.readAt
+              }
+            : message
+        ))
+      );
+    });
+
+    socket.on('message_reaction_updated', (payload = {}) => {
+      if (Number(payload.matchId) !== Number(activeMatchId)) {
+        return;
+      }
+
+      setMessages((currentMessages) =>
+        currentMessages.map((message) => (
+          String(message.id) === String(payload.messageId)
+            ? {
+                ...message,
+                reactions: Array.isArray(payload.reactions) ? payload.reactions : []
+              }
+            : message
+        ))
+      );
     });
 
     return () => {
@@ -249,6 +356,45 @@ const DatingMessaging = ({
     }, 1500);
   };
 
+  const handleUseIcebreaker = (text) => {
+    setInputMessage(text);
+    inputRef.current?.focus();
+  };
+
+  const handleEnableNotifications = async () => {
+    const granted = await notificationService.requestPermission();
+    setNotificationPermission(notificationService.getPermissionStatus().permission);
+
+    if (!granted && notificationService.getPermissionStatus().permission === 'denied') {
+      setError('Notifications are blocked in your browser settings.');
+    }
+  };
+
+  const handleToggleReaction = async (messageId, emoji) => {
+    setReactionLoadingMessageId(messageId);
+
+    try {
+      const response = await datingMessagingService.toggleReaction(messageId, emoji);
+      const nextReactions = response?.data?.reactions || [];
+
+      setMessages((currentMessages) =>
+        currentMessages.map((message) => (
+          String(message.id) === String(messageId)
+            ? {
+                ...message,
+                reactions: nextReactions
+              }
+            : message
+        ))
+      );
+      setActiveReactionPickerMessageId(null);
+    } catch (reactionError) {
+      setError(typeof reactionError === 'string' ? reactionError : 'Failed to update reaction');
+    } finally {
+      setReactionLoadingMessageId(null);
+    }
+  };
+
   if (loadingMatch && !activeMatch) {
     return (
       <div className="messaging-empty">
@@ -299,13 +445,25 @@ const DatingMessaging = ({
           </button>
         </div>
 
-        <button
-          className="btn-video-call"
-          onClick={() => onVideoCall?.(activeMatch)}
-          title="Start video call"
-        >
-          Video
-        </button>
+        <div className="messaging-header-actions">
+          {notificationsAvailable && notificationPermission !== 'granted' ? (
+            <button
+              type="button"
+              className="btn-enable-notifications"
+              onClick={handleEnableNotifications}
+            >
+              Enable Alerts
+            </button>
+          ) : null}
+
+          <button
+            className="btn-video-call"
+            onClick={() => onVideoCall?.(activeMatch)}
+            title="Start video call"
+          >
+            Video
+          </button>
+        </div>
       </div>
 
       {error ? (
@@ -320,20 +478,89 @@ const DatingMessaging = ({
             <p>Loading messages...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="empty-messages">
+          <div className="empty-messages empty-messages-start">
             <p>Say hello to {activeMatch.firstName}!</p>
+            {icebreakers.length > 0 ? (
+              <div className="icebreaker-list">
+                {icebreakers.map((icebreaker) => (
+                  <button
+                    key={icebreaker}
+                    type="button"
+                    className="icebreaker-chip"
+                    onClick={() => handleUseIcebreaker(icebreaker)}
+                  >
+                    {icebreaker}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : (
           messages.map((message) => (
             <div key={message.id} className={`message ${message.isOwn ? 'own' : 'other'}`}>
-              <div className="message-content">
-                <p>{message.text}</p>
-                <span className="message-time">
-                  {new Date(message.timestamp).toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
-                </span>
+              <div className="message-stack">
+                <div className="message-content">
+                  <p>{message.text}</p>
+                  <div className="message-meta">
+                    <span className="message-time">
+                      {new Date(message.timestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                    {message.isOwn ? (
+                      <span className={`message-status ${message.isRead ? 'read' : ''}`}>
+                        {getReadReceiptLabel(message)}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                {message.reactions?.length > 0 ? (
+                  <div className="message-reactions">
+                    {message.reactions.map((reaction) => (
+                      <button
+                        key={`${message.id}-${reaction.emoji}`}
+                        type="button"
+                        className={`reaction-chip ${reaction.reactedByCurrentUser ? 'reacted' : ''}`}
+                        onClick={() => handleToggleReaction(message.id, reaction.emoji)}
+                        disabled={reactionLoadingMessageId === message.id}
+                      >
+                        <span>{reaction.emoji}</span>
+                        <span>{reaction.count}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className={`message-tools ${message.isOwn ? 'own' : 'other'}`}>
+                  <button
+                    type="button"
+                    className="message-reaction-toggle"
+                    onClick={() => setActiveReactionPickerMessageId((currentMessageId) => (
+                      currentMessageId === message.id ? null : message.id
+                    ))}
+                    disabled={reactionLoadingMessageId === message.id}
+                  >
+                    React
+                  </button>
+                </div>
+
+                {activeReactionPickerMessageId === message.id ? (
+                  <div className="reaction-picker">
+                    {REACTION_OPTIONS.map((emoji) => (
+                      <button
+                        key={`${message.id}-${emoji}`}
+                        type="button"
+                        className="reaction-option"
+                        onClick={() => handleToggleReaction(message.id, emoji)}
+                        disabled={reactionLoadingMessageId === message.id}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </div>
           ))
@@ -348,6 +575,7 @@ const DatingMessaging = ({
 
       <div className="message-input-container">
         <input
+          ref={inputRef}
           type="text"
           placeholder="Say something nice..."
           value={inputMessage}

@@ -12,6 +12,7 @@ export const MODULE_PATHS = {
   localmarket: "/localmarket",
   ridesharing: "/ridesharing",
   matrimonial: "/matrimonial",
+  dating: "/dating",
   socialmedia: "/socialmedia",
   reminderalert: "/reminderalert",
   quicklinks: "/quicklinks",

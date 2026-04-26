@@ -37,6 +37,7 @@ const Navigation = ({ onLogout, loggedInUser, enabledModules = [] }) => {
     { id: "localmarket", label: t("modules.localmarket", "Local Market") },
     { id: "ridesharing", label: t("modules.ridesharing", "SwiftRide") },
     { id: "matrimonial", label: t("modules.matrimonial", "SoulMatch") },
+    { id: "dating", label: t("modules.dating", "Dating") },
     { id: "socialmedia", label: t("modules.socialmedia", "VibeHub") },
     { id: "diary", label: t("modules.diary", "My Diary") },
     { id: "reminderalert", label: t("modules.reminderalert", "ReminderAlert - Todo List") },

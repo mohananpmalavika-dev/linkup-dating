@@ -931,4 +931,33 @@ router.delete('/account', async (req, res) => {
 
 router.all('/account', methodNotAllowed('DELETE'));
 
+// SET USER AS ADMIN (for initialization)
+router.post('/set-admin', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const result = await db.query(
+      `UPDATE users SET is_admin = TRUE WHERE email = $1 RETURNING id, email, is_admin`,
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      success: true,
+      message: `${email} is now an admin`,
+      user: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Set admin error:', err);
+    res.status(500).json({ error: 'Failed to set admin' });
+  }
+});
+
 module.exports = router;
