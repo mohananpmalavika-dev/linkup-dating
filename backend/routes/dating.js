@@ -248,10 +248,11 @@ router.get('/discovery', async (req, res) => {
 router.post('/interactions/like', async (req, res) => {
   try {
     const fromUserId = req.user.id;
-    const { toUserId } = req.body;
+    const { toUserId, targetUserId } = req.body;
+    const userId = toUserId || targetUserId;
 
-    if (!toUserId) {
-      return res.status(400).json({ error: 'toUserId required' });
+    if (!userId) {
+      return res.status(400).json({ error: 'toUserId or targetUserId required' });
     }
 
     // Record the like
@@ -259,14 +260,14 @@ router.post('/interactions/like', async (req, res) => {
       `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
        VALUES ($1, $2, 'like')
        ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING`,
-      [fromUserId, toUserId]
+      [fromUserId, userId]
     );
 
     // Check if mutual like exists
     const mutualResult = await db.query(
       `SELECT * FROM interactions 
        WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type = 'like'`,
-      [toUserId, fromUserId]
+      [userId, fromUserId]
     );
 
     if (mutualResult.rows.length > 0) {
@@ -276,7 +277,7 @@ router.post('/interactions/like', async (req, res) => {
          VALUES (LEAST($1, $2), GREATEST($1, $2))
          ON CONFLICT DO NOTHING
          RETURNING *`,
-        [fromUserId, toUserId]
+        [fromUserId, userId]
       );
 
       // Notify matched user
@@ -305,17 +306,18 @@ router.post('/interactions/like', async (req, res) => {
 router.post('/interactions/pass', async (req, res) => {
   try {
     const fromUserId = req.user.id;
-    const { toUserId } = req.body;
+    const { toUserId, targetUserId } = req.body;
+    const userId = toUserId || targetUserId;
 
-    if (!toUserId) {
-      return res.status(400).json({ error: 'toUserId required' });
+    if (!userId) {
+      return res.status(400).json({ error: 'toUserId or targetUserId required' });
     }
 
     await db.query(
       `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
        VALUES ($1, $2, 'pass')
        ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING`,
-      [fromUserId, toUserId]
+      [fromUserId, userId]
     );
 
     res.json({ message: 'Profile passed' });
@@ -329,6 +331,9 @@ router.post('/interactions/pass', async (req, res) => {
 router.get('/matches', async (req, res) => {
   try {
     const userId = req.user.id;
+    const limit = req.query.limit || 20;
+    const page = req.query.page || 1;
+    const offset = (page - 1) * limit;
 
     const result = await db.query(
       `SELECT m.*,
@@ -341,8 +346,9 @@ router.get('/matches', async (req, res) => {
                ORDER BY position LIMIT 1) as matched_user_photo
        FROM matches m
        WHERE (m.user_id_1 = $1 OR m.user_id_2 = $1) AND m.status = 'active'
-       ORDER BY m.matched_at DESC`,
-      [userId]
+       ORDER BY m.matched_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
     );
 
     res.json(result.rows);
@@ -401,10 +407,38 @@ router.delete('/matches/:matchId', async (req, res) => {
   }
 });
 
+// 12b. UNMATCH - POST variant (for frontend compatibility)
+router.post('/matches/:matchId/unmatch', async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `UPDATE matches 
+       SET status = 'unmatched'
+       WHERE id = $1 AND (user_id_1 = $2 OR user_id_2 = $2)
+       RETURNING *`,
+      [matchId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    res.json({ message: 'Unmatched successfully' });
+  } catch (err) {
+    console.error('Unmatch error:', err);
+    res.status(500).json({ error: 'Failed to unmatch' });
+  }
+});
+
 // 13. GET LIKES RECEIVED
 router.get('/interactions/likes', async (req, res) => {
   try {
     const userId = req.user.id;
+    const limit = req.query.limit || 20;
+    const page = req.query.page || 1;
+    const offset = (page - 1) * limit;
 
     const result = await db.query(
       `SELECT i.*, dp.first_name, dp.age, dp.location_city,
@@ -412,8 +446,35 @@ router.get('/interactions/likes', async (req, res) => {
        FROM interactions i
        JOIN dating_profiles dp ON i.from_user_id = dp.user_id
        WHERE i.to_user_id = $1 AND i.interaction_type = 'like'
-       ORDER BY i.created_at DESC`,
-      [userId]
+       ORDER BY i.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get likes error:', err);
+    res.status(500).json({ error: 'Failed to get likes' });
+  }
+});
+
+// 13b. ALIAS - GET LIKES RECEIVED (alternate endpoint)
+router.get('/likes-received', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = req.query.limit || 20;
+    const page = req.query.page || 1;
+    const offset = (page - 1) * limit;
+
+    const result = await db.query(
+      `SELECT i.*, dp.first_name, dp.age, dp.location_city,
+              (SELECT photo_url FROM profile_photos WHERE user_id = i.from_user_id LIMIT 1) as photo_url
+       FROM interactions i
+       JOIN dating_profiles dp ON i.from_user_id = dp.user_id
+       WHERE i.to_user_id = $1 AND i.interaction_type = 'like'
+       ORDER BY i.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
     );
 
     res.json(result.rows);
@@ -427,13 +488,35 @@ router.get('/interactions/likes', async (req, res) => {
 router.get('/interactions/history', async (req, res) => {
   try {
     const userId = req.user.id;
+    const limit = req.query.limit || 100;
 
     const result = await db.query(
       `SELECT * FROM interactions 
        WHERE from_user_id = $1 OR to_user_id = $1
        ORDER BY created_at DESC
-       LIMIT 100`,
-      [userId]
+       LIMIT $2`,
+      [userId, limit]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Get history error:', err);
+    res.status(500).json({ error: 'Failed to get interaction history' });
+  }
+});
+
+// 14b. ALIAS - GET INTERACTION HISTORY (alternate endpoint)
+router.get('/interaction-history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = req.query.limit || 100;
+
+    const result = await db.query(
+      `SELECT * FROM interactions 
+       WHERE from_user_id = $1 OR to_user_id = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [userId, limit]
     );
 
     res.json(result.rows);

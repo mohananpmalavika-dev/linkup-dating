@@ -104,7 +104,7 @@ export const datingProfileService = {
    */
   likeProfile: async (userId) => {
     try {
-      const response = await axios.post(`${API_URL}/interactions/like`, { targetUserId: userId });
+      const response = await axios.post(`${API_URL}/interactions/like`, { toUserId: userId });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to like profile';
@@ -116,7 +116,7 @@ export const datingProfileService = {
    */
   passProfile: async (userId) => {
     try {
-      const response = await axios.post(`${API_URL}/interactions/pass`, { targetUserId: userId });
+      const response = await axios.post(`${API_URL}/interactions/pass`, { toUserId: userId });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to pass profile';
@@ -150,9 +150,9 @@ export const datingProfileService = {
   /**
    * Unmatch with a user
    */
-  unmatch: async (userId) => {
+  unmatch: async (matchId) => {
     try {
-      const response = await axios.post(`${API_URL}/matches/${userId}/unmatch`);
+      const response = await axios.post(`${API_URL}/matches/${matchId}/unmatch`);
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to unmatch';
