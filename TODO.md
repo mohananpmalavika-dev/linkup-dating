@@ -1,6 +1,6 @@
 # Dating App Module - Functional Improvements TODO
 
-## Status: Phase 1 Complete ✅ | Phase 2 In Progress 🔄
+## Status: Phase 1 Complete ✅ | Phase 2 Complete ✅ | Phase 3 Complete ✅
 
 ---
 
@@ -66,33 +66,56 @@
 
 ---
 
-## Phase 3: Safety & Premium (Pending)
+## Phase 3: Safety & Premium ✅ COMPLETE
 
-### 13. Photo Verification
-- Selfie verification flow
-- "Photo verified" badge
+### 13. Enhanced Photo Verification ✅
+- [x] Backend: `GET /verify-photo/challenge` - Generate pose challenge
+- [x] Backend: `POST /profiles/me/verify-photo` - Submit verification selfie
+- [x] Backend: `GET /profiles/me/verification-status` - Check verification status
+- [x] Backend: Added verification fields to DatingProfile model (verificationPhotoUrl, verificationStatus, verifiedAt)
+- [x] Frontend: Photo verification flow with camera capture in DatingProfile
+- [x] Frontend: Verification status badge in profile header
 
-### 14. Premium Features
-- Unlimited likes, boosts, rewind
-- See who liked you
-- Stripe integration
+### 14. Premium Subscription System ✅
+- [x] Backend: Subscription model (Subscription.js) with plan, status, expiresAt
+- [x] Backend: `GET /subscription/plans` - List plans (Free, Premium $19.99, Gold $29.99)
+- [x] Backend: `GET /subscription/me` - Current subscription status
+- [x] Backend: `POST /subscription/create` - Activate subscription (simulated, no Stripe)
+- [x] Backend: `DELETE /subscription/cancel` - Cancel subscription
+- [x] Backend: `POST /profiles/me/boost` - Profile boost (30 min, Premium/Gold only)
+- [x] Backend: `GET /who-liked-me` - List likers (blurred for free users)
+- [x] Backend: Daily limits check subscription status (unlimited for subscribers)
+- [x] Frontend: Premium upgrade UI with plan cards in DatingProfile
+- [x] Frontend: Subscription management (view/cancel)
+- [x] Frontend: "Who Liked You" tab in Matches (blurred for free, revealed for Premium)
+- [x] Frontend: Boost button in DiscoveryCards toolbar
 
-### 15. Message Requests
-- Non-match message requests
-- Accept/decline flow
+### 15. Message Requests (Non-Match) ✅
+- [x] Backend: MessageRequest model (MessageRequest.js) with from/to/message/status
+- [x] Backend: `POST /message-requests` - Send request (Gold only)
+- [x] Backend: `GET /message-requests` - List incoming requests
+- [x] Backend: `POST /message-requests/:id/accept` - Accept and create match
+- [x] Backend: `POST /message-requests/:id/decline` - Decline request
+- [x] Frontend: Send message request from DatingProfileView (Gold users)
+- [x] Frontend: Incoming requests tab in Matches with accept/decline
+
+### 16. Admin Safety Dashboard 🔄 PARTIAL
+- [x] Backend: User report endpoints already exist in dating.js
+- [x] Backend: Photo verification status tracked
+- [ ] Frontend: Dedicated admin verification review panel (can be added to AdminDashboard)
 
 ---
 
 ## Phase 4: Performance (Pending)
 
-### 16. Redis Caching
+### 17. Redis Caching
 - Cache profiles (5min TTL)
 - Cache matches (2min TTL)
 
-### 17. Optimistic Updates
+### 18. Optimistic Updates
 - Instant like/pass feedback
 
-### 18. Offline Support
+### 19. Offline Support
 - Service worker caching
 
 ---
@@ -105,19 +128,28 @@
 | Phase 1 | `src/services/datingProfileService.js` | Added preferences, superlike, daily limits methods |
 | Phase 1 | `src/components/DiscoveryCards.js` | Added superlike button, daily limits display |
 | Phase 1 | `src/components/DatingProfile.js` | Added daily limits stats |
-| Phase 2 | `backend/routes/dating.js` | Added top-picks, rewind, media, prompts |
-| Phase 2 | `src/services/datingProfileService.js` | Added top-picks, rewind methods |
+| Phase 2 | `backend/routes/dating.js` | Added top-picks, rewind, media, prompts, notification preferences |
+| Phase 2 | `src/services/datingProfileService.js` | Added top-picks, rewind, prompts, notification methods |
 | Phase 2 | `src/services/datingMessagingService.js` | Added media sharing methods |
 | Phase 2 | `src/components/DiscoveryCards.js` | Added top-picks toggle, rewind button |
 | Phase 2 | `src/components/DatingMessaging.js` | Added media sharing UI |
 | Phase 2 | `src/components/DatingProfile.js` | Added prompts, notification preferences |
+| Phase 3 | `backend/models/Subscription.js` | New model for premium subscriptions |
+| Phase 3 | `backend/models/MessageRequest.js` | New model for non-match message requests |
+| Phase 3 | `backend/models/DatingProfile.js` | Added verification fields |
+| Phase 3 | `backend/routes/dating.js` | Added photo verification, subscriptions, boost, who-liked-me, message-requests |
+| Phase 3 | `src/services/datingProfileService.js` | Added verification, subscription, boost, message request methods |
+| Phase 3 | `src/components/DatingProfile.js` | Added photo verification flow, subscription panel |
+| Phase 3 | `src/components/DiscoveryCards.js` | Added boost button, subscription-aware limits |
+| Phase 3 | `src/components/Matches.js` | Added "Who Liked You" and "Message Requests" tabs |
+| Phase 3 | `src/components/DatingProfileView.js` | Added send message request button (Gold users) |
 
 ---
 
 ## Next Steps
 
-1. **Complete Phase 2 implementation** - Top picks, rewind, media sharing, prompts, enhanced notifications
-2. **Test all new endpoints** - Verify backend functionality
-3. **Run frontend build** - Check for compilation errors
-4. **Begin Phase 3** - Safety & premium features
+1. **Run database migrations** - Create `subscriptions` and `message_requests` tables
+2. **Test all new Phase 3 endpoints** - Verify backend functionality for verification, subscriptions, boosts
+3. **Run frontend build** - Check for compilation errors in new components
+4. **Begin Phase 4** - Performance optimizations (Redis caching, optimistic updates, offline support)
 

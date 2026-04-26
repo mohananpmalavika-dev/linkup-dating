@@ -316,6 +316,427 @@ const normalizeInterestList = (interests = []) =>
     .map((interest) => String(interest || '').trim())
     .filter(Boolean);
 
+const normalizeStringArray = (values = []) =>
+  (Array.isArray(values) ? values : [])
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+
+const COMPATIBILITY_QUESTION_LABELS = {
+  weekendStyle: 'weekend style',
+  communicationStyle: 'communication style',
+  socialEnergy: 'social rhythm',
+  planningStyle: 'planning style',
+  affectionStyle: 'connection style',
+  conflictStyle: 'conflict approach'
+};
+
+const COMPATIBILITY_QUESTION_IDS = Object.keys(COMPATIBILITY_QUESTION_LABELS);
+
+const createDefaultDealBreakers = () => ({
+  enforceAgeRange: false,
+  enforceLocationRadius: false,
+  onlyVerifiedProfiles: false,
+  enforceRelationshipGoals: false,
+  requireSharedInterests: false,
+  enforceHeightRange: false,
+  enforceBodyType: false,
+  requireCompletedProfiles: false
+});
+
+const createDefaultPreferenceFlexibility = () => ({
+  mode: 'balanced',
+  learnFromActivity: true
+});
+
+const createDefaultCompatibilityAnswers = () =>
+  COMPATIBILITY_QUESTION_IDS.reduce((answers, questionId) => {
+    answers[questionId] = '';
+    return answers;
+  }, {});
+
+const createEmptyLearningSignalGroup = () => ({
+  interests: {},
+  relationshipGoals: {},
+  bodyTypes: {},
+  ageBands: {},
+  verification: {}
+});
+
+const createDefaultLearningProfile = () => ({
+  positiveSignals: createEmptyLearningSignalGroup(),
+  negativeSignals: createEmptyLearningSignalGroup(),
+  totalPositiveActions: 0,
+  totalNegativeActions: 0,
+  lastInteractionAt: null
+});
+
+const toFiniteNumber = (value) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+};
+
+const normalizeSignalKey = (value) => {
+  const normalizedValue = normalizeOptionalText(value);
+  return normalizedValue ? normalizedValue.toLowerCase() : null;
+};
+
+const clampSignalValue = (value) =>
+  Math.max(-12, Math.min(12, Math.round(Number(value) * 100) / 100));
+
+const normalizeSignalMap = (value) => {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  return Object.entries(value).reduce((normalizedMap, [key, rawScore]) => {
+    const normalizedKey = normalizeSignalKey(key);
+    const numericScore = Number(rawScore);
+
+    if (!normalizedKey || !Number.isFinite(numericScore)) {
+      return normalizedMap;
+    }
+
+    normalizedMap[normalizedKey] = clampSignalValue(numericScore);
+    return normalizedMap;
+  }, {});
+};
+
+const normalizeLearningSignalGroup = (value) => {
+  const source = value && typeof value === 'object' ? value : {};
+  const fallback = createEmptyLearningSignalGroup();
+
+  return Object.keys(fallback).reduce((normalizedGroup, key) => {
+    normalizedGroup[key] = normalizeSignalMap(source[key]);
+    return normalizedGroup;
+  }, {});
+};
+
+const normalizeDealBreakers = (value) => {
+  const fallback = createDefaultDealBreakers();
+  const source = value && typeof value === 'object' ? value : {};
+
+  return Object.keys(fallback).reduce((normalizedBreakers, key) => {
+    normalizedBreakers[key] = normalizeBoolean(source[key]);
+    return normalizedBreakers;
+  }, {});
+};
+
+const normalizePreferenceFlexibility = (value) => {
+  const fallback = createDefaultPreferenceFlexibility();
+  const source = value && typeof value === 'object' ? value : {};
+  const normalizedMode = normalizeOptionalText(source.mode)?.toLowerCase();
+
+  return {
+    mode: ['strict', 'balanced', 'open'].includes(normalizedMode) ? normalizedMode : fallback.mode,
+    learnFromActivity:
+      source.learnFromActivity === undefined
+        ? fallback.learnFromActivity
+        : normalizeBoolean(source.learnFromActivity)
+  };
+};
+
+const normalizeCompatibilityAnswers = (value) => {
+  const fallback = createDefaultCompatibilityAnswers();
+  const source = value && typeof value === 'object' ? value : {};
+
+  return Object.keys(fallback).reduce((normalizedAnswers, key) => {
+    normalizedAnswers[key] = normalizeOptionalText(source[key]) || '';
+    return normalizedAnswers;
+  }, {});
+};
+
+const normalizeLearningProfile = (value) => {
+  const fallback = createDefaultLearningProfile();
+  const source = value && typeof value === 'object' ? value : {};
+
+  return {
+    positiveSignals: normalizeLearningSignalGroup(source.positiveSignals),
+    negativeSignals: normalizeLearningSignalGroup(source.negativeSignals),
+    totalPositiveActions: Math.max(0, normalizeInteger(source.totalPositiveActions) ?? fallback.totalPositiveActions),
+    totalNegativeActions: Math.max(0, normalizeInteger(source.totalNegativeActions) ?? fallback.totalNegativeActions),
+    lastInteractionAt: normalizeOptionalText(source.lastInteractionAt)
+  };
+};
+
+const normalizePreferenceRow = (row) => {
+  const source = row && typeof row === 'object' ? row : {};
+
+  return {
+    ageRangeMin: normalizeInteger(source.age_range_min ?? source.ageRangeMin) ?? 18,
+    ageRangeMax: normalizeInteger(source.age_range_max ?? source.ageRangeMax) ?? 50,
+    locationRadius: normalizeInteger(source.location_radius ?? source.locationRadius) ?? 50,
+    genderPreferences: normalizeStringArray(source.gender_preferences ?? source.genderPreferences),
+    relationshipGoals: normalizeStringArray(source.relationship_goals ?? source.relationshipGoals),
+    interests: normalizeInterestList(source.interests),
+    heightRangeMin: normalizeInteger(source.height_range_min ?? source.heightRangeMin),
+    heightRangeMax: normalizeInteger(source.height_range_max ?? source.heightRangeMax),
+    bodyTypes: normalizeStringArray(source.body_types ?? source.bodyTypes),
+    showMyProfile:
+      source.show_my_profile === undefined && source.showMyProfile === undefined
+        ? true
+        : normalizeBoolean(source.show_my_profile ?? source.showMyProfile),
+    allowMessages:
+      source.allow_messages === undefined && source.allowMessages === undefined
+        ? true
+        : normalizeBoolean(source.allow_messages ?? source.allowMessages),
+    notificationsEnabled:
+      source.notifications_enabled === undefined && source.notificationsEnabled === undefined
+        ? true
+        : normalizeBoolean(source.notifications_enabled ?? source.notificationsEnabled),
+    dealBreakers: normalizeDealBreakers(source.deal_breakers ?? source.dealBreakers),
+    preferenceFlexibility: normalizePreferenceFlexibility(
+      source.preference_flexibility ?? source.preferenceFlexibility
+    ),
+    compatibilityAnswers: normalizeCompatibilityAnswers(
+      source.compatibility_answers ?? source.compatibilityAnswers
+    ),
+    learningProfile: normalizeLearningProfile(source.learning_profile ?? source.learningProfile)
+  };
+};
+
+const formatPreferenceResponse = (preferenceRow) => {
+  const preferences = normalizePreferenceRow(preferenceRow);
+
+  return {
+    ageRangeMin: preferences.ageRangeMin,
+    ageRangeMax: preferences.ageRangeMax,
+    locationRadius: preferences.locationRadius,
+    genderPreferences: preferences.genderPreferences,
+    relationshipGoals: preferences.relationshipGoals,
+    interests: preferences.interests,
+    heightRangeMin: preferences.heightRangeMin,
+    heightRangeMax: preferences.heightRangeMax,
+    bodyTypes: preferences.bodyTypes,
+    showMyProfile: preferences.showMyProfile,
+    allowMessages: preferences.allowMessages,
+    notificationsEnabled: preferences.notificationsEnabled,
+    dealBreakers: preferences.dealBreakers,
+    preferenceFlexibility: preferences.preferenceFlexibility,
+    compatibilityAnswers: preferences.compatibilityAnswers,
+    learningProfile: preferences.learningProfile
+  };
+};
+
+const buildAgeBand = (age) => {
+  if (!Number.isFinite(age)) {
+    return null;
+  }
+
+  const rangeStart = Math.max(18, Math.floor(age / 5) * 5);
+  return `${rangeStart}-${rangeStart + 4}`;
+};
+
+const applySignalDelta = (signalBucket, key, delta) => {
+  const normalizedKey = normalizeSignalKey(key);
+
+  if (!normalizedKey || !Number.isFinite(delta) || delta === 0) {
+    return;
+  }
+
+  const currentScore = Number(signalBucket[normalizedKey] || 0);
+  const nextScore = clampSignalValue(currentScore + delta);
+
+  if (Math.abs(nextScore) < 0.05) {
+    delete signalBucket[normalizedKey];
+    return;
+  }
+
+  signalBucket[normalizedKey] = nextScore;
+};
+
+const buildLearningDeltaProfile = (interactionType) => {
+  if (interactionType === 'superlike') {
+    return {
+      interests: 0.9,
+      relationshipGoals: 1.45,
+      bodyTypes: 1.05,
+      ageBands: 0.95,
+      verification: 0.35
+    };
+  }
+
+  if (interactionType === 'pass') {
+    return {
+      interests: 0.35,
+      relationshipGoals: 0.55,
+      bodyTypes: 0.45,
+      ageBands: 0.4,
+      verification: 0.15
+    };
+  }
+
+  return {
+    interests: 0.65,
+    relationshipGoals: 1.1,
+    bodyTypes: 0.8,
+    ageBands: 0.75,
+    verification: 0.25
+  };
+};
+
+const buildUpdatedLearningProfile = (existingLearningProfile, candidateProfile, interactionType) => {
+  const learningProfile = normalizeLearningProfile(existingLearningProfile);
+  const signalGroup =
+    interactionType === 'pass' ? learningProfile.negativeSignals : learningProfile.positiveSignals;
+  const deltas = buildLearningDeltaProfile(interactionType);
+
+  normalizeInterestList(candidateProfile?.interests)
+    .slice(0, 4)
+    .forEach((interest) => applySignalDelta(signalGroup.interests, interest, deltas.interests));
+
+  if (candidateProfile?.relationshipGoals) {
+    applySignalDelta(
+      signalGroup.relationshipGoals,
+      candidateProfile.relationshipGoals,
+      deltas.relationshipGoals
+    );
+  }
+
+  if (candidateProfile?.bodyType) {
+    applySignalDelta(signalGroup.bodyTypes, candidateProfile.bodyType, deltas.bodyTypes);
+  }
+
+  const ageBand = buildAgeBand(candidateProfile?.age);
+  if (ageBand) {
+    applySignalDelta(signalGroup.ageBands, ageBand, deltas.ageBands);
+  }
+
+  if (candidateProfile?.profileVerified) {
+    applySignalDelta(signalGroup.verification, 'verified', deltas.verification);
+  }
+
+  if (interactionType === 'pass') {
+    learningProfile.totalNegativeActions += 1;
+  } else {
+    learningProfile.totalPositiveActions += interactionType === 'superlike' ? 2 : 1;
+  }
+
+  learningProfile.lastInteractionAt = new Date().toISOString();
+  return learningProfile;
+};
+
+const persistLearningFeedback = async ({ userId, targetUserId, interactionType }) => {
+  if (!userId || !targetUserId || userId === targetUserId) {
+    return;
+  }
+
+  try {
+    const [preferenceResult, targetProfileResult] = await Promise.all([
+      db.query(
+        `SELECT learning_profile, preference_flexibility
+         FROM user_preferences
+         WHERE user_id = $1
+         LIMIT 1`,
+        [userId]
+      ),
+      db.query(
+        `SELECT dp.*
+         FROM dating_profiles dp
+         WHERE dp.user_id = $1
+         LIMIT 1`,
+        [targetUserId]
+      )
+    ]);
+
+    const flexibility = normalizePreferenceFlexibility(
+      preferenceResult.rows[0]?.preference_flexibility
+    );
+
+    if (!flexibility.learnFromActivity) {
+      return;
+    }
+
+    const targetProfile = normalizeProfileRow(targetProfileResult.rows[0] || null);
+    if (!targetProfile) {
+      return;
+    }
+
+    const updatedLearningProfile = buildUpdatedLearningProfile(
+      preferenceResult.rows[0]?.learning_profile,
+      targetProfile,
+      interactionType
+    );
+
+    await db.query(
+      `INSERT INTO user_preferences (user_id, preference_flexibility, learning_profile)
+       VALUES ($1, $2::jsonb, $3::jsonb)
+       ON CONFLICT (user_id) DO UPDATE
+       SET preference_flexibility = COALESCE(user_preferences.preference_flexibility, EXCLUDED.preference_flexibility),
+           learning_profile = EXCLUDED.learning_profile,
+           updated_at = CURRENT_TIMESTAMP`,
+      [userId, JSON.stringify(flexibility), JSON.stringify(updatedLearningProfile)]
+    );
+  } catch (error) {
+    console.error('Preference learning update error:', error);
+  }
+};
+
+const calculateDistanceKm = (currentLocation = {}, candidateLocation = {}) => {
+  const currentLat = toFiniteNumber(currentLocation.lat);
+  const currentLng = toFiniteNumber(currentLocation.lng);
+  const candidateLat = toFiniteNumber(candidateLocation.lat);
+  const candidateLng = toFiniteNumber(candidateLocation.lng);
+
+  if (
+    currentLat !== null &&
+    currentLng !== null &&
+    candidateLat !== null &&
+    candidateLng !== null
+  ) {
+    const toRadians = (degrees) => (degrees * Math.PI) / 180;
+    const earthRadiusKm = 6371;
+    const deltaLat = toRadians(candidateLat - currentLat);
+    const deltaLng = toRadians(candidateLng - currentLng);
+    const haversine =
+      Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+      Math.cos(toRadians(currentLat)) *
+        Math.cos(toRadians(candidateLat)) *
+        Math.sin(deltaLng / 2) *
+        Math.sin(deltaLng / 2);
+
+    return Math.round(earthRadiusKm * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine)));
+  }
+
+  const currentCity = normalizeSignalKey(currentLocation.city);
+  const candidateCity = normalizeSignalKey(candidateLocation.city);
+  const currentState = normalizeSignalKey(currentLocation.state);
+  const candidateState = normalizeSignalKey(candidateLocation.state);
+  const currentCountry = normalizeSignalKey(currentLocation.country);
+  const candidateCountry = normalizeSignalKey(candidateLocation.country);
+
+  if (
+    currentCity &&
+    candidateCity &&
+    currentState &&
+    candidateState &&
+    currentCity === candidateCity &&
+    currentState === candidateState
+  ) {
+    return 10;
+  }
+
+  if (
+    currentState &&
+    candidateState &&
+    currentCountry &&
+    candidateCountry &&
+    currentState === candidateState &&
+    currentCountry === candidateCountry
+  ) {
+    return 75;
+  }
+
+  if (currentCountry && candidateCountry && currentCountry === candidateCountry) {
+    return 250;
+  }
+
+  return null;
+};
+
 const buildIcebreakerSuggestions = (profile, sharedInterests = []) => {
   const suggestions = [];
   const firstSharedInterest = sharedInterests[0];
@@ -347,17 +768,30 @@ const buildIcebreakerSuggestions = (profile, sharedInterests = []) => {
   return [...new Set(suggestions)].slice(0, 4);
 };
 
-const buildCompatibilitySuggestion = (currentProfile, candidateProfile) => {
+const buildCompatibilitySuggestion = ({
+  currentProfile,
+  currentPreferences,
+  candidateProfile,
+  candidatePreferences
+}) => {
   if (!candidateProfile) {
     return {
+      isExcluded: false,
       compatibilityScore: 0,
       compatibilityReasons: [],
       icebreakers: []
     };
   }
 
+  const viewerPreferences = normalizePreferenceRow(currentPreferences);
+  const viewerFlexibility = normalizePreferenceFlexibility(
+    viewerPreferences.preferenceFlexibility
+  );
+  const candidatePreferenceSet = normalizePreferenceRow(candidatePreferences);
+
   if (!currentProfile) {
     return {
+      isExcluded: false,
       compatibilityScore: 60,
       compatibilityReasons: ['Complete your profile to unlock smarter match suggestions.'],
       icebreakers: buildIcebreakerSuggestions(candidateProfile)
@@ -371,21 +805,178 @@ const buildCompatibilitySuggestion = (currentProfile, candidateProfile) => {
     currentInterestLookup.has(interest.toLowerCase())
   );
 
-  let score = 48;
-  const reasons = [];
+  const preferredInterestLookup = new Set(
+    normalizeInterestList(viewerPreferences.interests).map((interest) => interest.toLowerCase())
+  );
+  const sharedPreferredInterests = candidateInterests.filter((interest) =>
+    preferredInterestLookup.has(interest.toLowerCase())
+  );
+  const candidateAge = Number.isFinite(candidateProfile.age) ? candidateProfile.age : null;
+  const candidateHeight = Number.isFinite(candidateProfile.height) ? candidateProfile.height : null;
+  const ageMatchesPreference =
+    candidateAge === null
+      ? null
+      : candidateAge >= viewerPreferences.ageRangeMin &&
+        candidateAge <= viewerPreferences.ageRangeMax;
+  const heightMatchesPreference =
+    candidateHeight === null
+      ? null
+      : (!viewerPreferences.heightRangeMin || candidateHeight >= viewerPreferences.heightRangeMin) &&
+        (!viewerPreferences.heightRangeMax || candidateHeight <= viewerPreferences.heightRangeMax);
+  const genderMatchesPreference =
+    viewerPreferences.genderPreferences.length === 0
+      ? null
+      : viewerPreferences.genderPreferences.includes(candidateProfile.gender || '');
+  const relationshipMatchesPreference =
+    viewerPreferences.relationshipGoals.length === 0
+      ? null
+      : viewerPreferences.relationshipGoals.includes(candidateProfile.relationshipGoals || '');
+  const bodyTypeMatchesPreference =
+    viewerPreferences.bodyTypes.length === 0
+      ? null
+      : viewerPreferences.bodyTypes.includes(candidateProfile.bodyType || '');
+  const distanceKm = calculateDistanceKm(currentProfile.location, candidateProfile.location);
+  const withinRadius =
+    distanceKm === null ? null : distanceKm <= Math.max(1, viewerPreferences.locationRadius || 50);
+  const strictPreferenceViolations = [];
+  const dealBreakerViolations = [];
+  const reasonCandidates = [];
+  const addReason = (text, weight) => {
+    if (!text || !Number.isFinite(weight) || weight <= 0) {
+      return;
+    }
 
-  if (sharedInterests.length > 0) {
-    score += Math.min(24, sharedInterests.length * 8);
-    reasons.push(`Shared interests: ${sharedInterests.slice(0, 2).join(' and ')}`);
+    reasonCandidates.push({ text, weight });
+  };
+
+  if (viewerFlexibility.mode === 'strict') {
+    if (ageMatchesPreference === false) {
+      strictPreferenceViolations.push('Outside your preferred age range');
+    }
+    if (genderMatchesPreference === false) {
+      strictPreferenceViolations.push('Outside your preferred gender preferences');
+    }
+    if (relationshipMatchesPreference === false) {
+      strictPreferenceViolations.push('Relationship goals do not line up');
+    }
+    if (withinRadius === false) {
+      strictPreferenceViolations.push('Outside your distance radius');
+    }
   }
 
+  if (viewerPreferences.dealBreakers.enforceAgeRange && ageMatchesPreference === false) {
+    dealBreakerViolations.push('Age range dealbreaker');
+  }
+  if (viewerPreferences.dealBreakers.enforceLocationRadius && withinRadius === false) {
+    dealBreakerViolations.push('Distance dealbreaker');
+  }
   if (
+    viewerPreferences.dealBreakers.enforceRelationshipGoals &&
+    relationshipMatchesPreference === false
+  ) {
+    dealBreakerViolations.push('Relationship goals dealbreaker');
+  }
+  if (
+    viewerPreferences.dealBreakers.requireSharedInterests &&
+    sharedPreferredInterests.length === 0 &&
+    sharedInterests.length === 0
+  ) {
+    dealBreakerViolations.push('Shared interests dealbreaker');
+  }
+  if (viewerPreferences.dealBreakers.onlyVerifiedProfiles && !candidateProfile.profileVerified) {
+    dealBreakerViolations.push('Verified profiles only');
+  }
+  if (viewerPreferences.dealBreakers.enforceHeightRange && heightMatchesPreference === false) {
+    dealBreakerViolations.push('Height range dealbreaker');
+  }
+  if (viewerPreferences.dealBreakers.enforceBodyType && bodyTypeMatchesPreference === false) {
+    dealBreakerViolations.push('Body type dealbreaker');
+  }
+  if (
+    viewerPreferences.dealBreakers.requireCompletedProfiles &&
+    (candidateProfile.profileCompletionPercent || 0) < 60
+  ) {
+    dealBreakerViolations.push('Profile completion dealbreaker');
+  }
+
+  if (dealBreakerViolations.length > 0 || strictPreferenceViolations.length > 0) {
+    return {
+      isExcluded: true,
+      compatibilityScore: 0,
+      compatibilityReasons: [],
+      icebreakers: []
+    };
+  }
+
+  let score = 42;
+
+  if (sharedInterests.length > 0) {
+    const sharedInterestScore = Math.min(16, sharedInterests.length * 6);
+    score += sharedInterestScore;
+    addReason(`Shared interests: ${sharedInterests.slice(0, 2).join(' and ')}`, sharedInterestScore);
+  }
+
+  if (sharedPreferredInterests.length > 0) {
+    const preferredInterestScore = Math.min(12, sharedPreferredInterests.length * 4);
+    score += preferredInterestScore;
+    addReason(
+      `Matches your preferred interests: ${sharedPreferredInterests.slice(0, 2).join(' and ')}`,
+      preferredInterestScore
+    );
+  }
+
+  if (relationshipMatchesPreference === true) {
+    score += 12;
+    addReason(`Fits your relationship goals`, 12);
+  } else if (relationshipMatchesPreference === false) {
+    score -= viewerFlexibility.mode === 'open' ? 2 : 7;
+  } else if (
     currentProfile.relationshipGoals &&
     candidateProfile.relationshipGoals &&
     currentProfile.relationshipGoals === candidateProfile.relationshipGoals
   ) {
-    score += 18;
-    reasons.push(`Both of you are looking for ${candidateProfile.relationshipGoals}`);
+    score += 10;
+    addReason(`Both of you are looking for ${candidateProfile.relationshipGoals}`, 10);
+  }
+
+  if (genderMatchesPreference === true) {
+    score += 8;
+  } else if (genderMatchesPreference === false) {
+    score -= viewerFlexibility.mode === 'open' ? 1 : 5;
+  }
+
+  if (ageMatchesPreference === true) {
+    score += 10;
+    addReason(
+      `Within your preferred age range`,
+      10
+    );
+  } else if (ageMatchesPreference === false) {
+    score -= viewerFlexibility.mode === 'open' ? 2 : 6;
+  }
+
+  if (heightMatchesPreference === true) {
+    score += 4;
+  } else if (heightMatchesPreference === false) {
+    score -= viewerFlexibility.mode === 'strict' ? 4 : 2;
+  }
+
+  if (bodyTypeMatchesPreference === true) {
+    score += 5;
+  } else if (bodyTypeMatchesPreference === false) {
+    score -= viewerFlexibility.mode === 'strict' ? 4 : 1;
+  }
+
+  if (withinRadius === true) {
+    score += 8;
+    addReason(
+      distanceKm !== null
+        ? `Within ${distanceKm} km of you`
+        : `Close to your preferred location`,
+      8
+    );
+  } else if (withinRadius === false) {
+    score -= viewerFlexibility.mode === 'open' ? 2 : 7;
   }
 
   const currentCity = currentProfile.location?.city?.toLowerCase?.() || '';
@@ -394,36 +985,118 @@ const buildCompatibilitySuggestion = (currentProfile, candidateProfile) => {
   const candidateState = candidateProfile.location?.state?.toLowerCase?.() || '';
 
   if (currentCity && candidateCity && currentCity === candidateCity) {
-    score += 12;
-    reasons.push(`You are both in ${candidateProfile.location.city}`);
+    score += 6;
+    addReason(`You are both in ${candidateProfile.location.city}`, 6);
   } else if (currentState && candidateState && currentState === candidateState) {
-    score += 7;
-    reasons.push(`You are in the same region`);
+    score += 4;
+    addReason(`You are in the same region`, 4);
   }
 
   if (Number.isFinite(currentProfile.age) && Number.isFinite(candidateProfile.age)) {
     const ageGap = Math.abs(currentProfile.age - candidateProfile.age);
 
     if (ageGap <= 2) {
-      score += 10;
+      score += 5;
     } else if (ageGap <= 5) {
-      score += 7;
-    } else if (ageGap <= 8) {
-      score += 4;
+      score += 3;
     }
   }
 
   if (candidateProfile.profileVerified) {
-    score += 5;
+    score += 4;
+    addReason(`Verified profile`, 4);
   }
 
   if (candidateProfile.bio) {
-    score += 3;
+    score += 2;
   }
 
+  const currentCompatibilityAnswers = normalizeCompatibilityAnswers(
+    viewerPreferences.compatibilityAnswers
+  );
+  const candidateCompatibilityAnswers = normalizeCompatibilityAnswers(
+    candidatePreferenceSet.compatibilityAnswers
+  );
+  const matchedQuestionIds = COMPATIBILITY_QUESTION_IDS.filter((questionId) => {
+    const currentAnswer = currentCompatibilityAnswers[questionId];
+    const candidateAnswer = candidateCompatibilityAnswers[questionId];
+    return currentAnswer && candidateAnswer && currentAnswer === candidateAnswer;
+  });
+
+  if (matchedQuestionIds.length > 0) {
+    const compatibilityQuestionScore = Math.min(18, matchedQuestionIds.length * 6);
+    score += compatibilityQuestionScore;
+
+    if (matchedQuestionIds.length === 1) {
+      addReason(
+        `You align on ${COMPATIBILITY_QUESTION_LABELS[matchedQuestionIds[0]]}`,
+        compatibilityQuestionScore
+      );
+    } else {
+      addReason(
+        `You matched on ${matchedQuestionIds.length} compatibility questions`,
+        compatibilityQuestionScore
+      );
+    }
+  }
+
+  const learningProfile = normalizeLearningProfile(viewerPreferences.learningProfile);
+  const totalLearningSignals =
+    learningProfile.totalPositiveActions + learningProfile.totalNegativeActions;
+
+  if (viewerFlexibility.learnFromActivity && totalLearningSignals >= 2) {
+    let learningRawScore = 0;
+
+    candidateInterests.slice(0, 4).forEach((interest) => {
+      const signalKey = interest.toLowerCase();
+      learningRawScore += Number(learningProfile.positiveSignals.interests[signalKey] || 0);
+      learningRawScore -= Number(learningProfile.negativeSignals.interests[signalKey] || 0);
+    });
+
+    if (candidateProfile.relationshipGoals) {
+      const signalKey = candidateProfile.relationshipGoals.toLowerCase();
+      learningRawScore +=
+        Number(learningProfile.positiveSignals.relationshipGoals[signalKey] || 0) * 1.3;
+      learningRawScore -=
+        Number(learningProfile.negativeSignals.relationshipGoals[signalKey] || 0) * 1.1;
+    }
+
+    if (candidateProfile.bodyType) {
+      const signalKey = candidateProfile.bodyType.toLowerCase();
+      learningRawScore += Number(learningProfile.positiveSignals.bodyTypes[signalKey] || 0);
+      learningRawScore -= Number(learningProfile.negativeSignals.bodyTypes[signalKey] || 0);
+    }
+
+    const ageBand = buildAgeBand(candidateProfile.age);
+    if (ageBand) {
+      const signalKey = ageBand.toLowerCase();
+      learningRawScore += Number(learningProfile.positiveSignals.ageBands[signalKey] || 0) * 1.2;
+      learningRawScore -= Number(learningProfile.negativeSignals.ageBands[signalKey] || 0);
+    }
+
+    if (candidateProfile.profileVerified) {
+      learningRawScore += Number(learningProfile.positiveSignals.verification.verified || 0);
+      learningRawScore -= Number(learningProfile.negativeSignals.verification.verified || 0);
+    }
+
+    const learningScore = Math.max(-12, Math.min(14, Math.round(learningRawScore * 2)));
+    score += learningScore;
+
+    if (learningScore >= 5) {
+      addReason(`Aligned with the profiles you engage with most`, learningScore);
+    }
+  }
+
+  const compatibilityReasons = reasonCandidates
+    .sort((leftReason, rightReason) => rightReason.weight - leftReason.weight)
+    .map((entry) => entry.text)
+    .filter((text, index, list) => list.indexOf(text) === index)
+    .slice(0, 4);
+
   return {
-    compatibilityScore: Math.max(52, Math.min(99, score)),
-    compatibilityReasons: reasons.slice(0, 3),
+    isExcluded: false,
+    compatibilityScore: Math.max(45, Math.min(99, Math.round(score))),
+    compatibilityReasons,
     icebreakers: buildIcebreakerSuggestions(candidateProfile, sharedInterests)
   };
 };
@@ -847,21 +1520,26 @@ router.get('/discovery', async (req, res) => {
 
     const currentProfileResult = await db.query(
       `SELECT dp.*,
+              row_to_json(up) as preferences,
               (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
                FROM profile_photos
                WHERE user_id = dp.user_id) as photos
        FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
        WHERE dp.user_id = $1
        LIMIT 1`,
       [userId]
     );
     const currentProfile = normalizeProfileRow(currentProfileResult.rows[0] || null);
+    const currentPreferences = normalizePreferenceRow(currentProfileResult.rows[0]?.preferences);
 
     const result = await db.query(
       `SELECT dp.*,
+              row_to_json(up) as preferences,
               (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
                FROM profile_photos WHERE user_id = dp.user_id) as photos
        FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
        WHERE dp.user_id != $1
          AND dp.is_active = true
          AND dp.user_id NOT IN (
@@ -879,13 +1557,23 @@ router.get('/discovery', async (req, res) => {
     const profiles = result.rows
       .map((profileRow) => {
         const normalizedProfile = normalizeProfileRow(profileRow);
-        const compatibility = buildCompatibilitySuggestion(currentProfile, normalizedProfile);
+        const compatibility = buildCompatibilitySuggestion({
+          currentProfile,
+          currentPreferences,
+          candidateProfile: normalizedProfile,
+          candidatePreferences: profileRow.preferences
+        });
+
+        if (compatibility.isExcluded) {
+          return null;
+        }
 
         return {
           ...normalizedProfile,
           ...compatibility
         };
       })
+      .filter(Boolean)
       .sort((leftProfile, rightProfile) => rightProfile.compatibilityScore - leftProfile.compatibilityScore)
       .slice(0, limit);
 
@@ -926,12 +1614,20 @@ router.post('/interactions/like', async (req, res) => {
     }
 
     // Record the like
-    await db.query(
+    const likeInsertResult = await db.query(
       `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
        VALUES ($1, $2, 'like')
-       ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING`,
+       ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING
+       RETURNING id`,
       [fromUserId, userId]
     );
+    if (likeInsertResult.rowCount > 0) {
+      await persistLearningFeedback({
+        userId: fromUserId,
+        targetUserId: userId,
+        interactionType: 'like'
+      });
+    }
 
     spamFraudService.trackUserActivity({
       userId: fromUserId,
@@ -1033,12 +1729,20 @@ router.post('/interactions/pass', async (req, res) => {
       return res.status(400).json({ error: 'toUserId or targetUserId required' });
     }
 
-    await db.query(
+    const passInsertResult = await db.query(
       `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
        VALUES ($1, $2, 'pass')
-       ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING`,
+       ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING
+       RETURNING id`,
       [fromUserId, userId]
     );
+    if (passInsertResult.rowCount > 0) {
+      await persistLearningFeedback({
+        userId: fromUserId,
+        targetUserId: userId,
+        interactionType: 'pass'
+      });
+    }
 
     res.json({ message: 'Profile passed' });
   } catch (err) {
@@ -1753,39 +2457,7 @@ router.get('/preferences', async (req, res) => {
       [userId]
     );
 
-    if (result.rows.length === 0) {
-      // Return default preferences
-      return res.json({
-        ageRangeMin: 18,
-        ageRangeMax: 50,
-        locationRadius: 50,
-        genderPreferences: [],
-        relationshipGoals: [],
-        interests: [],
-        heightRangeMin: null,
-        heightRangeMax: null,
-        bodyTypes: [],
-        showMyProfile: true,
-        allowMessages: true,
-        notificationsEnabled: true
-      });
-    }
-
-    const row = result.rows[0];
-    res.json({
-      ageRangeMin: row.age_range_min ?? 18,
-      ageRangeMax: row.age_range_max ?? 50,
-      locationRadius: row.location_radius ?? 50,
-      genderPreferences: row.gender_preferences || [],
-      relationshipGoals: row.relationship_goals || [],
-      interests: row.interests || [],
-      heightRangeMin: row.height_range_min,
-      heightRangeMax: row.height_range_max,
-      bodyTypes: row.body_types || [],
-      showMyProfile: row.show_my_profile ?? true,
-      allowMessages: row.allow_messages ?? true,
-      notificationsEnabled: row.notifications_enabled ?? true
-    });
+    res.json(formatPreferenceResponse(result.rows[0] || null));
   } catch (err) {
     console.error('Get preferences error:', err);
     res.status(500).json({ error: 'Failed to get preferences' });
@@ -1808,17 +2480,82 @@ router.put('/preferences', async (req, res) => {
       bodyTypes,
       showMyProfile,
       allowMessages,
-      notificationsEnabled
+      notificationsEnabled,
+      dealBreakers,
+      preferenceFlexibility,
+      compatibilityAnswers,
+      learningProfile
     } = req.body;
+    const hasOwnField = (fieldName) => Object.prototype.hasOwnProperty.call(req.body || {}, fieldName);
+
+    const existingPreferenceResult = await db.query(
+      `SELECT *
+       FROM user_preferences
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const existingPreferences = normalizePreferenceRow(existingPreferenceResult.rows[0] || null);
+    const nextPreferences = {
+      ageRangeMin: hasOwnField('ageRangeMin')
+        ? normalizeInteger(ageRangeMin) ?? 18
+        : existingPreferences.ageRangeMin,
+      ageRangeMax: hasOwnField('ageRangeMax')
+        ? normalizeInteger(ageRangeMax) ?? 50
+        : existingPreferences.ageRangeMax,
+      locationRadius: hasOwnField('locationRadius')
+        ? normalizeInteger(locationRadius) ?? 50
+        : existingPreferences.locationRadius,
+      genderPreferences: hasOwnField('genderPreferences')
+        ? normalizeStringArray(genderPreferences)
+        : existingPreferences.genderPreferences,
+      relationshipGoals: hasOwnField('relationshipGoals')
+        ? normalizeStringArray(relationshipGoals)
+        : existingPreferences.relationshipGoals,
+      interests: hasOwnField('interests')
+        ? normalizeInterestList(interests)
+        : existingPreferences.interests,
+      heightRangeMin: hasOwnField('heightRangeMin')
+        ? normalizeInteger(heightRangeMin)
+        : existingPreferences.heightRangeMin,
+      heightRangeMax: hasOwnField('heightRangeMax')
+        ? normalizeInteger(heightRangeMax)
+        : existingPreferences.heightRangeMax,
+      bodyTypes: hasOwnField('bodyTypes')
+        ? normalizeStringArray(bodyTypes)
+        : existingPreferences.bodyTypes,
+      showMyProfile: hasOwnField('showMyProfile')
+        ? normalizeBoolean(showMyProfile)
+        : existingPreferences.showMyProfile,
+      allowMessages: hasOwnField('allowMessages')
+        ? normalizeBoolean(allowMessages)
+        : existingPreferences.allowMessages,
+      notificationsEnabled: hasOwnField('notificationsEnabled')
+        ? normalizeBoolean(notificationsEnabled)
+        : existingPreferences.notificationsEnabled,
+      dealBreakers: hasOwnField('dealBreakers')
+        ? normalizeDealBreakers(dealBreakers)
+        : existingPreferences.dealBreakers,
+      preferenceFlexibility: hasOwnField('preferenceFlexibility')
+        ? normalizePreferenceFlexibility(preferenceFlexibility)
+        : existingPreferences.preferenceFlexibility,
+      compatibilityAnswers: hasOwnField('compatibilityAnswers')
+        ? normalizeCompatibilityAnswers(compatibilityAnswers)
+        : existingPreferences.compatibilityAnswers,
+      learningProfile: hasOwnField('learningProfile')
+        ? normalizeLearningProfile(learningProfile)
+        : existingPreferences.learningProfile
+    };
 
     const result = await db.query(
       `INSERT INTO user_preferences (
          user_id, age_range_min, age_range_max, location_radius,
          gender_preferences, relationship_goals, interests,
          height_range_min, height_range_max, body_types,
-         show_my_profile, allow_messages, notifications_enabled
+         show_my_profile, allow_messages, notifications_enabled,
+         deal_breakers, preference_flexibility, compatibility_answers, learning_profile
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb)
        ON CONFLICT (user_id) DO UPDATE
        SET age_range_min = EXCLUDED.age_range_min,
            age_range_max = EXCLUDED.age_range_max,
@@ -1832,43 +2569,37 @@ router.put('/preferences', async (req, res) => {
            show_my_profile = EXCLUDED.show_my_profile,
            allow_messages = EXCLUDED.allow_messages,
            notifications_enabled = EXCLUDED.notifications_enabled,
+           deal_breakers = EXCLUDED.deal_breakers,
+           preference_flexibility = EXCLUDED.preference_flexibility,
+           compatibility_answers = EXCLUDED.compatibility_answers,
+           learning_profile = EXCLUDED.learning_profile,
            updated_at = CURRENT_TIMESTAMP
        RETURNING *`,
       [
         userId,
-        normalizeInteger(ageRangeMin) ?? 18,
-        normalizeInteger(ageRangeMax) ?? 50,
-        normalizeInteger(locationRadius) ?? 50,
-        Array.isArray(genderPreferences) ? genderPreferences : [],
-        Array.isArray(relationshipGoals) ? relationshipGoals : [],
-        Array.isArray(interests) ? interests : [],
-        normalizeInteger(heightRangeMin),
-        normalizeInteger(heightRangeMax),
-        Array.isArray(bodyTypes) ? bodyTypes : [],
-        normalizeBoolean(showMyProfile),
-        normalizeBoolean(allowMessages),
-        normalizeBoolean(notificationsEnabled)
+        nextPreferences.ageRangeMin,
+        nextPreferences.ageRangeMax,
+        nextPreferences.locationRadius,
+        nextPreferences.genderPreferences,
+        nextPreferences.relationshipGoals,
+        nextPreferences.interests,
+        nextPreferences.heightRangeMin,
+        nextPreferences.heightRangeMax,
+        nextPreferences.bodyTypes,
+        nextPreferences.showMyProfile,
+        nextPreferences.allowMessages,
+        nextPreferences.notificationsEnabled,
+        JSON.stringify(nextPreferences.dealBreakers),
+        JSON.stringify(nextPreferences.preferenceFlexibility),
+        JSON.stringify(nextPreferences.compatibilityAnswers),
+        JSON.stringify(nextPreferences.learningProfile)
       ]
     );
 
 
-    const row = result.rows[0];
     res.json({
       message: 'Preferences updated',
-      preferences: {
-        ageRangeMin: row.age_range_min,
-        ageRangeMax: row.age_range_max,
-        locationRadius: row.location_radius,
-        genderPreferences: row.gender_preferences,
-        relationshipGoals: row.relationship_goals,
-        interests: row.interests,
-        heightRangeMin: row.height_range_min,
-        heightRangeMax: row.height_range_max,
-        bodyTypes: row.body_types,
-        showMyProfile: row.show_my_profile,
-        allowMessages: row.allow_messages,
-        notificationsEnabled: row.notifications_enabled
-      }
+      preferences: formatPreferenceResponse(result.rows[0])
     });
   } catch (err) {
     console.error('Update preferences error:', err);
@@ -1900,10 +2631,20 @@ router.post('/interactions/superlike', async (req, res) => {
       return res.status(429).json({ error: 'Daily superlike limit reached', limit: superlikeLimit, used: superlikesUsed, remaining: 0 });
     }
 
-    await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type) VALUES ($1, $2, 'superlike') ON CONFLICT DO NOTHING`,
+    const superlikeInsertResult = await db.query(
+      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
+       VALUES ($1, $2, 'superlike')
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
       [fromUserId, userId]
     );
+    if (superlikeInsertResult.rowCount > 0) {
+      await persistLearningFeedback({
+        userId: fromUserId,
+        targetUserId: userId,
+        interactionType: 'superlike'
+      });
+    }
 
     await db.query(
       `INSERT INTO user_analytics (user_id, activity_date, superlikes_used)
@@ -2010,10 +2751,20 @@ router.post('/interactions/like', async (req, res) => {
       return res.status(429).json({ error: 'Daily like limit reached', limit: likeLimit, used: likesUsed, remaining: 0 });
     }
 
-    await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type) VALUES ($1, $2, 'like') ON CONFLICT DO NOTHING`,
+    const likeInsertResult = await db.query(
+      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
+       VALUES ($1, $2, 'like')
+       ON CONFLICT DO NOTHING
+       RETURNING id`,
       [fromUserId, userId]
     );
+    if (likeInsertResult.rowCount > 0) {
+      await persistLearningFeedback({
+        userId: fromUserId,
+        targetUserId: userId,
+        interactionType: 'like'
+      });
+    }
 
     await db.query(
       `INSERT INTO user_analytics (user_id, activity_date, likes_used)
@@ -2070,7 +2821,8 @@ router.get('/top-picks', async (req, res) => {
 
     // Get current user's profile and preferences
     const currentProfileResult = await db.query(
-      `SELECT dp.*, up.gender_preferences, up.age_range_min, up.age_range_max, up.location_radius,
+      `SELECT dp.*,
+              row_to_json(up) as preferences,
               (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
                FROM profile_photos WHERE user_id = dp.user_id) as photos
        FROM dating_profiles dp
@@ -2080,6 +2832,7 @@ router.get('/top-picks', async (req, res) => {
       [userId]
     );
     const currentProfile = normalizeProfileRow(currentProfileResult.rows[0] || null);
+    const currentPreferences = normalizePreferenceRow(currentProfileResult.rows[0]?.preferences);
 
     if (!currentProfile) {
       return res.status(404).json({ error: 'Profile not found. Complete your profile first.' });
@@ -2088,9 +2841,11 @@ router.get('/top-picks', async (req, res) => {
     // Get candidates excluding already interacted users
     const result = await db.query(
       `SELECT dp.*,
+              row_to_json(up) as preferences,
               (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
                FROM profile_photos WHERE user_id = dp.user_id) as photos
        FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
        WHERE dp.user_id != $1
          AND dp.is_active = true
          AND dp.user_id NOT IN (
@@ -2109,7 +2864,16 @@ router.get('/top-picks', async (req, res) => {
     const scoredProfiles = result.rows
       .map((profileRow) => {
         const normalizedProfile = normalizeProfileRow(profileRow);
-        const compatibility = buildCompatibilitySuggestion(currentProfile, normalizedProfile);
+        const compatibility = buildCompatibilitySuggestion({
+          currentProfile,
+          currentPreferences,
+          candidateProfile: normalizedProfile,
+          candidatePreferences: profileRow.preferences
+        });
+
+        if (compatibility.isExcluded) {
+          return null;
+        }
 
         return {
           ...normalizedProfile,
@@ -2117,6 +2881,7 @@ router.get('/top-picks', async (req, res) => {
           topPickScore: compatibility.compatibilityScore
         };
       })
+      .filter(Boolean)
       .sort((leftProfile, rightProfile) => rightProfile.topPickScore - leftProfile.topPickScore)
       .slice(0, limit);
 
@@ -2527,6 +3292,742 @@ router.get('/notification-preferences', async (req, res) => {
   } catch (err) {
     console.error('Get notification preferences error:', err);
     res.status(500).json({ error: 'Failed to get notification preferences' });
+  }
+});
+
+// ========== PHASE 3: SAFETY & PREMIUM FEATURES ==========
+
+// 40. GET PHOTO VERIFICATION POSE CHALLENGE
+const VERIFICATION_POSES = [
+  'thumbs_up', 'peace_sign', 'wave', 'hand_on_chin', 'salute',
+  'heart_hands', 'shaka', 'point_up', 'fist_bump', 'ok_sign'
+];
+
+router.get('/verify-photo/challenge', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const pose = VERIFICATION_POSES[Math.floor(Math.random() * VERIFICATION_POSES.length)];
+
+    // Store the pose challenge for this user
+    await db.query(
+      `UPDATE dating_profiles
+       SET verification_pose = $1,
+           verification_status = 'pending',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2`,
+      [pose, userId]
+    );
+
+    res.json({
+      pose,
+      instructions: `Please take a selfie while making a ${pose.replace(/_/g, ' ')} gesture. Make sure your face is clearly visible.`,
+      expiresIn: 300 // 5 minutes
+    });
+  } catch (err) {
+    console.error('Get verification challenge error:', err);
+    res.status(500).json({ error: 'Failed to generate verification challenge' });
+  }
+});
+
+// 41. SUBMIT PHOTO VERIFICATION
+router.post('/profiles/me/verify-photo', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { photoBase64 } = req.body;
+    const requestMetadata = getRequestMetadata(req);
+
+    if (!photoBase64) {
+      return res.status(400).json({ error: 'Verification photo is required' });
+    }
+
+    // Get current challenge pose
+    const profileResult = await db.query(
+      `SELECT verification_pose, verification_status
+       FROM dating_profiles
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    const profile = profileResult.rows[0];
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    if (profile.verification_status === 'approved') {
+      return res.status(400).json({ error: 'Profile is already verified' });
+    }
+
+    // In production, this would call an AI/ML service to verify the pose matches
+    // For now, we simulate verification with a random 90% pass rate
+    const verificationPassed = Math.random() < 0.9;
+
+    if (!verificationPassed) {
+      await db.query(
+        `UPDATE dating_profiles
+         SET verification_status = 'rejected',
+             verification_pose = NULL,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $1`,
+        [userId]
+      );
+      return res.status(422).json({ error: 'Photo verification failed. Please try again with better lighting and a clearer view of your face.' });
+    }
+
+    // Store verification photo and mark as pending admin review or auto-approve
+    await db.query(
+      `UPDATE dating_profiles
+       SET verification_photo_url = $1,
+           verification_status = 'approved',
+           profile_verified = true,
+           verified_at = CURRENT_TIMESTAMP,
+           verification_pose = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2
+       RETURNING *`,
+      [photoBase64, userId]
+    );
+
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'photo_verified',
+      analyticsUpdates: { verifications_completed: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent
+    });
+
+    await userNotificationService.createNotification(userId, {
+      type: 'verification_complete',
+      title: 'Photo Verified!',
+      body: 'Your profile photo has been verified. You now have a verified badge.',
+      metadata: { verificationType: 'photo', status: 'approved' }
+    });
+
+    res.json({
+      message: 'Photo verification successful',
+      verified: true,
+      verificationStatus: 'approved'
+    });
+  } catch (err) {
+    console.error('Photo verification error:', err);
+    res.status(500).json({ error: 'Failed to process photo verification' });
+  }
+});
+
+// 42. GET VERIFICATION STATUS
+router.get('/profiles/me/verification-status', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT verification_status, verification_photo_url, verified_at, profile_verified
+       FROM dating_profiles
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      verificationStatus: row.verification_status,
+      profileVerified: row.profile_verified,
+      verifiedAt: row.verified_at,
+      hasVerificationPhoto: Boolean(row.verification_photo_url)
+    });
+  } catch (err) {
+    console.error('Get verification status error:', err);
+    res.status(500).json({ error: 'Failed to get verification status' });
+  }
+});
+
+// 43. GET SUBSCRIPTION PLANS
+router.get('/subscription/plans', async (req, res) => {
+  try {
+    const plans = [
+      {
+        id: 'free',
+        name: 'Free',
+        price: 0,
+        currency: 'USD',
+        interval: 'month',
+        features: [
+          '50 likes per day',
+          '1 superlike per day',
+          '3 rewinds per day',
+          'Basic matching'
+        ],
+        limits: {
+          likesPerDay: 50,
+          superlikesPerDay: 1,
+          rewindsPerDay: 3,
+          boostsPerMonth: 0,
+          seeWhoLikedYou: false
+        }
+      },
+      {
+        id: 'premium',
+        name: 'Premium',
+        price: 19.99,
+        currency: 'USD',
+        interval: 'month',
+        features: [
+          'Unlimited likes',
+          '5 superlikes per day',
+          'Unlimited rewinds',
+          '1 boost per month',
+          'See who liked you',
+          'Read receipts',
+          'Advanced filters'
+        ],
+        limits: {
+          likesPerDay: Infinity,
+          superlikesPerDay: 5,
+          rewindsPerDay: Infinity,
+          boostsPerMonth: 1,
+          seeWhoLikedYou: true
+        }
+      },
+      {
+        id: 'gold',
+        name: 'Gold',
+        price: 29.99,
+        currency: 'USD',
+        interval: 'month',
+        features: [
+          'Everything in Premium',
+          '5 boosts per month',
+          'Priority in discovery',
+          'Message requests',
+          'Profile highlights',
+          'Incognito mode'
+        ],
+        limits: {
+          likesPerDay: Infinity,
+          superlikesPerDay: 10,
+          rewindsPerDay: Infinity,
+          boostsPerMonth: 5,
+          seeWhoLikedYou: true,
+          messageRequests: true,
+          incognitoMode: true
+        }
+      }
+    ];
+
+    res.json({ plans });
+  } catch (err) {
+    console.error('Get plans error:', err);
+    res.status(500).json({ error: 'Failed to get subscription plans' });
+  }
+});
+
+// 44. GET MY SUBSCRIPTION
+router.get('/subscription/me', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      // Return free tier as default
+      return res.json({
+        plan: 'free',
+        status: 'active',
+        isPremium: false,
+        isGold: false,
+        features: {
+          unlimitedLikes: false,
+          unlimitedRewinds: false,
+          seeWhoLikedYou: false,
+          boostsRemaining: 0,
+          messageRequests: false,
+          incognitoMode: false
+        }
+      });
+    }
+
+    const sub = result.rows[0];
+    const isPremium = sub.plan === 'premium' && sub.status === 'active' && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+    const isGold = sub.plan === 'gold' && sub.status === 'active' && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+    const isActive = isPremium || isGold;
+
+    res.json({
+      plan: sub.plan,
+      status: isActive ? sub.status : 'expired',
+      startedAt: sub.started_at,
+      expiresAt: sub.expires_at,
+      isPremium: isPremium,
+      isGold: isGold,
+      features: {
+        unlimitedLikes: isActive,
+        unlimitedRewinds: isActive,
+        seeWhoLikedYou: isActive,
+        boostsRemaining: isGold ? 5 : (isPremium ? 1 : 0),
+        messageRequests: isGold,
+        incognitoMode: isGold
+      }
+    });
+  } catch (err) {
+    console.error('Get subscription error:', err);
+    res.status(500).json({ error: 'Failed to get subscription' });
+  }
+});
+
+// 45. CREATE SUBSCRIPTION (simulate - no Stripe)
+router.post('/subscription/create', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { plan } = req.body;
+
+    if (!['premium', 'gold'].includes(plan)) {
+      return res.status(400).json({ error: 'Invalid plan. Choose premium or gold.' });
+    }
+
+    // Cancel any existing subscription first
+    await db.query(
+      `UPDATE subscriptions
+       SET status = 'cancelled',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1 AND status = 'active'`,
+      [userId]
+    );
+
+    const startedAt = new Date();
+    const expiresAt = new Date();
+    expiresAt.setMonth(expiresAt.getMonth() + 1);
+
+    const result = await db.query(
+      `INSERT INTO subscriptions (
+         user_id, plan, status, started_at, expires_at, payment_method
+       )
+       VALUES ($1, $2, 'active', $3, $4, 'manual')
+       ON CONFLICT (user_id) DO UPDATE
+       SET plan = EXCLUDED.plan,
+           status = EXCLUDED.status,
+           started_at = EXCLUDED.started_at,
+           expires_at = EXCLUDED.expires_at,
+           payment_method = EXCLUDED.payment_method,
+           updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [userId, plan, startedAt, expiresAt]
+    );
+
+    await userNotificationService.createNotification(userId, {
+      type: 'subscription_updated',
+      title: `${plan.charAt(0).toUpperCase() + plan.slice(1)} Activated!`,
+      body: `Your ${plan} subscription is now active. Enjoy the premium features!`,
+      metadata: { plan, status: 'active', expiresAt: expiresAt.toISOString() }
+    });
+
+    spamFraudService.updateUserAnalytics(userId, { premium_conversions: 1 });
+    spamFraudService.refreshSystemMetrics();
+
+    res.json({
+      message: 'Subscription created',
+      subscription: {
+        plan,
+        status: 'active',
+        startedAt: startedAt.toISOString(),
+        expiresAt: expiresAt.toISOString()
+      }
+    });
+  } catch (err) {
+    console.error('Create subscription error:', err);
+    res.status(500).json({ error: 'Failed to create subscription' });
+  }
+});
+
+// 46. CANCEL SUBSCRIPTION
+router.delete('/subscription/cancel', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `UPDATE subscriptions
+       SET status = 'cancelled',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1 AND status = 'active'
+       RETURNING *`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No active subscription found' });
+    }
+
+    await userNotificationService.createNotification(userId, {
+      type: 'subscription_cancelled',
+      title: 'Subscription Cancelled',
+      body: 'Your premium subscription has been cancelled. You can resubscribe anytime.',
+      metadata: { previousPlan: result.rows[0].plan }
+    });
+
+    res.json({ message: 'Subscription cancelled successfully' });
+  } catch (err) {
+    console.error('Cancel subscription error:', err);
+    res.status(500).json({ error: 'Failed to cancel subscription' });
+  }
+});
+
+// 47. BOOST PROFILE
+router.post('/profiles/me/boost', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const requestMetadata = getRequestMetadata(req);
+
+    // Check subscription for boost availability
+    const subResult = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [userId]
+    );
+
+    const sub = subResult.rows[0];
+    const isPremium = sub && sub.plan === 'premium' && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+    const isGold = sub && sub.plan === 'gold' && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+
+    if (!isPremium && !isGold) {
+      return res.status(403).json({ error: 'Boost requires a Premium or Gold subscription' });
+    }
+
+    // Check if already boosted in last 30 minutes
+    const boostResult = await db.query(
+      `SELECT * FROM user_analytics
+       WHERE user_id = $1 AND activity_date = $2
+       LIMIT 1`,
+      [userId, new Date().toISOString().split('T')[0]]
+    );
+
+    const boostsUsedToday = boostResult.rows[0]?.boosts_used || 0;
+    const dailyBoostLimit = isGold ? 5 : (isPremium ? 1 : 0);
+
+    if (boostsUsedToday >= dailyBoostLimit) {
+      return res.status(429).json({
+        error: 'Daily boost limit reached',
+        limit: dailyBoostLimit,
+        used: boostsUsedToday
+      });
+    }
+
+    // Record boost
+    await db.query(
+      `INSERT INTO user_analytics (user_id, activity_date, boosts_used)
+       VALUES ($1, $2, 1)
+       ON CONFLICT (user_id, activity_date) DO UPDATE
+       SET boosts_used = user_analytics.boosts_used + 1`,
+      [userId, new Date().toISOString().split('T')[0]]
+    );
+
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'profile_boosted',
+      analyticsUpdates: { boosts_used: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent
+    });
+
+    res.json({
+      message: 'Profile boosted!',
+      boostedUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      boostsRemaining: Math.max(0, dailyBoostLimit - boostsUsedToday - 1)
+    });
+  } catch (err) {
+    console.error('Boost error:', err);
+    res.status(500).json({ error: 'Failed to boost profile' });
+  }
+});
+
+// 48. GET WHO LIKED ME
+router.get('/who-liked-me', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Check subscription
+    const subResult = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [userId]
+    );
+
+    const sub = subResult.rows[0];
+    const isPremium = sub && ['premium', 'gold'].includes(sub.plan) && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+
+    const result = await db.query(
+      `SELECT i.*, dp.first_name, dp.age, dp.location_city,
+              (SELECT photo_url FROM profile_photos WHERE user_id = i.from_user_id LIMIT 1) as photo_url
+       FROM interactions i
+       JOIN dating_profiles dp ON i.from_user_id = dp.user_id
+       WHERE i.to_user_id = $1 AND i.interaction_type IN ('like', 'superlike')
+         AND i.from_user_id NOT IN (
+           SELECT CASE WHEN user_id_1 = $1 THEN user_id_2 ELSE user_id_1 END
+           FROM matches WHERE (user_id_1 = $1 OR user_id_2 = $1) AND status = 'active'
+         )
+       ORDER BY i.created_at DESC
+       LIMIT 50`,
+      [userId]
+    );
+
+    const likers = result.rows.map(row => ({
+      userId: row.from_user_id,
+      firstName: row.first_name,
+      age: row.age,
+      location: { city: row.location_city },
+      photoUrl: row.photo_url,
+      interactionType: row.interaction_type,
+      likedAt: row.created_at,
+      // For free users, blur the photo and name
+      isRevealed: isPremium
+    }));
+
+    res.json({
+      likers,
+      isPremium,
+      totalCount: likers.length,
+      blurredCount: isPremium ? 0 : likers.length
+    });
+  } catch (err) {
+    console.error('Get who liked me error:', err);
+    res.status(500).json({ error: 'Failed to get likes' });
+  }
+});
+
+// 49. SEND MESSAGE REQUEST (to non-match)
+router.post('/message-requests', async (req, res) => {
+  try {
+    const fromUserId = req.user.id;
+    const { toUserId, message } = req.body;
+    const requestMetadata = getRequestMetadata(req);
+
+    if (!toUserId || !message || !message.trim()) {
+      return res.status(400).json({ error: 'toUserId and message are required' });
+    }
+
+    if (fromUserId === toUserId) {
+      return res.status(400).json({ error: 'Cannot send message request to yourself' });
+    }
+
+    const trimmedMessage = message.trim();
+    if (trimmedMessage.length < 10 || trimmedMessage.length > 500) {
+      return res.status(400).json({ error: 'Message must be between 10 and 500 characters' });
+    }
+
+    // Check if already matched
+    const matchCheck = await db.query(
+      `SELECT * FROM matches
+       WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)
+       AND status = 'active'
+       LIMIT 1`,
+      [fromUserId, toUserId]
+    );
+
+    if (matchCheck.rows.length > 0) {
+      return res.status(400).json({ error: 'You are already matched with this user' });
+    }
+
+    // Check Gold subscription for message requests
+    const subResult = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [fromUserId]
+    );
+
+    const sub = subResult.rows[0];
+    const isGold = sub && sub.plan === 'gold' && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+
+    if (!isGold) {
+      return res.status(403).json({ error: 'Message requests require a Gold subscription' });
+    }
+
+    // Check for existing pending request
+    const existingResult = await db.query(
+      `SELECT * FROM message_requests
+       WHERE from_user_id = $1 AND to_user_id = $2 AND status = 'pending'
+       LIMIT 1`,
+      [fromUserId, toUserId]
+    );
+
+    if (existingResult.rows.length > 0) {
+      return res.status(409).json({ error: 'A pending message request already exists' });
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const result = await db.query(
+      `INSERT INTO message_requests (from_user_id, to_user_id, message, status, expires_at)
+       VALUES ($1, $2, $3, 'pending', $4)
+       RETURNING *`,
+      [fromUserId, toUserId, trimmedMessage, expiresAt]
+    );
+
+    const fromProfile = await db.query(
+      `SELECT first_name FROM dating_profiles WHERE user_id = $1 LIMIT 1`,
+      [fromUserId]
+    );
+    const fromName = fromProfile.rows[0]?.first_name || 'Someone';
+
+    await userNotificationService.createNotification(toUserId, {
+      type: 'message_request',
+      title: `Message request from ${fromName}`,
+      body: trimmedMessage.length > 90 ? `${trimmedMessage.slice(0, 87)}...` : trimmedMessage,
+      metadata: {
+        requestId: result.rows[0].id,
+        fromUserId,
+        fromName
+      }
+    });
+
+    spamFraudService.trackUserActivity({
+      userId: fromUserId,
+      action: 'message_request_sent',
+      analyticsUpdates: { message_requests_sent: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true
+    });
+
+    res.json({
+      message: 'Message request sent',
+      request: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Send message request error:', err);
+    res.status(500).json({ error: 'Failed to send message request' });
+  }
+});
+
+// 50. GET INCOMING MESSAGE REQUESTS
+router.get('/message-requests', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT mr.*,
+              dp.first_name, dp.age, dp.location_city,
+              (SELECT photo_url FROM profile_photos WHERE user_id = mr.from_user_id LIMIT 1) as photo_url
+       FROM message_requests mr
+       JOIN dating_profiles dp ON dp.user_id = mr.from_user_id
+       WHERE mr.to_user_id = $1 AND mr.status = 'pending'
+       ORDER BY mr.created_at DESC`,
+      [userId]
+    );
+
+    res.json({
+      requests: result.rows.map(row => ({
+        id: row.id,
+        fromUserId: row.from_user_id,
+        firstName: row.first_name,
+        age: row.age,
+        location: { city: row.location_city },
+        photoUrl: row.photo_url,
+        message: row.message,
+        status: row.status,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at
+      }))
+    });
+  } catch (err) {
+    console.error('Get message requests error:', err);
+    res.status(500).json({ error: 'Failed to get message requests' });
+  }
+});
+
+// 51. ACCEPT MESSAGE REQUEST
+router.post('/message-requests/:requestId/accept', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { requestId } = req.params;
+
+    const requestResult = await db.query(
+      `SELECT * FROM message_requests WHERE id = $1 AND to_user_id = $2 AND status = 'pending'`,
+      [requestId, userId]
+    );
+
+    if (requestResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Message request not found' });
+    }
+
+    const request = requestResult.rows[0];
+
+    // Update request status
+    await db.query(
+      `UPDATE message_requests SET status = 'accepted', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [requestId]
+    );
+
+    // Create a match
+    const fromUserId = request.from_user_id;
+    const matchResult = await db.query(
+      `INSERT INTO matches (user_id_1, user_id_2) VALUES (LEAST($1, $2), GREATEST($1, $2)) ON CONFLICT DO NOTHING RETURNING *`,
+      [fromUserId, userId]
+    );
+    const persistedMatch = matchResult.rows[0] || (await db.query(
+      `SELECT * FROM matches WHERE user_id_1 = LEAST($1, $2) AND user_id_2 = GREATEST($1, $2) LIMIT 1`,
+      [fromUserId, userId]
+    )).rows[0];
+
+    // Notify both users
+    await Promise.all([
+      userNotificationService.createNotification(userId, {
+        type: 'message_request_accepted',
+        title: 'Message request accepted',
+        body: 'You can now chat with this user.',
+        metadata: { matchId: persistedMatch.id }
+      }),
+      userNotificationService.createNotification(fromUserId, {
+        type: 'message_request_accepted',
+        title: 'Your message request was accepted!',
+        body: 'Start the conversation now.',
+        metadata: { matchId: persistedMatch.id }
+      })
+    ]);
+
+    if (typeof req.emitToUser === 'function') {
+      [fromUserId, userId].forEach((pid) => {
+        req.emitToUser(pid, 'new_match', {
+          match: persistedMatch,
+          user: { id: fromUserId },
+          matchedUserId: pid === fromUserId ? userId : fromUserId,
+          createdAt: new Date().toISOString(),
+          fromMessageRequest: true
+        });
+      });
+    }
+
+    res.json({
+      message: 'Message request accepted',
+      match: persistedMatch
+    });
+  } catch (err) {
+    console.error('Accept message request error:', err);
+    res.status(500).json({ error: 'Failed to accept message request' });
+  }
+});
+
+// 52. DECLINE MESSAGE REQUEST
+router.post('/message-requests/:requestId/decline', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { requestId } = req.params;
+
+    const result = await db.query(
+      `UPDATE message_requests
+       SET status = 'declined',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND to_user_id = $2 AND status = 'pending'
+       RETURNING *`,
+      [requestId, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Message request not found' });
+    }
+
+    res.json({ message: 'Message request declined' });
+  } catch (err) {
+    console.error('Decline message request error:', err);
+    res.status(500).json({ error: 'Failed to decline message request' });
   }
 });
 

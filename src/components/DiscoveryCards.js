@@ -63,6 +63,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [remainingSuperlikes, setRemainingSuperlikes] = useState(1);
   const [remainingRewinds, setRemainingRewinds] = useState(3);
   const [discoveryMode, setDiscoveryMode] = useState('regular'); // 'regular' | 'topPicks'
+  const [subscription, setSubscription] = useState(null);
+  const [boosting, setBoosting] = useState(false);
 
   const activeFilterCount = useMemo(() => (
     Object.values(appliedFilters).filter((value) => String(value).trim() !== '').length
@@ -107,12 +109,30 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
   const loadDailyLimits = async () => {
     try {
-      const data = await datingProfileService.getDailyLimits();
-      setRemainingLikes(data.remainingLikes ?? 50);
-      setRemainingSuperlikes(data.remainingSuperlikes ?? 1);
-      setRemainingRewinds(data.remainingRewinds ?? 3);
+      const [limitsData, subData] = await Promise.all([
+        datingProfileService.getDailyLimits().catch(() => ({})),
+        datingProfileService.getMySubscription().catch(() => ({ plan: 'free', isPremium: false }))
+      ]);
+      setRemainingLikes(limitsData.remainingLikes ?? 50);
+      setRemainingSuperlikes(limitsData.remainingSuperlikes ?? 1);
+      setRemainingRewinds(limitsData.remainingRewinds ?? 3);
+      setSubscription(subData);
     } catch (err) {
       console.error('Failed to load daily limits:', err);
+    }
+  };
+
+  const handleBoost = async () => {
+    try {
+      setBoosting(true);
+      setError('');
+      const result = await datingProfileService.boostProfile();
+      setError(result.message || 'Profile boosted for 30 minutes!');
+      setTimeout(() => setError(''), 3000);
+    } catch (err) {
+      setError(err || 'Boost requires Premium or Gold subscription');
+    } finally {
+      setBoosting(false);
     }
   };
 
@@ -443,6 +463,15 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           <span title="Remaining likes today">❤️ {remainingLikes}</span>
           <span title="Remaining superlikes today">⭐ {remainingSuperlikes}</span>
           <span title="Remaining rewinds today">↩️ {remainingRewinds}</span>
+          <button
+            type="button"
+            className="btn-boost"
+            onClick={handleBoost}
+            disabled={boosting || !(subscription?.isPremium || subscription?.isGold)}
+            title={subscription?.isPremium || subscription?.isGold ? 'Boost your profile' : 'Boost requires Premium'}
+          >
+            {boosting ? '⚡...' : '⚡ Boost'}
+          </button>
         </div>
       </div>
 

@@ -110,6 +110,10 @@ const init = async () => {
         show_my_profile BOOLEAN DEFAULT TRUE,
         allow_messages BOOLEAN DEFAULT TRUE,
         notifications_enabled BOOLEAN DEFAULT TRUE,
+        deal_breakers JSONB DEFAULT '{}',
+        preference_flexibility JSONB DEFAULT '{"mode":"balanced","learnFromActivity":true}',
+        compatibility_answers JSONB DEFAULT '{}',
+        learning_profile JSONB DEFAULT '{"positiveSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"negativeSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"totalPositiveActions":0,"totalNegativeActions":0,"lastInteractionAt":null}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -256,6 +260,29 @@ const init = async () => {
       WHERE is_admin IS NULL
          OR created_at IS NULL
          OR updated_at IS NULL;
+    `);
+
+      await client.query(`
+      ALTER TABLE user_preferences
+      ADD COLUMN IF NOT EXISTS deal_breakers JSONB DEFAULT '{}',
+      ADD COLUMN IF NOT EXISTS preference_flexibility JSONB DEFAULT '{"mode":"balanced","learnFromActivity":true}',
+      ADD COLUMN IF NOT EXISTS compatibility_answers JSONB DEFAULT '{}',
+      ADD COLUMN IF NOT EXISTS learning_profile JSONB DEFAULT '{"positiveSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"negativeSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"totalPositiveActions":0,"totalNegativeActions":0,"lastInteractionAt":null}';
+    `);
+
+      await client.query(`
+      UPDATE user_preferences
+      SET deal_breakers = COALESCE(deal_breakers, '{}'::jsonb),
+          preference_flexibility = COALESCE(preference_flexibility, '{"mode":"balanced","learnFromActivity":true}'::jsonb),
+          compatibility_answers = COALESCE(compatibility_answers, '{}'::jsonb),
+          learning_profile = COALESCE(
+            learning_profile,
+            '{"positiveSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"negativeSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"totalPositiveActions":0,"totalNegativeActions":0,"lastInteractionAt":null}'::jsonb
+          )
+      WHERE deal_breakers IS NULL
+         OR preference_flexibility IS NULL
+         OR compatibility_answers IS NULL
+         OR learning_profile IS NULL;
     `);
 
       // Migration: Add username column if it doesn't exist

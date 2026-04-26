@@ -60,6 +60,9 @@ module.exports = (sequelize, DataTypes) => {
     User.hasMany(models.AdminAction, { foreignKey: 'admin_user_id', as: 'adminActions', onDelete: 'CASCADE' });
     User.hasMany(models.AdminAction, { foreignKey: 'target_user_id', as: 'targetedByActions', onDelete: 'SET NULL' });
     User.hasMany(models.VerificationToken, { foreignKey: 'user_id', as: 'verificationTokens', onDelete: 'CASCADE' });
+    User.hasOne(models.Subscription, { foreignKey: 'user_id', as: 'subscription', onDelete: 'CASCADE' });
+    User.hasMany(models.MessageRequest, { foreignKey: 'from_user_id', as: 'sentMessageRequests', onDelete: 'CASCADE' });
+    User.hasMany(models.MessageRequest, { foreignKey: 'to_user_id', as: 'receivedMessageRequests', onDelete: 'CASCADE' });
   };
 
   return User;

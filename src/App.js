@@ -760,8 +760,11 @@ const AppContent = () => {
             <Route
               path="messages"
               element={
-                <DatingMessaging
-                  onBack={() => navigate('/matches')}
+                <Matches
+                  pageLabel="Messages"
+                  onSelectMatch={(match) => handleOpenMessages(match, '/messages')}
+                  onMatchCreated={refreshDatingCounts}
+                  onUnmatch={handleUnmatch}
                   onViewProfile={(profile) => handleOpenProfile(profile, '/messages')}
                   onScheduleVideoCall={(profile) =>
                     handleVideoCall(profile, '/messages', {
@@ -769,8 +772,7 @@ const AppContent = () => {
                       startImmediately: false
                     })
                   }
-                  onVideoCall={handleVideoCall}
-                  onConversationActivity={handleConversationActivity}
+                  onStartVideoCall={handleVideoCall}
                 />
               }
             />

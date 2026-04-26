@@ -77,6 +77,47 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
       field: 'notifications_enabled'
+    },
+    dealBreakers: {
+      type: DataTypes.JSONB,
+      defaultValue: {},
+      field: 'deal_breakers'
+    },
+    preferenceFlexibility: {
+      type: DataTypes.JSONB,
+      defaultValue: {
+        mode: 'balanced',
+        learnFromActivity: true
+      },
+      field: 'preference_flexibility'
+    },
+    compatibilityAnswers: {
+      type: DataTypes.JSONB,
+      defaultValue: {},
+      field: 'compatibility_answers'
+    },
+    learningProfile: {
+      type: DataTypes.JSONB,
+      defaultValue: {
+        positiveSignals: {
+          interests: {},
+          relationshipGoals: {},
+          bodyTypes: {},
+          ageBands: {},
+          verification: {}
+        },
+        negativeSignals: {
+          interests: {},
+          relationshipGoals: {},
+          bodyTypes: {},
+          ageBands: {},
+          verification: {}
+        },
+        totalPositiveActions: 0,
+        totalNegativeActions: 0,
+        lastInteractionAt: null
+      },
+      field: 'learning_profile'
     }
   }, {
     tableName: 'user_preferences',

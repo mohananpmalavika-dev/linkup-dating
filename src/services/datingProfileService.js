@@ -534,6 +534,164 @@ export const datingProfileService = {
       throw error.response?.data?.error || 'Failed to update notification preferences';
     }
   },
+
+  // ========== PHASE 3: SAFETY & PREMIUM ==========
+
+  /**
+   * Get photo verification pose challenge
+   */
+  getVerificationChallenge: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/verify-photo/challenge`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get verification challenge';
+    }
+  },
+
+  /**
+   * Submit photo verification selfie
+   */
+  verifyPhoto: async (photoBase64) => {
+    try {
+      const response = await axios.post(`${API_URL}/profiles/me/verify-photo`, { photoBase64 });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to submit verification photo';
+    }
+  },
+
+  /**
+   * Get photo verification status
+   */
+  getVerificationStatus: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/profiles/me/verification-status`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get verification status';
+    }
+  },
+
+  /**
+   * Get subscription plans
+   */
+  getSubscriptionPlans: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/subscription/plans`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get subscription plans';
+    }
+  },
+
+  /**
+   * Get current user's subscription
+   */
+  getMySubscription: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/subscription/me`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get subscription';
+    }
+  },
+
+  /**
+   * Create subscription (simulate)
+   */
+  createSubscription: async (plan) => {
+    try {
+      const response = await axios.post(`${API_URL}/subscription/create`, { plan });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to create subscription';
+    }
+  },
+
+  /**
+   * Cancel subscription
+   */
+  cancelSubscription: async () => {
+    try {
+      const response = await axios.delete(`${API_URL}/subscription/cancel`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to cancel subscription';
+    }
+  },
+
+  /**
+   * Boost profile visibility
+   */
+  boostProfile: async () => {
+    try {
+      const response = await axios.post(`${API_URL}/profiles/me/boost`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to boost profile';
+    }
+  },
+
+  /**
+   * Get who liked me (requires premium)
+   */
+  getWhoLikedMe: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/who-liked-me`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get likes';
+    }
+  },
+
+  /**
+   * Send message request to non-match
+   */
+  sendMessageRequest: async (toUserId, message) => {
+    try {
+      const response = await axios.post(`${API_URL}/message-requests`, { toUserId, message });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to send message request';
+    }
+  },
+
+  /**
+   * Get incoming message requests
+   */
+  getMessageRequests: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/message-requests`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get message requests';
+    }
+  },
+
+  /**
+   * Accept message request
+   */
+  acceptMessageRequest: async (requestId) => {
+    try {
+      const response = await axios.post(`${API_URL}/message-requests/${requestId}/accept`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to accept request';
+    }
+  },
+
+  /**
+   * Decline message request
+   */
+  declineMessageRequest: async (requestId) => {
+    try {
+      const response = await axios.post(`${API_URL}/message-requests/${requestId}/decline`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to decline request';
+    }
+  },
 };
 
 export default datingProfileService;

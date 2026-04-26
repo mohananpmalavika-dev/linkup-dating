@@ -5,13 +5,220 @@ import { getStoredUserData } from '../utils/auth';
 import '../styles/AccountSettings.css';
 
 const GENDER_OPTIONS = ['male', 'female', 'non-binary', 'other'];
-const RELATIONSHIP_GOALS_OPTIONS = ['serious', 'casual', 'friendship', 'marriage'];
+const RELATIONSHIP_GOALS_OPTIONS = [
+  'dating',
+  'relationship',
+  'casual',
+  'unsure',
+  'friendship',
+  'marriage'
+];
 const BODY_TYPE_OPTIONS = ['slim', 'athletic', 'average', 'curvy', 'muscular', 'heavyset'];
 const INTEREST_SUGGESTIONS = [
   'music', 'travel', 'fitness', 'reading', 'cooking', 'gaming',
   'photography', 'art', 'hiking', 'movies', 'sports', 'dancing',
   'yoga', 'technology', 'fashion', 'pets', 'politics', 'science'
 ];
+const PREFERENCE_MODE_OPTIONS = [
+  {
+    value: 'strict',
+    label: 'Strict',
+    description: 'Keep discovery close to your preferred ranges and goals.'
+  },
+  {
+    value: 'balanced',
+    label: 'Balanced',
+    description: 'Prioritize your preferences while still allowing strong nearby fits.'
+  },
+  {
+    value: 'open',
+    label: 'Open',
+    description: 'Use dealbreakers only and stay flexible with the rest.'
+  }
+];
+const DEAL_BREAKER_QUESTIONS = [
+  {
+    id: 'enforceAgeRange',
+    label: 'Outside my age range',
+    description: 'Hide profiles that fall outside your chosen age range.'
+  },
+  {
+    id: 'enforceLocationRadius',
+    label: 'Outside my distance radius',
+    description: 'Remove profiles beyond your preferred location radius.'
+  },
+  {
+    id: 'onlyVerifiedProfiles',
+    label: 'Unverified profiles',
+    description: 'Only show profiles that have completed verification.'
+  },
+  {
+    id: 'enforceRelationshipGoals',
+    label: 'Different relationship goals',
+    description: 'Hide profiles whose relationship goals do not match yours.'
+  },
+  {
+    id: 'requireSharedInterests',
+    label: 'No shared interests',
+    description: 'Require at least one shared or preferred interest.'
+  },
+  {
+    id: 'enforceHeightRange',
+    label: 'Outside my height range',
+    description: 'If you set a height range, treat it as a hard rule.'
+  },
+  {
+    id: 'enforceBodyType',
+    label: 'Outside my selected body types',
+    description: 'Treat selected body types as a required filter.'
+  },
+  {
+    id: 'requireCompletedProfiles',
+    label: 'Incomplete profiles',
+    description: 'Hide profiles that are still mostly unfinished.'
+  }
+];
+const COMPATIBILITY_QUESTIONS = [
+  {
+    id: 'weekendStyle',
+    label: 'What kind of weekend feels best to you?',
+    options: [
+      { value: 'outdoors', label: 'Outdoors and exploring' },
+      { value: 'cozy', label: 'Cozy and low-key' },
+      { value: 'social', label: 'Going out with people' }
+    ]
+  },
+  {
+    id: 'communicationStyle',
+    label: 'How do you like to communicate in a relationship?',
+    options: [
+      { value: 'direct', label: 'Direct and honest' },
+      { value: 'steady', label: 'Consistent check-ins' },
+      { value: 'deep', label: 'Long thoughtful talks' }
+    ]
+  },
+  {
+    id: 'socialEnergy',
+    label: 'Which social rhythm sounds most like you?',
+    options: [
+      { value: 'small_circle', label: 'Small circle' },
+      { value: 'balanced', label: 'A healthy mix' },
+      { value: 'high_energy', label: 'Always up for plans' }
+    ]
+  },
+  {
+    id: 'planningStyle',
+    label: 'How do you approach plans?',
+    options: [
+      { value: 'planner', label: 'I love a plan' },
+      { value: 'balanced', label: 'Some structure, some spontaneity' },
+      { value: 'spontaneous', label: 'Go with the flow' }
+    ]
+  },
+  {
+    id: 'affectionStyle',
+    label: 'What helps you feel closest to someone?',
+    options: [
+      { value: 'quality_time', label: 'Quality time' },
+      { value: 'words', label: 'Words and reassurance' },
+      { value: 'acts', label: 'Thoughtful actions' }
+    ]
+  },
+  {
+    id: 'conflictStyle',
+    label: 'How do you prefer to handle tension?',
+    options: [
+      { value: 'talk_now', label: 'Talk it through quickly' },
+      { value: 'pause_then_talk', label: 'Take a beat, then talk' },
+      { value: 'gentle', label: 'Keep it calm and gentle' }
+    ]
+  }
+];
+
+const createEmptyLearningSignals = () => ({
+  interests: {},
+  relationshipGoals: {},
+  bodyTypes: {},
+  ageBands: {},
+  verification: {}
+});
+
+const createDefaultLearningProfile = () => ({
+  positiveSignals: createEmptyLearningSignals(),
+  negativeSignals: createEmptyLearningSignals(),
+  totalPositiveActions: 0,
+  totalNegativeActions: 0,
+  lastInteractionAt: null
+});
+
+const createDefaultPreferences = () => ({
+  ageRangeMin: 18,
+  ageRangeMax: 50,
+  locationRadius: 50,
+  genderPreferences: [],
+  relationshipGoals: [],
+  interests: [],
+  heightRangeMin: '',
+  heightRangeMax: '',
+  bodyTypes: [],
+  showMyProfile: true,
+  allowMessages: true,
+  notificationsEnabled: true,
+  dealBreakers: {
+    enforceAgeRange: false,
+    enforceLocationRadius: false,
+    onlyVerifiedProfiles: false,
+    enforceRelationshipGoals: false,
+    requireSharedInterests: false,
+    enforceHeightRange: false,
+    enforceBodyType: false,
+    requireCompletedProfiles: false
+  },
+  preferenceFlexibility: {
+    mode: 'balanced',
+    learnFromActivity: true
+  },
+  compatibilityAnswers: COMPATIBILITY_QUESTIONS.reduce((answers, question) => ({
+    ...answers,
+    [question.id]: ''
+  }), {}),
+  learningProfile: createDefaultLearningProfile()
+});
+
+const formatLearningLabel = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  if (/^\d/.test(value)) {
+    return value;
+  }
+
+  return value
+    .split(/[_-]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
+const getTopSignalKeys = (signalMap = {}, limit = 2) =>
+  Object.entries(signalMap)
+    .filter(([, score]) => Number(score) > 0)
+    .sort((leftEntry, rightEntry) => Number(rightEntry[1]) - Number(leftEntry[1]))
+    .map(([key]) => key)
+    .slice(0, limit);
+
+const buildLearningHighlights = (learningProfile) => {
+  const positiveSignals = learningProfile?.positiveSignals || {};
+  const highlights = [
+    ...getTopSignalKeys(positiveSignals.interests, 2),
+    ...getTopSignalKeys(positiveSignals.relationshipGoals, 1),
+    ...getTopSignalKeys(positiveSignals.ageBands, 1).map((ageBand) => `${ageBand} age band`),
+    ...getTopSignalKeys(positiveSignals.bodyTypes, 1)
+  ];
+
+  return highlights.map(formatLearningLabel).slice(0, 4);
+};
 
 const AccountSettings = ({ onBack, onLogout }) => {
   const currentUser = getStoredUserData();
@@ -28,20 +235,7 @@ const AccountSettings = ({ onBack, onLogout }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [devResetCode, setDevResetCode] = useState('');
 
-  const [preferences, setPreferences] = useState({
-    ageRangeMin: 18,
-    ageRangeMax: 50,
-    locationRadius: 50,
-    genderPreferences: [],
-    relationshipGoals: [],
-    interests: [],
-    heightRangeMin: '',
-    heightRangeMax: '',
-    bodyTypes: [],
-    showMyProfile: true,
-    allowMessages: true,
-    notificationsEnabled: true
-  });
+  const [preferences, setPreferences] = useState(createDefaultPreferences());
   const [preferencesLoading, setPreferencesLoading] = useState(false);
   const [preferencesSaving, setPreferencesSaving] = useState(false);
 
@@ -53,7 +247,9 @@ const AccountSettings = ({ onBack, onLogout }) => {
     setPreferencesLoading(true);
     try {
       const data = await datingProfileService.getPreferences();
+      const defaults = createDefaultPreferences();
       setPreferences({
+        ...defaults,
         ageRangeMin: data.ageRangeMin ?? 18,
         ageRangeMax: data.ageRangeMax ?? 50,
         locationRadius: data.locationRadius ?? 50,
@@ -65,7 +261,31 @@ const AccountSettings = ({ onBack, onLogout }) => {
         bodyTypes: data.bodyTypes || [],
         showMyProfile: data.showMyProfile ?? true,
         allowMessages: data.allowMessages ?? true,
-        notificationsEnabled: data.notificationsEnabled ?? true
+        notificationsEnabled: data.notificationsEnabled ?? true,
+        dealBreakers: {
+          ...defaults.dealBreakers,
+          ...(data.dealBreakers || {})
+        },
+        preferenceFlexibility: {
+          ...defaults.preferenceFlexibility,
+          ...(data.preferenceFlexibility || {})
+        },
+        compatibilityAnswers: {
+          ...defaults.compatibilityAnswers,
+          ...(data.compatibilityAnswers || {})
+        },
+        learningProfile: {
+          ...defaults.learningProfile,
+          ...(data.learningProfile || {}),
+          positiveSignals: {
+            ...defaults.learningProfile.positiveSignals,
+            ...(data.learningProfile?.positiveSignals || {})
+          },
+          negativeSignals: {
+            ...defaults.learningProfile.negativeSignals,
+            ...(data.learningProfile?.negativeSignals || {})
+          }
+        }
       });
     } catch (err) {
       console.error('Failed to load preferences:', err);
@@ -98,6 +318,26 @@ const AccountSettings = ({ onBack, onLogout }) => {
       const exists = current.includes(value);
       return { ...prev, [field]: exists ? current.filter((v) => v !== value) : [...current, value] };
     });
+  };
+
+  const toggleDealBreaker = (field) => {
+    setPreferences((prev) => ({
+      ...prev,
+      dealBreakers: {
+        ...prev.dealBreakers,
+        [field]: !prev.dealBreakers[field]
+      }
+    }));
+  };
+
+  const updateCompatibilityAnswer = (field, value) => {
+    setPreferences((prev) => ({
+      ...prev,
+      compatibilityAnswers: {
+        ...prev.compatibilityAnswers,
+        [field]: value
+      }
+    }));
   };
 
   const handleDeleteAccount = async () => {
@@ -156,7 +396,10 @@ const AccountSettings = ({ onBack, onLogout }) => {
     }
   };
 
-  const renderPreferencesTab = () => (
+  const renderPreferencesTab = () => {
+    const learningHighlights = buildLearningHighlights(preferences.learningProfile);
+
+    return (
     <div className="preferences-section">
       {preferencesLoading ? (
         <div className="preferences-loading">
@@ -311,6 +554,141 @@ const AccountSettings = ({ onBack, onLogout }) => {
           </div>
 
           <div className="preferences-group">
+            <h3>Discovery Style</h3>
+            <p className="preferences-helper">
+              Choose how closely discovery should follow your soft preferences. Dealbreakers
+              still apply in every mode.
+            </p>
+            <div className="segmented-control">
+              {PREFERENCE_MODE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`segmented-option ${
+                    preferences.preferenceFlexibility.mode === option.value ? 'active' : ''
+                  }`}
+                  onClick={() =>
+                    setPreferences((prev) => ({
+                      ...prev,
+                      preferenceFlexibility: {
+                        ...prev.preferenceFlexibility,
+                        mode: option.value
+                      }
+                    }))
+                  }
+                >
+                  <strong>{option.label}</strong>
+                  <span>{option.description}</span>
+                </button>
+              ))}
+            </div>
+            <label className="toggle-item toggle-item-inline">
+              <div className="toggle-info">
+                <strong>Learning Algorithm</strong>
+                <span>Use your likes, passes, and superlikes to improve future suggestions.</span>
+              </div>
+              <input
+                type="checkbox"
+                checked={preferences.preferenceFlexibility.learnFromActivity}
+                onChange={(event) =>
+                  setPreferences((prev) => ({
+                    ...prev,
+                    preferenceFlexibility: {
+                      ...prev.preferenceFlexibility,
+                      learnFromActivity: event.target.checked
+                    }
+                  }))
+                }
+                className="toggle-switch"
+              />
+            </label>
+          </div>
+
+          <div className="preferences-group">
+            <h3>Dealbreaker Questions</h3>
+            <p className="preferences-helper">
+              Turn these on when you want LinkUp to remove profiles instead of just lowering
+              their score.
+            </p>
+            <div className="question-list">
+              {DEAL_BREAKER_QUESTIONS.map((question) => (
+                <label key={question.id} className="question-card checkbox-card">
+                  <div className="question-copy">
+                    <strong>{question.label}</strong>
+                    <span>{question.description}</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(preferences.dealBreakers[question.id])}
+                    onChange={() => toggleDealBreaker(question.id)}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="preferences-group">
+            <h3>Compatibility Questions</h3>
+            <p className="preferences-helper">
+              These answers help LinkUp spot emotional and lifestyle fit, not just filters.
+            </p>
+            <div className="question-list">
+              {COMPATIBILITY_QUESTIONS.map((question) => (
+                <div key={question.id} className="question-card">
+                  <div className="question-copy">
+                    <strong>{question.label}</strong>
+                  </div>
+                  <div className="option-grid">
+                    {question.options.map((option) => (
+                      <label
+                        key={option.value}
+                        className={`option-pill ${
+                          preferences.compatibilityAnswers[question.id] === option.value
+                            ? 'selected'
+                            : ''
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name={question.id}
+                          value={option.value}
+                          checked={preferences.compatibilityAnswers[question.id] === option.value}
+                          onChange={() => updateCompatibilityAnswer(question.id, option.value)}
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="preferences-group">
+            <h3>Learning Snapshot</h3>
+            <div className="insight-panel">
+              {preferences.preferenceFlexibility.learnFromActivity ? (
+                <>
+                  <p>
+                    {learningHighlights.length > 0
+                      ? 'Right now your recent activity is giving stronger signals around:'
+                      : 'LinkUp will start learning as you like, pass, and superlike profiles.'}
+                  </p>
+                  {learningHighlights.length > 0 ? (
+                    <div className="insight-tags">
+                      {learningHighlights.map((highlight) => (
+                        <span key={highlight} className="insight-tag">{highlight}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p>Learning is paused. Turn it back on any time to personalize discovery again.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="preferences-group">
             <h3>Privacy Settings</h3>
             <div className="toggle-list">
               <label className="toggle-item">
@@ -371,7 +749,8 @@ const AccountSettings = ({ onBack, onLogout }) => {
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   const renderSecurityTab = () => (
     <div className="security-section">

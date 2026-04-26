@@ -1,4 +1,4 @@
-ng module.exports = (sequelize, DataTypes) => {
+module.exports = (sequelize, DataTypes) => {
   const DatingProfile = sequelize.define('DatingProfile', {
     id: {
       type: DataTypes.INTEGER,
@@ -203,6 +203,31 @@ ng module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(500),
       allowNull: true,
       field: 'video_intro_url'
+    },
+    // Photo verification fields
+    verificationPhotoUrl: {
+      type: DataTypes.STRING(500),
+      allowNull: true,
+      field: 'verification_photo_url'
+    },
+    verificationStatus: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      field: 'verification_status',
+      validate: {
+        isIn: [['none', 'pending', 'approved', 'rejected']]
+      },
+      defaultValue: 'none'
+    },
+    verificationPose: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'verification_pose'
+    },
+    verifiedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'verified_at'
     }
   }, {
     tableName: 'dating_profiles',

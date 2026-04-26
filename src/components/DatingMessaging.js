@@ -10,6 +10,8 @@ import '../styles/DatingMessaging.css';
 
 const REACTION_OPTIONS = ['❤️', '👍', '😂', '🔥', '👏'];
 
+const unwrapMessagePayload = (payload) => payload?.data ?? payload ?? null;
+
 const normalizeMessage = (message, currentUserId) => ({
   id: message.id,
   text: message.message || message.text || '',
@@ -333,7 +335,7 @@ const DatingMessaging = ({
 
     try {
       const response = await datingMessagingService.sendMessage(activeMatchId, trimmedMessage);
-      const createdMessage = normalizeMessage(response.data, currentUserId);
+      const createdMessage = normalizeMessage(unwrapMessagePayload(response), currentUserId);
 
       setMessages((currentMessages) => [...currentMessages, createdMessage]);
       setInputMessage('');
@@ -387,7 +389,7 @@ const DatingMessaging = ({
 
     try {
       const response = await datingMessagingService.toggleReaction(messageId, emoji);
-      const nextReactions = response?.data?.reactions || [];
+      const nextReactions = unwrapMessagePayload(response)?.reactions || [];
 
       setMessages((currentMessages) =>
         currentMessages.map((message) => (
@@ -416,7 +418,7 @@ const DatingMessaging = ({
 
     try {
       const response = await datingMessagingService.sendMediaMessage(activeMatchId, file, 'image');
-      const createdMessage = normalizeMessage(response.data, currentUserId);
+      const createdMessage = normalizeMessage(unwrapMessagePayload(response), currentUserId);
       setMessages((currentMessages) => [...currentMessages, createdMessage]);
       notifyConversationActivity();
     } catch (sendError) {
@@ -430,6 +432,11 @@ const DatingMessaging = ({
   };
 
   const startVoiceRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setError('Voice recording is not supported on this device or browser.');
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -448,7 +455,7 @@ const DatingMessaging = ({
         setSendingMedia(true);
         try {
           const response = await datingMessagingService.sendVoiceNote(activeMatchId, audioBlob, duration);
-          const createdMessage = normalizeMessage(response.data, currentUserId);
+          const createdMessage = normalizeMessage(unwrapMessagePayload(response), currentUserId);
           setMessages((currentMessages) => [...currentMessages, createdMessage]);
           notifyConversationActivity();
         } catch (sendError) {

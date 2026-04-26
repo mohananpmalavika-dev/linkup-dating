@@ -276,6 +276,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   localStorage.clear();
   sessionStorage.clear();
+  window.history.pushState({}, "", "/");
   window.open = jest.fn();
 });
 
@@ -594,4 +595,26 @@ test("enabled SOS module opens the emergency alert workspace", async () => {
 
   expect(screen.getByText(/sos alert is live\. trusted contacts are being notified now\./i)).toBeInTheDocument();
   expect(screen.getByText(/current incident/i)).toBeInTheDocument();
+});
+
+test("messages route renders the inbox view for authenticated users", async () => {
+  mockAxiosForApp();
+  localStorage.setItem("mb_auth_token", "token");
+  localStorage.setItem(
+    "linkup_user_data",
+    JSON.stringify({
+      id: "user-3",
+      email: "person@example.com",
+      name: "Person",
+      avatar: "P",
+      registrationType: "user",
+      role: "user",
+    })
+  );
+  window.history.pushState({}, "", "/messages");
+
+  render(<App />);
+
+  expect(await screen.findByRole("heading", { level: 2, name: /messages/i })).toBeInTheDocument();
+  expect(screen.getByText(/no matches yet\. start swiping to find someone!/i)).toBeInTheDocument();
 });

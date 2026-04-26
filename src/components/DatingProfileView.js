@@ -17,6 +17,10 @@ const DatingProfileView = ({
   const [loading, setLoading] = useState(Boolean(initialProfile?.userId || profileId));
   const [error, setError] = useState('');
   const [showBlockReportModal, setShowBlockReportModal] = useState(false);
+  const [showMessageRequest, setShowMessageRequest] = useState(false);
+  const [requestMessage, setRequestMessage] = useState('');
+  const [sendingRequest, setSendingRequest] = useState(false);
+  const [subscription, setSubscription] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -32,13 +36,17 @@ const DatingProfileView = ({
       setError('');
 
       try {
-        const latestProfile = await datingProfileService.getProfileById(resolvedProfileId);
+        const [latestProfile, subData] = await Promise.all([
+          datingProfileService.getProfileById(resolvedProfileId),
+          datingProfileService.getMySubscription().catch(() => ({ plan: 'free', isGold: false }))
+        ]);
         if (!cancelled) {
           setProfile((currentProfile) => ({
             ...(currentProfile || {}),
             ...latestProfile,
             matchId: currentProfile?.matchId || initialProfile?.matchId || latestProfile.matchId || null
           }));
+          setSubscription(subData);
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -98,6 +106,26 @@ const DatingProfileView = ({
       setShowBlockReportModal(false);
     } catch (err) {
       throw err;
+    }
+  };
+
+  const handleSendMessageRequest = async () => {
+    if (!requestMessage.trim() || requestMessage.trim().length < 10) {
+      setError('Message must be at least 10 characters');
+      return;
+    }
+
+    try {
+      setSendingRequest(true);
+      setError('');
+      await datingProfileService.sendMessageRequest(profile.userId, requestMessage.trim());
+      setShowMessageRequest(false);
+      setRequestMessage('');
+      alert('Message request sent successfully!');
+    } catch (err) {
+      setError(err || 'Failed to send message request');
+    } finally {
+      setSendingRequest(false);
     }
   };
 
@@ -190,6 +218,14 @@ const DatingProfileView = ({
             <button type="button" className="btn-edit" onClick={() => onMessage(profile)}>
               Open Chat
             </button>
+          ) : subscription?.isGold && !profile.matchId ? (
+            <button
+              type="button"
+              className="btn-edit"
+              onClick={() => setShowMessageRequest(true)}
+            >
+              💌 Send Message Request
+            </button>
           ) : null}
           {canScheduleVideoCall ? (
             <button
@@ -216,6 +252,38 @@ const DatingProfileView = ({
             Back
           </button>
         </div>
+
+        {showMessageRequest && (
+          <div className="profile-section message-request-form">
+            <h3>Send Message Request</h3>
+            <p>Send a message to {profile.firstName} without matching. They can accept or decline.</p>
+            <textarea
+              value={requestMessage}
+              onChange={(e) => setRequestMessage(e.target.value)}
+              placeholder="Write a thoughtful message (10-500 characters)..."
+              rows={4}
+              maxLength={500}
+            />
+            <div className="request-actions">
+              <span className="char-count">{requestMessage.length}/500</span>
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => setShowMessageRequest(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-save"
+                onClick={handleSendMessageRequest}
+                disabled={sendingRequest || requestMessage.trim().length < 10}
+              >
+                {sendingRequest ? 'Sending...' : 'Send Request'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {showBlockReportModal && (
           <BlockReportModal

@@ -78,6 +78,19 @@ const DatingProfile = ({ onLogout }) => {
   });
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
 
+  // Phase 3: Photo verification
+  const [verificationStatus, setVerificationStatus] = useState('none');
+  const [showPhotoVerification, setShowPhotoVerification] = useState(false);
+  const [verificationChallenge, setVerificationChallenge] = useState(null);
+  const [verificationPhoto, setVerificationPhoto] = useState(null);
+  const [verifyingPhoto, setVerifyingPhoto] = useState(false);
+
+  // Phase 3: Subscription
+  const [subscription, setSubscription] = useState(null);
+  const [subscriptionPlans, setSubscriptionPlans] = useState([]);
+  const [showSubscription, setShowSubscription] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+
   const completionChecklist = [
     {
       key: 'bio',
@@ -174,6 +187,17 @@ const DatingProfile = ({ onLogout }) => {
       setDailyPrompts(promptsData.prompts || []);
       setAnsweredPrompts(profilePromptsData.prompts || []);
       setNotificationPreferences(notifPrefsData);
+
+      // Phase 3: Load verification status and subscription
+      const [verificationData, subscriptionData, plansData] = await Promise.all([
+        datingProfileService.getVerificationStatus().catch(() => ({ verificationStatus: 'none', profileVerified: false })),
+        datingProfileService.getMySubscription().catch(() => ({ plan: 'free', isPremium: false, isGold: false })),
+        datingProfileService.getSubscriptionPlans().catch(() => ({ plans: [] }))
+      ]);
+
+      setVerificationStatus(verificationData.verificationStatus || 'none');
+      setSubscription(subscriptionData);
+      setSubscriptionPlans(plansData.plans || []);
       setStats({
         likes: Array.isArray(likesData) ? likesData.length : 0,
         matches: matchesData.matches?.length || 0,
@@ -319,6 +343,96 @@ const DatingProfile = ({ onLogout }) => {
     } catch (err) {
       setError('Failed to update notification preferences');
       console.error(err);
+    }
+  };
+
+  // Phase 3: Photo verification handlers
+  const handleStartPhotoVerification = async () => {
+    try {
+      setVerifyingPhoto(true);
+      setError('');
+      const challenge = await datingProfileService.getVerificationChallenge();
+      setVerificationChallenge(challenge);
+      setShowPhotoVerification(true);
+    } catch (err) {
+      setError(err || 'Failed to start verification');
+    } finally {
+      setVerifyingPhoto(false);
+    }
+  };
+
+  const handleCaptureVerificationPhoto = async () => {
+    if (!verificationPhoto) {
+      setError('Please capture a photo first');
+      return;
+    }
+
+    try {
+      setVerifyingPhoto(true);
+      setError('');
+      const result = await datingProfileService.verifyPhoto(verificationPhoto);
+      setVerificationStatus(result.verificationStatus || 'approved');
+      setShowPhotoVerification(false);
+      setVerificationPhoto(null);
+      setVerificationChallenge(null);
+      await loadProfile();
+    } catch (err) {
+      setError(err || 'Photo verification failed');
+    } finally {
+      setVerifyingPhoto(false);
+    }
+  };
+
+  const handleFileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleVerificationFileSelect = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const base64 = await handleFileToBase64(file);
+      setVerificationPhoto(base64);
+    } catch (err) {
+      setError('Failed to process photo');
+    }
+  };
+
+  // Phase 3: Subscription handlers
+  const handleSubscribe = async (plan) => {
+    try {
+      setSubscribing(true);
+      setError('');
+      await datingProfileService.createSubscription(plan);
+      const subData = await datingProfileService.getMySubscription();
+      setSubscription(subData);
+      setShowSubscription(false);
+    } catch (err) {
+      setError(err || 'Failed to activate subscription');
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!window.confirm('Are you sure you want to cancel your subscription?')) return;
+
+    try {
+      setSubscribing(true);
+      setError('');
+      await datingProfileService.cancelSubscription();
+      const subData = await datingProfileService.getMySubscription();
+      setSubscription(subData);
+    } catch (err) {
+      setError(err || 'Failed to cancel subscription');
+    } finally {
+      setSubscribing(false);
     }
   };
 
@@ -936,6 +1050,172 @@ const DatingProfile = ({ onLogout }) => {
                 </span>
               </div>
             )}
+          </div>
+
+          {/* Phase 3: Photo Verification Section */}
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Photo Verification</h3>
+                <p>
+                  {verificationStatus === 'approved'
+                    ? 'Your photo is verified. You have a verified badge on your profile.'
+                    : verificationStatus === 'pending'
+                    ? 'Your verification is pending review.'
+                    : verificationStatus === 'rejected'
+                    ? 'Your verification was rejected. Try again with better lighting.'
+                    : 'Verify your photo to get a trusted badge and stand out.'}
+                </p>
+              </div>
+              {verificationStatus !== 'approved' ? (
+                <button
+                  type="button"
+                  className="section-link-btn"
+                  onClick={() => setShowPhotoVerification((current) => !current)}
+                >
+                  {showPhotoVerification ? 'Cancel' : 'Verify'}
+                </button>
+              ) : (
+                <span className="verified-badge">✓ Verified</span>
+              )}
+            </div>
+
+            {showPhotoVerification ? (
+              <div className="photo-verification-flow">
+                {!verificationChallenge ? (
+                  <button
+                    type="button"
+                    className="btn-save"
+                    onClick={handleStartPhotoVerification}
+                    disabled={verifyingPhoto}
+                  >
+                    {verifyingPhoto ? 'Loading...' : 'Start Verification Challenge'}
+                  </button>
+                ) : (
+                  <div className="verification-challenge">
+                    <div className="challenge-instructions">
+                      <h4>📸 Pose Challenge</h4>
+                      <p>{verificationChallenge.instructions}</p>
+                      <p className="challenge-timer">Expires in {verificationChallenge.expiresIn / 60} minutes</p>
+                    </div>
+
+                    <div className="verification-upload">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="user"
+                        onChange={handleVerificationFileSelect}
+                        id="verification-file"
+                        style={{ display: 'none' }}
+                      />
+                      <label htmlFor="verification-file" className="btn-edit">
+                        {verificationPhoto ? 'Change Photo' : '📷 Take Selfie'}
+                      </label>
+
+                      {verificationPhoto ? (
+                        <div className="verification-preview">
+                          <img src={verificationPhoto} alt="Verification preview" />
+                          <button
+                            type="button"
+                            className="btn-save"
+                            onClick={handleCaptureVerificationPhoto}
+                            disabled={verifyingPhoto}
+                          >
+                            {verifyingPhoto ? 'Verifying...' : 'Submit for Verification'}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          {/* Phase 3: Subscription Section */}
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Subscription</h3>
+                <p>
+                  {subscription?.isGold
+                    ? 'Gold plan active. You have all premium features.'
+                    : subscription?.isPremium
+                    ? 'Premium plan active. Enjoy unlimited likes and more.'
+                    : 'Upgrade to unlock unlimited likes, boosts, and more features.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="section-link-btn"
+                onClick={() => setShowSubscription((current) => !current)}
+              >
+                {showSubscription ? 'Close' : subscription?.isPremium || subscription?.isGold ? 'Manage' : 'Upgrade'}
+              </button>
+            </div>
+
+            {showSubscription ? (
+              <div className="subscription-panel">
+                {subscription?.isPremium || subscription?.isGold ? (
+                  <div className="current-subscription">
+                    <div className="subscription-badge">
+                      {subscription.isGold ? '⭐ Gold' : '💎 Premium'} Active
+                    </div>
+                    {subscription.expiresAt ? (
+                      <p>Renews on {new Date(subscription.expiresAt).toLocaleDateString()}</p>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="btn-cancel"
+                      onClick={handleCancelSubscription}
+                      disabled={subscribing}
+                    >
+                      {subscribing ? 'Processing...' : 'Cancel Subscription'}
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="plans-grid">
+                  {subscriptionPlans.map((plan) => (
+                    <div
+                      key={plan.id}
+                      className={`plan-card ${plan.id === 'free' ? 'plan-free' : ''} ${
+                        subscription?.plan === plan.id ? 'plan-active' : ''
+                      }`}
+                    >
+                      <h4>{plan.name}</h4>
+                      <div className="plan-price">
+                        {plan.price === 0 ? (
+                          'Free'
+                        ) : (
+                          <>
+                            ${plan.price}
+                            <span>/{plan.interval}</span>
+                          </>
+                        )}
+                      </div>
+                      <ul className="plan-features">
+                        {plan.features.map((feature, idx) => (
+                          <li key={idx}>{feature}</li>
+                        ))}
+                      </ul>
+                      {plan.id !== 'free' && subscription?.plan !== plan.id ? (
+                        <button
+                          type="button"
+                          className="btn-save"
+                          onClick={() => handleSubscribe(plan.id)}
+                          disabled={subscribing}
+                        >
+                          {subscribing ? 'Activating...' : `Get ${plan.name}`}
+                        </button>
+                      ) : subscription?.plan === plan.id ? (
+                        <span className="plan-current-label">Current Plan</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {error ? (
