@@ -188,6 +188,12 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
     `);
 
+    // Migration: Add username column if it doesn't exist
+    await client.query(`
+      ALTER TABLE dating_profiles
+      ADD COLUMN IF NOT EXISTS username VARCHAR(100) UNIQUE;
+    `);
+
     client.release();
     console.log('✓ Database schema initialized');
   } catch (err) {

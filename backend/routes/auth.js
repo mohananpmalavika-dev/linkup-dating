@@ -129,8 +129,14 @@ router.get('/check-username', async (req, res) => {
     const available = result.rows.length === 0;
     res.json({ available, username });
   } catch (err) {
-    console.error('Check username error:', err);
-    res.status(500).json({ error: 'Failed to check username' });
+    console.error('Check username error:', err.message);
+    
+    // If column doesn't exist, return available as true for now
+    if (err.message.includes('column "username" does not exist')) {
+      return res.json({ available: true, username: req.query.username });
+    }
+    
+    res.status(500).json({ error: 'Failed to check username', details: err.message });
   }
 });
 
