@@ -81,5 +81,17 @@ export const authService = {
     } catch (error) {
       throw error.response?.data?.error || 'Failed to check email';
     }
+  },
+
+  /**
+   * Delete user account
+   */
+  deleteAccount: async () => {
+    try {
+      const response = await axios.delete(`${API_URL}/account`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { error: 'Failed to delete account' };
+    }
   }
 };

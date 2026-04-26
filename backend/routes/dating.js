@@ -1134,4 +1134,135 @@ router.get('/profiles/me/completion', async (req, res) => {
   }
 });
 
+// 17. BLOCK A USER
+router.post('/blocks', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { blockedUserId } = req.body;
+
+    if (!blockedUserId) {
+      return res.status(400).json({ error: 'Blocked user ID is required' });
+    }
+
+    if (userId === blockedUserId) {
+      return res.status(400).json({ error: 'Cannot block yourself' });
+    }
+
+    // Check if user exists
+    const userExists = await db.query('SELECT id FROM users WHERE id = $1', [blockedUserId]);
+    if (userExists.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Insert block
+    await db.query(
+      `INSERT INTO user_blocks (blocking_user_id, blocked_user_id) 
+       VALUES ($1, $2) 
+       ON CONFLICT DO NOTHING`,
+      [userId, blockedUserId]
+    );
+
+    res.json({ success: true, message: 'User blocked successfully' });
+  } catch (err) {
+    console.error('Block user error:', err);
+    res.status(500).json({ error: 'Failed to block user' });
+  }
+});
+
+// 18. GET MY BLOCKED USERS
+router.get('/blocks', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT ub.id, ub.blocked_user_id, dp.first_name, dp.age, 
+              dp.location_city, dp.location_state,
+              (SELECT photo_url FROM profile_photos WHERE user_id = ub.blocked_user_id LIMIT 1) as photo_url,
+              ub.created_at
+       FROM user_blocks ub
+       JOIN users u ON ub.blocked_user_id = u.id
+       JOIN dating_profiles dp ON dp.user_id = u.id
+       WHERE ub.blocking_user_id = $1
+       ORDER BY ub.created_at DESC`,
+      [userId]
+    );
+
+    res.json({
+      blockedUsers: result.rows.map(row => ({
+        id: row.blocked_user_id,
+        firstName: row.first_name,
+        age: row.age,
+        location: {
+          city: row.location_city,
+          state: row.location_state
+        },
+        photoUrl: row.photo_url,
+        blockedAt: row.created_at
+      }))
+    });
+  } catch (err) {
+    console.error('Get blocked users error:', err);
+    res.status(500).json({ error: 'Failed to get blocked users' });
+  }
+});
+
+// 19. UNBLOCK A USER
+router.delete('/blocks/:blockedUserId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { blockedUserId } = req.params;
+
+    await db.query(
+      `DELETE FROM user_blocks 
+       WHERE blocking_user_id = $1 AND blocked_user_id = $2`,
+      [userId, parseInt(blockedUserId, 10)]
+    );
+
+    res.json({ success: true, message: 'User unblocked successfully' });
+  } catch (err) {
+    console.error('Unblock user error:', err);
+    res.status(500).json({ error: 'Failed to unblock user' });
+  }
+});
+
+// 20. REPORT A USER
+router.post('/reports', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { reportedUserId, reason, description } = req.body;
+
+    if (!reportedUserId || !reason) {
+      return res.status(400).json({ error: 'Reported user ID and reason are required' });
+    }
+
+    if (userId === reportedUserId) {
+      return res.status(400).json({ error: 'Cannot report yourself' });
+    }
+
+    // Check if user exists
+    const userExists = await db.query('SELECT id FROM users WHERE id = $1', [reportedUserId]);
+    if (userExists.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Insert report
+    const result = await db.query(
+      `INSERT INTO user_reports (reporting_user_id, reported_user_id, reason, description) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING id, created_at`,
+      [userId, reportedUserId, reason, description || null]
+    );
+
+    res.json({ 
+      success: true, 
+      message: 'Report submitted successfully',
+      reportId: result.rows[0].id,
+      createdAt: result.rows[0].created_at
+    });
+  } catch (err) {
+    console.error('Report user error:', err);
+    res.status(500).json({ error: 'Failed to submit report' });
+  }
+});
+
 module.exports = router;

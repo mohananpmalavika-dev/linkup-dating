@@ -228,6 +228,58 @@ export const datingProfileService = {
       throw error.response?.data?.error || 'Failed to verify identity';
     }
   },
+
+  /**
+   * Block a user
+   */
+  blockUser: async (userId) => {
+    try {
+      const response = await axios.post(`${API_URL}/blocks`, { blockedUserId: userId });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to block user';
+    }
+  },
+
+  /**
+   * Get list of blocked users
+   */
+  getBlockedUsers: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/blocks`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch blocked users';
+    }
+  },
+
+  /**
+   * Unblock a user
+   */
+  unblockUser: async (userId) => {
+    try {
+      const response = await axios.delete(`${API_URL}/blocks/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to unblock user';
+    }
+  },
+
+  /**
+   * Report a user
+   */
+  reportUser: async (userId, reason, description) => {
+    try {
+      const response = await axios.post(`${API_URL}/reports`, {
+        reportedUserId: userId,
+        reason,
+        description,
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to report user';
+    }
+  },
 };
 
 export default datingProfileService;

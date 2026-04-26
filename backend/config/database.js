@@ -267,6 +267,40 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_chatroom_messages_created_at ON chatroom_messages(created_at);
       CREATE INDEX IF NOT EXISTS idx_lobby_messages_created_at ON lobby_messages(created_at);
     `);
+
+    // Create user_blocks table for blocking functionality
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_blocks (
+        id SERIAL PRIMARY KEY,
+        blocking_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        blocked_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(blocking_user_id, blocked_user_id)
+      );
+    `);
+
+    // Create user_reports table for abuse reporting
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_reports (
+        id SERIAL PRIMARY KEY,
+        reporting_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reported_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reason VARCHAR(255) NOT NULL,
+        description TEXT,
+        status VARCHAR(50) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        resolved_at TIMESTAMP
+      );
+    `);
+
+    // Create indices for user_blocks and user_reports
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_blocks_blocking_user_id ON user_blocks(blocking_user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_blocks_blocked_user_id ON user_blocks(blocked_user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_reports_reporting_user_id ON user_reports(reporting_user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_reports_reported_user_id ON user_reports(reported_user_id);
+    `);
+
       console.log('✓ Database schema initialized');
       return true;
     } finally {

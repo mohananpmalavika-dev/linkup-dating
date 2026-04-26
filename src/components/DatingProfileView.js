@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import datingProfileService from '../services/datingProfileService';
+import BlockReportModal from './BlockReportModal';
 import '../styles/DatingProfile.css';
 
 const DatingProfileView = ({ profile: initialProfile, profileId, onBack, onMessage, onVideoCall }) => {
   const [profile, setProfile] = useState(initialProfile || null);
   const [loading, setLoading] = useState(Boolean(initialProfile?.userId || profileId));
   const [error, setError] = useState('');
+  const [showBlockReportModal, setShowBlockReportModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,26 @@ const DatingProfileView = ({ profile: initialProfile, profileId, onBack, onMessa
 
   const canMessage = typeof onMessage === 'function' && Boolean(profile.matchId);
   const canVideoCall = typeof onVideoCall === 'function' && Boolean(profile.matchId);
+
+  const handleBlockUser = async (userId) => {
+    try {
+      await datingProfileService.blockUser(userId);
+      setShowBlockReportModal(false);
+      alert('User blocked successfully');
+      onBack();
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const handleReportUser = async (userId, reason, description) => {
+    try {
+      await datingProfileService.reportUser(userId, reason, description);
+      setShowBlockReportModal(false);
+    } catch (err) {
+      throw err;
+    }
+  };
 
   return (
     <div className="dating-profile-container">
@@ -163,10 +185,22 @@ const DatingProfileView = ({ profile: initialProfile, profileId, onBack, onMessa
               Start Video Call
             </button>
           ) : null}
+          <button type="button" className="btn-more-actions" onClick={() => setShowBlockReportModal(true)} title="Block or Report">
+            ⋮
+          </button>
           <button type="button" className="btn-cancel" onClick={onBack}>
             Back
           </button>
         </div>
+
+        {showBlockReportModal && (
+          <BlockReportModal
+            profile={profile}
+            onClose={() => setShowBlockReportModal(false)}
+            onBlock={handleBlockUser}
+            onReport={handleReportUser}
+          />
+        )}
       </div>
     </div>
   );

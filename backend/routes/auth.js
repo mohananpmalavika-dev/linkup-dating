@@ -887,4 +887,48 @@ router.post('/set-username', async (req, res) => {
 
 router.all('/set-username', methodNotAllowed('POST'));
 
+// DELETE ACCOUNT
+router.delete('/account', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Check if user exists
+    const userExists = await db.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userExists.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Delete user and all associated data (cascading deletes will handle related records)
+    // This will delete:
+    // - dating_profiles
+    // - profile_photos
+    // - user_preferences
+    // - interactions (as from_user_id or to_user_id)
+    // - matches (as user_id_1 or user_id_2)
+    // - messages (as from_user_id or to_user_id)
+    // - video_dates
+    // - verification_tokens
+    // - user_blocks (as blocking_user_id or blocked_user_id)
+    // - user_reports (as reporting_user_id or reported_user_id)
+    // - chatroom_members
+    // - chatroom_messages
+    // - lobby_messages
+    await db.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    res.json({ 
+      success: true, 
+      message: 'Account deleted successfully' 
+    });
+  } catch (err) {
+    console.error('Delete account error:', err);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
+router.all('/account', methodNotAllowed('DELETE'));
+
 module.exports = router;
