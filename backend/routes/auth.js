@@ -9,12 +9,12 @@ const db = require('../config/database');
 // Email transporter configuration - recreated on each request to ensure env vars are loaded
 const getEmailTransporter = () => {
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // Use TLS
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT) || 587,
+    secure: process.env.EMAIL_SECURE === 'true' || false, // Use TLS
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD
+      pass: process.env.EMAIL_PASS // Note: EMAIL_PASS not EMAIL_PASSWORD
     }
   });
 };
