@@ -119,14 +119,6 @@ const LaunchPage = ({
           </div>
         </header>
       )}
-                title="Sign out from your account"
-              >
-                <span>🚪</span> Sign Out
-              </button>
-            </div>
-          </div>
-        </header>
-      )}
 
       {/* Logout Confirmation Modal */}
       {showLogoutConfirm && (
@@ -258,55 +250,6 @@ const LaunchPage = ({
           <p>&copy; 2026 LinkUp Dating. All rights reserved.</p>
         </div>
       </footer>
-    </main>
-  );
-};
-              type="button"
-              className="registration-option login-option"
-              onClick={() => onSelectRegistrationType("login")}
-            >
-              <span>{launch.login || "Sign In"}</span>
-              <small>{launch.loginHelp || "Already have an account?"}</small>
-            </button>
-            <button
-              type="button"
-              className="registration-option primary-option"
-              onClick={() => onSelectRegistrationType("user")}
-            >
-              <span>{launch.user || "Sign Up"}</span>
-              <small>{launch.userHelp || "Create a new dating profile"}</small>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="launch-features" aria-labelledby="features-heading">
-        <div className="launch-section-heading">
-          <p>{launch.featuresLabel}</p>
-          <h2 id="features-heading">{launch.featuresTitle}</h2>
-        </div>
-
-        <div className="feature-grid">
-          {featureCards.map((feature) => (
-            <button
-              type="button"
-              className="feature-card"
-              key={feature.key}
-              onClick={() =>
-                feature.type === "external"
-                  ? openExternalLink(feature.url)
-                  : onSelectRegistrationType("login", feature.moduleId || moduleMapping[feature.title])
-              }
-            >
-              <h3>{feature.title}</h3>
-              <p>{feature.description}</p>
-              {feature.type === "external" ? (
-                <span className="feature-card-link-badge">Open link</span>
-              ) : null}
-            </button>
-          ))}
-        </div>
-      </section>
     </main>
   );
 };
