@@ -65,8 +65,8 @@ router.get('/profiles/me', async (req, res) => {
     const userId = req.user.id;
     const result = await db.query(
       `SELECT dp.*, 
-              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position))
-               FROM profile_photos WHERE user_id = $1 ORDER BY position) as photos
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = $1) as photos
        FROM dating_profiles dp
        WHERE user_id = $1`,
       [userId]
@@ -89,8 +89,8 @@ router.get('/profiles/:userId', async (req, res) => {
     const { userId } = req.params;
     const result = await db.query(
       `SELECT dp.*, 
-              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position))
-               FROM profile_photos WHERE user_id = $1 ORDER BY position) as photos
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = $1) as photos
        FROM dating_profiles dp
        WHERE user_id = $1`,
       [userId]
@@ -178,7 +178,7 @@ router.post('/search', async (req, res) => {
 
     let query = `
       SELECT dp.*, COUNT(*) OVER() as total_count,
-             (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position) 
+             (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
               FROM profile_photos WHERE user_id = dp.user_id) as photos
       FROM dating_profiles dp
       WHERE dp.user_id != $1
@@ -228,8 +228,8 @@ router.get('/discovery', async (req, res) => {
       `SELECT dp.id, dp.user_id, dp.username, dp.first_name, dp.age, dp.gender, 
               dp.location_city, dp.location_state, dp.bio, dp.interests,
               dp.relationship_goals, dp.created_at,
-              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position))
-               FROM profile_photos WHERE user_id = dp.user_id ORDER BY position) as photos
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
        FROM dating_profiles dp
        WHERE dp.user_id != $1
          AND dp.is_active = true
