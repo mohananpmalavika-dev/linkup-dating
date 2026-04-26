@@ -267,8 +267,10 @@ router.post('/signup', async (req, res) => {
 
     // Create empty dating profile
     await db.query(
-      'INSERT INTO dating_profiles (user_id) VALUES ($1)',
-      [userId]
+      `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [userId, buildDisplayNameFromEmail(email), 18, 10]
     );
 
     // Create user preferences
@@ -339,7 +341,7 @@ const checkUsernameAvailability = async (req, res) => {
 
     // Check if username exists in dating_profiles
     const result = await db.query(
-      'SELECT id FROM dating_profiles WHERE first_name ILIKE $1 OR username ILIKE $1 LIMIT 1',
+      'SELECT id FROM dating_profiles WHERE LOWER(username) = LOWER($1) LIMIT 1',
       [username]
     );
 

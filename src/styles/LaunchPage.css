@@ -392,9 +392,21 @@
   background: linear-gradient(135deg, #ec4899, #a78bfa);
 }
 
+.secondary-option {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #f2c94c;
+  color: #1f2937;
+}
+
+.secondary-option span,
+.secondary-option small {
+  color: #1f2937;
+}
+
 .login-option {
-  background: rgba(31, 122, 83, 0.92);
+  background: linear-gradient(135deg, #1f7a53, #22c55e);
   border-color: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 .login-option span,
@@ -402,11 +414,9 @@
   color: #ffffff;
 }
 
-.secondary-option {
-  background: rgba(255, 255, 255, 0.92);
-  border-color: #f2c94c;
+.login-option:hover {
+  box-shadow: 0 18px 34px rgba(31, 122, 83, 0.25);
 }
-
 
 .launch-features {
   max-width: 1180px;

@@ -175,6 +175,15 @@ const LaunchPage = ({
                 <span>{launch.user || "Get Started"}</span>
                 <small>{launch.userHelp || "Join LinkUp and find your match"}</small>
               </button>
+
+              <button
+                type="button"
+                className="registration-option secondary-option login-option"
+                onClick={() => onSelectRegistrationType("login")}
+              >
+                <span>{launch.login || "Login"}</span>
+                <small>{launch.loginHelp || "Access your existing account"}</small>
+              </button>
             </div>
           )}
         </div>

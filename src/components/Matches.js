@@ -30,12 +30,12 @@ const Matches = ({ onSelectMatch, onUnmatch }) => {
     }
   };
 
-  const handleUnmatch = async (userId) => {
+  const handleUnmatch = async (matchId) => {
     if (window.confirm('Unmatch with this person?')) {
       try {
-        await datingProfileService.unmatch(userId);
-        setMatches(matches.filter(m => m.userId !== userId));
-        onUnmatch?.(userId);
+        await datingProfileService.unmatch(matchId);
+        setMatches(matches.filter(m => m.id !== matchId));
+        onUnmatch?.(matchId);
       } catch (err) {
         console.error('Failed to unmatch:', err);
       }
@@ -152,7 +152,7 @@ const Matches = ({ onSelectMatch, onUnmatch }) => {
                   <button onClick={() => onSelectMatch?.(match)}>
                     View Profile
                   </button>
-                  <button onClick={() => handleUnmatch(match.userId)}>
+                  <button onClick={() => handleUnmatch(match.id)}>
                     Unmatch
                   </button>
                 </div>

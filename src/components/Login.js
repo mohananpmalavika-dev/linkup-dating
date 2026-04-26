@@ -33,7 +33,6 @@ const Login = ({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [devOtp, setDevOtp] = useState("");
-  const [loginRole, setLoginRole] = useState("user");
   const [needsUsernameSetup, setNeedsUsernameSetup] = useState(false);
   const [setupUsername, setSetupUsername] = useState("");
   const [setupUsernameStatus, setSetupUsernameStatus] = useState(null); // 'available', 'taken', 'checking', null
@@ -198,11 +197,6 @@ const Login = ({
 
   const updateEmail = (value) => {
     setEmail(value);
-    clearMessages();
-  };
-
-  const updateLoginRole = (role) => {
-    setLoginRole(role);
     clearMessages();
   };
 
@@ -538,7 +532,7 @@ const Login = ({
               registrationType: "user",
             });
           }
-        } else if (isAdminFlow || (isLoginFlow && isAdminEmail && loginRole === "entrepreneur")) {
+        } else if (isAdminFlow) {
           mergedUser = {
             ...response.data.user,
             name: "LinkUp Admin",
@@ -551,15 +545,15 @@ const Login = ({
           mergedUser = {
             ...response.data.user,
             name: registeredAccount?.name || response.data.user.name,
-            role: loginRole === "entrepreneur" ? "business" : "user",
-            registrationType: loginRole,
+            role: "user",
+            registrationType: "user",
           };
         }
 
         onLoginSuccess?.(
           mergedUser,
           response.data.token,
-          mergedUser.registrationType === "admin" ? "admin" : isLoginFlow ? loginRole : mergedUser.registrationType
+          mergedUser.registrationType === "admin" ? "admin" : mergedUser.registrationType
         );
       } else {
         setError(response.data.message || response.data.error || "Failed to verify OTP");
@@ -622,14 +616,14 @@ const Login = ({
           ...verifiedUser,
           username: response.data.user.username,
           name: registeredAccount?.name || response.data.user.name,
-          role: loginRole === "entrepreneur" ? "business" : "user",
-          registrationType: loginRole,
+          role: "user",
+          registrationType: "user",
         };
 
         onLoginSuccess?.(
           mergedUser,
           verifiedToken,
-          loginRole
+          "user"
         );
       } else {
         setSetupUsernameError(response.data.message || response.data.error || "Failed to set username");
@@ -660,7 +654,7 @@ const Login = ({
     : registrationType === "admin"
       ? "Verify the admin email to manage category fees and registrations"
     : registrationType === "login"
-        ? "Choose whether you want to log in as a user or entrepreneur."
+        ? "Verify your email to log in to LinkUp."
         : loginCopy.userSubtitle;
   const headerKicker = registrationType === "login"
     ? loginCopy.welcomeBack
@@ -678,8 +672,8 @@ const Login = ({
       ? "Enter your name, verify your email, and create your user account."
     : isAdminFlow
       ? `Use ${ADMIN_EMAIL} to sign in and manage admin-controlled category fees.`
-      : isLoginFlow
-        ? "Only roles you have already registered for can be used during login."
+    : isLoginFlow
+        ? "Enter your email and confirm the one-time password to continue."
         : "Enter your email and confirm the one-time password to continue.";
 
   const handleVoiceFill = (fieldKey, updateValue) => {
@@ -735,9 +729,9 @@ const Login = ({
         )}
 
         <div className="login-header">
-          <img src="/logo.svg" alt="NilaHub" className="login-logo" />
+          <img src="/logo.svg" alt="LinkUp" className="login-logo" />
           <p className="login-kicker">{headerKicker}</p>
-          <h1>NilaHub</h1>
+          <h1>LinkUp</h1>
           <p className="login-subtitle">{loginSubtitle}</p>
         </div>
 
@@ -753,34 +747,6 @@ const Login = ({
             </div>
             <p>{formDescription}</p>
           </div>
-
-          {isLoginFlow && !otpSent && (
-            <fieldset className="form-group category-group">
-              <legend>Login As</legend>
-              <div className="category-options">
-                <label className="category-option" htmlFor="login-role-user">
-                  <input
-                    id="login-role-user"
-                    type="radio"
-                    name="loginRole"
-                    checked={loginRole === "user"}
-                    onChange={() => updateLoginRole("user")}
-                  />
-                  <span>User</span>
-                </label>
-                <label className="category-option" htmlFor="login-role-entrepreneur">
-                  <input
-                    id="login-role-entrepreneur"
-                    type="radio"
-                    name="loginRole"
-                    checked={loginRole === "entrepreneur"}
-                    onChange={() => updateLoginRole("entrepreneur")}
-                  />
-                  <span>Entrepreneur</span>
-                </label>
-              </div>
-            </fieldset>
-          )}
 
           {isUserRegistrationFlow && !otpSent && (
             <>

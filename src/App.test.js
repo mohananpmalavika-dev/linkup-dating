@@ -328,7 +328,7 @@ test("shows Local Market and AstroNila on the launch page when they are enabled"
   expect(screen.queryByRole("button", { name: /feastly/i })).not.toBeInTheDocument();
 });
 
-test("shows login as user or entrepreneur options", async () => {
+test("shows the simplified login screen", async () => {
   mockAxiosForApp();
 
   render(<App />);
@@ -338,25 +338,10 @@ test("shows login as user or entrepreneur options", async () => {
   expect(
     screen.getByRole("heading", { level: 2, name: /verify your email/i })
   ).toBeInTheDocument();
-  expect(screen.getByRole("group", { name: /login as/i })).toBeInTheDocument();
-  expect(screen.getByLabelText(/^user$/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/^entrepreneur$/i)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 1, name: /linkup/i })).toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: /login as/i })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/^entrepreneur$/i)).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: /send login otp/i })).toBeInTheDocument();
-});
-
-test("allows the admin email to use entrepreneur login without prior registration", async () => {
-  mockAxiosForApp();
-
-  render(<App />);
-  fireEvent.click(await screen.findByRole("button", { name: /login/i }));
-
-  fireEvent.click(screen.getByLabelText(/^entrepreneur$/i));
-  fireEvent.change(screen.getByLabelText(/email address/i), {
-    target: { value: "mgdhanyamohan@gmail.com" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: /send login otp/i }));
-
-  expect(screen.queryByText(/not registered as a entrepreneur/i)).not.toBeInTheDocument();
 });
 
 test("opens the business registration form with fee and food-license handling", async () => {

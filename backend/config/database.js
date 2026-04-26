@@ -3,7 +3,7 @@ require('dotenv').config();
 
 // Support both local development and production (Render)
 const pool = new Pool(
-  process.env.DATABASE_URL 
+  process.env.DATABASE_URL
     ? {
         connectionString: process.env.DATABASE_URL,
         ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
@@ -21,13 +21,19 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle client', err);
 });
 
+let databaseAvailable = false;
+
 const init = async () => {
+  let client;
+
   try {
-    const client = await pool.connect();
+    client = await pool.connect();
+    databaseAvailable = true;
     console.log('✓ Connected to PostgreSQL');
 
-    // Create users table
-    await client.query(`
+    try {
+      // Create users table
+      await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
@@ -37,8 +43,8 @@ const init = async () => {
       );
     `);
 
-    // Create dating_profiles table
-    await client.query(`
+      // Create dating_profiles table
+      await client.query(`
       CREATE TABLE IF NOT EXISTS dating_profiles (
         id SERIAL PRIMARY KEY,
         user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -74,8 +80,8 @@ const init = async () => {
       );
     `);
 
-    // Create profile_photos table
-    await client.query(`
+      // Create profile_photos table
+      await client.query(`
       CREATE TABLE IF NOT EXISTS profile_photos (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -86,20 +92,20 @@ const init = async () => {
       );
     `);
 
-    // Create user_preferences table
-    await client.query(`
+      // Create user_preferences table
+      await client.query(`
       CREATE TABLE IF NOT EXISTS user_preferences (
         id SERIAL PRIMARY KEY,
         user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         age_range_min INTEGER DEFAULT 18,
         age_range_max INTEGER DEFAULT 50,
         location_radius INTEGER DEFAULT 50,
-        gender_preferences TEXT[],
-        relationship_goals TEXT[],
-        interests TEXT[],
+        gender_preferences TEXT[] DEFAULT '{}',
+        relationship_goals TEXT[] DEFAULT '{}',
+        interests TEXT[] DEFAULT '{}',
         height_range_min INTEGER,
         height_range_max INTEGER,
-        body_types TEXT[],
+        body_types TEXT[] DEFAULT '{}',
         show_my_profile BOOLEAN DEFAULT TRUE,
         allow_messages BOOLEAN DEFAULT TRUE,
         notifications_enabled BOOLEAN DEFAULT TRUE,
@@ -108,8 +114,8 @@ const init = async () => {
       );
     `);
 
-    // Create interactions table (likes/passes)
-    await client.query(`
+      // Create interactions table (likes/passes)
+      await client.query(`
       CREATE TABLE IF NOT EXISTS interactions (
         id SERIAL PRIMARY KEY,
         from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -121,8 +127,8 @@ const init = async () => {
       );
     `);
 
-    // Create matches table
-    await client.query(`
+      // Create matches table
+      await client.query(`
       CREATE TABLE IF NOT EXISTS matches (
         id SERIAL PRIMARY KEY,
         user_id_1 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -136,8 +142,8 @@ const init = async () => {
       );
     `);
 
-    // Create messages table
-    await client.query(`
+      // Create messages table
+      await client.query(`
       CREATE TABLE IF NOT EXISTS messages (
         id SERIAL PRIMARY KEY,
         match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
@@ -150,8 +156,8 @@ const init = async () => {
       );
     `);
 
-    // Create video_dates table
-    await client.query(`
+      // Create video_dates table
+      await client.query(`
       CREATE TABLE IF NOT EXISTS video_dates (
         id SERIAL PRIMARY KEY,
         match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
@@ -167,8 +173,8 @@ const init = async () => {
       );
     `);
 
-    // Create verification_tokens table
-    await client.query(`
+      // Create verification_tokens table
+      await client.query(`
       CREATE TABLE IF NOT EXISTS verification_tokens (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -179,8 +185,8 @@ const init = async () => {
       );
     `);
 
-    // Create indices for better query performance
-    await client.query(`
+      // Create indices for better query performance
+      await client.query(`
       CREATE INDEX IF NOT EXISTS idx_dating_profiles_user_id ON dating_profiles(user_id);
       CREATE INDEX IF NOT EXISTS idx_profile_photos_user_id ON profile_photos(user_id);
       CREATE INDEX IF NOT EXISTS idx_interactions_users ON interactions(from_user_id, to_user_id);
@@ -188,8 +194,8 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
     `);
 
-    // Migration: Add username column if it doesn't exist
-    await client.query(`
+      // Migration: Add username column if it doesn't exist
+      await client.query(`
       ALTER TABLE dating_profiles
       ADD COLUMN IF NOT EXISTS username VARCHAR(100) UNIQUE;
     `);
@@ -200,16 +206,35 @@ const init = async () => {
       ADD COLUMN IF NOT EXISTS storefront_data JSONB DEFAULT '{"cart": [], "favorites": [], "savedAddresses": []}';
     `);
 
-    client.release();
-    console.log('✓ Database schema initialized');
+    // Migration: allow long photo payloads such as data URLs
+    await client.query(`
+      ALTER TABLE profile_photos
+      ALTER COLUMN photo_url TYPE TEXT;
+    `);
+
+      console.log('✓ Database schema initialized');
+      return true;
+    } finally {
+      client.release();
+    }
   } catch (err) {
+    databaseAvailable = false;
     console.error('Error initializing database:', err);
+
+    if (err.code === 'ECONNREFUSED' && process.env.NODE_ENV !== 'production') {
+      console.warn('⚠ PostgreSQL is unavailable. Starting backend without database connectivity in development mode.');
+      return false;
+    }
+
     throw err;
   }
 };
 
+const isAvailable = () => databaseAvailable;
+
 module.exports = {
   pool,
   query: (text, params) => pool.query(text, params),
-  init
+  init,
+  isAvailable
 };

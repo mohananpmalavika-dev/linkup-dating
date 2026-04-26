@@ -296,7 +296,7 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
 
     try {
       // Create dating profile
-      const profileResponse = await axios.post(`${API_BASE_URL}/dating/profiles`, {
+      await axios.post(`${API_BASE_URL}/dating/profiles`, {
         firstName: formData.firstName,
         age: formData.age,
         gender: formData.gender,
