@@ -21,12 +21,14 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
   const [devOtp, setDevOtp] = useState('');
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [verifiedUser, setVerifiedUser] = useState(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
   
   // Username state
   const [username, setUsername] = useState('');
   const [usernameStatus, setUsernameStatus] = useState(null); // 'checking', 'available', 'taken'
   const [usernameError, setUsernameError] = useState('');
   const usernameCheckTimeoutRef = React.useRef(null);
+  const resendTimerRef = React.useRef(null);
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -84,8 +86,63 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
 
       setOtpSent(true);
       setSuccess('OTP sent to your email!');
+      setResendCooldown(60); // 60 second cooldown
+      
+      // Start countdown timer
+      if (resendTimerRef.current) {
+        clearInterval(resendTimerRef.current);
+      }
+      resendTimerRef.current = setInterval(() => {
+        setResendCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(resendTimerRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Resend OTP
+  const handleResendOtp = async (e) => {
+    e.preventDefault();
+    setError('');
+    setOtp('');
+
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
+        email: email.trim().toLowerCase(),
+        purpose: 'signup'
+      });
+
+      if (response.data.devOtp) {
+        setDevOtp(response.data.devOtp);
+      }
+
+      setSuccess('OTP resent to your email!');
+      setResendCooldown(60); // Reset cooldown
+      
+      // Start countdown timer
+      if (resendTimerRef.current) {
+        clearInterval(resendTimerRef.current);
+      }
+      resendTimerRef.current = setInterval(() => {
+        setResendCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(resendTimerRef.current);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to resend OTP');
     } finally {
       setLoading(false);
     }
@@ -365,17 +422,34 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                 <button type="submit" className="btn-submit" disabled={loading}>
                   {loading ? 'Verifying...' : 'Verify OTP'}
                 </button>
-                <button
-                  type="button"
-                  className="btn-outline"
-                  onClick={() => {
-                    setOtpSent(false);
-                    setOtp('');
-                  }}
-                  disabled={loading}
-                >
-                  Back
-                </button>
+                
+                <div className="otp-actions">
+                  <button
+                    type="button"
+                    className="btn-resend"
+                    onClick={handleResendOtp}
+                    disabled={loading || resendCooldown > 0}
+                  >
+                    {resendCooldown > 0 
+                      ? `Resend OTP (${resendCooldown}s)` 
+                      : 'Resend OTP'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={() => {
+                      setOtpSent(false);
+                      setOtp('');
+                      if (resendTimerRef.current) {
+                        clearInterval(resendTimerRef.current);
+                      }
+                      setResendCooldown(0);
+                    }}
+                    disabled={loading}
+                  >
+                    Change Email
+                  </button>
+                </div>
               </>
             )}
           </form>

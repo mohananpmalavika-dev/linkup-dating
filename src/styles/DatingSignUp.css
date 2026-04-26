@@ -1,6 +1,6 @@
 .dating-signup-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #d946a6 0%, #7c3aed 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -12,39 +12,45 @@
 
 .signup-card {
   background: white;
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 40px;
   max-width: 500px;
   width: 100%;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 40px rgba(217, 70, 166, 0.25);
 }
 
 .signup-card h1 {
   margin: 0 0 30px 0;
   font-size: 28px;
-  color: #333;
+  color: #2d2d2d;
   text-align: center;
+  background: linear-gradient(135deg, #d946a6, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* Messages */
 .error-message {
   padding: 12px;
-  background: #ffe0ed;
-  color: #ff6b6b;
+  background: #fce7f3;
+  color: #be185d;
   border-radius: 8px;
   margin-bottom: 15px;
   font-size: 14px;
   text-align: center;
+  border-left: 4px solid #ec4899;
 }
 
 .success-message {
   padding: 12px;
-  background: #e0ffe0;
-  color: #4caf50;
+  background: #dcfce7;
+  color: #16a34a;
   border-radius: 8px;
   margin-bottom: 15px;
   font-size: 14px;
   text-align: center;
+  border-left: 4px solid #22c55e;
 }
 
 /* Step Indicators */
@@ -59,7 +65,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #f0f0f0;
+  background: #f3f4f6;
   color: #999;
   display: flex;
   align-items: center;
@@ -69,7 +75,7 @@
 }
 
 .step.active {
-  background: #667eea;
+  background: linear-gradient(135deg, #d946a6, #7c3aed);
   color: white;
 }
 
@@ -83,7 +89,7 @@
 .signup-step h2 {
   margin: 0;
   font-size: 20px;
-  color: #333;
+  color: #2d2d2d;
 }
 
 .signup-step > p {
@@ -108,14 +114,14 @@
 .form-group label {
   font-size: 14px;
   font-weight: 600;
-  color: #333;
+  color: #2d2d2d;
 }
 
 .form-group input,
 .form-group textarea,
 .form-group select {
   padding: 10px;
-  border: 1px solid #ddd;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   font-size: 14px;
   font-family: inherit;
@@ -126,8 +132,8 @@
 .form-group textarea:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #d946a6;
+  box-shadow: 0 0 0 3px rgba(217, 70, 166, 0.1);
 }
 
 .form-group textarea {
@@ -174,10 +180,11 @@
   gap: 8px;
 }
 
+.interest-tag,
 .interest-btn {
   padding: 8px 12px;
-  background: #f0f0f0;
-  color: #333;
+  background: #f3f4f6;
+  color: #2d2d2d;
   border: 2px solid transparent;
   border-radius: 20px;
   font-size: 13px;
@@ -186,14 +193,16 @@
   font-weight: 500;
 }
 
+.interest-tag:hover,
 .interest-btn:hover {
-  background: #e0e0e0;
+  background: #e5e7eb;
 }
 
+.interest-tag.selected,
 .interest-btn.selected {
-  background: #667eea;
+  background: linear-gradient(135deg, #d946a6, #7c3aed);
   color: white;
-  border-color: #667eea;
+  border-color: #d946a6;
 }
 
 /* Photo Upload */
@@ -290,7 +299,9 @@
 
 .btn-back,
 .btn-next,
-.btn-submit {
+.btn-submit,
+.btn-outline,
+.btn-resend {
   flex: 1;
   padding: 12px;
   border: none;
@@ -301,18 +312,21 @@
   transition: all 0.2s;
 }
 
-.btn-back {
-  background: #f0f0f0;
-  color: #333;
+.btn-back,
+.btn-outline {
+  background: #f3f4f6;
+  color: #2d2d2d;
+  border: 1px solid #e5e7eb;
 }
 
-.btn-back:hover {
-  background: #e0e0e0;
+.btn-back:hover,
+.btn-outline:hover {
+  background: #e5e7eb;
 }
 
 .btn-next,
 .btn-submit {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #d946a6 0%, #7c3aed 100%);
   color: white;
   width: 100%;
   margin-top: 15px;
@@ -321,13 +335,34 @@
 .btn-next:hover,
 .btn-submit:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(217, 70, 166, 0.3);
 }
 
-.btn-submit:disabled {
+.btn-submit:disabled,
+.btn-resend:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   transform: none;
+}
+
+/* OTP Actions */
+.otp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.btn-resend {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  margin: 0;
+}
+
+.btn-resend:hover:not(:disabled) {
+  background: #fde68a;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
 }
 
 /* Login Link */
@@ -341,7 +376,7 @@
 .login-link button {
   background: none;
   border: none;
-  color: #667eea;
+  color: #d946a6;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
@@ -349,7 +384,7 @@
 }
 
 .login-link button:hover {
-  color: #764ba2;
+  color: #7c3aed;
 }
 
 /* Responsive */

@@ -169,19 +169,11 @@ const LaunchPage = ({
             <div className="registration-actions" aria-label="Registration options">
               <button
                 type="button"
-                className="registration-option login-option"
-                onClick={() => onSelectRegistrationType("login")}
-              >
-                <span>{launch.login || "Sign In"}</span>
-                <small>{launch.loginHelp || "Already have an account?"}</small>
-              </button>
-              <button
-                type="button"
                 className="registration-option primary-option"
                 onClick={() => onSelectRegistrationType("user")}
               >
-                <span>{launch.user || "Sign Up"}</span>
-                <small>{launch.userHelp || "Create a new dating profile"}</small>
+                <span>{launch.user || "Get Started"}</span>
+                <small>{launch.userHelp || "Join LinkUp and find your match"}</small>
               </button>
             </div>
           )}
