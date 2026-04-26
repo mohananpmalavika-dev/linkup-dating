@@ -323,4 +323,57 @@ router.post('/contact-means', (req, res) => {
   });
 });
 
+// SEND OTP
+router.post('/send-otp', async (req, res) => {
+  try {
+    const { email, phone } = req.body;
+
+    if (!email && !phone) {
+      return res.status(400).json({ error: 'Email or phone number required' });
+    }
+
+    // Generate a random 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // In production, you would send this OTP via email/SMS
+    // For now, we'll store it in memory or log it
+    console.log(`OTP for ${email || phone}: ${otp}`);
+
+    res.json({
+      success: true,
+      message: 'OTP sent successfully',
+      otpId: 'temp-otp-' + Date.now() // Temporary identifier for verification
+    });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ error: 'Failed to send OTP' });
+  }
+});
+
+// VERIFY OTP
+router.post('/verify-otp', async (req, res) => {
+  try {
+    const { otpId, otp } = req.body;
+
+    if (!otpId || !otp) {
+      return res.status(400).json({ error: 'OTP ID and OTP required' });
+    }
+
+    // In production, verify the OTP from your storage
+    // For now, accept any valid 6-digit OTP
+    if (!/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: 'Invalid OTP format' });
+    }
+
+    res.json({
+      success: true,
+      message: 'OTP verified successfully',
+      verified: true
+    });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(500).json({ error: 'Failed to verify OTP' });
+  }
+});
+
 module.exports = router;
