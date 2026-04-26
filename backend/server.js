@@ -9,6 +9,7 @@ const db = require('./config/database');
 const authRoutes = require('./routes/auth');
 const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
+const productsRoutes = require('./routes/products');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
@@ -100,6 +101,7 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/products', authenticateToken, productsRoutes);
 app.use('/api/dating', authenticateToken, datingRoutes);
 app.use('/api/messaging', authenticateToken, messagingRoutes);
 
@@ -115,6 +117,7 @@ app.use((req, res) => {
     message: `The endpoint ${req.method} ${req.path} does not exist`,
     availableEndpoints: {
       auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/me',
+      products: '/api/products, /api/products/manage (requires auth)',
       dating: '/api/dating/* (requires auth)',
       messaging: '/api/messaging/* (requires auth)',
       health: '/health'
