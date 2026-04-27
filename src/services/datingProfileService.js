@@ -76,6 +76,24 @@ export const datingProfileService = {
   },
 
   /**
+   * Upload a short voice intro for the current profile
+   */
+  uploadVoiceIntro: async (file, durationSeconds) => {
+    try {
+      const formData = new FormData();
+      formData.append('photos', file);
+      formData.append('durationSeconds', String(durationSeconds));
+
+      const response = await axios.post(`${API_URL}/profiles/me/voice-intro`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to upload voice intro';
+    }
+  },
+
+  /**
    * Get profiles for discovery (with optional filters and cursor pagination)
    */
   getDiscoveryProfiles: async (filters = {}) => {
@@ -488,6 +506,69 @@ export const datingProfileService = {
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to fetch new profiles';
+    }
+  },
+
+  /**
+   * Get saved discovery filter presets
+   */
+  getFilterPresets: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/filter-presets`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch filter presets';
+    }
+  },
+
+  /**
+   * Save a named discovery filter preset
+   */
+  saveFilterPreset: async (presetName, filters) => {
+    try {
+      const response = await axios.post(`${API_URL}/filter-presets`, {
+        presetName,
+        filters
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to save filter preset';
+    }
+  },
+
+  /**
+   * Load and apply a saved discovery preset
+   */
+  applyFilterPreset: async (presetId) => {
+    try {
+      const response = await axios.post(`${API_URL}/filter-presets/${presetId}/apply`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to apply filter preset';
+    }
+  },
+
+  /**
+   * Delete a saved discovery preset
+   */
+  deleteFilterPreset: async (presetId) => {
+    try {
+      const response = await axios.delete(`${API_URL}/filter-presets/${presetId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to delete filter preset';
+    }
+  },
+
+  /**
+   * Fetch the explanation for a suggested discovery profile
+   */
+  getMatchExplanation: async (userId) => {
+    try {
+      const response = await axios.get(`${API_URL}/match-explanation/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch match explanation';
     }
   },
 

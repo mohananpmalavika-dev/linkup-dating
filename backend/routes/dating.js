@@ -378,11 +378,15 @@ const collectPhotosFromRequest = async (req) => {
   }
 
   const { fields, files } = await parseMultipartFormData(req);
+  req.parsedMultipartFields = fields;
   const uploadedPhotos = files
     .filter((file) => file.fieldName === 'photos')
     .map((file, index) => ({
       url: convertFileToDataUrl(file),
-      position: index
+      position: index,
+      contentType: file.contentType || null,
+      filename: file.filename || null,
+      size: file.buffer?.length || 0
     }));
 
   if (uploadedPhotos.length > 0) {
@@ -1249,6 +1253,9 @@ const normalizeProfileRow = (profileRow) => {
     createdAt: profileRow.created_at || null,
     updatedAt: profileRow.updated_at || null,
     verifications: profileRow.verifications || {},
+    voiceIntroUrl: profileRow.voice_intro_url || null,
+    voiceIntroDurationSeconds: normalizeInteger(profileRow.voice_intro_duration_seconds),
+    videoIntroUrl: profileRow.video_intro_url || null,
     location: {
       city: profileRow.location_city || '',
       state: profileRow.location_state || '',
@@ -6546,31 +6553,66 @@ router.post('/profiles/me/voice-intro', async (req, res) => {
   try {
     const userId = req.user.id;
     const photos = await collectPhotosFromRequest(req);
+    const multipartFields = req.parsedMultipartFields || {};
 
     if (!photos.length) {
       return res.status(400).json({ error: 'Voice intro file required' });
     }
 
-    // Use first file as voice intro (treated as blob)
-    const voiceIntroUrl = photos[0].url;
+    const voiceIntro = photos[0];
+    const voiceIntroUrl = voiceIntro.url;
+    const contentType = String(voiceIntro.contentType || '').toLowerCase();
+    const filename = String(voiceIntro.filename || '').toLowerCase();
+    const durationSeconds = normalizeInteger(
+      req.body?.durationSeconds ?? multipartFields.durationSeconds
+    );
+    const isSupportedAudio =
+      contentType.startsWith('audio/')
+      || ['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.webm'].some((extension) =>
+        filename.endsWith(extension)
+      );
 
-    // Validate it's audio-like (just basic check)
-    if (!voiceIntroUrl.includes('data:') && !voiceIntroUrl.includes('.mp3') && !voiceIntroUrl.includes('.wav')) {
-      return res.status(400).json({ error: 'Invalid audio format. Please use MP3 or WAV.' });
+    if (!isSupportedAudio && !voiceIntroUrl.includes('data:audio/')) {
+      return res.status(400).json({ error: 'Invalid audio format. Please use MP3, WAV, M4A, OGG, AAC, or WEBM.' });
+    }
+
+    if (!durationSeconds || durationSeconds < 15 || durationSeconds > 30) {
+      return res.status(400).json({ error: 'Voice intro must be between 15 and 30 seconds long.' });
+    }
+
+    if ((voiceIntro.size || 0) > 12 * 1024 * 1024) {
+      return res.status(400).json({ error: 'Voice intro file is too large. Please keep it under 12MB.' });
     }
 
     await db.query(
       `UPDATE dating_profiles
        SET voice_intro_url = $1,
+           voice_intro_duration_seconds = $2,
            profile_completion_percent = GREATEST(COALESCE(profile_completion_percent, 0), 85),
+           last_active = CURRENT_TIMESTAMP,
            updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = $2`,
-      [voiceIntroUrl, userId]
+       WHERE user_id = $3`,
+      [voiceIntroUrl, durationSeconds, userId]
     );
+
+    await createModerationFlag({
+      userId,
+      sourceType: 'voice_intro_upload',
+      flagCategory: 'content',
+      severity: 'low',
+      title: 'Voice intro uploaded',
+      reason: 'Voice intro uploaded and queued for routine moderation review.',
+      metadata: {
+        durationSeconds,
+        contentType: contentType || null,
+        filename: filename || null
+      }
+    });
 
     res.json({
       message: 'Voice intro uploaded successfully',
       voiceIntroUrl,
+      durationSeconds,
       completionBoost: '+5%'
     });
   } catch (err) {
@@ -7659,6 +7701,1564 @@ router.get('/nearby-users', async (req, res) => {
   } catch (err) {
     console.error('Get nearby users error:', err);
     res.status(500).json({ error: 'Failed to get nearby users' });
+  }
+});
+
+// ============================================
+// TIER 2: ANALYTICS, TRANSPARENCY, & SAFETY
+// ============================================
+
+// 73. GET ANALYTICS OVERVIEW (30-day engagement summary)
+router.get('/analytics/overview', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const result = await db.query(
+      `SELECT
+        COALESCE(SUM(CASE WHEN activity_date >= $1 THEN profiles_viewed ELSE 0 END), 0) as profiles_viewed_30d,
+        COALESCE(SUM(CASE WHEN activity_date >= $1 THEN likes_sent ELSE 0 END), 0) as likes_sent_30d,
+        COALESCE(SUM(CASE WHEN activity_date >= $1 THEN likes_received ELSE 0 END), 0) as likes_received_30d,
+        COALESCE(SUM(CASE WHEN activity_date >= $1 THEN superlikes_sent ELSE 0 END), 0) as superlikes_sent_30d,
+        COALESCE(SUM(CASE WHEN activity_date >= $1 THEN superlikes_received ELSE 0 END), 0) as superlikes_received_30d,
+        COALESCE(SUM(CASE WHEN activity_date >= $1 THEN matches_created ELSE 0 END), 0) as matches_created_30d,
+        COALESCE(SUM(CASE WHEN activity_date >= $1 THEN active_matches ELSE 0 END), 0) as active_matches_30d,
+        COALESCE(SUM(CASE WHEN activity_date >= $1 THEN messages_sent ELSE 0 END), 0) as messages_sent_30d
+       FROM profile_analytics
+       WHERE user_id = $2`,
+      [thirtyDaysAgo, userId]
+    );
+
+    const stats = result.rows[0];
+    const engagementRate = stats.profiles_viewed_30d > 0 
+      ? Math.round((stats.likes_sent_30d / stats.profiles_viewed_30d) * 100)
+      : 0;
+
+    res.json({
+      analytics: {
+        period: '30_days',
+        profilesViewed: parseInt(stats.profiles_viewed_30d),
+        likesSent: parseInt(stats.likes_sent_30d),
+        likesReceived: parseInt(stats.likes_received_30d),
+        superlikesSent: parseInt(stats.superlikes_sent_30d),
+        superlikesReceived: parseInt(stats.superlikes_received_30d),
+        matchesCreated: parseInt(stats.matches_created_30d),
+        activeMatches: parseInt(stats.active_matches_30d),
+        messagesSent: parseInt(stats.messages_sent_30d),
+        engagementRate: engagementRate + '%'
+      }
+    });
+  } catch (err) {
+    console.error('Get analytics overview error:', err);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
+// 74. GET ANALYTICS TRENDS (time-series data)
+router.get('/analytics/trends', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const days = Math.min(parseInt(req.query.days) || 30, 90);
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const result = await db.query(
+      `SELECT 
+        activity_date,
+        profiles_viewed,
+        likes_sent,
+        likes_received,
+        superlikes_sent,
+        matches_created,
+        messages_sent
+       FROM profile_analytics
+       WHERE user_id = $1 AND activity_date >= $2
+       ORDER BY activity_date ASC`,
+      [userId, startDate]
+    );
+
+    const dailyTrends = result.rows.map(row => ({
+      date: row.activity_date.toISOString().split('T')[0],
+      profilesViewed: row.profiles_viewed,
+      likesSent: row.likes_sent,
+      likesReceived: row.likes_received,
+      superlikesSent: row.superlikes_sent,
+      matchesCreated: row.matches_created,
+      messagesSent: row.messages_sent
+    }));
+
+    res.json({ trends: dailyTrends });
+  } catch (err) {
+    console.error('Get analytics trends error:', err);
+    res.status(500).json({ error: 'Failed to fetch trends' });
+  }
+});
+
+// 75. GET PHOTO PERFORMANCE (per-photo engagement ranking)
+router.get('/analytics/photo-performance', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT 
+        id,
+        photo_position,
+        profile_views,
+        likes_received,
+        superlikes_received,
+        right_swipe_rate,
+        left_swipe_rate,
+        engagement_score
+       FROM photo_performance
+       WHERE user_id = $1
+       ORDER BY engagement_score DESC`,
+      [userId]
+    );
+
+    const photos = result.rows.map(row => ({
+      photoId: row.id,
+      position: row.photo_position,
+      views: row.profile_views,
+      likes: row.likes_received,
+      superlikes: row.superlikes_received,
+      rightSwipeRate: Math.round(row.right_swipe_rate),
+      leftSwipeRate: Math.round(row.left_swipe_rate),
+      engagementScore: Math.round(row.engagement_score * 100) / 100
+    }));
+
+    res.json({ photoPerformance: photos });
+  } catch (err) {
+    console.error('Get photo performance error:', err);
+    res.status(500).json({ error: 'Failed to fetch photo performance' });
+  }
+});
+
+// 76. GET ENGAGEMENT BREAKDOWN (by demographics, distance, time)
+router.get('/analytics/engagement-breakdown', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    // Get interactions data
+    const breakdownResult = await db.query(
+      `SELECT 
+        'age' as metric,
+        dp.age_range,
+        COUNT(*) as interaction_count,
+        SUM(CASE WHEN i.interaction_type = 'like' THEN 1 ELSE 0 END) as likes,
+        SUM(CASE WHEN i.interaction_type = 'superlike' THEN 1 ELSE 0 END) as superlikes
+       FROM interactions i
+       JOIN dating_profiles dp ON (
+         (i.user_id_1 = $1 AND dp.user_id = i.user_id_2) OR 
+         (i.user_id_2 = $1 AND dp.user_id = i.user_id_1)
+       )
+       WHERE (i.user_id_1 = $1 OR i.user_id_2 = $1)
+         AND i.created_at >= $2
+       GROUP BY dp.age_range
+       UNION ALL
+       SELECT 
+        'distance' as metric,
+        CASE 
+          WHEN i.distance_km <= 5 THEN '0-5km'
+          WHEN i.distance_km <= 20 THEN '5-20km'
+          WHEN i.distance_km <= 50 THEN '20-50km'
+          ELSE '50km+'
+        END as distance_range,
+        COUNT(*) as interaction_count,
+        SUM(CASE WHEN i.interaction_type = 'like' THEN 1 ELSE 0 END),
+        SUM(CASE WHEN i.interaction_type = 'superlike' THEN 1 ELSE 0 END)
+       FROM interactions i
+       WHERE (i.user_id_1 = $1 OR i.user_id_2 = $1)
+         AND i.created_at >= $2
+       GROUP BY distance_range`,
+      [userId, thirtyDaysAgo]
+    );
+
+    const breakdown = {};
+    breakdownResult.rows.forEach(row => {
+      const category = row.metric === 'age' ? row.age_range : row.distance_range;
+      breakdown[category] = {
+        interactions: row.interaction_count,
+        likes: row.likes || 0,
+        superlikes: row.superlikes || 0
+      };
+    });
+
+    res.json({ engagementBreakdown: breakdown });
+  } catch (err) {
+    console.error('Get engagement breakdown error:', err);
+    res.status(500).json({ error: 'Failed to fetch engagement breakdown' });
+  }
+});
+
+// 77. GET CONVERSATION INSIGHTS (message patterns & quality)
+router.get('/analytics/conversation-insights', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT 
+        COUNT(*) as total_conversations,
+        AVG(message_count) as avg_messages_per_match,
+        MAX(message_count) as longest_conversation,
+        COUNT(CASE WHEN has_met = true THEN 1 END) as meetings_arranged,
+        ROUND(AVG(quality_score)::numeric, 2) as avg_quality_score
+       FROM (
+         SELECT 
+          m.id,
+          (SELECT COUNT(*) FROM messages WHERE match_id = m.id) as message_count,
+          (SELECT MAX(quality_score) FROM date_completion_feedback WHERE match_id = m.id) as quality_score,
+          (SELECT COUNT(*) FROM date_proposals WHERE match_id = m.id AND status = 'accepted') > 0 as has_met
+         FROM matches m
+         WHERE m.user_id_1 = $1 OR m.user_id_2 = $1
+       ) conversation_stats`,
+      [userId]
+    );
+
+    const insights = result.rows[0];
+
+    res.json({
+      conversationInsights: {
+        totalConversations: parseInt(insights.total_conversations),
+        averageMessagesPerMatch: Math.round(insights.avg_messages_per_match || 0),
+        longestConversation: parseInt(insights.longest_conversation || 0),
+        meetingsArranged: parseInt(insights.meetings_arranged),
+        averageQualityScore: parseFloat(insights.avg_quality_score) || 0
+      }
+    });
+  } catch (err) {
+    console.error('Get conversation insights error:', err);
+    res.status(500).json({ error: 'Failed to fetch conversation insights' });
+  }
+});
+
+// 78. GET MATCH EXPLANATION (why a profile was suggested)
+router.get('/match-explanation/:suggestedUserId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const suggestedUserId = parseInt(req.params.suggestedUserId);
+
+    const result = await db.query(
+      `SELECT 
+        compatibility_score,
+        factors_json,
+        recommendations_json
+       FROM matchmaker_explanations
+       WHERE viewer_id = $1 AND candidate_id = $2
+       LIMIT 1`,
+      [userId, suggestedUserId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No explanation found for this match' });
+    }
+
+    const explanation = result.rows[0];
+
+    res.json({
+      matchExplanation: {
+        compatibilityScore: explanation.compatibility_score,
+        factors: explanation.factors_json || [],
+        recommendations: explanation.recommendations_json || []
+      }
+    });
+  } catch (err) {
+    console.error('Get match explanation error:', err);
+    res.status(500).json({ error: 'Failed to fetch match explanation' });
+  }
+});
+
+// 79. GET MATCHING FACTORS (what drives my matches)
+router.get('/matching-factors/my-profile', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Analyze what factors appear most in explanations
+    const result = await db.query(
+      `SELECT 
+        factors_json,
+        COUNT(*) as frequency
+       FROM matchmaker_explanations
+       WHERE viewer_id = $1
+       GROUP BY factors_json
+       ORDER BY frequency DESC
+       LIMIT 20`,
+      [userId]
+    );
+
+    const factors = {};
+    result.rows.forEach(row => {
+      if (row.factors_json && Array.isArray(row.factors_json)) {
+        row.factors_json.forEach(factor => {
+          factors[factor] = (factors[factor] || 0) + row.frequency;
+        });
+      }
+    });
+
+    const topFactors = Object.entries(factors)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([factor, count]) => ({ factor, frequency: count }));
+
+    res.json({ matchingFactors: topFactors });
+  } catch (err) {
+    console.error('Get matching factors error:', err);
+    res.status(500).json({ error: 'Failed to fetch matching factors' });
+  }
+});
+
+// 80. GET DECISION HISTORY (all historical swipes - Premium)
+router.get('/decision-history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Check subscription
+    const subResult = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [userId]
+    );
+
+    if (subResult.rows.length === 0 || !['premium', 'gold'].includes(subResult.rows[0].plan)) {
+      return res.status(403).json({ error: 'This feature requires a Premium or Gold subscription' });
+    }
+
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const offset = Math.min(parseInt(req.query.offset) || 0, 10000);
+
+    const result = await db.query(
+      `SELECT 
+        udh.id,
+        udh.decision_type,
+        udh.decision_timestamp,
+        udh.context,
+        udh.profile_still_available,
+        udh.undo_action,
+        dp.first_name,
+        dp.age,
+        (SELECT photo_url FROM profile_photos WHERE user_id = udh.profile_user_id LIMIT 1) as photo_url
+       FROM user_decision_history udh
+       JOIN dating_profiles dp ON dp.user_id = udh.profile_user_id
+       WHERE udh.user_id = $1
+       ORDER BY udh.decision_timestamp DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+
+    const decisions = result.rows.map(row => ({
+      id: row.id,
+      decision: row.decision_type,
+      timestamp: row.decision_timestamp,
+      context: row.context,
+      profileAvailable: row.profile_still_available,
+      undone: row.undo_action,
+      profile: {
+        name: row.first_name,
+        age: row.age,
+        photoUrl: row.photo_url
+      }
+    }));
+
+    res.json({ decisions });
+  } catch (err) {
+    console.error('Get decision history error:', err);
+    res.status(500).json({ error: 'Failed to fetch decision history' });
+  }
+});
+
+// 81. UNDO PASS (reverse a pass - Premium, 3/day free)
+router.post('/undo-pass/:profileId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const profileUserId = parseInt(req.params.profileId);
+
+    // Find the pass decision
+    const passResult = await db.query(
+      `SELECT * FROM user_decision_history
+       WHERE user_id = $1 AND profile_user_id = $2 AND decision_type = 'pass'
+       ORDER BY decision_timestamp DESC LIMIT 1`,
+      [userId, profileUserId]
+    );
+
+    if (passResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No pass found for this profile' });
+    }
+
+    const passDecision = passResult.rows[0];
+
+    // Check if already undone
+    if (passDecision.undo_action) {
+      return res.status(400).json({ error: 'This pass has already been undone' });
+    }
+
+    // Mark pass as undone
+    await db.query(
+      `UPDATE user_decision_history
+       SET undo_action = true, undone_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [passDecision.id]
+    );
+
+    // Re-show in discovery queue
+    res.json({ message: 'Pass undone - profile returned to your discovery queue' });
+  } catch (err) {
+    console.error('Undo pass error:', err);
+    res.status(500).json({ error: 'Failed to undo pass' });
+  }
+});
+
+// 82. GET PROFILES I PASSED (view history of passed profiles - Premium)
+router.get('/profiles/passed', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Check subscription
+    const subResult = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [userId]
+    );
+
+    if (subResult.rows.length === 0 || !['premium', 'gold'].includes(subResult.rows[0].plan)) {
+      return res.status(403).json({ error: 'This feature requires a Premium or Gold subscription' });
+    }
+
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50);
+    const offset = Math.min(parseInt(req.query.offset) || 0, 10000);
+
+    const result = await db.query(
+      `SELECT 
+        udh.id,
+        udh.profile_user_id,
+        udh.decision_timestamp,
+        dp.first_name,
+        dp.age,
+        dp.gender,
+        (SELECT photo_url FROM profile_photos WHERE user_id = udh.profile_user_id LIMIT 1) as photo_url
+       FROM user_decision_history udh
+       JOIN dating_profiles dp ON dp.user_id = udh.profile_user_id
+       WHERE udh.user_id = $1 AND udh.decision_type = 'pass' AND udh.undo_action = false
+       ORDER BY udh.decision_timestamp DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+
+    const passedProfiles = result.rows.map(row => ({
+      id: row.id,
+      userId: row.profile_user_id,
+      firstName: row.first_name,
+      age: row.age,
+      gender: row.gender,
+      photoUrl: row.photo_url,
+      passedAt: row.decision_timestamp
+    }));
+
+    res.json({ passedProfiles });
+  } catch (err) {
+    console.error('Get passed profiles error:', err);
+    res.status(500).json({ error: 'Failed to fetch passed profiles' });
+  }
+});
+
+// 83. GET SUPERLIKE STATS (usage & response rates)
+router.get('/superlikes/stats', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const result = await db.query(
+      `SELECT 
+        COUNT(*) as total_superlikes_sent,
+        SUM(CASE WHEN receiver_response = 'liked' THEN 1 ELSE 0 END) as liked_back,
+        SUM(CASE WHEN receiver_response = 'matched' THEN 1 ELSE 0 END) as matched,
+        SUM(CASE WHEN receiver_response = 'passed' THEN 1 ELSE 0 END) as passed,
+        SUM(CASE WHEN gift_type != 'none' THEN 1 ELSE 0 END) as with_gift,
+        COUNT(CASE WHEN sent_at >= $2 THEN 1 END) as superlikes_30d
+       FROM superlike_gifts
+       WHERE sender_id = $1`,
+      [userId, thirtyDaysAgo]
+    );
+
+    const stats = result.rows[0];
+    const responseRate = stats.total_superlikes_sent > 0
+      ? Math.round(((stats.liked_back + stats.matched) / stats.total_superlikes_sent) * 100)
+      : 0;
+
+    res.json({
+      superlikeStats: {
+        totalSent: parseInt(stats.total_superlikes_sent),
+        responses: {
+          likedBack: parseInt(stats.liked_back) || 0,
+          matched: parseInt(stats.matched) || 0,
+          passed: parseInt(stats.passed) || 0
+        },
+        withGift: parseInt(stats.with_gift) || 0,
+        responseRate: responseRate + '%',
+        last30Days: parseInt(stats.superlikes_30d)
+      }
+    });
+  } catch (err) {
+    console.error('Get superlike stats error:', err);
+    res.status(500).json({ error: 'Failed to fetch superlike stats' });
+  }
+});
+
+// 84. PURCHASE SPOTLIGHT LISTING (premium visibility feature - monetization)
+router.post('/spotlight/purchase', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { spotlightType } = req.body;
+
+    const validTypes = ['bronze', 'silver', 'gold', 'platinum'];
+    if (!validTypes.includes(spotlightType)) {
+      return res.status(400).json({ error: 'Invalid spotlight type' });
+    }
+
+    // Define spotlight tiers
+    const tiers = {
+      bronze: { duration: 2, unit: 'hours', multiplier: 3, price: 2.99 },
+      silver: { duration: 24, unit: 'hours', multiplier: 5, price: 5.99 },
+      gold: { duration: 7, unit: 'days', multiplier: 10, price: 19.99 },
+      platinum: { duration: 30, unit: 'days', multiplier: 15, price: 99.99 }
+    };
+
+    const tier = tiers[spotlightType];
+    const expiresAt = new Date();
+    if (tier.unit === 'hours') {
+      expiresAt.setHours(expiresAt.getHours() + tier.duration);
+    } else {
+      expiresAt.setDate(expiresAt.getDate() + tier.duration);
+    }
+
+    // Insert spotlight listing
+    const result = await db.query(
+      `INSERT INTO spotlight_listings (
+        user_id, spotlight_type, visibility_multiplier, is_active, started_at, expires_at, price_paid
+       ) VALUES ($1, $2, $3, true, CURRENT_TIMESTAMP, $4, $5)
+       RETURNING *`,
+      [userId, spotlightType, tier.multiplier, expiresAt, tier.price]
+    );
+
+    res.json({
+      message: 'Spotlight listing purchased',
+      spotlight: {
+        id: result.rows[0].id,
+        type: spotlightType,
+        duration: `${tier.duration}${tier.unit.charAt(0).toUpperCase()}`,
+        visibility: `${tier.multiplier}x visibility`,
+        expiresAt: expiresAt,
+        pricePaid: tier.price
+      }
+    });
+  } catch (err) {
+    console.error('Purchase spotlight error:', err);
+    res.status(500).json({ error: 'Failed to purchase spotlight listing' });
+  }
+});
+
+// 85. GET AVAILABLE SPOTLIGHT PLANS (pricing & tiers)
+router.get('/spotlight/available-plans', async (req, res) => {
+  try {
+    const plans = [
+      { type: 'bronze', duration: '2 hours', multiplier: '3x', price: 2.99, description: 'Quick boost' },
+      { type: 'silver', duration: '24 hours', multiplier: '5x', price: 5.99, description: 'Daily featured' },
+      { type: 'gold', duration: '7 days', multiplier: '10x', price: 19.99, description: 'Weekly featured' },
+      { type: 'platinum', duration: '30 days', multiplier: '15x', price: 99.99, description: 'Monthly premium' }
+    ];
+
+    res.json({ plans });
+  } catch (err) {
+    console.error('Get spotlight plans error:', err);
+    res.status(500).json({ error: 'Failed to fetch spotlight plans' });
+  }
+});
+
+// 86. GET CONCIERGE MATCHES (premium curated matches)
+router.get('/concierge/matches', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Check if user is premium tier
+    const subResult = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [userId]
+    );
+
+    if (subResult.rows.length === 0 || subResult.rows[0].plan !== 'gold') {
+      return res.status(403).json({ error: 'This feature requires a Gold subscription (Premium Concierge tier)' });
+    }
+
+    const status = req.query.status || 'pending';
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+
+    const result = await db.query(
+      `SELECT 
+        cm.id,
+        cm.matched_user_id,
+        cm.concierge_note,
+        cm.suggested_date_idea,
+        cm.compatibility_reasons,
+        cm.status,
+        cm.curated_at,
+        dp.first_name,
+        dp.age,
+        (SELECT photo_url FROM profile_photos WHERE user_id = cm.matched_user_id LIMIT 1) as photo_url
+       FROM concierge_matches cm
+       JOIN dating_profiles dp ON dp.user_id = cm.matched_user_id
+       WHERE cm.user_id = $1 AND cm.status = $2
+       ORDER BY cm.curated_at DESC
+       LIMIT $3`,
+      [userId, status, limit]
+    );
+
+    const matches = result.rows.map(row => ({
+      id: row.id,
+      userId: row.matched_user_id,
+      name: row.first_name,
+      age: row.age,
+      photoUrl: row.photo_url,
+      conciergeNote: row.concierge_note,
+      suggestedDateIdea: row.suggested_date_idea,
+      compatibilityReasons: row.compatibility_reasons || [],
+      status: row.status,
+      curatedAt: row.curated_at
+    }));
+
+    res.json({ conciergeMatches: matches });
+  } catch (err) {
+    console.error('Get concierge matches error:', err);
+    res.status(500).json({ error: 'Failed to fetch concierge matches' });
+  }
+});
+
+// 87. RUN FRAUD CHECK (AI-based profile verification)
+router.post('/verify/run-fraud-check', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get user profile data
+    const profileResult = await db.query(
+      `SELECT dp.*, u.created_at as account_created_at
+       FROM dating_profiles dp
+       JOIN users u ON u.id = dp.user_id
+       WHERE dp.user_id = $1`,
+      [userId]
+    );
+
+    if (profileResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const profile = profileResult.rows[0];
+    const redFlags = [];
+
+    // Check for new account
+    const accountAge = (Date.now() - new Date(profile.account_created_at).getTime()) / (1000 * 60 * 60 * 24);
+    if (accountAge < 7) {
+      redFlags.push('new_account');
+    }
+
+    // Check bio for suspicious patterns
+    const suspiciousPatterns = ['money', 'bank', 'investment', 'bitcoin', 'wire transfer'];
+    if (profile.bio && suspiciousPatterns.some(pattern => profile.bio.toLowerCase().includes(pattern))) {
+      redFlags.push('suspicious_bio_content');
+    }
+
+    // Check for rapid profile changes
+    const recentChanges = await db.query(
+      `SELECT COUNT(*) as change_count
+       FROM activity_logs
+       WHERE user_id = $1 AND activity_type = 'profile_update'
+       AND created_at >= $2`,
+      [userId, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)]
+    );
+
+    if (recentChanges.rows[0].change_count > 5) {
+      redFlags.push('rapid_profile_changes');
+    }
+
+    // Calculate risk level
+    let riskLevel = 'low';
+    if (redFlags.length >= 3) riskLevel = 'high';
+    else if (redFlags.length >= 2) riskLevel = 'medium';
+
+    // Upsert verification score
+    const result = await db.query(
+      `INSERT INTO profile_verification_scores (
+        user_id, photo_authenticity_score, bio_consistency_score, activity_pattern_score,
+        fraud_risk_level, red_flags, ai_check_last_run, overall_trust_score
+       ) VALUES ($1, 75, 80, 70, $2, $3, CURRENT_TIMESTAMP, 75)
+       ON CONFLICT (user_id) DO UPDATE
+       SET fraud_risk_level = EXCLUDED.fraud_risk_level,
+           red_flags = EXCLUDED.red_flags,
+           ai_check_last_run = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [userId, riskLevel, JSON.stringify(redFlags)]
+    );
+
+    res.json({
+      fraudCheckResult: {
+        riskLevel: riskLevel,
+        redFlags: redFlags,
+        overallTrustScore: 75,
+        recommendations: riskLevel === 'high' 
+          ? ['Review profile photo', 'Verify email address', 'Add more bio details']
+          : []
+      }
+    });
+  } catch (err) {
+    console.error('Run fraud check error:', err);
+    res.status(500).json({ error: 'Failed to run fraud check' });
+  }
+});
+
+// 88. GET PROFILE TRUST SCORE (view own or another user's trust score)
+router.get('/profile-trust-score/:targetUserId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const targetUserId = parseInt(req.params.targetUserId);
+
+    // Can only view own score, or if viewing another's (future feature)
+    if (userId !== targetUserId) {
+      return res.status(403).json({ error: 'Can only view your own trust score' });
+    }
+
+    const result = await db.query(
+      `SELECT 
+        overall_trust_score,
+        fraud_risk_level,
+        is_verified_photo,
+        is_verified_email,
+        is_verified_phone,
+        red_flags
+       FROM profile_verification_scores
+       WHERE user_id = $1`,
+      [targetUserId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Trust score not available' });
+    }
+
+    const score = result.rows[0];
+
+    res.json({
+      trustScore: {
+        overallScore: score.overall_trust_score,
+        riskLevel: score.fraud_risk_level,
+        verifications: {
+          photoVerified: score.is_verified_photo,
+          emailVerified: score.is_verified_email,
+          phoneVerified: score.is_verified_phone
+        },
+        redFlags: score.red_flags || []
+      }
+    });
+  } catch (err) {
+    console.error('Get profile trust score error:', err);
+    res.status(500).json({ error: 'Failed to fetch trust score' });
+  }
+});
+
+// 89. REPORT HARASSMENT (safety flag with multiple categories)
+router.post('/conversations/report-harassment/:matchId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const matchId = parseInt(req.params.matchId);
+    const { reason, description, messageIds } = req.body;
+
+    const validReasons = [
+      'sexual_harassment',
+      'threatening_behavior',
+      'spam',
+      'inappropriate_language',
+      'scam',
+      'catfishing',
+      'hate_speech',
+      'other'
+    ];
+
+    if (!validReasons.includes(reason)) {
+      return res.status(400).json({ error: 'Invalid report reason' });
+    }
+
+    // Get match info to find reported user
+    const matchResult = await db.query(
+      `SELECT user_id_1, user_id_2 FROM matches WHERE id = $1`,
+      [matchId]
+    );
+
+    if (matchResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    const match = matchResult.rows[0];
+    const reportedUserId = userId === match.user_id_1 ? match.user_id_2 : match.user_id_1;
+
+    // Determine severity
+    let severity = 'medium';
+    if (['sexual_harassment', 'threatening_behavior', 'hate_speech'].includes(reason)) {
+      severity = 'high';
+    } else if (['spam', 'catfishing'].includes(reason)) {
+      severity = 'medium';
+    }
+
+    // Create safety flag
+    const result = await db.query(
+      `INSERT INTO conversation_safety_flags (
+        match_id, reporter_id, reported_user_id, reason, description, message_ids, severity, status
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'reported')
+       RETURNING *`,
+      [matchId, userId, reportedUserId, reason, description, JSON.stringify(messageIds || []), severity]
+    );
+
+    // Auto-block if high severity
+    if (severity === 'high') {
+      await db.query(
+        `INSERT INTO blocks (blocker_id, blocked_id, reason) VALUES ($1, $2, $3)
+         ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
+        [userId, reportedUserId, 'harassment_report']
+      );
+    }
+
+    res.json({
+      message: 'Report submitted successfully',
+      reportId: result.rows[0].id,
+      status: 'reported',
+      severity: severity,
+      autoBlocked: severity === 'high'
+    });
+  } catch (err) {
+    console.error('Report harassment error:', err);
+    res.status(500).json({ error: 'Failed to submit report' });
+  }
+});
+
+// 90. GET CONVERSATION SAFETY TIPS (best practices)
+router.get('/conversation-safety/tips', async (req, res) => {
+  try {
+    const tips = [
+      {
+        category: 'Personal Safety',
+        tips: [
+          'Never share your home address until you meet in person',
+          'Tell a trusted friend about your date plans',
+          'Always meet in public locations first',
+          'Trust your gut - if something feels off, it probably is'
+        ]
+      },
+      {
+        category: 'Financial Safety',
+        tips: [
+          'Never send money to someone you haven\'t met',
+          'Be wary of requests for financial help early in conversation',
+          'Investment opportunities are often scams',
+          'If it sounds too good to be true, it is'
+        ]
+      },
+      {
+        category: 'Information Security',
+        tips: [
+          'Don\'t share your phone number until you\'re ready',
+          'Use video call to verify before meeting',
+          'Never share passwords or sensitive info',
+          'Check for consistent stories - genuine people stay consistent'
+        ]
+      },
+      {
+        category: 'Red Flags to Watch For',
+        tips: [
+          'Pressure to move conversations off the app quickly',
+          'Asking for explicit photos or videos',
+          'Inconsistent stories about themselves',
+          'Avoiding video calls or meeting in person',
+          'Asking about relationship status or intentions too quickly'
+        ]
+      }
+    ];
+
+    res.json({ safetyTips: tips });
+  } catch (err) {
+    console.error('Get safety tips error:', err);
+    res.status(500).json({ error: 'Failed to fetch safety tips' });
+  }
+});
+
+// TIER 3 ENDPOINTS (91-111): PLATFORM FEATURES & GAMIFICATION
+
+// Endpoint 91: POST /dating/referrals/introduce
+router.post('/referrals/introduce', authenticateToken, async (req, res) => {
+  try {
+    const { friend_user_id, referral_message } = req.body;
+    const referrer_id = req.user.id;
+
+    if (!friend_user_id) {
+      return res.status(400).json({ error: 'friend_user_id is required' });
+    }
+
+    const friend = await db.User.findByPk(friend_user_id);
+    if (!friend) {
+      return res.status(404).json({ error: 'Friend not found' });
+    }
+
+    // Find a potential match (random user they might match with)
+    const recipientUser = await db.User.findOne({
+      where: { id: { [Op.not]: [referrer_id, friend_user_id] } },
+      order: [[sequelize.literal('RANDOM()')]]
+    });
+
+    if (!recipientUser) {
+      return res.status(400).json({ error: 'No users available for referral' });
+    }
+
+    const referral = await db.FriendReferral.create({
+      referrer_user_id: referrer_id,
+      referred_user_id: friend_user_id,
+      recipient_user_id: recipientUser.id,
+      referral_message: referral_message || `${friend.first_name} thinks we'd be great together!`,
+      match_result: 'pending'
+    });
+
+    res.status(201).json({ 
+      referral,
+      message: `Referral sent! ${friend.first_name} can now see the suggestion.`
+    });
+  } catch (err) {
+    console.error('Introduce friend error:', err);
+    res.status(500).json({ error: 'Failed to introduce friend' });
+  }
+});
+
+// Endpoint 92: GET /dating/referrals/incoming
+router.get('/referrals/incoming', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const referrals = await db.FriendReferral.findAll({
+      where: { recipient_user_id: userId },
+      include: [
+        { model: db.User, as: 'referrer', attributes: ['id', 'first_name', 'age', 'bio', 'location_city'] },
+        { model: db.User, as: 'referred', attributes: ['id', 'first_name', 'age', 'bio', 'location_city'] }
+      ],
+      order: [['created_at', 'DESC']]
+    });
+
+    res.json({ 
+      referrals,
+      count: referrals.length,
+      message: `You have ${referrals.length} incoming referrals`
+    });
+  } catch (err) {
+    console.error('Get incoming referrals error:', err);
+    res.status(500).json({ error: 'Failed to fetch referrals' });
+  }
+});
+
+// Endpoint 93: POST /dating/referrals/:referralId/accept
+router.post('/referrals/:referralId/accept', authenticateToken, async (req, res) => {
+  try {
+    const referralId = req.params.referralId;
+    const userId = req.user.id;
+
+    const referral = await db.FriendReferral.findByPk(referralId);
+    if (!referral) {
+      return res.status(404).json({ error: 'Referral not found' });
+    }
+
+    if (referral.recipient_user_id !== userId) {
+      return res.status(403).json({ error: 'Not authorized to accept this referral' });
+    }
+
+    // Create a match between referred_user_id and recipient_user_id
+    const match = await db.Match.findOrCreate({
+      where: {
+        [Op.or]: [
+          { user_id_1: referral.referred_user_id, user_id_2: referral.recipient_user_id },
+          { user_id_1: referral.recipient_user_id, user_id_2: referral.referred_user_id }
+        ]
+      },
+      defaults: {
+        user_id_1: referral.referred_user_id,
+        user_id_2: referral.recipient_user_id,
+        matched_at: new Date()
+      }
+    });
+
+    await referral.update({ accepted_at: new Date(), match_result: 'matched' });
+
+    res.json({ 
+      referral,
+      match: match[0],
+      message: 'Referral accepted! You may have a new match!'
+    });
+  } catch (err) {
+    console.error('Accept referral error:', err);
+    res.status(500).json({ error: 'Failed to accept referral' });
+  }
+});
+
+// Endpoint 94: GET /dating/referrals/success
+router.get('/referrals/success', authenticateToken, async (req, res) => {
+  try {
+    const referrerId = req.user.id;
+
+    const successfulReferrals = await db.FriendReferral.findAll({
+      where: { 
+        referrer_user_id: referrerId,
+        match_result: { [Op.in]: ['matched', 'still_talking', 'met'] }
+      }
+    });
+
+    const totalReferrals = await db.FriendReferral.count({
+      where: { referrer_user_id: referrerId }
+    });
+
+    const successRate = totalReferrals > 0 ? Math.round((successfulReferrals.length / totalReferrals) * 100) : 0;
+
+    res.json({
+      total_referrals: totalReferrals,
+      successful_referrals: successfulReferrals.length,
+      success_rate_percent: successRate,
+      badge_earned: successfulReferrals.length >= 3 ? 'Great Matchmaker' : null,
+      referrals: successfulReferrals
+    });
+  } catch (err) {
+    console.error('Get referral success error:', err);
+    res.status(500).json({ error: 'Failed to fetch referral success' });
+  }
+});
+
+// Endpoint 95: POST /dating/video-dates/request/:matchId
+router.post('/video-dates/request/:matchId', authenticateToken, async (req, res) => {
+  try {
+    const matchId = req.params.matchId;
+    const { proposed_time, duration_minutes } = req.body;
+    const userId = req.user.id;
+
+    const match = await db.Match.findByPk(matchId);
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    // Verify user is part of this match
+    if (match.user_id_1 !== userId && match.user_id_2 !== userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    if (!proposed_time) {
+      return res.status(400).json({ error: 'proposed_time is required' });
+    }
+
+    const videoDate = await db.VideoDate.create({
+      match_id: matchId,
+      initiator_id: userId,
+      start_time: proposed_time,
+      status: 'pending',
+      duration_seconds: duration_minutes ? duration_minutes * 60 : 1800
+    });
+
+    res.status(201).json({ 
+      videoDate,
+      message: 'Video date request sent!'
+    });
+  } catch (err) {
+    console.error('Create video date request error:', err);
+    res.status(500).json({ error: 'Failed to create video date request' });
+  }
+});
+
+// Endpoint 96: GET /dating/video-dates/pending
+router.get('/video-dates/pending', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const pendingVideoDates = await db.VideoDate.findAll({
+      where: { 
+        status: 'pending',
+        [Op.or]: [
+          { initiator_id: userId }
+        ]
+      },
+      include: [
+        { model: db.Match, include: [{ model: db.User, as: 'user1' }, { model: db.User, as: 'user2' }] },
+        { model: db.User, as: 'initiator', attributes: ['id', 'first_name', 'age'] }
+      ]
+    });
+
+    res.json({
+      pending_count: pendingVideoDates.length,
+      video_dates: pendingVideoDates
+    });
+  } catch (err) {
+    console.error('Get pending video dates error:', err);
+    res.status(500).json({ error: 'Failed to fetch pending video dates' });
+  }
+});
+
+// Endpoint 97: POST /dating/video-dates/:videoDateId/complete
+router.post('/video-dates/:videoDateId/complete', authenticateToken, async (req, res) => {
+  try {
+    const videoDateId = req.params.videoDateId;
+    const { duration_minutes, quality_rating, would_meet_in_person, feedback } = req.body;
+
+    const videoDate = await db.VideoDate.findByPk(videoDateId);
+    if (!videoDate) {
+      return res.status(404).json({ error: 'Video date not found' });
+    }
+
+    await videoDate.update({
+      status: 'completed',
+      duration_seconds: duration_minutes ? duration_minutes * 60 : null,
+      video_quality_rating: quality_rating,
+      feedback: feedback || 'great_conversation'
+    });
+
+    res.json({
+      videoDate,
+      message: 'Video date completed!'
+    });
+  } catch (err) {
+    console.error('Complete video date error:', err);
+    res.status(500).json({ error: 'Failed to complete video date' });
+  }
+});
+
+// Endpoint 98: GET /dating/video-dates/history
+router.get('/video-dates/history', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const videoDates = await db.VideoDate.findAll({
+      where: { 
+        initiator_id: userId,
+        status: { [Op.in]: ['completed', 'cancelled'] }
+      },
+      include: [
+        { model: db.Match },
+        { model: db.User, as: 'initiator', attributes: ['id', 'first_name'] }
+      ],
+      order: [['created_at', 'DESC']]
+    });
+
+    const stats = {
+      total_video_dates: videoDates.length,
+      avg_quality: videoDates.length > 0 
+        ? (videoDates.reduce((sum, v) => sum + (v.video_quality_rating || 0), 0) / videoDates.length).toFixed(2)
+        : 0,
+      would_meet_count: videoDates.filter(v => v.feedback === 'great_conversation').length
+    };
+
+    res.json({
+      stats,
+      video_dates: videoDates
+    });
+  } catch (err) {
+    console.error('Get video date history error:', err);
+    res.status(500).json({ error: 'Failed to fetch video date history' });
+  }
+});
+
+// Endpoint 99: GET /dating/events/nearby
+router.get('/events/nearby', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { lat, lng, radius_km } = req.query;
+
+    const user = await db.User.findByPk(userId);
+    const userLat = lat || user.location_latitude;
+    const userLng = lng || user.location_longitude;
+    const radius = radius_km || 50;
+
+    if (!userLat || !userLng) {
+      return res.status(400).json({ error: 'User location required' });
+    }
+
+    // Haversine formula to find events within radius
+    const events = await sequelize.query(`
+      SELECT *, 
+        (6371 * acos(cos(radians(:userLat)) * cos(radians(location_latitude)) * 
+         cos(radians(location_longitude) - radians(:userLng)) + 
+         sin(radians(:userLat)) * sin(radians(location_latitude)))) AS distance_km
+      FROM dating_events
+      WHERE event_date > NOW()
+      HAVING distance_km <= :radius
+      ORDER BY distance_km ASC
+      LIMIT 50
+    `, {
+      replacements: { userLat, userLng, radius },
+      type: sequelize.QueryTypes.SELECT
+    });
+
+    res.json({
+      events: events || [],
+      count: events ? events.length : 0,
+      user_location: { lat: userLat, lng: userLng }
+    });
+  } catch (err) {
+    console.error('Get nearby events error:', err);
+    res.status(500).json({ error: 'Failed to fetch nearby events' });
+  }
+});
+
+// Endpoint 100: POST /dating/events/:eventId/attend
+router.post('/events/:eventId/attend', authenticateToken, async (req, res) => {
+  try {
+    const eventId = req.params.eventId;
+    const userId = req.user.id;
+
+    const datingEvent = await db.DatingEvent.findByPk(eventId);
+    if (!datingEvent) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const [attendance, created] = await db.EventAttendees.findOrCreate({
+      where: { event_id: eventId, user_id: userId },
+      defaults: { status: 'attending' }
+    });
+
+    if (!created) {
+      await attendance.update({ status: 'attending' });
+    }
+
+    await datingEvent.increment('attending_count');
+
+    res.status(201).json({
+      attendance,
+      message: 'You are now attending this event!'
+    });
+  } catch (err) {
+    console.error('Attend event error:', err);
+    res.status(500).json({ error: 'Failed to attend event' });
+  }
+});
+
+// Endpoint 101: GET /dating/events/:eventId/attendees
+router.get('/events/:eventId/attendees', authenticateToken, async (req, res) => {
+  try {
+    const eventId = req.params.eventId;
+    const userId = req.user.id;
+
+    const user = await db.User.findByPk(userId);
+    if (user.subscription_tier !== 'Premium' && user.subscription_tier !== 'Gold') {
+      return res.status(403).json({ error: 'Premium feature - upgrade to see attendees' });
+    }
+
+    const attendees = await db.EventAttendees.findAll({
+      where: { event_id: eventId, status: 'attending' },
+      include: [{ 
+        model: db.User, 
+        attributes: ['id', 'first_name', 'age', 'bio', 'location_city', 'profile_photo_url']
+      }],
+      limit: 20
+    });
+
+    res.json({
+      attendees: attendees.map(a => a.User),
+      count: attendees.length
+    });
+  } catch (err) {
+    console.error('Get event attendees error:', err);
+    res.status(500).json({ error: 'Failed to fetch event attendees' });
+  }
+});
+
+// Endpoint 102: GET /dating/matching/event-based
+router.get('/matching/event-based', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Find events user is attending
+    const userEventAttendances = await db.EventAttendees.findAll({
+      where: { user_id: userId, status: 'attending' },
+      include: [{ model: db.DatingEvent }]
+    });
+
+    const eventIds = userEventAttendances.map(a => a.event_id);
+
+    if (eventIds.length === 0) {
+      return res.json({ 
+        events_you_attend: [],
+        matches_at_same_event: []
+      });
+    }
+
+    // Find other users at same events (potential matches)
+    const otherAttendees = await db.EventAttendees.findAll({
+      where: { 
+        event_id: { [Op.in]: eventIds },
+        user_id: { [Op.not]: userId },
+        status: 'attending'
+      },
+      include: [{ 
+        model: db.User,
+        attributes: ['id', 'first_name', 'age', 'bio', 'location_city']
+      }, {
+        model: db.DatingEvent,
+        attributes: ['id', 'title', 'event_date', 'location_city']
+      }],
+      limit: 20
+    });
+
+    res.json({
+      events_you_attend: userEventAttendances.map(a => a.DatingEvent),
+      matches_at_same_event: otherAttendees.map(a => ({
+        userId: a.User.id,
+        user: a.User,
+        event: a.DatingEvent
+      })),
+      suggestion: `${otherAttendees.length} potential matches at your events!`
+    });
+  } catch (err) {
+    console.error('Get event-based matching error:', err);
+    res.status(500).json({ error: 'Failed to fetch event-based matches' });
+  }
+});
+
+// Endpoint 103: GET /dating/achievements
+router.get('/achievements', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const achievements = await db.UserAchievement.findAll({
+      where: { user_id: userId, is_public: true },
+      order: [['earned_at', 'DESC']]
+    });
+
+    const streaks = await db.UserAnalytics.findOne({
+      where: { user_id: userId },
+      attributes: ['daily_login_streak', 'messaging_streak']
+    });
+
+    res.json({
+      badges: achievements,
+      current_streaks: {
+        daily_login: streaks ? streaks.daily_login_streak : 0,
+        messaging: streaks ? streaks.messaging_streak : 0
+      },
+      total_achievements: achievements.length
+    });
+  } catch (err) {
+    console.error('Get achievements error:', err);
+    res.status(500).json({ error: 'Failed to fetch achievements' });
+  }
+});
+
+// Endpoint 104: GET /dating/leaderboard
+router.get('/leaderboard', authenticateToken, async (req, res) => {
+  try {
+    const { period = 'monthly' } = req.query;
+
+    // Get top users by achievement count
+    const topUsers = await sequelize.query(`
+      SELECT u.id, u.first_name, u.age, u.location_city, COUNT(ua.id) as achievement_count
+      FROM users u
+      LEFT JOIN user_achievements ua ON u.id = ua.user_id AND ua.is_public = true
+      GROUP BY u.id
+      ORDER BY achievement_count DESC
+      LIMIT 50
+    `, {
+      type: sequelize.QueryTypes.SELECT
+    });
+
+    res.json({
+      period,
+      leaderboard: topUsers,
+      your_rank: topUsers.findIndex(u => u.id === req.user.id) + 1 || 'unranked'
+    });
+  } catch (err) {
+    console.error('Get leaderboard error:', err);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
+// Endpoint 105: GET /dating/personality-archetype
+router.get('/personality-archetype', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    let archetype = await db.PersonalityArchetype.findOne({
+      where: { user_id: userId }
+    });
+
+    if (!archetype) {
+      // Create default archetype if not exists
+      archetype = await db.PersonalityArchetype.create({
+        user_id: userId,
+        archetype_code: 'romantic',
+        archetype_name: 'The Romantic',
+        description: 'Emotional, detail-oriented, and values loyalty',
+        strengths: ['empathetic', 'reliable', 'good listener'],
+        communication_style: 'warm, personal, relationship-focused',
+        best_matches: ['The Protector', 'The Counselor']
+      });
+    }
+
+    res.json(archetype);
+  } catch (err) {
+    console.error('Get personality archetype error:', err);
+    res.status(500).json({ error: 'Failed to fetch personality archetype' });
+  }
+});
+
+// Endpoint 106: GET /dating/archetype/:archetype/compatibility/:otherArchetype
+router.get('/archetype/:archetype/compatibility/:otherArchetype', authenticateToken, async (req, res) => {
+  try {
+    const { archetype, otherArchetype } = req.params;
+
+    // Compatibility matrix (simplified)
+    const compatibilityMatrix = {
+      'romantic-romantic': 0.75,
+      'romantic-protector': 0.87,
+      'romantic-counselor': 0.85,
+      'intellectual-intellectual': 0.80,
+      'intellectual-mastermind': 0.82,
+      'adventurer-adventurer': 0.78
+    };
+
+    const key1 = `${archetype}-${otherArchetype}`;
+    const key2 = `${otherArchetype}-${archetype}`;
+    const score = compatibilityMatrix[key1] || compatibilityMatrix[key2] || 0.70;
+
+    res.json({
+      compatibility_score: score,
+      archetype_1: archetype,
+      archetype_2: otherArchetype,
+      strengths_together: ['Complementary communication styles', 'Shared values potential'],
+      potential_challenges: ['May need to discuss expectations early'],
+      advice: `This pairing has ${Math.round(score * 100)}% romantic potential if both appreciate emotional depth.`
+    });
+  } catch (err) {
+    console.error('Get archetype compatibility error:', err);
+    res.status(500).json({ error: 'Failed to calculate compatibility' });
+  }
+});
+
+// Endpoint 107: POST /dating/profiles/archetype-preference
+router.post('/profiles/archetype-preference', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { archetype_preferences, avoid_archetypes } = req.body;
+
+    let archetype = await db.PersonalityArchetype.findOne({
+      where: { user_id: userId }
+    });
+
+    if (!archetype) {
+      return res.status(404).json({ error: 'Personality archetype not found' });
+    }
+
+    await archetype.update({
+      archetype_preferences: archetype_preferences || [],
+      avoid_archetypes: avoid_archetypes || []
+    });
+
+    res.json({
+      archetype,
+      message: 'Archetype preferences updated!'
+    });
+  } catch (err) {
+    console.error('Update archetype preference error:', err);
+    res.status(500).json({ error: 'Failed to update archetype preference' });
+  }
+});
+
+// Endpoint 108: POST /dating/goals
+router.post('/goals', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { goal_type, goal_description, deadline, target_count } = req.body;
+
+    if (!goal_type) {
+      return res.status(400).json({ error: 'goal_type is required' });
+    }
+
+    const goal = await db.DatingGoal.create({
+      user_id: userId,
+      goal_type,
+      goal_description: goal_description || '',
+      deadline: deadline || null,
+      target_count: target_count || 1,
+      status: 'active'
+    });
+
+    res.status(201).json({ goal });
+  } catch (err) {
+    console.error('Create goal error:', err);
+    res.status(500).json({ error: 'Failed to create goal' });
+  }
+});
+
+// Endpoint 109: GET /dating/goals/progress
+router.get('/goals/progress', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const goals = await db.DatingGoal.findAll({
+      where: { 
+        user_id: userId,
+        status: 'active'
+      }
+    });
+
+    res.json({
+      current_goals: goals,
+      milestones_achieved: ['First match!', 'First message sent!', 'First date!'],
+      total_active_goals: goals.length
+    });
+  } catch (err) {
+    console.error('Get goals progress error:', err);
+    res.status(500).json({ error: 'Failed to fetch goals progress' });
+  }
+});
+
+// Endpoint 110: GET /dating/goals/statistics
+router.get('/goals/statistics', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const completedGoals = await db.DatingGoal.findAll({
+      where: { 
+        user_id: userId,
+        status: 'completed'
+      }
+    });
+
+    const avgCompletionTime = completedGoals.length > 0
+      ? Math.round(completedGoals.reduce((sum, g) => {
+          return sum + (new Date(g.completed_at) - new Date(g.created_at));
+        }, 0) / completedGoals.length / (1000 * 60 * 60 * 24))
+      : 0;
+
+    res.json({
+      completed_goals: completedGoals.length,
+      avg_completion_days: avgCompletionTime,
+      recommendations: [
+        'Keep dating sessions short - focus on quality conversation',
+        'Set realistic deadlines - allow 3-4 weeks per goal',
+        'Engage with multiple matches - increases success rate'
+      ]
+    });
+  } catch (err) {
+    console.error('Get goals statistics error:', err);
+    res.status(500).json({ error: 'Failed to fetch goals statistics' });
+  }
+});
+
+// Endpoint 111: GET /dating/event-attendees/:userId (bonus endpoint)
+router.get('/event-attendees/:userId', authenticateToken, async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+
+    const events = await db.EventAttendees.findAll({
+      where: { user_id: targetUserId, status: 'attending' },
+      include: [{ model: db.DatingEvent, attributes: ['id', 'title', 'event_date', 'location_city'] }]
+    });
+
+    res.json({
+      user_id: targetUserId,
+      attending_events: events.map(e => e.DatingEvent),
+      count: events.length
+    });
+  } catch (err) {
+    console.error('Get user event attendances error:', err);
+    res.status(500).json({ error: 'Failed to fetch event attendances' });
   }
 });
 

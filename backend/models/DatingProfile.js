@@ -195,12 +195,17 @@ module.exports = (sequelize, DataTypes) => {
       field: 'looking_for'
     },
     voiceIntroUrl: {
-      type: DataTypes.STRING(500),
+      type: DataTypes.TEXT,
       allowNull: true,
       field: 'voice_intro_url'
     },
+    voiceIntroDurationSeconds: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'voice_intro_duration_seconds'
+    },
     videoIntroUrl: {
-      type: DataTypes.STRING(500),
+      type: DataTypes.TEXT,
       allowNull: true,
       field: 'video_intro_url'
     },

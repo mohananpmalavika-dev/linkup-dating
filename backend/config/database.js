@@ -405,6 +405,19 @@ const init = async () => {
       ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;
     `);
 
+      await client.query(`
+      ALTER TABLE dating_profiles
+      ADD COLUMN IF NOT EXISTS voice_intro_url TEXT,
+      ADD COLUMN IF NOT EXISTS voice_intro_duration_seconds INTEGER,
+      ADD COLUMN IF NOT EXISTS video_intro_url TEXT;
+    `);
+
+      await client.query(`
+      ALTER TABLE dating_profiles
+      ALTER COLUMN voice_intro_url TYPE TEXT,
+      ALTER COLUMN video_intro_url TYPE TEXT;
+    `);
+
     // Migration: Add storefront_data column for cart, favorites, saved addresses
     await client.query(`
       ALTER TABLE users
@@ -469,6 +482,61 @@ const init = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS filter_presets (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        preset_name VARCHAR(100) NOT NULL,
+        filters JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, preset_name)
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_filter_presets_user_id ON filter_presets(user_id);
+      CREATE INDEX IF NOT EXISTS idx_filter_presets_updated_at ON filter_presets(updated_at DESC);
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_presence_sessions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        session_id VARCHAR(255),
+        is_online BOOLEAN DEFAULT FALSE,
+        last_activity_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        device_type VARCHAR(50) DEFAULT 'web',
+        status_message VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_user_presence_sessions_online ON user_presence_sessions(is_online);
+      CREATE INDEX IF NOT EXISTS idx_user_presence_sessions_last_activity ON user_presence_sessions(last_activity_at DESC);
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS matchmaker_explanations (
+        id SERIAL PRIMARY KEY,
+        viewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        candidate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        compatibility_score INTEGER DEFAULT 0,
+        factors_json JSONB DEFAULT '[]'::jsonb,
+        recommendations_json JSONB DEFAULT '[]'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(viewer_id, candidate_id)
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_matchmaker_explanations_viewer_id ON matchmaker_explanations(viewer_id);
+      CREATE INDEX IF NOT EXISTS idx_matchmaker_explanations_candidate_id ON matchmaker_explanations(candidate_id);
     `);
 
     // Create chatroom_members junction table
