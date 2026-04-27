@@ -40,6 +40,16 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0,
       field: 'likes_sent'
     },
+    superlikesSent: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      field: 'superlikes_sent'
+    },
+    rewindsSent: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      field: 'rewinds_sent'
+    },
     matchesMade: {
       type: DataTypes.INTEGER,
       defaultValue: 0,

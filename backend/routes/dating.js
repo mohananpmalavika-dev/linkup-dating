@@ -3192,14 +3192,14 @@ router.post('/interactions/superlike', async (req, res) => {
 
     const today = new Date().toISOString().split('T')[0];
     const analyticsResult = await db.query(
-      `SELECT superlikes_used FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
+      `SELECT superlikes_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
       [fromUserId, today]
     );
 
-    const superlikesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_used || 0) : 0;
+    const superlikesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_sent || 0) : 0;
     const superlikeLimit = 1;
-    if (superlikesUsed >= superlikeLimit) {
-      return res.status(429).json({ error: 'Daily superlike limit reached', limit: superlikeLimit, used: superlikesUsed, remaining: 0 });
+    if (superlikesSent >= superlikeLimit) {
+      return res.status(429).json({ error: 'Daily superlike limit reached', limit: superlikeLimit, used: superlikesSent, remaining: 0 });
     }
 
     const superlikeInsertResult = await db.query(
@@ -3218,10 +3218,10 @@ router.post('/interactions/superlike', async (req, res) => {
     }
 
     await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, superlikes_used)
+      `INSERT INTO user_analytics (user_id, activity_date, superlikes_sent)
        VALUES ($1, $2, 1)
        ON CONFLICT (user_id, activity_date) DO UPDATE
-       SET superlikes_used = user_analytics.superlikes_used + 1`,
+       SET superlikes_sent = user_analytics.superlikes_sent + 1`,
       [fromUserId, today]
     );
 
@@ -3274,25 +3274,25 @@ router.get('/daily-limits', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
 
     const analyticsResult = await db.query(
-      `SELECT likes_used, superlikes_used, rewinds_used
+      `SELECT likes_sent, superlikes_sent, rewinds_sent
        FROM user_analytics
        WHERE user_id = $1 AND activity_date = $2`,
       [userId, today]
     );
 
-    const likesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_used || 0) : 0;
-    const superlikesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_used || 0) : 0;
-    const rewindsUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_used || 0) : 0;
+    const likesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_sent || 0) : 0;
+    const superlikesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_sent || 0) : 0;
+    const rewindsSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_sent || 0) : 0;
 
     const likeLimit = 50;
     const superlikeLimit = 1;
     const rewindLimit = 3;
 
     res.json({
-      likeLimit, superlikeLimit, rewindLimit, likesUsed, superlikesUsed, rewindsUsed,
-      remainingLikes: Math.max(0, likeLimit - likesUsed),
-      remainingSuperlikes: Math.max(0, superlikeLimit - superlikesUsed),
-      remainingRewinds: Math.max(0, rewindLimit - rewindsUsed),
+      likeLimit, superlikeLimit, rewindLimit, likesSent, superlikesSent, rewindsSent,
+      remainingLikes: Math.max(0, likeLimit - likesSent),
+      remainingSuperlikes: Math.max(0, superlikeLimit - superlikesSent),
+      remainingRewinds: Math.max(0, rewindLimit - rewindsSent),
       resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     });
   } catch (err) {
@@ -3486,18 +3486,18 @@ router.post('/interactions/rewind', async (req, res) => {
     // Check daily rewind limit
     const today = new Date().toISOString().split('T')[0];
     const analyticsResult = await db.query(
-      `SELECT rewinds_used FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
+      `SELECT rewinds_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
       [userId, today]
     );
 
-    const rewindsUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_used || 0) : 0;
+    const rewindsSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_sent || 0) : 0;
     const rewindLimit = 3; // Free tier: 3/day
 
-    if (rewindsUsed >= rewindLimit) {
+    if (rewindsSent >= rewindLimit) {
       return res.status(429).json({
         error: 'Daily rewind limit reached',
         limit: rewindLimit,
-        used: rewindsUsed,
+        used: rewindsSent,
         remaining: 0
       });
     }
@@ -3526,10 +3526,10 @@ router.post('/interactions/rewind', async (req, res) => {
 
     // Update rewind count
     await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, rewinds_used)
+      `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent)
        VALUES ($1, $2, 1)
        ON CONFLICT (user_id, activity_date) DO UPDATE
-       SET rewinds_used = user_analytics.rewinds_used + 1`,
+       SET rewinds_sent = user_analytics.rewinds_sent + 1`,
       [userId, today]
     );
 
