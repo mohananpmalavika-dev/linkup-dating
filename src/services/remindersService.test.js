@@ -5,12 +5,21 @@ jest.mock("axios", () => {
     put: jest.fn(),
     delete: jest.fn(),
   };
+  const mockAxiosRoot = {
+    create: jest.fn(() => mockAxiosInstance),
+    interceptors: {
+      request: {
+        use: jest.fn(),
+      },
+      response: {
+        use: jest.fn(),
+      },
+    },
+  };
 
   return {
     __esModule: true,
-    default: {
-      create: jest.fn(() => mockAxiosInstance),
-    },
+    default: mockAxiosRoot,
   };
 });
 

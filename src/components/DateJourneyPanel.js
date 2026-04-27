@@ -1,6 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import datingProfileService from '../services/datingProfileService';
+import {
+  createReminder,
+  getAcceptedTrustedContacts,
+  shareReminderWithContacts,
+} from '../services/remindersService';
 import videoCallService from '../services/videoCallService';
+import {
+  buildDateSafetyReminderPayload,
+  extractReminderId,
+  formatDateSafetyCopy,
+  getDateSafetyShareTarget,
+  getShareTypeLabel,
+  normalizeTrustedContacts,
+} from '../utils/dateSafety';
 import '../styles/DateJourneyPanel.css';
 
 const DATE_TYPE_LABELS = {
@@ -184,6 +197,10 @@ const DateJourneyPanel = ({
     summary: '',
     wouldMeetInPerson: true
   });
+  const [trustedContacts, setTrustedContacts] = useState([]);
+  const [loadingTrustedContacts, setLoadingTrustedContacts] = useState(false);
+  const [selectedTrustedContactIds, setSelectedTrustedContactIds] = useState([]);
+  const [safetyNote, setSafetyNote] = useState('');
 
   const slotSuggestions = useMemo(() => createSlotSuggestions(), []);
   const activeMatch = match || initialMatch || null;
@@ -208,6 +225,18 @@ const DateJourneyPanel = ({
     latestCompletedVideoSession &&
     !latestCompletedVideoSession.currentUserFeedbackSubmitted
   );
+  const safetyShareTarget = useMemo(
+    () => getDateSafetyShareTarget({
+      acceptedProposal,
+      outgoingPendingProposal,
+      incomingPendingProposal
+    }),
+    [acceptedProposal, outgoingPendingProposal, incomingPendingProposal]
+  );
+  const safetyShareTypeLabel = getShareTypeLabel(safetyShareTarget?.type);
+  const safetyShareSummary = safetyShareTarget?.proposal
+    ? formatDateSafetyCopy(safetyShareTarget.proposal, partnerName, safetyShareTypeLabel)
+    : '';
 
   const refreshPanel = useCallback(async (showLoader = true) => {
     if (!matchId) {
@@ -257,6 +286,37 @@ const DateJourneyPanel = ({
   }, [matchId, refreshPanel]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadTrustedContacts = async () => {
+      setLoadingTrustedContacts(true);
+
+      try {
+        const payload = await getAcceptedTrustedContacts();
+        if (cancelled) {
+          return;
+        }
+
+        setTrustedContacts(normalizeTrustedContacts(payload));
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed to load trusted contacts:', error);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingTrustedContacts(false);
+        }
+      }
+    };
+
+    loadTrustedContacts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     const recommendedDateType = dateTypes[0]?.value || 'coffee';
     const defaultSlot = slotSuggestions[0]?.value || toLocalDateTimeInputValue(new Date(Date.now() + 48 * 60 * 60 * 1000));
 
@@ -280,6 +340,75 @@ const DateJourneyPanel = ({
     );
     setPlannerNotes('');
     setLocationIdea('');
+  };
+
+  const handleToggleTrustedContact = (contactId) => {
+    setSelectedTrustedContactIds((currentIds) => (
+      currentIds.includes(contactId)
+        ? currentIds.filter((id) => id !== contactId)
+        : [...currentIds, contactId]
+    ));
+  };
+
+  const handleCopySafetyPlan = async () => {
+    if (!safetyShareSummary) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(safetyShareSummary);
+      setPanelStatus('Date details copied. You can send them manually if needed.');
+      setPanelError('');
+    } catch (error) {
+      setPanelError('Unable to copy the date details right now.');
+    }
+  };
+
+  const handleShareWithTrustedContacts = async () => {
+    if (!safetyShareTarget?.proposal) {
+      setPanelError('Share a date plan first, then you can send it to trusted contacts.');
+      return;
+    }
+
+    if (selectedTrustedContactIds.length === 0) {
+      setPanelError('Choose at least one trusted contact first.');
+      return;
+    }
+
+    const reminderPayload = buildDateSafetyReminderPayload({
+      proposal: safetyShareTarget.proposal,
+      partnerName,
+      shareType: safetyShareTypeLabel,
+      note: safetyNote
+    });
+
+    if (!reminderPayload) {
+      setPanelError('We could not prepare this plan for sharing.');
+      return;
+    }
+
+    setActionLoading('share-safety');
+    setPanelError('');
+    setPanelStatus('');
+
+    try {
+      const reminderResponse = await createReminder(reminderPayload);
+      const reminderId = extractReminderId(reminderResponse);
+
+      if (!reminderId) {
+        throw new Error('The safety reminder was created, but we could not find its ID to share.');
+      }
+
+      await shareReminderWithContacts(reminderId, selectedTrustedContactIds);
+      setPanelStatus(
+        `Shared this ${safetyShareTypeLabel} with ${selectedTrustedContactIds.length} trusted contact${selectedTrustedContactIds.length === 1 ? '' : 's'}.`
+      );
+      setSafetyNote('');
+    } catch (error) {
+      setPanelError(typeof error === 'string' ? error : error.message || 'Failed to share the safety plan');
+    } finally {
+      setActionLoading('');
+    }
   };
 
   const handleSubmitPlanner = async () => {
@@ -579,6 +708,90 @@ const DateJourneyPanel = ({
             <p className="date-proposal-notes">{acceptedProposal.notes}</p>
           ) : null}
         </article>
+      ) : null}
+
+      {safetyShareTarget?.proposal ? (
+        <section className="date-safety-card">
+          <div className="date-safety-header">
+            <div>
+              <h4>Date Safety</h4>
+              <p>
+                Share this {safetyShareTypeLabel} with trusted contacts so someone you trust knows where you expect to be.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="date-proposal-ghost"
+              onClick={handleCopySafetyPlan}
+            >
+              Copy Details
+            </button>
+          </div>
+
+          <div className="date-safety-summary">
+            {safetyShareSummary.split('\n').map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </div>
+
+          {loadingTrustedContacts ? (
+            <div className="date-safety-empty">
+              <p>Loading trusted contacts...</p>
+            </div>
+          ) : trustedContacts.length > 0 ? (
+            <>
+              <div className="date-safety-contact-list">
+                {trustedContacts.map((contact) => (
+                  <label key={contact.id} className="date-safety-contact">
+                    <input
+                      type="checkbox"
+                      checked={selectedTrustedContactIds.includes(contact.id)}
+                      onChange={() => handleToggleTrustedContact(contact.id)}
+                    />
+                    <div>
+                      <strong>{contact.name}</strong>
+                      <span>{contact.relationship}</span>
+                      {contact.note ? <small>{contact.note}</small> : null}
+                    </div>
+                  </label>
+                ))}
+              </div>
+
+              <label className="date-planner-field">
+                <span>Optional safety note</span>
+                <textarea
+                  value={safetyNote}
+                  onChange={(event) => setSafetyNote(event.target.value)}
+                  placeholder="Example: Please check in with me if I have not messaged by 10:30 PM."
+                  rows={2}
+                  maxLength={240}
+                />
+              </label>
+
+              <div className="date-safety-actions">
+                <button
+                  type="button"
+                  className="date-planner-submit"
+                  onClick={handleShareWithTrustedContacts}
+                  disabled={actionLoading === 'share-safety'}
+                >
+                  {actionLoading === 'share-safety' ? 'Sharing...' : 'Share With Trusted Contacts'}
+                </button>
+                <button
+                  type="button"
+                  className="date-proposal-secondary"
+                  onClick={() => setSelectedTrustedContactIds(trustedContacts.map((contact) => contact.id))}
+                >
+                  Select All
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="date-safety-empty">
+              <p>No trusted contacts yet. Add them in ReminderAlert first, then you can share date plans here.</p>
+            </div>
+          )}
+        </section>
       ) : null}
 
       <div className="date-planner-form">

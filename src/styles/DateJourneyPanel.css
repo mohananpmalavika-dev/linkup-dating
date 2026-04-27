@@ -69,6 +69,7 @@
 .date-journey-empty,
 .date-journey-nudge-card,
 .date-proposal-card,
+.date-safety-card,
 .date-feedback-card,
 .date-planner-form {
   padding: 14px;
@@ -94,7 +95,8 @@
 .date-proposal-actions,
 .date-slot-list,
 .date-type-grid,
-.date-feedback-grid {
+.date-feedback-grid,
+.date-safety-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -131,7 +133,8 @@
 }
 
 .date-proposal-card-header,
-.date-planner-header {
+.date-planner-header,
+.date-safety-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -253,6 +256,94 @@
 .date-feedback-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.date-safety-card {
+  border-color: rgba(148, 163, 184, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(14, 165, 233, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(255, 255, 255, 0.98));
+}
+
+.date-safety-header h4 {
+  margin: 0;
+  color: #1f2937;
+}
+
+.date-safety-header p {
+  margin: 4px 0 0;
+  color: #5f6b7a;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.date-safety-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(191, 219, 254, 0.85);
+}
+
+.date-safety-summary span {
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.date-safety-contact-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.date-safety-contact {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  cursor: pointer;
+}
+
+.date-safety-contact input {
+  margin-top: 3px;
+}
+
+.date-safety-contact strong,
+.date-safety-contact span,
+.date-safety-contact small {
+  display: block;
+}
+
+.date-safety-contact strong {
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.date-safety-contact span,
+.date-safety-contact small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.date-safety-empty {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px dashed rgba(148, 163, 184, 0.55);
+}
+
+.date-safety-empty p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .date-feedback-grid label,

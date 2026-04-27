@@ -784,8 +784,15 @@ const AppContent = () => {
               element={
                 <Matches
                   pageLabel="Messages"
-                  onSelectMatch={(match) => handleOpenMessages(match, '/messages')}
-                  onPlanDate={(match) => handleOpenMessages(match, '/messages', { focusPlanner: true })}
+                  onSelectMatch={(match, returnPath = '/messages', options = {}) =>
+                    handleOpenMessages(match, returnPath, options)
+                  }
+                  onPlanDate={(match, returnPath = '/messages', options = {}) =>
+                    handleOpenMessages(match, returnPath, {
+                      ...options,
+                      focusPlanner: true
+                    })
+                  }
                   onMatchCreated={refreshDatingCounts}
                   onUnmatch={handleUnmatch}
                   onViewProfile={(profile) => handleOpenProfile(profile, '/messages')}
@@ -804,8 +811,15 @@ const AppContent = () => {
               element={
                 <Matches
                   pageLabel="Matches"
-                  onSelectMatch={(match) => handleOpenMessages(match, '/matches')}
-                  onPlanDate={(match) => handleOpenMessages(match, '/matches', { focusPlanner: true })}
+                  onSelectMatch={(match, returnPath = '/matches', options = {}) =>
+                    handleOpenMessages(match, returnPath, options)
+                  }
+                  onPlanDate={(match, returnPath = '/matches', options = {}) =>
+                    handleOpenMessages(match, returnPath, {
+                      ...options,
+                      focusPlanner: true
+                    })
+                  }
                   onMatchCreated={refreshDatingCounts}
                   onUnmatch={handleUnmatch}
                   onViewProfile={(profile) => handleOpenProfile(profile, '/matches')}

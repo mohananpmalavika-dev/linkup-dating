@@ -9,6 +9,7 @@ import messagingEnhancedService from '../services/messagingEnhancedService';
 import notificationService from '../services/notificationService';
 import { getStoredUserData } from '../utils/auth';
 import { BACKEND_BASE_URL } from '../utils/api';
+import { getConversationRescuePlan } from '../utils/datingRescue';
 import '../styles/DatingMessaging.css';
 
 const REACTION_OPTIONS = ['❤️', '👍', '😂', '🔥', '👏'];
@@ -211,6 +212,10 @@ const DatingMessaging = ({
   const sharedActionSuggestions = Array.isArray(journey?.sharedActions) ? journey.sharedActions : [];
   const notificationsAvailable = notificationService.getPermissionStatus().available;
   const icebreakers = useMemo(() => buildIcebreakers(activeMatch), [activeMatch]);
+  const conversationRescuePlan = useMemo(
+    () => getConversationRescuePlan(activeMatch, messages),
+    [activeMatch, messages]
+  );
   const showComposerStarters = messages.length < 3 && icebreakers.length > 0;
 
   const showStatus = useCallback((message, tone = 'info') => {
@@ -598,6 +603,22 @@ const DatingMessaging = ({
 
     setInputMessage(action.message);
     inputRef.current?.focus();
+  };
+
+  const handleConversationRescueAction = (action) => {
+    if (!action) {
+      return;
+    }
+
+    if (action.type === 'plan') {
+      setShowDatePlanner(true);
+      return;
+    }
+
+    if (action.message) {
+      setInputMessage(action.message);
+      inputRef.current?.focus();
+    }
   };
 
   const handleEnableNotifications = async () => {
@@ -1184,6 +1205,24 @@ const DatingMessaging = ({
                 type="button"
                 className="composer-starter-chip"
                 onClick={() => handleSharedAction(action)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {conversationRescuePlan?.actions?.length > 0 && !showDatePlanner ? (
+        <div className="conversation-rescue-strip">
+          <span className="composer-starters-label">{conversationRescuePlan.label}</span>
+          <div className="composer-starters-list">
+            {conversationRescuePlan.actions.map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className="composer-starter-chip conversation-rescue-chip"
+                onClick={() => handleConversationRescueAction(action)}
               >
                 {action.label}
               </button>

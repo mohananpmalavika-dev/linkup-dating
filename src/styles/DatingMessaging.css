@@ -542,6 +542,11 @@
   background: white;
 }
 
+.conversation-rescue-strip {
+  padding: 10px 12px 0;
+  background: white;
+}
+
 .composer-starters-label {
   display: block;
   margin-bottom: 8px;
@@ -554,6 +559,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.conversation-rescue-chip {
+  background: #eef4ff;
+  color: #3150a6;
+  border-color: #c7d2fe;
 }
 
 .disappearing-strip {

@@ -36,6 +36,7 @@ const invalidateDiscoveryCache = async (userId) => {
 const userNotificationService = require('../services/userNotificationService');
 const { createModerationFlag } = require('../utils/moderation');
 const spamFraudService = require('../services/spamFraudService');
+const mlCompatibilityService = require('../services/mlCompatibilityService');
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MULTIPART_FORM_DATA_PATTERN = /^multipart\/form-data/i;
@@ -12468,6 +12469,517 @@ router.get('/goals/statistics', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Get goal statistics error:', err);
     res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
+});
+
+// ========== AI-POWERED PROFILE SUGGESTIONS (TIER 3) ==========
+
+// AI.1. GET SMART SUGGESTIONS - AI-ranked profiles with compatibility explanations
+router.get('/smart-suggestions', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+    const cursor = req.query.cursor || null;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found in token' });
+    }
+
+    // Check cache first
+    const cacheKey = buildCacheKey('ai', userId, 'smart-suggestions', cursor);
+    const cached = await cacheGetPaginated(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    // Get current user's profile and preferences
+    const currentProfileResult = await db.query(
+      `SELECT dp.*,
+              row_to_json(up) as preferences,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       WHERE dp.user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (currentProfileResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found. Complete your profile first.' });
+    }
+
+    const currentProfile = normalizeProfileRow(currentProfileResult.rows[0]);
+    const currentPreferences = normalizePreferenceRow(currentProfileResult.rows[0]?.preferences);
+
+    // Build discovery query with user's preferences
+    const query = buildDiscoveryQuery({
+      userId,
+      currentLat: toFiniteNumber(currentProfile?.location?.lat),
+      currentLng: toFiniteNumber(currentProfile?.location?.lng),
+      radiusKm: currentPreferences.locationRadius,
+      ageMin: currentPreferences.ageRangeMin,
+      ageMax: currentPreferences.ageRangeMax,
+      genderPreferences: currentPreferences.genderPreferences,
+      relationshipGoals: currentPreferences.relationshipGoals,
+      interests: currentPreferences.interests,
+      heightRangeMin: currentPreferences.heightRangeMin,
+      heightRangeMax: currentPreferences.heightRangeMax,
+      bodyTypes: currentPreferences.bodyTypes,
+      excludeShown: false,
+      limit,
+      cursor
+    });
+
+    const result = await db.query(query.text, query.params);
+    const hasMore = result.rows.length > limit;
+    const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
+    // Apply ML compatibility scoring
+    const smartSuggestions = rows
+      .map((profileRow) => {
+        const normalizedProfile = normalizeProfileRow(profileRow);
+        const learning = normalizeLearningProfile(currentPreferences.learningProfile);
+
+        // Use ML service to calculate compatibility
+        const compatibilityScore = mlCompatibilityService.calculateCompatibilityScore(
+          currentProfile,
+          normalizedProfile,
+          learning
+        );
+
+        // Generate "Why You Might Like Them" reasons
+        const candidateInterests = normalizeInterestList(normalizedProfile.interests);
+        const currentInterests = normalizeInterestList(currentProfile.interests);
+        const shared = candidateInterests.filter(i => 
+          currentInterests.map(ci => ci.toLowerCase()).includes(i.toLowerCase())
+        );
+
+        const suggestions = mlCompatibilityService.buildSuggestions(
+          currentProfile,
+          normalizedProfile,
+          shared
+        );
+
+        // Generate icebreaker suggestions
+        const icebreakers = mlCompatibilityService.generateIcebreakers(
+          normalizedProfile,
+          shared
+        );
+
+        return {
+          ...normalizedProfile,
+          compatibilityScore,
+          compatibilityReasons: suggestions,
+          icebreakers,
+          aiSuggestion: true,
+          scoreExplanation: `${compatibilityScore}% match based on profile preferences, interests, and your interaction patterns.`
+        };
+      })
+      .filter(profile => profile.compatibilityScore >= 50) // Only show 50%+ matches
+      .sort((a, b) => b.compatibilityScore - a.compatibilityScore)
+      .slice(0, limit);
+
+    // Cache compatibility scores in the CompatibilityScore model
+    const bulkScoreData = smartSuggestions.map(profile => ({
+      viewer_user_id: userId,
+      candidate_user_id: profile.userId,
+      compatibility_score: profile.compatibilityScore,
+      factors_json: profile.compatibilityReasons,
+      recommendations_json: {
+        icebreakers: profile.icebreakers,
+        suggestions: profile.compatibilityReasons
+      }
+    }));
+
+    if (bulkScoreData.length > 0) {
+      try {
+        // Batch insert compatibility scores
+        const scoreValues = bulkScoreData.map((score, i) => 
+          `($${i * 5 + 1}, $${i * 5 + 2}, $${i * 5 + 3}, $${i * 5 + 4}::jsonb, $${i * 5 + 5}::jsonb)`
+        ).join(', ');
+        
+        const scoreParams = [];
+        bulkScoreData.forEach(score => {
+          scoreParams.push(score.viewer_user_id, score.candidate_user_id, score.compatibility_score);
+          scoreParams.push(JSON.stringify(score.factors_json), JSON.stringify(score.recommendations_json));
+        });
+
+        await db.query(
+          `INSERT INTO compatibility_scores (viewer_user_id, candidate_user_id, compatibility_score, factors_json, recommendations_json)
+           VALUES ${scoreValues}
+           ON CONFLICT (viewer_user_id, candidate_user_id) DO UPDATE
+           SET compatibility_score = EXCLUDED.compatibility_score,
+               factors_json = EXCLUDED.factors_json,
+               recommendations_json = EXCLUDED.recommendations_json,
+               updated_at = CURRENT_TIMESTAMP`,
+          scoreParams
+        );
+      } catch (cacheErr) {
+        console.warn('Could not cache compatibility scores:', cacheErr.message);
+      }
+    }
+
+    const lastRow = rows[rows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.updated_at, lastRow.id) : null;
+
+    const response = {
+      profiles: smartSuggestions,
+      nextCursor,
+      hasMore: Boolean(nextCursor),
+      generatedAt: new Date().toISOString(),
+      message: `Found ${smartSuggestions.length} AI-matched profiles for you`
+    };
+
+    await cacheSetPaginated(cacheKey, response, DISCOVERY_CACHE_TTL);
+
+    const requestMetadata = getRequestMetadata(req);
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'smart_suggestions_view',
+      analyticsUpdates: {},
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
+
+    res.json(response);
+  } catch (err) {
+    console.error('Smart suggestions error:', err);
+    res.status(500).json({ error: 'Failed to get smart suggestions', details: err.message });
+  }
+});
+
+// AI.2. GET COMPATIBILITY SCORE - Detailed compatibility breakdown for specific profile
+router.get('/compatibility/:userId', async (req, res) => {
+  try {
+    const viewerId = req.user.id;
+    const { userId: candidateUserIdStr } = req.params;
+    const candidateUserId = normalizeInteger(candidateUserIdStr);
+
+    if (!candidateUserId) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    if (Number(viewerId) === Number(candidateUserId)) {
+      return res.status(400).json({ error: 'Cannot get compatibility with yourself' });
+    }
+
+    // Check if compatibility score already cached
+    const cacheKey = buildCacheKey('compatibility', viewerId, candidateUserId);
+    const cachedScore = await cacheGetPaginated(cacheKey);
+    if (cachedScore) {
+      return res.json(cachedScore);
+    }
+
+    // Get both profiles and preferences
+    const [viewerResult, candidateResult] = await Promise.all([
+      db.query(
+        `SELECT dp.*,
+                row_to_json(up) as preferences,
+                (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+                 FROM profile_photos WHERE user_id = dp.user_id) as photos
+         FROM dating_profiles dp
+         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+         WHERE dp.user_id = $1 LIMIT 1`,
+        [viewerId]
+      ),
+      db.query(
+        `SELECT dp.*,
+                row_to_json(up) as preferences,
+                (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+                 FROM profile_photos WHERE user_id = dp.user_id) as photos
+         FROM dating_profiles dp
+         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+         WHERE dp.user_id = $1 LIMIT 1`,
+        [candidateUserId]
+      )
+    ]);
+
+    if (viewerResult.rows.length === 0 || candidateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'One or both profiles not found' });
+    }
+
+    const viewerProfile = normalizeProfileRow(viewerResult.rows[0]);
+    const viewerPreferences = normalizePreferenceRow(viewerResult.rows[0]?.preferences);
+    const candidateProfile = normalizeProfileRow(candidateResult.rows[0]);
+    const candidatePreferences = normalizePreferenceRow(candidateResult.rows[0]?.preferences);
+    const learningProfile = normalizeLearningProfile(viewerPreferences.learningProfile);
+
+    // Calculate ML compatibility
+    const compatibilityScore = mlCompatibilityService.calculateCompatibilityScore(
+      viewerProfile,
+      candidateProfile,
+      learningProfile
+    );
+
+    // Get detailed factor breakdown
+    const candidateInterests = normalizeInterestList(candidateProfile.interests);
+    const viewerInterests = normalizeInterestList(viewerProfile.interests);
+    const shared = candidateInterests.filter(i => 
+      viewerInterests.map(vi => vi.toLowerCase()).includes(i.toLowerCase())
+    );
+
+    // Get suggestions and factors
+    const suggestions = mlCompatibilityService.buildSuggestions(
+      viewerProfile,
+      candidateProfile,
+      shared
+    );
+
+    // Get why-you-might-like reasons from standard compatibility
+    const compatibilityData = buildCompatibilitySuggestion({
+      currentProfile: viewerProfile,
+      currentPreferences: viewerPreferences,
+      candidateProfile: candidateProfile,
+      candidatePreferences: candidatePreferences
+    });
+
+    // Cache the result
+    const result = {
+      viewerId,
+      candidateUserId,
+      compatibilityScore,
+      compatibilityReasons: compatibilityData.compatibilityReasons,
+      mlSuggestions: suggestions,
+      sharedInterests: shared,
+      icebreakers: compatibilityData.icebreakers,
+      factors: {
+        interests: shared.length > 0,
+        locationMatch: candidateProfile.location?.city === viewerProfile.location?.city,
+        ageMatch: candidateProfile.age >= viewerPreferences.ageRangeMin && candidateProfile.age <= viewerPreferences.ageRangeMax,
+        verificationMatch: candidateProfile.profileVerified || false,
+        relationshipGoalsMatch: candidateProfile.relationshipGoals === viewerProfile.relationshipGoals,
+        isExcluded: compatibilityData.isExcluded
+      },
+      generatedAt: new Date().toISOString()
+    };
+
+    await cacheSetPaginated(cacheKey, result, 3600); // Cache for 1 hour
+
+    res.json(result);
+  } catch (err) {
+    console.error('Get compatibility error:', err);
+    res.status(500).json({ error: 'Failed to get compatibility score', details: err.message });
+  }
+});
+
+// AI.3. GET COMPATIBILITY EXPLANATION - AI-generated explanation of why profiles match
+router.post('/compatibility/explain/:userId', async (req, res) => {
+  try {
+    const viewerId = req.user.id;
+    const { userId: candidateUserIdStr } = req.params;
+    const candidateUserId = normalizeInteger(candidateUserIdStr);
+
+    if (!candidateUserId) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    if (Number(viewerId) === Number(candidateUserId)) {
+      return res.status(400).json({ error: 'Cannot explain compatibility with yourself' });
+    }
+
+    // Get both profiles
+    const [viewerResult, candidateResult] = await Promise.all([
+      db.query(
+        `SELECT dp.*,
+                row_to_json(up) as preferences
+         FROM dating_profiles dp
+         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+         WHERE dp.user_id = $1 LIMIT 1`,
+        [viewerId]
+      ),
+      db.query(
+        `SELECT dp.*,
+                row_to_json(up) as preferences
+         FROM dating_profiles dp
+         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+         WHERE dp.user_id = $1 LIMIT 1`,
+        [candidateUserId]
+      )
+    ]);
+
+    if (viewerResult.rows.length === 0 || candidateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'One or both profiles not found' });
+    }
+
+    const viewerProfile = normalizeProfileRow(viewerResult.rows[0]);
+    const viewerPreferences = normalizePreferenceRow(viewerResult.rows[0]?.preferences);
+    const candidateProfile = normalizeProfileRow(candidateResult.rows[0]);
+
+    // Get detailed compatibility explanation
+    const candidateInterests = normalizeInterestList(candidateProfile.interests);
+    const viewerInterests = normalizeInterestList(viewerProfile.interests);
+    const shared = candidateInterests.filter(i => 
+      viewerInterests.map(vi => vi.toLowerCase()).includes(i.toLowerCase())
+    );
+
+    // Build explanation
+    const compatibilityScore = mlCompatibilityService.calculateCompatibilityScore(
+      viewerProfile,
+      candidateProfile,
+      normalizeLearningProfile(viewerPreferences.learningProfile)
+    );
+
+    const suggestions = mlCompatibilityService.buildSuggestions(
+      viewerProfile,
+      candidateProfile,
+      shared
+    );
+
+    const icebreakers = mlCompatibilityService.generateIcebreakers(
+      candidateProfile,
+      shared
+    );
+
+    // Generate AI explanation
+    const explanation = {
+      title: `${compatibilityScore}% Compatible Match`,
+      summary: suggestions && suggestions.length > 0 
+        ? `You and ${candidateProfile.firstName} have a lot in common. ${suggestions[0]}`
+        : `You and ${candidateProfile.firstName} might be a good match based on your profiles.`,
+      whyYouMatch: suggestions.slice(0, 3),
+      startConversation: icebreakers[0] || 'I noticed we both like discovering new things. What\s something you\ve learned recently?',
+      nextSteps: [
+        'Take your time reading their profile',
+        'Send a thoughtful message with your icebreaker',
+        'Share what you have in common',
+        'Plan a video date to see if there\s chemistry'
+      ]
+    };
+
+    res.json({
+      explanation,
+      compatibilityScore,
+      profile: {
+        id: candidateProfile.id,
+        firstName: candidateProfile.firstName,
+        age: candidateProfile.age,
+        location: candidateProfile.location,
+        interests: candidateProfile.interests
+      },
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Get compatibility explanation error:', err);
+    res.status(500).json({ error: 'Failed to generate explanation', details: err.message });
+  }
+});
+
+// AI.4. GET COMPATIBILITY FACTORS - Detailed factor breakdown for profile matching
+router.get('/compatibility-factors/:userId', async (req, res) => {
+  try {
+    const viewerId = req.user.id;
+    const { userId: candidateUserIdStr } = req.params;
+    const candidateUserId = normalizeInteger(candidateUserIdStr);
+
+    if (!candidateUserId) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    // Try to get cached compatibility score first
+    const cachedScore = await db.query(
+      `SELECT * FROM compatibility_scores 
+       WHERE viewer_user_id = $1 AND candidate_user_id = $2
+       LIMIT 1`,
+      [viewerId, candidateUserId]
+    );
+
+    if (cachedScore.rows.length > 0) {
+      const score = cachedScore.rows[0];
+      return res.json({
+        factors: score.factors_json || {},
+        recommendations: score.recommendations_json || {},
+        compatibilityScore: score.compatibility_score,
+        updatedAt: score.updated_at
+      });
+    }
+
+    // If not cached, get profiles and calculate
+    const [viewerResult, candidateResult] = await Promise.all([
+      db.query(
+        `SELECT dp.*,
+                row_to_json(up) as preferences
+         FROM dating_profiles dp
+         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+         WHERE dp.user_id = $1 LIMIT 1`,
+        [viewerId]
+      ),
+      db.query(
+        `SELECT dp.*
+         FROM dating_profiles dp
+         WHERE dp.user_id = $1 LIMIT 1`,
+        [candidateUserId]
+      )
+    ]);
+
+    if (viewerResult.rows.length === 0 || candidateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'One or both profiles not found' });
+    }
+
+    const viewerProfile = normalizeProfileRow(viewerResult.rows[0]);
+    const viewerPreferences = normalizePreferenceRow(viewerResult.rows[0]?.preferences);
+    const candidateProfile = normalizeProfileRow(candidateResult.rows[0]);
+
+    // Calculate factors
+    const candidateInterests = normalizeInterestList(candidateProfile.interests);
+    const viewerInterests = normalizeInterestList(viewerProfile.interests);
+    const shared = candidateInterests.filter(i => 
+      viewerInterests.map(vi => vi.toLowerCase()).includes(i.toLowerCase())
+    );
+
+    const factors = {
+      sharedInterests: {
+        score: Math.min(100, shared.length * 20),
+        details: shared.slice(0, 5),
+        weight: 0.25
+      },
+      locationMatch: {
+        score: candidateProfile.location?.city === viewerProfile.location?.city ? 100 : 
+               candidateProfile.location?.state === viewerProfile.location?.state ? 50 : 0,
+        details: candidateProfile.location,
+        weight: 0.15
+      },
+      ageMatch: {
+        score: (candidateProfile.age >= viewerPreferences.ageRangeMin && 
+                candidateProfile.age <= viewerPreferences.ageRangeMax) ? 100 : 0,
+        details: `${candidateProfile.age} years old`,
+        weight: 0.20
+      },
+      relationshipGoalsMatch: {
+        score: (candidateProfile.relationshipGoals === viewerProfile.relationshipGoals) ? 100 : 50,
+        details: candidateProfile.relationshipGoals,
+        weight: 0.20
+      },
+      verificationScore: {
+        score: candidateProfile.profileVerified ? 100 : 0,
+        details: candidateProfile.profileVerified ? 'Verified profile' : 'Not verified',
+        weight: 0.10
+      },
+      profileCompletion: {
+        score: candidateProfile.profileCompletionPercent || 0,
+        details: `${candidateProfile.profileCompletionPercent}% complete`,
+        weight: 0.10
+      }
+    };
+
+    res.json({
+      factors,
+      overallScore: Object.entries(factors).reduce((total, [key, factor]) => 
+        total + (factor.score * factor.weight), 0
+      ),
+      candidateProfile: {
+        firstName: candidateProfile.firstName,
+        age: candidateProfile.age,
+        location: candidateProfile.location,
+        profileVerified: candidateProfile.profileVerified
+      },
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Get compatibility factors error:', err);
+    res.status(500).json({ error: 'Failed to get compatibility factors', details: err.message });
   }
 });
 

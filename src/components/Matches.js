@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from '../router';
 import '../styles/Matches.css';
 import datingProfileService from '../services/datingProfileService';
+import { getActionableMatches } from '../utils/datingRescue';
 
 /**
  * Matches Component
@@ -240,6 +241,40 @@ const Matches = ({
     });
 
   const displayMatches = isMessagesPage ? messageMatches : filteredMatches;
+  const actionableMatches = useMemo(
+    () => getActionableMatches(matches).slice(0, 3),
+    [matches]
+  );
+
+  const handleOpenSuggestedMessage = (match, prefillMessage) => {
+    onSelectMatch?.(match, location.pathname, { prefillMessage });
+  };
+
+  const handlePrimarySuggestion = (match, suggestion) => {
+    if (!suggestion) {
+      return;
+    }
+
+    if (suggestion.actionType === 'plan') {
+      onPlanDate?.(match, location.pathname);
+      return;
+    }
+
+    handleOpenSuggestedMessage(match, suggestion.prefillMessage);
+  };
+
+  const handleSecondarySuggestion = (match, suggestion) => {
+    if (!suggestion?.secondaryActionType) {
+      return;
+    }
+
+    if (suggestion.secondaryActionType === 'plan') {
+      onPlanDate?.(match, location.pathname);
+      return;
+    }
+
+    handleOpenSuggestedMessage(match, suggestion.secondaryPrefillMessage);
+  };
 
   if (loading) {
     return (
@@ -488,6 +523,60 @@ const Matches = ({
               )}
             </div>
           )}
+
+          {activeTab === 'matches' && actionableMatches.length > 0 ? (
+            <section className="match-rescue-panel">
+              <div className="match-rescue-header">
+                <div>
+                  <h3>Keep the momentum going</h3>
+                  <p>LinkUp spotted a few matches that could use a timely next step.</p>
+                </div>
+              </div>
+
+              <div className="match-rescue-list">
+                {actionableMatches.map(({ match, suggestion }) => (
+                  <article key={`rescue-${match.id}-${suggestion.kind}`} className="match-rescue-card">
+                    <div className="match-rescue-copy">
+                      <span className={`match-rescue-kind ${suggestion.kind}`}>
+                        {suggestion.kind === 'first_message'
+                          ? 'New match'
+                          : suggestion.kind === 'revive'
+                            ? 'Needs a nudge'
+                            : 'Ready to plan'}
+                      </span>
+                      <h4>{suggestion.title}</h4>
+                      <p>{suggestion.description}</p>
+                      {suggestion.prefillMessage ? (
+                        <div className="match-rescue-preview">
+                          <strong>Suggested message</strong>
+                          <span>{suggestion.prefillMessage}</span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="match-rescue-actions">
+                      <button
+                        type="button"
+                        className="match-rescue-primary"
+                        onClick={() => handlePrimarySuggestion(match, suggestion)}
+                      >
+                        {suggestion.ctaLabel}
+                      </button>
+                      {suggestion.secondaryCtaLabel ? (
+                        <button
+                          type="button"
+                          className="match-rescue-secondary"
+                          onClick={() => handleSecondarySuggestion(match, suggestion)}
+                        >
+                          {suggestion.secondaryCtaLabel}
+                        </button>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {displayMatches.length > 0 ? (
             <div className="matches-list">
