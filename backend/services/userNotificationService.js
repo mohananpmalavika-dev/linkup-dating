@@ -23,26 +23,31 @@ const userNotificationService = {
       return null;
     }
 
-    const result = await db.query(
-      `INSERT INTO user_notifications (
-         user_id,
-         notification_type,
-         title,
-         body,
-         metadata
-       )
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [
-        userId,
-        payload.type || 'general',
-        payload.title || 'LinkUp update',
-        payload.body || '',
-        JSON.stringify(payload.metadata || {})
-      ]
-    );
+    try {
+      const result = await db.query(
+        `INSERT INTO user_notifications (
+           user_id,
+           notification_type,
+           title,
+           body,
+           metadata
+         )
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [
+          userId,
+          payload.type || 'general',
+          payload.title || 'LinkUp update',
+          payload.body || '',
+          JSON.stringify(payload.metadata || {})
+        ]
+      );
 
-    return normalizeNotificationRow(result.rows[0]);
+      return normalizeNotificationRow(result.rows[0]);
+    } catch (error) {
+      console.error('Create notification error:', error);
+      return null;
+    }
   },
 
   getNotificationsForUser: async (userId, options = {}) => {

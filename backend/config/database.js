@@ -736,6 +736,24 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_dating_profiles_height ON dating_profiles(height);
       CREATE INDEX IF NOT EXISTS idx_discovery_queue_shown_viewer ON discovery_queue_shown(viewer_user_id, shown_at);
       CREATE INDEX IF NOT EXISTS idx_discovery_queue_shown_pair ON discovery_queue_shown(viewer_user_id, shown_user_id);
+
+      -- Composite indexes for common discovery filter combinations
+      CREATE INDEX IF NOT EXISTS idx_dp_active_gender_age_updated ON dating_profiles(is_active, gender, age, updated_at DESC, id);
+      CREATE INDEX IF NOT EXISTS idx_dp_active_goals_updated ON dating_profiles(is_active, relationship_goals, updated_at DESC, id);
+      CREATE INDEX IF NOT EXISTS idx_dp_active_verified_updated ON dating_profiles(is_active, profile_verified, updated_at DESC, id);
+      CREATE INDEX IF NOT EXISTS idx_dp_active_completion_updated ON dating_profiles(is_active, profile_completion_percent, updated_at DESC, id);
+
+      -- GIN index for interests array overlap queries
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_interests_gin ON dating_profiles USING GIN(interests);
+
+      -- Index for cursor-based pagination
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_cursor ON dating_profiles(updated_at DESC, id DESC);
+
+      -- Covering index for trending queries
+      CREATE INDEX IF NOT EXISTS idx_interactions_to_user_type_created ON interactions(to_user_id, interaction_type, created_at);
+
+      -- Index for profile views analytics
+      CREATE INDEX IF NOT EXISTS idx_profile_views_viewed_user ON profile_views(viewed_user_id, viewed_at DESC);
     `);
 
       console.log('✓ Database schema initialized');

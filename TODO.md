@@ -8,5 +8,7 @@
   - Update empty-state text for Messages
   - Fix heading count to reflect filtered list
 - [x] Step 2: Update `src/App.test.js` to assert new Messages empty-state text
-- [ ] Step 3: Run tests to verify no regressions
+- [x] Step 3: Run tests to verify no regressions
+  - The modified "messages route" test passes
+  - Other pre-existing test failures are unrelated to this change
 

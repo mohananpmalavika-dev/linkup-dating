@@ -220,6 +220,25 @@ const cacheDeletePattern = async (pattern) => {
   return true;
 };
 
+const cacheGetPaginated = async (key) => {
+  const data = await getValue(key);
+  return data ? JSON.parse(data) : null;
+};
+
+const cacheSetPaginated = async (key, value, expiry = 300) => {
+  await setWithExpiry(key, expiry, JSON.stringify(value));
+  return true;
+};
+
+const buildCacheKey = (prefix, ...parts) => {
+  const normalizedParts = parts.map((part) => {
+    if (part === null || part === undefined) return 'null';
+    if (typeof part === 'object') return JSON.stringify(part);
+    return String(part);
+  });
+  return `${prefix}:${normalizedParts.join(':')}`;
+};
+
 module.exports = {
   redis,
   storeOTP,
@@ -231,6 +250,9 @@ module.exports = {
   cacheSet,
   cacheDelete,
   cacheDeletePattern,
+  cacheGetPaginated,
+  cacheSetPaginated,
+  buildCacheKey,
   OTP_EXPIRY,
   MAX_OTP_ATTEMPTS
 };

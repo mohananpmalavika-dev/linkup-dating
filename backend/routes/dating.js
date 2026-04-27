@@ -1,9 +1,39 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const spamFraudService = require('../services/spamFraudService');
+const { cacheGetPaginated, cacheSetPaginated, buildCacheKey, cacheDeletePattern } = require('../utils/redis');
+
+const CURSOR_PAGE_SIZE = 20;
+const DISCOVERY_CACHE_TTL = 45;
+const TRENDING_CACHE_TTL = 60;
+
+const encodeCursor = (updatedAt, id) => {
+  if (!updatedAt || !id) return null;
+  const payload = `${updatedAt}::${id}`;
+  return Buffer.from(payload).toString('base64');
+};
+
+const decodeCursor = (cursor) => {
+  if (!cursor) return { updatedAt: null, id: null };
+  try {
+    const payload = Buffer.from(cursor, 'base64').toString('utf8');
+    const [updatedAt, id] = payload.split('::');
+    return { updatedAt, id: parseInt(id, 10) || null };
+  } catch {
+    return { updatedAt: null, id: null };
+  }
+};
+
+const invalidateDiscoveryCache = async (userId) => {
+  try {
+    await cacheDeletePattern(buildCacheKey('discovery', userId, '*'));
+  } catch (err) {
+    console.error('Cache invalidation error:', err);
+  }
+};
 const userNotificationService = require('../services/userNotificationService');
 const { createModerationFlag } = require('../utils/moderation');
+const spamFraudService = require('../services/spamFraudService');
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MULTIPART_FORM_DATA_PATTERN = /^multipart\/form-data/i;
@@ -1612,7 +1642,7 @@ router.post('/search', async (req, res) => {
   }
 });
 
-// Helper: build discovery SQL with DB-level filters
+// Helper: build discovery SQL with DB-level filters and cursor pagination
 const buildDiscoveryQuery = ({
   userId,
   currentLat,
@@ -1627,8 +1657,8 @@ const buildDiscoveryQuery = ({
   heightRangeMax,
   bodyTypes,
   excludeShown,
-  limit = 100,
-  offset = 0
+  limit = CURSOR_PAGE_SIZE,
+  cursor = null
 }) => {
   const params = [userId];
   let paramIndex = 2;
@@ -1638,21 +1668,25 @@ const buildDiscoveryQuery = ({
     'COALESCE(up.show_my_profile, true) = true'
   ];
 
-  // Exclude already interacted users
-  conditions.push(`dp.user_id NOT IN (
-    SELECT CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END
-    FROM interactions WHERE from_user_id = $1 OR to_user_id = $1
+  // Exclude already interacted users using NOT EXISTS (faster than NOT IN)
+  conditions.push(`NOT EXISTS (
+    SELECT 1 FROM interactions i
+    WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
+       OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
   )`);
 
-  // Exclude blocked users (both directions)
-  conditions.push(`dp.user_id NOT IN (
-    SELECT blocked_user_id FROM user_blocks WHERE blocking_user_id = $1
-    UNION
-    SELECT blocking_user_id FROM user_blocks WHERE blocked_user_id = $1
+  // Exclude blocked users using NOT EXISTS
+  conditions.push(`NOT EXISTS (
+    SELECT 1 FROM user_blocks ub
+    WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id)
+       OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id)
   )`);
 
   if (excludeShown) {
-    conditions.push(`dp.user_id NOT IN (SELECT shown_user_id FROM discovery_queue_shown WHERE viewer_user_id = $1)`);
+    conditions.push(`NOT EXISTS (
+      SELECT 1 FROM discovery_queue_shown dqs
+      WHERE dqs.viewer_user_id = $1 AND dqs.shown_user_id = dp.user_id
+    )`);
   }
 
   if (Number.isFinite(ageMin)) {
@@ -1708,6 +1742,13 @@ const buildDiscoveryQuery = ({
     paramIndex += 3;
   }
 
+  // Cursor pagination: fetch rows after the cursor (updated_at, id)
+  const { updatedAt, id } = decodeCursor(cursor);
+  if (updatedAt && id) {
+    conditions.push(`(dp.updated_at, dp.id) < ($${paramIndex++}::timestamp, $${paramIndex++})`);
+    params.push(updatedAt, id);
+  }
+
   const whereClause = conditions.join(' AND ');
 
   return {
@@ -1719,22 +1760,28 @@ const buildDiscoveryQuery = ({
       FROM dating_profiles dp
       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
       WHERE ${whereClause}
-      ORDER BY dp.updated_at DESC
-      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+      ORDER BY dp.updated_at DESC, dp.id DESC
+      LIMIT $${paramIndex++}
     `,
-    params: [...params, limit, offset]
+    params: [...params, limit + 1]
   };
 };
 
-// 7. GET DISCOVERY PROFILES (For swipe interface) — with DB-level filtering
+// 7. GET DISCOVERY PROFILES (For swipe interface) — with DB-level filtering and cursor pagination
 router.get('/discovery', async (req, res) => {
   try {
     const userId = req.user.id;
-    const limit = parseInt(req.query.limit, 10) || 10;
-    const offset = parseInt(req.query.offset, 10) || 0;
+    const limit = Math.min(parseInt(req.query.limit, 10) || CURSOR_PAGE_SIZE, 50);
+    const cursor = req.query.cursor || null;
 
     if (!userId) {
       return res.status(401).json({ error: 'User ID not found in token' });
+    }
+
+    const cacheKey = buildCacheKey('discovery', userId, 'discovery', req.query, cursor);
+    const cached = await cacheGetPaginated(cacheKey);
+    if (cached) {
+      return res.json(cached);
     }
 
     const currentProfileResult = await db.query(
@@ -1777,13 +1824,17 @@ router.get('/discovery', async (req, res) => {
       heightRangeMax: discoveryFilters.heightRangeMax,
       bodyTypes: discoveryFilters.bodyTypes,
       excludeShown: false,
-      limit: 100,
-      offset
+      limit,
+      cursor
     });
 
     const result = await db.query(query.text, query.params);
 
-    const profiles = result.rows
+    // Check if there are more results
+    const hasMore = result.rows.length > limit;
+    const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
+    const profiles = rows
       .map((profileRow) => {
         const normalizedProfile = normalizeProfileRow(profileRow);
         const compatibility = buildCompatibilitySuggestion({
@@ -1806,6 +1857,17 @@ router.get('/discovery', async (req, res) => {
       .sort((leftProfile, rightProfile) => rightProfile.compatibilityScore - leftProfile.compatibilityScore)
       .slice(0, limit);
 
+    const lastRow = rows[rows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.updated_at, lastRow.id) : null;
+
+    const response = {
+      profiles,
+      nextCursor,
+      hasMore: Boolean(nextCursor)
+    };
+
+    await cacheSetPaginated(cacheKey, response, DISCOVERY_CACHE_TTL);
+
     const requestMetadata = getRequestMetadata(req);
     spamFraudService.trackUserActivity({
       userId,
@@ -1823,23 +1885,28 @@ router.get('/discovery', async (req, res) => {
       resultCount: profiles.length
     });
 
-    res.json({ profiles, offset: offset + profiles.length });
+    res.json(response);
   } catch (err) {
     console.error('Discovery error:', err);
     res.status(500).json({ error: 'Failed to get discovery profiles', details: err.message });
   }
 });
 
-// 7b. GET SMART DISCOVERY QUEUE (Personalized multi-factor ranking)
+// 7b. GET SMART DISCOVERY QUEUE (Personalized multi-factor ranking) — cursor pagination
 router.get('/discovery-queue', async (req, res) => {
   try {
     const userId = req.user.id;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
-    const page = parseInt(req.query.page, 10) || 1;
-    const offset = (page - 1) * 100;
+    const limit = Math.min(parseInt(req.query.limit, 10) || CURSOR_PAGE_SIZE, 30);
+    const cursor = req.query.cursor || null;
 
     if (!userId) {
       return res.status(401).json({ error: 'User ID not found in token' });
+    }
+
+    const cacheKey = buildCacheKey('discovery', userId, 'queue', cursor);
+    const cached = await cacheGetPaginated(cacheKey);
+    if (cached) {
+      return res.json(cached);
     }
 
     const currentProfileResult = await db.query(
@@ -1874,17 +1941,20 @@ router.get('/discovery-queue', async (req, res) => {
       heightRangeMax: currentPreferences.heightRangeMax,
       bodyTypes: currentPreferences.bodyTypes,
       excludeShown: true,
-      limit: 100,
-      offset
+      limit,
+      cursor
     });
 
     const result = await db.query(query.text, query.params);
+
+    const hasMore = result.rows.length > limit;
+    const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
     const learningProfile = normalizeLearningProfile(currentPreferences.learningProfile);
     const totalLearningSignals = learningProfile.totalPositiveActions + learningProfile.totalNegativeActions;
     const hasLearningData = currentPreferences.preferenceFlexibility?.learnFromActivity && totalLearningSignals >= 2;
 
-    const scoredProfiles = result.rows
+    const scoredProfiles = rows
       .map((profileRow) => {
         const normalizedProfile = normalizeProfileRow(profileRow);
         const compatibility = buildCompatibilitySuggestion({
@@ -2017,6 +2087,17 @@ router.get('/discovery-queue', async (req, res) => {
       );
     }
 
+    const lastRow = rows[rows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.updated_at, lastRow.id) : null;
+
+    const response = {
+      profiles: scoredProfiles,
+      nextCursor,
+      hasMore: Boolean(nextCursor)
+    };
+
+    await cacheSetPaginated(cacheKey, response, DISCOVERY_CACHE_TTL);
+
     const requestMetadata = getRequestMetadata(req);
     spamFraudService.trackUserActivity({
       userId,
@@ -2028,24 +2109,35 @@ router.get('/discovery-queue', async (req, res) => {
       runFraudCheck: true
     });
 
-    res.json({
-      profiles: scoredProfiles,
-      page,
-      hasMore: scoredProfiles.length === limit
-    });
+    res.json(response);
   } catch (err) {
     console.error('Discovery queue error:', err);
     res.status(500).json({ error: 'Failed to get discovery queue', details: err.message });
   }
 });
 
-// 7c. GET TRENDING PROFILES
+// 7c. GET TRENDING PROFILES — cursor pagination + caching
 router.get('/trending', async (req, res) => {
   try {
     const userId = req.user.id;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
+    const limit = Math.min(parseInt(req.query.limit, 10) || CURSOR_PAGE_SIZE, 30);
+    const cursor = req.query.cursor || null;
+
+    const cacheKey = buildCacheKey('discovery', userId, 'trending', cursor);
+    const cached = await cacheGetPaginated(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { updatedAt, id } = decodeCursor(cursor);
+
+    let cursorCondition = '';
+    const params = [userId, sevenDaysAgo, limit + 1];
+    if (updatedAt && id) {
+      cursorCondition = `AND (dp.updated_at, dp.id) < ($4::timestamp, $5)`;
+      params.push(updatedAt, id);
+    }
 
     const result = await db.query(
       `SELECT dp.*,
@@ -2065,23 +2157,30 @@ router.get('/trending', async (req, res) => {
        ) engagement ON true
        WHERE dp.user_id != $1
          AND dp.is_active = true
-         AND dp.user_id NOT IN (
-           SELECT CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END
-           FROM interactions WHERE from_user_id = $1 OR to_user_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM interactions i
+           WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
+              OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
          )
-         AND dp.user_id NOT IN (
-           SELECT blocked_user_id FROM user_blocks WHERE blocking_user_id = $1
-           UNION
-           SELECT blocking_user_id FROM user_blocks WHERE blocked_user_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM user_blocks ub
+           WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id)
+              OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id)
          )
+         ${cursorCondition}
        ORDER BY (COALESCE(engagement.like_count, 0) * 2 + COALESCE(engagement.view_count, 0)) DESC,
                 dp.profile_verified DESC,
-                dp.profile_completion_percent DESC
+                dp.profile_completion_percent DESC,
+                dp.updated_at DESC,
+                dp.id DESC
        LIMIT $3`,
-      [userId, sevenDaysAgo, limit]
+      params
     );
 
-    const profiles = result.rows.map((row) => {
+    const hasMore = result.rows.length > limit;
+    const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+
+    const profiles = rows.map((row) => {
       const normalizedProfile = normalizeProfileRow(row);
       return {
         ...normalizedProfile,
@@ -2091,19 +2190,41 @@ router.get('/trending', async (req, res) => {
       };
     });
 
-    res.json({ profiles, generatedAt: new Date().toISOString() });
+    const lastRow = rows[rows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.updated_at, lastRow.id) : null;
+
+    const response = { profiles, nextCursor, hasMore: Boolean(nextCursor), generatedAt: new Date().toISOString() };
+    await cacheSetPaginated(cacheKey, response, TRENDING_CACHE_TTL);
+
+    res.json(response);
   } catch (err) {
     console.error('Trending error:', err);
     res.status(500).json({ error: 'Failed to get trending profiles', details: err.message });
   }
 });
 
-// 7d. GET NEW PROFILES
+// 7d. GET NEW PROFILES — cursor pagination + caching
 router.get('/new-profiles', async (req, res) => {
   try {
     const userId = req.user.id;
-    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
+    const limit = Math.min(parseInt(req.query.limit, 10) || CURSOR_PAGE_SIZE, 30);
+    const cursor = req.query.cursor || null;
+
+    const cacheKey = buildCacheKey('discovery', userId, 'new-profiles', cursor);
+    const cached = await cacheGetPaginated(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const { updatedAt, id } = decodeCursor(cursor);
+
+    let cursorCondition = '';
+    const params = [userId, fourteenDaysAgo, limit + 1];
+    if (updatedAt && id) {
+      cursorCondition = `AND (dp.created_at, dp.id) < ($4::timestamp, $5)`;
+      params.push(updatedAt, id);
+    }
 
     const result = await db.query(
       `SELECT dp.*,
@@ -2115,23 +2236,34 @@ router.get('/new-profiles', async (req, res) => {
        WHERE dp.user_id != $1
          AND dp.is_active = true
          AND dp.created_at >= $2
-         AND dp.user_id NOT IN (
-           SELECT CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END
-           FROM interactions WHERE from_user_id = $1 OR to_user_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM interactions i
+           WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
+              OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
          )
-         AND dp.user_id NOT IN (
-           SELECT blocked_user_id FROM user_blocks WHERE blocking_user_id = $1
-           UNION
-           SELECT blocking_user_id FROM user_blocks WHERE blocked_user_id = $1
+         AND NOT EXISTS (
+           SELECT 1 FROM user_blocks ub
+           WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id)
+              OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id)
          )
-       ORDER BY dp.created_at DESC, dp.last_active DESC NULLS LAST
+         ${cursorCondition}
+       ORDER BY dp.created_at DESC, dp.id DESC
        LIMIT $3`,
-      [userId, fourteenDaysAgo, limit]
+      params
     );
 
-    const profiles = result.rows.map((row) => normalizeProfileRow(row));
+    const hasMore = result.rows.length > limit;
+    const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
-    res.json({ profiles, generatedAt: new Date().toISOString() });
+    const profiles = rows.map((row) => normalizeProfileRow(row));
+
+    const lastRow = rows[rows.length - 1];
+    const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.created_at, lastRow.id) : null;
+
+    const response = { profiles, nextCursor, hasMore: Boolean(nextCursor), generatedAt: new Date().toISOString() };
+    await cacheSetPaginated(cacheKey, response, TRENDING_CACHE_TTL);
+
+    res.json(response);
   } catch (err) {
     console.error('New profiles error:', err);
     res.status(500).json({ error: 'Failed to get new profiles', details: err.message });
@@ -2175,6 +2307,9 @@ router.post('/interactions/like', async (req, res) => {
       runSpamCheck: true,
       runFraudCheck: true
     });
+
+    // Invalidate discovery cache after interaction
+    await invalidateDiscoveryCache(fromUserId);
 
     // Check if mutual like exists
     const mutualResult = await db.query(
