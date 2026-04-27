@@ -4,6 +4,28 @@ import datingProfileService from '../services/datingProfileService';
 import BlockReportModal from './BlockReportModal';
 import '../styles/DatingProfile.css';
 
+const getProfileActivityHint = (lastActive) => {
+  if (!lastActive) {
+    return null;
+  }
+
+  const elapsedMinutes = Math.floor((Date.now() - new Date(lastActive).getTime()) / 60000);
+
+  if (elapsedMinutes <= 5) {
+    return { label: 'Online now', tone: 'online' };
+  }
+
+  if (elapsedMinutes <= 60 * 24) {
+    return { label: 'Active recently', tone: 'recent' };
+  }
+
+  if (elapsedMinutes <= 60 * 24 * 7) {
+    return { label: 'Active this week', tone: 'week' };
+  }
+
+  return null;
+};
+
 const DatingProfileView = ({
   profile: initialProfile,
   profileId,
@@ -110,6 +132,7 @@ const DatingProfileView = ({
   const canVideoCall = typeof onVideoCall === 'function' && Boolean(profile.matchId);
   const canScheduleVideoCall =
     typeof onScheduleVideoCall === 'function' && Boolean(profile.matchId);
+  const activityHint = getProfileActivityHint(profile.lastActive);
 
   const handleBlockUser = async (userId) => {
     try {
@@ -179,6 +202,14 @@ const DatingProfileView = ({
             {profile.location?.city || 'Unknown city'}
             {profile.location?.state ? `, ${profile.location.state}` : ''}
           </p>
+          <div className="profile-header-meta">
+            {activityHint ? (
+              <span className={`activity-chip ${activityHint.tone}`}>{activityHint.label}</span>
+            ) : null}
+            {profile.voiceIntroUrl ? (
+              <span className="voice-intro-chip">Voice intro available</span>
+            ) : null}
+          </div>
         </div>
 
         <div className="profile-section">
@@ -212,6 +243,25 @@ const DatingProfileView = ({
             ) : null}
           </div>
         </div>
+
+        {profile.voiceIntroUrl ? (
+          <div className="profile-section voice-intro-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Voice Intro</h3>
+                <p>
+                  Hear a short intro before you decide how you want to start the conversation.
+                </p>
+              </div>
+              {profile.voiceIntroDurationSeconds ? (
+                <span className="section-meta-pill">{profile.voiceIntroDurationSeconds}s</span>
+              ) : null}
+            </div>
+            <audio controls preload="none" className="voice-intro-player" src={profile.voiceIntroUrl}>
+              Your browser does not support audio playback.
+            </audio>
+          </div>
+        ) : null}
 
         {/* Compatibility Score Section */}
         {compatibility && !compatibility.isExcluded ? (

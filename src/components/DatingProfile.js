@@ -33,7 +33,7 @@ const formatSearchHistoryLabel = (entry) => {
     parts.push(String(filters.interests));
   }
 
-  return parts.length > 0 ? parts.join(' • ') : 'General discovery refresh';
+  return parts.length > 0 ? parts.join(' | ') : 'General discovery refresh';
 };
 
 const DatingProfile = ({ onLogout }) => {
@@ -96,6 +96,10 @@ const DatingProfile = ({ onLogout }) => {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [profileViews, setProfileViews] = useState({ viewers: [], isPremium: false, totalCount: 0 });
   const [showProfileViews, setShowProfileViews] = useState(false);
+  const [showVoiceIntroUploader, setShowVoiceIntroUploader] = useState(false);
+  const [voiceIntroFile, setVoiceIntroFile] = useState(null);
+  const [voiceIntroDurationSeconds, setVoiceIntroDurationSeconds] = useState(null);
+  const [uploadingVoiceIntro, setUploadingVoiceIntro] = useState(false);
 
   const completionChecklist = [
     {
@@ -121,6 +125,12 @@ const DatingProfile = ({ onLogout }) => {
       label: 'Set relationship goals',
       done: Boolean(profile?.relationshipGoals),
       hint: 'Tell people what you are looking for to improve match quality.'
+    },
+    {
+      key: 'voiceIntro',
+      label: 'Add a voice intro',
+      done: Boolean(profile?.voiceIntroUrl),
+      hint: 'A short voice intro helps your profile feel more human and memorable.'
     },
     {
       key: 'verification',
@@ -469,6 +479,78 @@ const DatingProfile = ({ onLogout }) => {
     }
   };
 
+  const getAudioDurationSeconds = (file) =>
+    new Promise((resolve, reject) => {
+      const audio = document.createElement('audio');
+      const objectUrl = URL.createObjectURL(file);
+
+      audio.preload = 'metadata';
+      audio.src = objectUrl;
+
+      audio.onloadedmetadata = () => {
+        const duration = Math.round(audio.duration || 0);
+        URL.revokeObjectURL(objectUrl);
+        resolve(duration);
+      };
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Unable to read audio metadata'));
+      };
+    });
+
+  const handleVoiceIntroSelection = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith('audio/')) {
+      setError('Please choose an audio file for your voice intro.');
+      return;
+    }
+
+    try {
+      setError('');
+      const duration = await getAudioDurationSeconds(file);
+
+      if (duration < 15 || duration > 30) {
+        setVoiceIntroFile(null);
+        setVoiceIntroDurationSeconds(null);
+        setError('Voice intros must be between 15 and 30 seconds.');
+        return;
+      }
+
+      setVoiceIntroFile(file);
+      setVoiceIntroDurationSeconds(duration);
+    } catch (voiceError) {
+      setVoiceIntroFile(null);
+      setVoiceIntroDurationSeconds(null);
+      setError('Failed to inspect the audio file. Try another recording.');
+    }
+  };
+
+  const handleUploadVoiceIntro = async () => {
+    if (!voiceIntroFile || !voiceIntroDurationSeconds) {
+      setError('Select a 15-30 second voice intro first.');
+      return;
+    }
+
+    try {
+      setUploadingVoiceIntro(true);
+      setError('');
+      await datingProfileService.uploadVoiceIntro(voiceIntroFile, voiceIntroDurationSeconds);
+      setShowVoiceIntroUploader(false);
+      setVoiceIntroFile(null);
+      setVoiceIntroDurationSeconds(null);
+      await loadProfile();
+    } catch (voiceError) {
+      setError(voiceError || 'Failed to upload voice intro');
+    } finally {
+      setUploadingVoiceIntro(false);
+    }
+  };
+
   const getLastActiveLabel = (lastActive) => {
     if (!lastActive) return 'Not recently active';
     const diff = Date.now() - new Date(lastActive).getTime();
@@ -622,7 +704,7 @@ const DatingProfile = ({ onLogout }) => {
               <div className="completion-list">
                 {missingSteps.map((item) => (
                   <div key={item.key} className="completion-item">
-                    <div className="completion-item-icon">•</div>
+                    <div className="completion-item-icon">*</div>
                     <div className="completion-item-copy">
                       <strong>{item.label}</strong>
                       <span>{item.hint}</span>
@@ -690,6 +772,85 @@ const DatingProfile = ({ onLogout }) => {
               </div>
             </div>
           ) : null}
+
+          <div className="profile-section voice-intro-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Voice Intro</h3>
+                <p>
+                  Upload a 15-30 second intro so people can hear your vibe before they message.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="section-link-btn"
+                onClick={() => {
+                  setShowVoiceIntroUploader((current) => {
+                    const next = !current;
+                    if (!next) {
+                      setVoiceIntroFile(null);
+                      setVoiceIntroDurationSeconds(null);
+                    }
+                    return next;
+                  });
+                  setError('');
+                }}
+              >
+                {showVoiceIntroUploader ? 'Close' : profile.voiceIntroUrl ? 'Replace' : 'Add intro'}
+              </button>
+            </div>
+
+            {profile.voiceIntroUrl ? (
+              <div className="voice-intro-card">
+                <div className="voice-intro-card-header">
+                  <strong>Live on your profile</strong>
+                  {profile.voiceIntroDurationSeconds ? (
+                    <span>{profile.voiceIntroDurationSeconds}s</span>
+                  ) : null}
+                </div>
+                <audio controls preload="none" className="voice-intro-player" src={profile.voiceIntroUrl}>
+                  Your browser does not support audio playback.
+                </audio>
+                <p className="voice-intro-note">
+                  New intros are checked for safety and should stay within the 15-30 second range.
+                </p>
+              </div>
+            ) : (
+              <p className="voice-intro-note">
+                No voice intro yet. Adding one can make your profile feel warmer and more personal.
+              </p>
+            )}
+
+            {showVoiceIntroUploader ? (
+              <div className="voice-intro-uploader">
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleVoiceIntroSelection}
+                />
+                {voiceIntroFile ? (
+                  <div className="voice-intro-draft">
+                    <div className="voice-intro-draft-copy">
+                      <strong>{voiceIntroFile.name}</strong>
+                      <span>{voiceIntroDurationSeconds}s ready to upload</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-save"
+                      onClick={handleUploadVoiceIntro}
+                      disabled={uploadingVoiceIntro}
+                    >
+                      {uploadingVoiceIntro ? 'Uploading...' : 'Upload intro'}
+                    </button>
+                  </div>
+                ) : (
+                  <p className="voice-intro-note">
+                    Choose a recording between 15 and 30 seconds. MP3, WAV, M4A, OGG, AAC, and WEBM are supported.
+                  </p>
+                )}
+              </div>
+            ) : null}
+          </div>
 
           <div className="profile-section">
             <h3>Verification</h3>
@@ -853,7 +1014,7 @@ const DatingProfile = ({ onLogout }) => {
                   <div key={entry.id} className="search-history-item">
                     <strong>{formatSearchHistoryLabel(entry)}</strong>
                     <span>
-                      {entry.resultCount} results • {new Date(entry.createdAt).toLocaleString()}
+                      {entry.resultCount} results | {new Date(entry.createdAt).toLocaleString()}
                     </span>
                   </div>
                 ))}

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const { authenticateToken } = require('../middleware/auth');
 const { cacheGetPaginated, cacheSetPaginated, buildCacheKey, cacheDeletePattern } = require('../utils/redis');
 
 const CURSOR_PAGE_SIZE = 20;
@@ -6532,19 +6533,6 @@ router.get('/notifications/count/unread', async (req, res) => {
     res.status(500).json({ error: 'Failed to get unread count' });
   }
 });
-
-// Helper function: Create dating notification
-const createDatingNotification = async (toUserId, notificationType, fromUserId, metadata = {}) => {
-  try {
-    await db.query(
-      `INSERT INTO dating_notifications (to_user_id, from_user_id, notification_type, metadata, is_read)
-       VALUES ($1, $2, $3, $4::jsonb, false)`,
-      [toUserId, fromUserId, notificationType, JSON.stringify(metadata)]
-    );
-  } catch (error) {
-    console.error('Create notification error:', error);
-  }
-};
 
 // ============ PHASE 4: BOOST, VOICE INTRO, FILTER PRESETS ============
 
