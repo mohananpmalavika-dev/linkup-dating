@@ -1,4 +1,4 @@
-0import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import '../styles/DiscoveryCards.css';
 import datingProfileService from '../services/datingProfileService';
 
@@ -42,6 +42,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [subscription, setSubscription] = useState(null);
   const [boosting, setBoosting] = useState(false);
   const [queuePage, setQueuePage] = useState(1);
+  const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
 
   const activeFilterCount = useMemo(() => Object.values(appliedFilters).filter(v => String(v).trim() !== '').length, [appliedFilters]);
 
@@ -217,8 +218,11 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           </form>
         )}
         <div className="empty-state"><h2>No More Profiles</h2><p>{activeFilterCount>0?'No profiles match your current preferences.':"You've reviewed all available profiles!"}</p><button onClick={reloadProfiles} className="btn-primary">Reload Profiles</button></div>
+      </div>
     );
   }
+
+  const scoreBreakdown = currentProfile?.scoreBreakdown;
 
   return (
     <div className="discovery-container">
@@ -236,6 +240,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           <span title="Remaining rewinds">↩️ {remainingRewinds}</span>
           <button type="button" className="btn-boost" onClick={handleBoost} disabled={boosting||!(subscription?.isPremium||subscription?.isGold)}>{boosting?'⚡...':'⚡ Boost'}</button>
         </div>
+      </div>
 
       {showFilters && (
         <form className="filter-panel" onSubmit={handleApplyFilters}>
@@ -282,12 +287,25 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
               <div className="name-age"><h2>{currentProfile.firstName}</h2><span className="age">{currentProfile.age}</span></div>
               {currentProfile.profileVerified && <div className="verified-badge" title="Verified Profile">✓</div>}
             </div>
-            <div className="location">📍 {currentProfile.location?.city}, {currentProfile.location?.state}</div>
+            <div className="location">📍 {currentProfile.location?.city}, {currentProfile.location?.state}{currentProfile.distanceKm !== undefined && currentProfile.distanceKm !== null ? ` · ${currentProfile.distanceKm} km` : ''}</div>
+          </div>
 
           <div className="profile-info">
             {currentProfile.compatibilityScore ? (
               <div className="compatibility-panel">
-                <div className="compatibility-badge">Compatibility {currentProfile.compatibilityScore}%</div>
+                <div className="compatibility-badge" onClick={() => setShowScoreBreakdown(s => !s)} style={{ cursor: scoreBreakdown ? 'pointer' : 'default' }}>
+                  Compatibility {currentProfile.compatibilityScore}%
+                  {scoreBreakdown && <span className="score-toggle">{showScoreBreakdown ? ' ▲' : ' ▼'}</span>}
+                </div>
+                {showScoreBreakdown && scoreBreakdown && (
+                  <div className="score-breakdown">
+                    <div className="score-row"><span>Compatibility</span><div className="score-bar"><div className="score-fill" style={{width:`${scoreBreakdown.compatibility}%`}}></div></div><b>{scoreBreakdown.compatibility}%</b></div>
+                    <div className="score-row"><span>Behavioral</span><div className="score-bar"><div className="score-fill behavioral" style={{width:`${scoreBreakdown.behavioral}%`}}></div></div><b>{scoreBreakdown.behavioral}%</b></div>
+                    <div className="score-row"><span>Recency</span><div className="score-bar"><div className="score-fill recency" style={{width:`${scoreBreakdown.recency}%`}}></div></div><b>{scoreBreakdown.recency}%</b></div>
+                    <div className="score-row"><span>Trending</span><div className="score-bar"><div className="score-fill trending" style={{width:`${scoreBreakdown.trending}%`}}></div></div><b>{scoreBreakdown.trending}%</b></div>
+                    <div className="score-row"><span>Diversity</span><div className="score-bar"><div className="score-fill diversity" style={{width:`${scoreBreakdown.diversity}%`}}></div></div><b>{scoreBreakdown.diversity}%</b></div>
+                  </div>
+                )}
                 {currentProfile.compatibilityReasons?.length > 0 && <div className="compatibility-reasons">{currentProfile.compatibilityReasons.map(r=>(<span key={r} className="compatibility-reason">{r}</span>))}</div>}
                 {currentProfile.icebreakers?.[0] && <p className="compatibility-opener">Try this opener: {currentProfile.icebreakers[0]}</p>}
               </div>
@@ -297,11 +315,14 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
               {currentProfile.occupation && <div className="detail-item"><span className="label">Occupation</span><span className="value">{currentProfile.occupation}</span></div>}
               {currentProfile.education && <div className="detail-item"><span className="label">Education</span><span className="value">{currentProfile.education}</span></div>}
               {currentProfile.relationshipGoals && <div className="detail-item"><span className="label">Looking For</span><span className="value">{currentProfile.relationshipGoals}</span></div>}
+              {currentProfile.bodyType && <div className="detail-item"><span className="label">Body Type</span><span className="value">{currentProfile.bodyType}</span></div>}
+              {currentProfile.height && <div className="detail-item"><span className="label">Height</span><span className="value">{currentProfile.height} cm</span></div>}
             </div>
             {currentProfile.interests && currentProfile.interests.length > 0 && (
-              <div className="interests"><h4>Interests</h4><div className="interest-tags">{currentProfile.interests.map((interest,idx)=>(<span key={idx} className="tag">{interest}</span>))}</div>
+              <div className="interests"><h4>Interests</h4><div className="interest-tags">{currentProfile.interests.map((interest,idx)=>(<span key={idx} className="tag">{interest}</span>))}</div></div>
             )}
           </div>
+        </div>
       </div>
 
       <div className="action-buttons">
@@ -313,7 +334,9 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       </div>
 
       <div className="card-counter">{currentIndex + 1} of {profiles.length}</div>
+    </div>
   );
 };
 
 export default DiscoveryCards;
+

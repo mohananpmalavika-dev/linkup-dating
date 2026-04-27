@@ -6,7 +6,10 @@ const defaultFilters = {
   ageRange: { min: 18, max: 65 },
   relationshipGoals: ['dating', 'relationship'],
   interests: [],
-  heightRange: { min: 150, max: 210 }
+  heightRange: { min: 150, max: 210 },
+  bodyTypes: [],
+  genderPreferences: [],
+  distance: 100
 };
 
 const relationshipGoalOptions = [
@@ -30,6 +33,9 @@ const interestOptions = [
   'Movies',
   'Yoga'
 ];
+
+const bodyTypeOptions = ['Slim', 'Average', 'Athletic', 'Curvy', 'Muscular', 'Heavyset'];
+const genderOptions = ['male', 'female', 'non-binary', 'other'];
 
 const parseIntegerOrFallback = (value, fallbackValue) => {
   const parsedValue = Number.parseInt(value, 10);
@@ -113,6 +119,13 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
     }));
   };
 
+  const handleDistanceChange = (value) => {
+    setFilters((prev) => ({
+      ...prev,
+      distance: parseIntegerOrFallback(value, prev.distance)
+    }));
+  };
+
   const toggleArrayValue = (field, value) => {
     setFilters((prev) => ({
       ...prev,
@@ -177,7 +190,14 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       interests: Array.isArray(entry.filters?.interests)
         ? entry.filters.interests
         : defaultFilters.interests,
-      heightRange: entry.filters?.heightRange || defaultFilters.heightRange
+      heightRange: entry.filters?.heightRange || defaultFilters.heightRange,
+      bodyTypes: Array.isArray(entry.filters?.bodyTypes)
+        ? entry.filters.bodyTypes
+        : defaultFilters.bodyTypes,
+      genderPreferences: Array.isArray(entry.filters?.genderPreferences)
+        ? entry.filters.genderPreferences
+        : defaultFilters.genderPreferences,
+      distance: entry.filters?.distance || defaultFilters.distance
     };
 
     setFilters(nextFilters);
@@ -198,7 +218,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       <div className="browse-header">
         <div>
           <h1>Browse Profiles</h1>
-          <p className="browse-subtitle">Search by age, height, goals, and shared interests.</p>
+          <p className="browse-subtitle">Search by age, height, goals, body type, distance, and shared interests.</p>
         </div>
         <button
           type="button"
@@ -278,6 +298,37 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
+            <label>Distance (km)</label>
+            <div className="range-slider-container">
+              <input
+                type="range"
+                min="1"
+                max="500"
+                value={filters.distance}
+                onChange={(event) => handleDistanceChange(event.target.value)}
+                className="range-slider"
+              />
+              <span className="range-value">{filters.distance} km</span>
+            </div>
+          </div>
+
+          <div className="filter-group">
+            <label>Gender Preferences</label>
+            <div className="checkbox-group">
+              {genderOptions.map((gender) => (
+                <label key={gender} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={filters.genderPreferences.includes(gender)}
+                    onChange={() => toggleArrayValue('genderPreferences', gender)}
+                  />
+                  {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="filter-group">
             <label>Relationship Goals</label>
             <div className="checkbox-group">
               {relationshipGoalOptions.map((goal) => (
@@ -304,6 +355,22 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
                     onChange={() => toggleArrayValue('interests', interest)}
                   />
                   {interest}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="filter-group">
+            <label>Body Types</label>
+            <div className="checkbox-group">
+              {bodyTypeOptions.map((type) => (
+                <label key={type} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={filters.bodyTypes.includes(type)}
+                    onChange={() => toggleArrayValue('bodyTypes', type)}
+                  />
+                  {type}
                 </label>
               ))}
             </div>
@@ -376,63 +443,3 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
                     ? `url(${profile.photos[0]})`
                     : 'linear-gradient(135deg, #667eea, #764ba2)'
                 }}
-              >
-                {profile.profileVerified ? (
-                  <div className="verified-badge">Verified</div>
-                ) : null}
-              </button>
-
-              <div className="profile-card-info">
-                <h3>{profile.firstName}, {profile.age}</h3>
-                <p className="location">{profile.location?.city || 'Location unavailable'}</p>
-                <p className="bio-preview">{truncateText(profile.bio)}</p>
-
-                {profile.interests && profile.interests.length > 0 ? (
-                  <div className="interests-preview">
-                    {profile.interests.slice(0, 3).map((interest) => (
-                      <span key={interest} className="tag-small">{interest}</span>
-                    ))}
-                  </div>
-                ) : null}
-
-                <div className="card-actions">
-                  <button
-                    type="button"
-                    className="btn-view-profile"
-                    onClick={() => onProfileSelect?.(profile)}
-                  >
-                    View Profile
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-view-profile"
-                    onClick={() => handleToggleFavorite(profile)}
-                  >
-                    {favoriteUserIds.has(String(profile.userId)) ? 'Unfavorite' : 'Favorite'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-like-small"
-                    onClick={() => handleLike(profile)}
-                    aria-label={`Like ${profile.firstName}`}
-                  >
-                    Like
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {!loading && !error && profiles.length === 0 && (
-        <div className="no-profiles">
-          <p>No profiles found. Try adjusting your filters.</p>
-          <button type="button" onClick={() => setShowFilters(true)}>Adjust Filters</button>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default BrowseProfiles;

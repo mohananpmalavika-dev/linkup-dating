@@ -295,6 +295,73 @@
   line-height: 1.5;
 }
 
+.score-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: #ffffff;
+  border-radius: 10px;
+  margin-top: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.score-row span {
+  width: 80px;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.score-row b {
+  width: 36px;
+  text-align: right;
+  color: #1f2937;
+}
+
+.score-bar {
+  flex: 1;
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transition: width 0.4s ease;
+}
+
+.score-fill.behavioral {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.score-fill.recency {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.score-fill.trending {
+  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.score-fill.diversity {
+  background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+}
+
+.score-toggle {
+  margin-left: 6px;
+  font-size: 10px;
+  opacity: 0.8;
+}
+
 .bio {
   margin: 0;
 }

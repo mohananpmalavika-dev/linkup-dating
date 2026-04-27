@@ -1502,10 +1502,25 @@ router.post('/profiles/me/photos', async (req, res) => {
 router.post('/search', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { ageRange, relationshipGoals, heightRange, interests } = req.body;
+    const { ageRange, relationshipGoals, heightRange, interests, bodyTypes, distance, genderPreferences } = req.body;
     const normalizedInterests = Array.isArray(interests)
       ? interests.map((interest) => normalizeOptionalText(interest)).filter(Boolean)
       : [];
+    const normalizedBodyTypes = Array.isArray(bodyTypes)
+      ? bodyTypes.map((bt) => normalizeOptionalText(bt)).filter(Boolean)
+      : [];
+    const normalizedGenderPreferences = Array.isArray(genderPreferences)
+      ? genderPreferences.map((g) => normalizeOptionalText(g)).filter(Boolean)
+      : [];
+    const radiusKm = normalizeInteger(distance);
+
+    // Get current user's location for distance filtering
+    const currentProfileResult = await db.query(
+      `SELECT location_lat, location_lng FROM dating_profiles WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+    const currentLat = toFiniteNumber(currentProfileResult.rows[0]?.location_lat);
+    const currentLng = toFiniteNumber(currentProfileResult.rows[0]?.location_lng);
 
     let query = `
       SELECT dp.*, COUNT(*) OVER() as total_count,
@@ -1514,7 +1529,6 @@ router.post('/search', async (req, res) => {
       FROM dating_profiles dp
       WHERE dp.user_id != $1
         AND dp.is_active = true
-        AND dp.profile_verified = true
     `;
 
     const params = [userId];
@@ -1528,6 +1542,10 @@ router.post('/search', async (req, res) => {
       query += ` AND dp.age <= $${paramIndex++}`;
       params.push(ageRange.max);
     }
+    if (normalizedGenderPreferences.length > 0) {
+      query += ` AND dp.gender = ANY($${paramIndex++})`;
+      params.push(normalizedGenderPreferences);
+    }
     if (relationshipGoals?.length > 0) {
       query += ` AND dp.relationship_goals = ANY($${paramIndex++})`;
       params.push(relationshipGoals);
@@ -1540,12 +1558,31 @@ router.post('/search', async (req, res) => {
       query += ` AND dp.height <= $${paramIndex++}`;
       params.push(heightRange.max);
     }
+    if (normalizedBodyTypes.length > 0) {
+      query += ` AND dp.body_type = ANY($${paramIndex++})`;
+      params.push(normalizedBodyTypes);
+    }
     if (normalizedInterests.length > 0) {
       query += ` AND COALESCE(dp.interests, ARRAY[]::text[]) && $${paramIndex++}::text[]`;
       params.push(normalizedInterests);
     }
 
-    query += ' ORDER BY dp.updated_at DESC LIMIT 20';
+    // Haversine distance filter
+    if (Number.isFinite(currentLat) && Number.isFinite(currentLng) && Number.isFinite(radiusKm) && radiusKm > 0) {
+      query += ` AND (
+        6371 * acos(
+          LEAST(1, GREATEST(-1,
+            cos(radians($${paramIndex})) * cos(radians(dp.location_lat)) *
+            cos(radians(dp.location_lng) - radians($${paramIndex + 1})) +
+            sin(radians($${paramIndex})) * sin(radians(dp.location_lat))
+          ))
+        )
+      ) <= $${paramIndex + 2}`;
+      params.push(currentLat, currentLng, radiusKm);
+      paramIndex += 3;
+    }
+
+    query += ' ORDER BY dp.updated_at DESC LIMIT 50';
 
     const result = await db.query(query, params);
     await recordSearchHistory({
@@ -1555,7 +1592,10 @@ router.post('/search', async (req, res) => {
         ageRange: ageRange || {},
         relationshipGoals: Array.isArray(relationshipGoals) ? relationshipGoals : [],
         heightRange: heightRange || {},
-        interests: normalizedInterests
+        interests: normalizedInterests,
+        bodyTypes: normalizedBodyTypes,
+        distance: radiusKm,
+        genderPreferences: normalizedGenderPreferences
       },
       resultCount: result.rows.length
     });
