@@ -1,16 +1,37 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import io from 'socket.io-client';
+import MessageToolbar from './MessageToolbar';
 import { useLocation } from '../router';
 import datingMessagingService from '../services/datingMessagingService';
 import datingProfileService from '../services/datingProfileService';
+import messagingEnhancedService from '../services/messagingEnhancedService';
 import notificationService from '../services/notificationService';
 import { getStoredUserData } from '../utils/auth';
 import { BACKEND_BASE_URL } from '../utils/api';
 import '../styles/DatingMessaging.css';
 
 const REACTION_OPTIONS = ['❤️', '👍', '😂', '🔥', '👏'];
+const SEARCH_LOAD_LIMIT = 200;
+const DISAPPEARING_DURATION_OPTIONS = [
+  { value: 3600, label: '1 hour' },
+  { value: 86400, label: '24 hours' },
+  { value: 604800, label: '7 days' }
+];
 
 const unwrapMessagePayload = (payload) => payload?.data ?? payload ?? null;
+
+const inferMessageType = (message) => {
+  if (message.message_type || message.messageType) {
+    return message.message_type || message.messageType;
+  }
+
+  const mediaType = message.media_type || message.mediaType;
+  if (mediaType === 'voice') {
+    return 'audio';
+  }
+
+  return mediaType || 'text';
+};
 
 const normalizeMessage = (message, currentUserId) => ({
   id: message.id,
@@ -22,7 +43,15 @@ const normalizeMessage = (message, currentUserId) => ({
   readAt: message.read_at || message.readAt || null,
   mediaType: message.media_type || message.mediaType || null,
   mediaUrl: message.media_url || message.mediaUrl || null,
+  messageType: inferMessageType(message),
   duration: message.duration ?? null,
+  isDisappearing: Boolean(message.is_disappearing ?? message.isDisappearing),
+  disappearsAt: message.disappears_at || message.disappearsAt || null,
+  disappearAfterSeconds: Number.parseInt(
+    message.disappear_after_seconds ?? message.disappearAfterSeconds,
+    10
+  ) || null,
+  locationName: message.location_name || message.locationName || null,
   reactions: Array.isArray(message.reactions)
     ? message.reactions.map((reaction) => ({
         emoji: reaction.emoji,
@@ -80,6 +109,55 @@ const getReadReceiptLabel = (message) => {
   })}`;
 };
 
+const getDisappearingLabel = (message, now) => {
+  if (!message?.isDisappearing) {
+    return '';
+  }
+
+  if (!message.disappearsAt) {
+    return 'Disappearing message';
+  }
+
+  const remainingMs = new Date(message.disappearsAt).getTime() - now;
+  if (remainingMs <= 0) {
+    return 'Disappearing now';
+  }
+
+  const totalMinutes = Math.ceil(remainingMs / 60000);
+  if (totalMinutes < 60) {
+    return `Disappears in ${totalMinutes}m`;
+  }
+
+  const totalHours = Math.ceil(totalMinutes / 60);
+  if (totalHours < 24) {
+    return `Disappears in ${totalHours}h`;
+  }
+
+  return `Disappears in ${Math.ceil(totalHours / 24)}d`;
+};
+
+const parseLocationMessage = (text) => {
+  if (!text || !text.includes('https://maps.google.com/?q=')) {
+    return null;
+  }
+
+  const lines = text.split('\n').filter(Boolean);
+  const mapUrl = lines.find((line) => line.startsWith('https://maps.google.com/?q='));
+  if (!mapUrl) {
+    return null;
+  }
+
+  const label = lines
+    .filter((line) => line !== mapUrl)
+    .join('\n')
+    .trim();
+
+  return {
+    label: label || 'Shared location',
+    mapUrl
+  };
+};
+
 const DatingMessaging = ({
   matchedProfile,
   matchId,
@@ -99,6 +177,7 @@ const DatingMessaging = ({
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [error, setError] = useState('');
+  const [statusBanner, setStatusBanner] = useState(null);
   const [otherUserTyping, setOtherUserTyping] = useState(false);
   const [otherUserOnline, setOtherUserOnline] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState(() =>
@@ -109,6 +188,11 @@ const DatingMessaging = ({
   const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const [voiceRecordingDuration, setVoiceRecordingDuration] = useState(0);
   const [sendingMedia, setSendingMedia] = useState(false);
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+  const [disappearingEnabled, setDisappearingEnabled] = useState(false);
+  const [disappearAfterSeconds, setDisappearAfterSeconds] = useState(3600);
+  const [securitySetupReady, setSecuritySetupReady] = useState(false);
+  const [countdownNow, setCountdownNow] = useState(Date.now());
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
@@ -116,15 +200,80 @@ const DatingMessaging = ({
   const mediaInputRef = useRef(null);
   const voiceRecorderRef = useRef(null);
   const voiceIntervalRef = useRef(null);
+  const statusTimeoutRef = useRef(null);
+  const messageRefs = useRef({});
   const activeMatch = conversationMatch || matchedProfile || null;
   const activeMatchId = activeMatch?.matchId || matchId || null;
   const activeMatchUserId = activeMatch?.userId || null;
   const notificationsAvailable = notificationService.getPermissionStatus().available;
   const icebreakers = useMemo(() => buildIcebreakers(activeMatch), [activeMatch]);
+  const showComposerStarters = messages.length < 3 && icebreakers.length > 0;
+
+  const showStatus = useCallback((message, tone = 'info') => {
+    if (statusTimeoutRef.current) {
+      clearTimeout(statusTimeoutRef.current);
+    }
+
+    setStatusBanner({ message, tone });
+    statusTimeoutRef.current = setTimeout(() => {
+      setStatusBanner(null);
+      statusTimeoutRef.current = null;
+    }, 4000);
+  }, []);
 
   const notifyConversationActivity = useCallback(() => {
     onConversationActivity?.();
   }, [onConversationActivity]);
+
+  const appendMessage = useCallback((rawMessage) => {
+    if (!rawMessage) {
+      return;
+    }
+
+    const nextMessage = normalizeMessage(rawMessage, currentUserId);
+    setMessages((currentMessages) => (
+      currentMessages.some((message) => String(message.id) === String(nextMessage.id))
+        ? currentMessages
+        : [...currentMessages, nextMessage]
+    ));
+  }, [currentUserId]);
+
+  const loadMessages = useCallback(async (showLoader = true, options = {}) => {
+    if (!activeMatchId || !currentUserId) {
+      setMessages([]);
+      return;
+    }
+
+    if (showLoader) {
+      setLoadingMessages(true);
+    }
+
+    setError('');
+
+    try {
+      const response = await datingMessagingService.getMessages(activeMatchId, {
+        limit: options.limit || 50,
+        offset: options.offset || 0
+      });
+      setMessages((response || []).map((message) => normalizeMessage(message, currentUserId)));
+      notifyConversationActivity();
+    } catch (loadError) {
+      setError(typeof loadError === 'string' ? loadError : 'Failed to load messages');
+    } finally {
+      if (showLoader) {
+        setLoadingMessages(false);
+      }
+    }
+  }, [activeMatchId, currentUserId, notifyConversationActivity]);
+
+  useEffect(() => () => {
+    if (statusTimeoutRef.current) {
+      clearTimeout(statusTimeoutRef.current);
+    }
+    if (voiceIntervalRef.current) {
+      clearInterval(voiceIntervalRef.current);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,32 +322,11 @@ const DatingMessaging = ({
     setOtherUserOnline(false);
     setOtherUserTyping(false);
     setActiveReactionPickerMessageId(null);
+    setHighlightedMessageId(null);
+    setDisappearingEnabled(false);
+    setSecuritySetupReady(false);
+    setStatusBanner(null);
   }, [activeMatchId]);
-
-  const loadMessages = useCallback(async (showLoader = true) => {
-    if (!activeMatchId || !currentUserId) {
-      setMessages([]);
-      return;
-    }
-
-    if (showLoader) {
-      setLoadingMessages(true);
-    }
-
-    setError('');
-
-    try {
-      const response = await datingMessagingService.getMessages(activeMatchId);
-      setMessages((response || []).map((message) => normalizeMessage(message, currentUserId)));
-      notifyConversationActivity();
-    } catch (loadError) {
-      setError(typeof loadError === 'string' ? loadError : 'Failed to load messages');
-    } finally {
-      if (showLoader) {
-        setLoadingMessages(false);
-      }
-    }
-  }, [activeMatchId, currentUserId, notifyConversationActivity]);
 
   useEffect(() => {
     if (activeMatchId && currentUserId) {
@@ -211,6 +339,40 @@ const DatingMessaging = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, otherUserTyping]);
+
+  useEffect(() => {
+    if (!highlightedMessageId) {
+      return undefined;
+    }
+
+    const messageElement = messageRefs.current[String(highlightedMessageId)];
+    if (!messageElement) {
+      return undefined;
+    }
+
+    messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const timeoutId = window.setTimeout(() => {
+      setHighlightedMessageId(null);
+    }, 2500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [highlightedMessageId, messages]);
+
+  useEffect(() => {
+    const hasActiveDisappearingMessages = messages.some(
+      (message) => message.isDisappearing && message.disappearsAt
+    );
+
+    if (!hasActiveDisappearingMessages) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setCountdownNow(Date.now());
+    }, 30000);
+
+    return () => window.clearInterval(intervalId);
+  }, [messages]);
 
   useEffect(() => {
     if (!currentUserId) {
@@ -238,22 +400,20 @@ const DatingMessaging = ({
         return;
       }
 
-      const nextMessage = normalizeMessage(
-        {
-          id: payload.messageId || `${payload.matchId}-${payload.fromUserId}-${payload.timestamp}`,
-          text: payload.message,
-          fromUserId: payload.fromUserId,
-          createdAt: payload.timestamp,
-          reactions: payload.reactions || []
-        },
-        currentUserId
-      );
-
-      setMessages((currentMessages) => (
-        currentMessages.some((message) => message.id === nextMessage.id)
-          ? currentMessages
-          : [...currentMessages, nextMessage]
-      ));
+      appendMessage({
+        id: payload.messageId || `${payload.matchId}-${payload.fromUserId}-${payload.timestamp}`,
+        message: payload.message,
+        fromUserId: payload.fromUserId,
+        createdAt: payload.timestamp,
+        mediaType: payload.mediaType,
+        mediaUrl: payload.mediaUrl,
+        duration: payload.duration,
+        messageType: payload.messageType,
+        isDisappearing: payload.isDisappearing,
+        disappearsAt: payload.disappearsAt,
+        disappearAfterSeconds: payload.disappearAfterSeconds,
+        reactions: payload.reactions || []
+      });
       setOtherUserTyping(false);
       loadMessages(false);
     });
@@ -307,7 +467,7 @@ const DatingMessaging = ({
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [activeMatchId, activeMatchUserId, currentUserId, loadMessages]);
+  }, [activeMatchId, activeMatchUserId, appendMessage, currentUserId, loadMessages]);
 
   const stopTypingSignal = () => {
     if (typingTimeoutRef.current) {
@@ -323,6 +483,37 @@ const DatingMessaging = ({
     }
   };
 
+  const sendTextMessage = useCallback(async (messageText, options = {}) => {
+    if (!activeMatchId) {
+      return null;
+    }
+
+    const trimmedMessage = messageText.trim();
+    if (!trimmedMessage) {
+      return null;
+    }
+
+    if (options.disappearing) {
+      return messagingEnhancedService.sendDisappearingMessage(
+        activeMatchId,
+        trimmedMessage,
+        options.disappearAfterSeconds || disappearAfterSeconds
+      );
+    }
+
+    const response = await datingMessagingService.sendMessage(activeMatchId, trimmedMessage);
+    return unwrapMessagePayload(response);
+  }, [activeMatchId, disappearAfterSeconds]);
+
+  const sendMediaAsset = useCallback(async (file, mediaType, options = {}) => {
+    if (!activeMatchId) {
+      return null;
+    }
+
+    const response = await datingMessagingService.sendMediaMessage(activeMatchId, file, mediaType, options);
+    return unwrapMessagePayload(response);
+  }, [activeMatchId]);
+
   const handleSendMessage = async () => {
     const trimmedMessage = inputMessage.trim();
 
@@ -334,13 +525,25 @@ const DatingMessaging = ({
     setError('');
 
     try {
-      const response = await datingMessagingService.sendMessage(activeMatchId, trimmedMessage);
-      const createdMessage = normalizeMessage(unwrapMessagePayload(response), currentUserId);
+      const createdMessage = await sendTextMessage(trimmedMessage, {
+        disappearing: disappearingEnabled,
+        disappearAfterSeconds
+      });
 
-      setMessages((currentMessages) => [...currentMessages, createdMessage]);
+      appendMessage(createdMessage);
       setInputMessage('');
       stopTypingSignal();
       notifyConversationActivity();
+
+      if (disappearingEnabled) {
+        const activeDuration = DISAPPEARING_DURATION_OPTIONS.find(
+          (option) => option.value === disappearAfterSeconds
+        );
+        showStatus(
+          `Disappearing message sent${activeDuration ? ` (${activeDuration.label})` : ''}.`,
+          'success'
+        );
+      }
     } catch (sendError) {
       setError(typeof sendError === 'string' ? sendError : 'Failed to send message');
     } finally {
@@ -411,15 +614,16 @@ const DatingMessaging = ({
 
   const handleImageSelect = async (event) => {
     const file = event.target.files?.[0];
-    if (!file || !activeMatchId) return;
+    if (!file || !activeMatchId) {
+      return;
+    }
 
     setSendingMedia(true);
     setError('');
 
     try {
-      const response = await datingMessagingService.sendMediaMessage(activeMatchId, file, 'image');
-      const createdMessage = normalizeMessage(unwrapMessagePayload(response), currentUserId);
-      setMessages((currentMessages) => [...currentMessages, createdMessage]);
+      const createdMessage = await sendMediaAsset(file, 'image');
+      appendMessage(createdMessage);
       notifyConversationActivity();
     } catch (sendError) {
       setError(typeof sendError === 'string' ? sendError : 'Failed to send image');
@@ -454,9 +658,10 @@ const DatingMessaging = ({
 
         setSendingMedia(true);
         try {
-          const response = await datingMessagingService.sendVoiceNote(activeMatchId, audioBlob, duration);
-          const createdMessage = normalizeMessage(unwrapMessagePayload(response), currentUserId);
-          setMessages((currentMessages) => [...currentMessages, createdMessage]);
+          const createdMessage = unwrapMessagePayload(
+            await datingMessagingService.sendVoiceNote(activeMatchId, audioBlob, duration)
+          );
+          appendMessage(createdMessage);
           notifyConversationActivity();
         } catch (sendError) {
           setError(typeof sendError === 'string' ? sendError : 'Failed to send voice note');
@@ -475,11 +680,11 @@ const DatingMessaging = ({
       setVoiceRecordingDuration(0);
 
       voiceIntervalRef.current = setInterval(() => {
-        setVoiceRecordingDuration((prev) => prev + 1);
+        setVoiceRecordingDuration((currentValue) => currentValue + 1);
       }, 1000);
-    } catch (err) {
+    } catch (recordingError) {
       setError('Could not access microphone. Please check permissions.');
-      console.error(err);
+      console.error(recordingError);
     }
   };
 
@@ -494,10 +699,184 @@ const DatingMessaging = ({
     }
   };
 
+  const handleToolbarAttachments = async (attachments) => {
+    if (!activeMatchId || !Array.isArray(attachments) || attachments.length === 0) {
+      return;
+    }
+
+    setSendingMedia(true);
+    setError('');
+
+    try {
+      for (const attachment of attachments) {
+        const createdMessage = await sendMediaAsset(attachment.file, attachment.type);
+        appendMessage(createdMessage);
+      }
+
+      notifyConversationActivity();
+      showStatus(
+        `${attachments.length} attachment${attachments.length === 1 ? '' : 's'} sent.`,
+        'success'
+      );
+    } catch (attachmentError) {
+      setError(typeof attachmentError === 'string' ? attachmentError : 'Failed to send attachment');
+    } finally {
+      setSendingMedia(false);
+    }
+  };
+
+  const handleShareLocation = async (sharedLocation) => {
+    if (!activeMatchId || !sharedLocation) {
+      return;
+    }
+
+    setSendingMessage(true);
+    setError('');
+
+    try {
+      const locationMessage = [
+        `Shared location: ${sharedLocation.name}`,
+        `https://maps.google.com/?q=${sharedLocation.lat},${sharedLocation.lng}`
+      ].join('\n');
+
+      const createdMessage = await sendTextMessage(locationMessage);
+      appendMessage(createdMessage);
+      notifyConversationActivity();
+      showStatus('Location shared in chat.', 'success');
+    } catch (locationError) {
+      setError(typeof locationError === 'string' ? locationError : 'Failed to share location');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  const handleToolbarMore = async (action) => {
+    if (!activeMatchId) {
+      return;
+    }
+
+    setError('');
+
+    try {
+      if (action === 'encrypt') {
+        const response = await messagingEnhancedService.initializeEncryption(activeMatchId);
+        setSecuritySetupReady(true);
+        showStatus(response.message || 'Secure chat keys initialized for this match.', 'success');
+        return;
+      }
+
+      if (action === 'backup') {
+        await messagingEnhancedService.createBackup(activeMatchId);
+        showStatus('Chat backup created.', 'success');
+        return;
+      }
+
+      if (action === 'disappearing') {
+        setDisappearingEnabled((currentValue) => {
+          const nextValue = !currentValue;
+          showStatus(
+            nextValue ? 'Disappearing mode is on for new messages.' : 'Disappearing mode is off.',
+            nextValue ? 'success' : 'info'
+          );
+          return nextValue;
+        });
+      }
+    } catch (actionError) {
+      setError(typeof actionError === 'string' ? actionError : 'Unable to complete that action');
+    }
+  };
+
+  const handleSearchSelect = async (message) => {
+    if (!message?.id) {
+      return;
+    }
+
+    if (!messages.some((currentMessage) => String(currentMessage.id) === String(message.id))) {
+      await loadMessages(false, { limit: SEARCH_LOAD_LIMIT });
+    }
+
+    setHighlightedMessageId(String(message.id));
+    showStatus('Jumped to the matching message.', 'success');
+  };
+
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const renderTextMessage = (message) => {
+    const locationPayload = parseLocationMessage(message.text);
+
+    if (locationPayload) {
+      return (
+        <div className="message-location-card">
+          <span className="message-location-label">{locationPayload.label}</span>
+          <a
+            href={locationPayload.mapUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="message-location-link"
+          >
+            Open in Maps
+          </a>
+        </div>
+      );
+    }
+
+    return <p>{message.text}</p>;
+  };
+
+  const renderMessageBody = (message) => {
+    if (message.mediaType === 'image' && message.mediaUrl) {
+      return (
+        <div className="message-media">
+          <img
+            src={message.mediaUrl}
+            alt="Shared"
+            className="message-image"
+            onClick={() => window.open(message.mediaUrl, '_blank')}
+          />
+        </div>
+      );
+    }
+
+    if ((message.mediaType === 'voice' || message.mediaType === 'audio') && message.mediaUrl) {
+      return (
+        <div className="message-media voice-message">
+          <audio controls src={message.mediaUrl} className="voice-audio" />
+          {message.duration ? (
+            <span className="voice-duration">{formatDuration(message.duration)}</span>
+          ) : null}
+        </div>
+      );
+    }
+
+    if (message.mediaType === 'video' && message.mediaUrl) {
+      return (
+        <div className="message-media">
+          <video controls src={message.mediaUrl} className="message-video" />
+        </div>
+      );
+    }
+
+    if (message.mediaType === 'document' && message.mediaUrl) {
+      return (
+        <div className="message-media message-document">
+          <span className="message-document-label">Document attachment</span>
+          <a
+            href={message.mediaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="message-document-link"
+          >
+            Open document
+          </a>
+        </div>
+      );
+    }
+
+    return renderTextMessage(message);
   };
 
   if (loadingMatch && !activeMatch) {
@@ -551,6 +930,10 @@ const DatingMessaging = ({
         </div>
 
         <div className="messaging-header-actions">
+          {securitySetupReady ? (
+            <span className="messaging-badge">Secure setup ready</span>
+          ) : null}
+
           {notificationsAvailable && notificationPermission !== 'granted' ? (
             <button
               type="button"
@@ -562,6 +945,7 @@ const DatingMessaging = ({
           ) : null}
 
           <button
+            type="button"
             className="btn-schedule-call"
             onClick={() => onScheduleVideoCall?.(activeMatch, location.pathname)}
             title="Schedule video call"
@@ -570,6 +954,7 @@ const DatingMessaging = ({
           </button>
 
           <button
+            type="button"
             className="btn-video-call"
             onClick={() => onVideoCall?.(activeMatch, location.pathname)}
             title="Start video call"
@@ -582,6 +967,12 @@ const DatingMessaging = ({
       {error ? (
         <div className="messaging-error" role="alert">
           {error}
+        </div>
+      ) : null}
+
+      {statusBanner ? (
+        <div className={`messaging-status messaging-status-${statusBanner.tone}`}>
+          {statusBanner.message}
         </div>
       ) : null}
 
@@ -610,28 +1001,29 @@ const DatingMessaging = ({
           </div>
         ) : (
           messages.map((message) => (
-            <div key={message.id} className={`message ${message.isOwn ? 'own' : 'other'}`}>
+            <div
+              key={message.id}
+              ref={(node) => {
+                if (node) {
+                  messageRefs.current[String(message.id)] = node;
+                } else {
+                  delete messageRefs.current[String(message.id)];
+                }
+              }}
+              className={`message ${message.isOwn ? 'own' : 'other'} ${
+                highlightedMessageId === String(message.id) ? 'message-highlighted' : ''
+              }`}
+            >
               <div className="message-stack">
                 <div className="message-content">
-                  {message.mediaType === 'image' && message.mediaUrl ? (
-                    <div className="message-media">
-                      <img
-                        src={message.mediaUrl}
-                        alt="Shared"
-                        className="message-image"
-                        onClick={() => window.open(message.mediaUrl, '_blank')}
-                      />
+                  {renderMessageBody(message)}
+                  {message.isDisappearing ? (
+                    <div className="message-flags">
+                      <span className="message-flag">
+                        {getDisappearingLabel(message, countdownNow)}
+                      </span>
                     </div>
-                  ) : message.mediaType === 'voice' && message.mediaUrl ? (
-                    <div className="message-media voice-message">
-                      <audio controls src={message.mediaUrl} className="voice-audio" />
-                      {message.duration ? (
-                        <span className="voice-duration">{formatDuration(message.duration)}</span>
-                      ) : null}
-                    </div>
-                  ) : (
-                    <p>{message.text}</p>
-                  )}
+                  ) : null}
                   <div className="message-meta">
                     <span className="message-time">
                       {new Date(message.timestamp).toLocaleTimeString([], {
@@ -704,6 +1096,60 @@ const DatingMessaging = ({
         <div ref={messagesEndRef} />
       </div>
 
+      <MessageToolbar
+        matchId={activeMatchId}
+        onSelectTemplate={(content) => {
+          setInputMessage(content);
+          inputRef.current?.focus();
+        }}
+        onSearch={handleSearchSelect}
+        onAttachment={handleToolbarAttachments}
+        onLocation={handleShareLocation}
+        onMore={handleToolbarMore}
+      />
+
+      {showComposerStarters ? (
+        <div className="composer-starters">
+          <span className="composer-starters-label">Try an opener:</span>
+          <div className="composer-starters-list">
+            {icebreakers.map((icebreaker) => (
+              <button
+                key={`composer-${icebreaker}`}
+                type="button"
+                className="composer-starter-chip"
+                onClick={() => handleUseIcebreaker(icebreaker)}
+              >
+                {icebreaker}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {disappearingEnabled ? (
+        <div className="disappearing-strip">
+          <span className="disappearing-strip-label">Disappearing mode</span>
+          <select
+            value={disappearAfterSeconds}
+            onChange={(event) => setDisappearAfterSeconds(Number.parseInt(event.target.value, 10))}
+            className="disappearing-select"
+          >
+            {DISAPPEARING_DURATION_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="disappearing-toggle-btn"
+            onClick={() => setDisappearingEnabled(false)}
+          >
+            Turn off
+          </button>
+        </div>
+      ) : null}
+
       <div className="message-input-container">
         <input
           ref={mediaInputRef}
@@ -720,7 +1166,7 @@ const DatingMessaging = ({
           disabled={sendingMedia || isRecordingVoice || loadingMatch}
           title="Send image"
         >
-          📷
+          Img
         </button>
 
         {isRecordingVoice ? (
@@ -733,7 +1179,7 @@ const DatingMessaging = ({
               onClick={stopVoiceRecording}
               title="Stop recording"
             >
-              ⏹️
+              Stop
             </button>
           </div>
         ) : (
@@ -744,14 +1190,14 @@ const DatingMessaging = ({
             disabled={sendingMedia || loadingMatch}
             title="Record voice note"
           >
-            🎤
+            Mic
           </button>
         )}
 
         <input
           ref={inputRef}
           type="text"
-          placeholder="Say something nice..."
+          placeholder={disappearingEnabled ? 'Send a disappearing message...' : 'Say something nice...'}
           value={inputMessage}
           onChange={handleTyping}
           onKeyDown={(event) => {
@@ -760,14 +1206,28 @@ const DatingMessaging = ({
               handleSendMessage();
             }
           }}
-          disabled={loadingMatch || loadingMessages || sendingMessage || isRecordingVoice}
+          disabled={
+            loadingMatch ||
+            loadingMessages ||
+            sendingMessage ||
+            sendingMedia ||
+            isRecordingVoice
+          }
         />
         <button
+          type="button"
           onClick={handleSendMessage}
-          disabled={!inputMessage.trim() || loadingMatch || sendingMessage || loadingMessages || isRecordingVoice}
+          disabled={
+            !inputMessage.trim() ||
+            loadingMatch ||
+            loadingMessages ||
+            sendingMessage ||
+            sendingMedia ||
+            isRecordingVoice
+          }
           className="btn-send"
         >
-          {sendingMedia ? '...' : 'Send'}
+          {sendingMessage || sendingMedia ? '...' : 'Send'}
         </button>
       </div>
     </div>

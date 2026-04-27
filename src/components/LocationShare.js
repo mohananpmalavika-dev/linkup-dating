@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import '../../styles/LocationShare.css';
+import React, { useEffect, useState } from 'react';
+import '../styles/LocationShare.css';
 
 /**
  * LocationShare Component
@@ -18,7 +18,6 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
-    // Try to get current location on mount
     getCurrentLocation();
   }, []);
 
@@ -38,11 +37,11 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
         setLocation({
           lat: latitude,
           lng: longitude,
-          name: 'Your Current Location'
+          name: 'Your current location'
         });
         setLoading(false);
       },
-      (err) => {
+      () => {
         setError('Unable to get your location. Please enter it manually.');
         setLoading(false);
       },
@@ -62,42 +61,36 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
 
     try {
       setLoading(true);
-      // Using Nominatim (OpenStreetMap) API for geocoding
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`
       );
       const results = await response.json();
       setSearchResults(
-        results.map((r) => ({
-          name: r.display_name,
-          lat: parseFloat(r.lat),
-          lng: parseFloat(r.lon)
+        results.map((result) => ({
+          name: result.display_name,
+          lat: Number.parseFloat(result.lat),
+          lng: Number.parseFloat(result.lon)
         }))
       );
       setLoading(false);
-    } catch (err) {
+    } catch (searchError) {
       setError('Failed to search locations');
       setLoading(false);
     }
   };
 
-  const handleSelectSearchResult = (result) => {
-    setLocation(result);
-    setSearchResults([]);
-  };
-
-  const handleManualSubmit = (e) => {
-    e.preventDefault();
+  const handleManualSubmit = (event) => {
+    event.preventDefault();
 
     if (!manualLocation.name.trim() || !manualLocation.lat || !manualLocation.lng) {
       setError('Please fill in all fields');
       return;
     }
 
-    const lat = parseFloat(manualLocation.lat);
-    const lng = parseFloat(manualLocation.lng);
+    const lat = Number.parseFloat(manualLocation.lat);
+    const lng = Number.parseFloat(manualLocation.lng);
 
-    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    if (Number.isNaN(lat) || Number.isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       setError('Invalid coordinates');
       return;
     }
@@ -124,25 +117,27 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
   return (
     <div className="location-share">
       <div className="location-header">
-        <h3>📍 Share Location</h3>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        <h3>Share Location</h3>
+        <button type="button" className="close-btn" onClick={onClose}>x</button>
       </div>
 
       {error && <div className="error-message">{error}</div>}
 
       <div className="location-controls">
         <button
+          type="button"
           className="get-location-btn"
           onClick={getCurrentLocation}
           disabled={loading}
         >
-          {loading ? '⟳ Getting location...' : '📍 Use Current Location'}
+          {loading ? 'Getting location...' : 'Use current location'}
         </button>
         <button
+          type="button"
           className="manual-location-btn"
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => setShowForm((currentState) => !currentState)}
         >
-          {showForm ? 'Cancel' : '✏️ Enter Manually'}
+          {showForm ? 'Cancel' : 'Enter manually'}
         </button>
       </div>
 
@@ -152,9 +147,9 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
             type="text"
             placeholder="Location name"
             value={manualLocation.name}
-            onChange={(e) =>
-              setManualLocation({ ...manualLocation, name: e.target.value })
-            }
+            onChange={(event) => (
+              setManualLocation({ ...manualLocation, name: event.target.value })
+            )}
             className="form-input"
           />
           <div className="form-row">
@@ -163,9 +158,9 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
               placeholder="Latitude (-90 to 90)"
               step="0.000001"
               value={manualLocation.lat}
-              onChange={(e) =>
-                setManualLocation({ ...manualLocation, lat: e.target.value })
-              }
+              onChange={(event) => (
+                setManualLocation({ ...manualLocation, lat: event.target.value })
+              )}
               className="form-input"
             />
             <input
@@ -173,9 +168,9 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
               placeholder="Longitude (-180 to 180)"
               step="0.000001"
               value={manualLocation.lng}
-              onChange={(e) =>
-                setManualLocation({ ...manualLocation, lng: e.target.value })
-              }
+              onChange={(event) => (
+                setManualLocation({ ...manualLocation, lng: event.target.value })
+              )}
               className="form-input"
             />
           </div>
@@ -200,7 +195,7 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
             rel="noopener noreferrer"
             className="map-link"
           >
-            View on Map
+            View on map
           </a>
         </div>
       )}
@@ -209,16 +204,19 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
         <input
           type="text"
           placeholder="Search locations..."
-          onChange={(e) => handleSearchLocation(e.target.value)}
+          onChange={(event) => handleSearchLocation(event.target.value)}
           className="search-input"
         />
         {searchResults.length > 0 && (
           <div className="search-results">
             {searchResults.map((result, index) => (
               <div
-                key={index}
+                key={`${result.name}-${index}`}
                 className="search-result"
-                onClick={() => handleSelectSearchResult(result)}
+                onClick={() => {
+                  setLocation(result);
+                  setSearchResults([]);
+                }}
               >
                 <div className="result-name">{result.name}</div>
                 <div className="result-coords">
@@ -232,11 +230,12 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
 
       <div className="location-actions">
         <button
+          type="button"
           className="share-btn"
           onClick={handleShareLocation}
           disabled={!location}
         >
-          ✓ Share Location
+          Share location
         </button>
       </div>
 
@@ -245,8 +244,8 @@ const LocationShare = ({ onLocationSelect, onClose }) => {
         <ul>
           <li>Your precise location is shared with the recipient</li>
           <li>Only share locations with people you trust</li>
-          <li>Locations are encrypted end-to-end</li>
-          <li>You can set an expiration time for shared locations</li>
+          <li>This is sent into chat as a normal map link</li>
+          <li>Accuracy depends on your device or the manual coordinates you enter</li>
         </ul>
       </div>
     </div>

@@ -168,7 +168,7 @@ export const messagingEnhancedService = {
       if (dateRange.endDate) params.append('endDate', dateRange.endDate);
 
       const response = await axios.get(`${API_URL}/export?${params.toString()}`, {
-        responseType: format === 'pdf' ? 'arraybuffer' : 'text'
+        responseType: 'blob'
       });
 
       return response.data;
@@ -193,17 +193,15 @@ export const messagingEnhancedService = {
           mimeType = 'text/csv';
           fileName = `chat-export-${Date.now()}.csv`;
           break;
-        case 'pdf':
-          mimeType = 'application/pdf';
-          fileName = `chat-export-${Date.now()}.pdf`;
-          break;
         case 'html':
           mimeType = 'text/html';
           fileName = `chat-export-${Date.now()}.html`;
           break;
+        default:
+          break;
       }
 
-      const blob = new Blob([data], { type: mimeType });
+      const blob = data instanceof Blob ? data : new Blob([data], { type: mimeType });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -260,7 +258,7 @@ export const messagingEnhancedService = {
         message,
         disappearAfterSeconds
       });
-      return response.data.message;
+      return response.data.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to send disappearing message';
     }

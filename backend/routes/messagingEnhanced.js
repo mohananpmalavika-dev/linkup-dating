@@ -1,119 +1,189 @@
 /**
  * Messaging Enhancement Routes
- * Handles templates, attachments, encryption, search, export, and disappearing messages
+ * Handles templates, search, export, encryption setup, backup, and disappearing messages
  */
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 const EncryptionService = require('../services/encryptionService');
 const MessageExportService = require('../services/messageExportService');
-const { authenticate } = require('../middleware/auth');
-const { validateRequest } = require('../middleware/validation');
 
-// ============================================
-// MESSAGE TEMPLATES
-// ============================================
+const parseInteger = (value, fallbackValue = 0) => {
+  const parsedValue = Number.parseInt(value, 10);
+  return Number.isFinite(parsedValue) ? parsedValue : fallbackValue;
+};
 
-/**
- * GET /messaging/templates - Get user's message templates
- */
-router.get('/templates', authenticate, async (req, res) => {
+const getMatchForUser = async (matchId, userId) => {
+  const result = await db.query(
+    `SELECT *
+     FROM matches
+     WHERE id = $1
+       AND (user_id_1 = $2 OR user_id_2 = $2)
+     LIMIT 1`,
+    [matchId, userId]
+  );
+
+  return result.rows[0] || null;
+};
+
+const buildSearchTypeClause = (type, params) => {
+  if (!type) {
+    return '';
+  }
+
+  params.push(type);
+  const typeParam = `$${params.length}`;
+
+  return ` AND COALESCE(
+    NULLIF(m.message_type, ''),
+    CASE
+      WHEN m.media_type = 'voice' THEN 'audio'
+      WHEN m.media_type IS NOT NULL AND m.media_type <> '' THEN m.media_type
+      ELSE 'text'
+    END
+  ) = ${typeParam}`;
+};
+
+// GET /messaging/templates
+router.get('/templates', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { category, pinned } = req.query;
+    const category = req.query.category ? String(req.query.category).trim() : null;
+    const pinned = req.query.pinned === undefined ? null : String(req.query.pinned).toLowerCase() === 'true';
+    const params = [userId];
+    const conditions = ['user_id = $1'];
 
-    const where = { user_id: userId };
-    if (category) where.category = category;
-    if (pinned === 'true') where.is_pinned = true;
+    if (category) {
+      params.push(category);
+      conditions.push(`category = $${params.length}`);
+    }
 
-    const templates = await db.models.MessageTemplate.findAll({
-      where,
-      order: [['is_pinned', 'DESC'], ['usage_count', 'DESC'], ['created_at', 'DESC']]
-    });
+    if (pinned !== null) {
+      params.push(pinned);
+      conditions.push(`is_pinned = $${params.length}`);
+    }
 
-    res.json({ templates });
+    const result = await db.query(
+      `SELECT *
+       FROM message_templates
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY is_pinned DESC, usage_count DESC, created_at DESC`,
+      params
+    );
+
+    res.json({ templates: result.rows });
   } catch (error) {
     console.error('Get templates error:', error);
     res.status(500).json({ error: 'Failed to fetch templates' });
   }
 });
 
-/**
- * POST /messaging/templates - Create a new message template
- */
-router.post('/templates', authenticate, async (req, res) => {
+// POST /messaging/templates
+router.post('/templates', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { title, content, category, emoji } = req.body;
+    const title = String(req.body.title || '').trim();
+    const content = String(req.body.content || '').trim();
+    const category = String(req.body.category || 'general').trim() || 'general';
+    const emoji = String(req.body.emoji || '').trim() || null;
 
     if (!title || !content) {
       return res.status(400).json({ error: 'Title and content are required' });
     }
 
-    const template = await db.models.MessageTemplate.create({
-      user_id: userId,
-      title,
-      content,
-      category: category || 'general',
-      emoji: emoji || null,
-      is_pinned: false
-    });
+    const result = await db.query(
+      `INSERT INTO message_templates (
+         user_id,
+         title,
+         content,
+         category,
+         emoji,
+         is_pinned,
+         usage_count,
+         created_at,
+         updated_at
+       )
+       VALUES ($1, $2, $3, $4, $5, FALSE, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [userId, title, content, category, emoji]
+    );
 
-    res.status(201).json({ template });
+    res.status(201).json({ template: result.rows[0] });
   } catch (error) {
     console.error('Create template error:', error);
     res.status(500).json({ error: 'Failed to create template' });
   }
 });
 
-/**
- * PUT /messaging/templates/:templateId - Update a message template
- */
-router.put('/templates/:templateId', authenticate, async (req, res) => {
+// PUT /messaging/templates/:templateId
+router.put('/templates/:templateId', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { templateId } = req.params;
-    const { title, content, category, emoji, isPinned } = req.body;
+    const templateId = parseInteger(req.params.templateId);
+    const existingTemplateResult = await db.query(
+      `SELECT *
+       FROM message_templates
+       WHERE id = $1
+         AND user_id = $2
+       LIMIT 1`,
+      [templateId, userId]
+    );
 
-    const template = await db.models.MessageTemplate.findOne({
-      where: { id: templateId, user_id: userId }
-    });
-
-    if (!template) {
+    if (existingTemplateResult.rows.length === 0) {
       return res.status(404).json({ error: 'Template not found' });
     }
 
-    if (title) template.title = title;
-    if (content) template.content = content;
-    if (category) template.category = category;
-    if (emoji !== undefined) template.emoji = emoji;
-    if (isPinned !== undefined) template.is_pinned = isPinned;
+    const existingTemplate = existingTemplateResult.rows[0];
+    const nextTitle = String(req.body.title ?? existingTemplate.title).trim();
+    const nextContent = String(req.body.content ?? existingTemplate.content).trim();
+    const nextCategory = String(
+      req.body.category ?? existingTemplate.category ?? 'general'
+    ).trim() || 'general';
+    const nextEmoji = req.body.emoji === undefined ? existingTemplate.emoji : String(req.body.emoji || '').trim() || null;
+    const nextPinned = req.body.isPinned === undefined ? existingTemplate.is_pinned : Boolean(req.body.isPinned);
 
-    await template.save();
-    res.json({ template });
+    if (!nextTitle || !nextContent) {
+      return res.status(400).json({ error: 'Title and content are required' });
+    }
+
+    const result = await db.query(
+      `UPDATE message_templates
+       SET title = $1,
+           content = $2,
+           category = $3,
+           emoji = $4,
+           is_pinned = $5,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $6
+         AND user_id = $7
+       RETURNING *`,
+      [nextTitle, nextContent, nextCategory, nextEmoji, nextPinned, templateId, userId]
+    );
+
+    res.json({ template: result.rows[0] });
   } catch (error) {
     console.error('Update template error:', error);
     res.status(500).json({ error: 'Failed to update template' });
   }
 });
 
-/**
- * DELETE /messaging/templates/:templateId - Delete a message template
- */
-router.delete('/templates/:templateId', authenticate, async (req, res) => {
+// DELETE /messaging/templates/:templateId
+router.delete('/templates/:templateId', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { templateId } = req.params;
+    const templateId = parseInteger(req.params.templateId);
+    const result = await db.query(
+      `DELETE FROM message_templates
+       WHERE id = $1
+         AND user_id = $2
+       RETURNING id`,
+      [templateId, userId]
+    );
 
-    const template = await db.models.MessageTemplate.findOne({
-      where: { id: templateId, user_id: userId }
-    });
-
-    if (!template) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Template not found' });
     }
 
-    await template.destroy();
     res.json({ success: true, message: 'Template deleted' });
   } catch (error) {
     console.error('Delete template error:', error);
@@ -121,95 +191,108 @@ router.delete('/templates/:templateId', authenticate, async (req, res) => {
   }
 });
 
-/**
- * POST /messaging/templates/:templateId/use - Log template usage
- */
-router.post('/templates/:templateId/use', authenticate, async (req, res) => {
+// POST /messaging/templates/:templateId/use
+router.post('/templates/:templateId/use', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { templateId } = req.params;
+    const templateId = parseInteger(req.params.templateId);
+    const result = await db.query(
+      `UPDATE message_templates
+       SET usage_count = COALESCE(usage_count, 0) + 1,
+           last_used_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1
+         AND user_id = $2
+       RETURNING *`,
+      [templateId, userId]
+    );
 
-    const template = await db.models.MessageTemplate.findOne({
-      where: { id: templateId, user_id: userId }
-    });
-
-    if (!template) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Template not found' });
     }
 
-    template.usage_count = (template.usage_count || 0) + 1;
-    template.last_used_at = new Date();
-    await template.save();
-
-    res.json({ template });
+    res.json({ template: result.rows[0] });
   } catch (error) {
     console.error('Use template error:', error);
     res.status(500).json({ error: 'Failed to log template usage' });
   }
 });
 
-// ============================================
-// MESSAGE SEARCH & FILTERING
-// ============================================
-
-/**
- * GET /messaging/search - Search messages
- */
-router.get('/search', authenticate, async (req, res) => {
+// GET /messaging/search
+router.get('/search', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { q, matchId, startDate, endDate, type, limit = 50, offset = 0 } = req.query;
+    const query = String(req.query.q || '').trim();
+    const matchId = req.query.matchId ? parseInteger(req.query.matchId) : null;
+    const type = req.query.type ? String(req.query.type).trim() : null;
+    const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+    const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
+    const limit = Math.min(parseInteger(req.query.limit, 50), 100);
+    const offset = Math.max(parseInteger(req.query.offset, 0), 0);
 
-    if (!q || q.trim().length < 2) {
+    if (query.length < 2) {
       return res.status(400).json({ error: 'Search query too short' });
     }
 
-    const where = {
-      [db.Sequelize.Op.or]: [
-        { from_user_id: userId },
-        { to_user_id: userId }
-      ],
-      is_deleted: false
-    };
+    const conditions = [
+      '(m.from_user_id = $1 OR m.to_user_id = $1)',
+      'COALESCE(m.is_deleted, FALSE) = FALSE',
+      '(COALESCE(m.is_disappearing, FALSE) = FALSE OR m.disappears_at IS NULL OR m.disappears_at > CURRENT_TIMESTAMP)',
+      `m.message ILIKE $2`
+    ];
+    const params = [userId, `%${query}%`];
 
-    if (matchId) where.match_id = matchId;
-    if (type) where.message_type = type;
-
-    if (startDate || endDate) {
-      where.created_at = {};
-      if (startDate) where.created_at[db.Sequelize.Op.gte] = new Date(startDate);
-      if (endDate) where.created_at[db.Sequelize.Op.lte] = new Date(endDate);
+    if (matchId) {
+      params.push(matchId);
+      conditions.push(`m.match_id = $${params.length}`);
     }
 
-    // Search using LIKE for simplicity (in production, use full-text search)
-    where.message = { [db.Sequelize.Op.iLike]: `%${q}%` };
+    if (startDate && !Number.isNaN(startDate.getTime())) {
+      params.push(startDate);
+      conditions.push(`m.created_at >= $${params.length}`);
+    }
 
-    const messages = await db.models.Message.findAll({
-      where,
-      include: [
-        {
-          model: db.models.MessageAttachment,
-          as: 'attachments',
-          required: false
-        },
-        {
-          model: db.models.User,
-          as: 'fromUser',
-          attributes: ['id', 'first_name', 'username']
-        }
-      ],
-      order: [['created_at', 'DESC']],
-      limit: parseInt(limit),
-      offset: parseInt(offset)
-    });
+    if (endDate && !Number.isNaN(endDate.getTime())) {
+      params.push(endDate);
+      conditions.push(`m.created_at <= $${params.length}`);
+    }
 
-    const total = await db.models.Message.count({ where });
+    conditions.push(buildSearchTypeClause(type, params).replace(/^ AND /, ''));
+    const normalizedConditions = conditions.filter(Boolean);
+
+    const totalResult = await db.query(
+      `SELECT COUNT(*) AS total
+       FROM messages m
+       WHERE ${normalizedConditions.join(' AND ')}`,
+      params
+    );
+
+    params.push(limit);
+    params.push(offset);
+
+    const result = await db.query(
+      `SELECT m.*,
+              COALESCE(NULLIF(dp.first_name, ''), dp.username, 'User') AS from_user_name
+       FROM messages m
+       LEFT JOIN dating_profiles dp
+         ON dp.user_id = m.from_user_id
+       WHERE ${normalizedConditions.join(' AND ')}
+       ORDER BY m.created_at DESC
+       LIMIT $${params.length - 1}
+       OFFSET $${params.length}`,
+      params
+    );
 
     res.json({
-      results: messages,
-      total,
-      limit: parseInt(limit),
-      offset: parseInt(offset)
+      results: result.rows.map((row) => ({
+        ...row,
+        fromUser: {
+          first_name: row.from_user_name
+        }
+      })),
+      total: parseInteger(totalResult.rows[0]?.total, 0),
+      limit,
+      offset
     });
   } catch (error) {
     console.error('Search messages error:', error);
@@ -217,40 +300,27 @@ router.get('/search', authenticate, async (req, res) => {
   }
 });
 
-// ============================================
-// MESSAGE ENCRYPTION & SECURITY
-// ============================================
-
-/**
- * POST /messaging/encryption/init - Initialize encryption for a match
- */
-router.post('/encryption/init', authenticate, async (req, res) => {
+// POST /messaging/encryption/init
+router.post('/encryption/init', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { matchId } = req.body;
+    const matchId = parseInteger(req.body.matchId);
 
     if (!matchId) {
       return res.status(400).json({ error: 'Match ID required' });
     }
 
-    // Verify user is part of the match
-    const match = await db.models.Match.findByPk(matchId);
-    if (!match || (match.user_1_id !== userId && match.user_2_id !== userId)) {
+    const match = await getMatchForUser(matchId, userId);
+    if (!match) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    // Generate key pair
     const { publicKey, privateKey } = await EncryptionService.generateKeyPair(userId, matchId);
-
-    // Encrypt private key with user's password (simplified - use proper key derivation in production)
-    const encryptedPrivateKey = privateKey; // In production, encrypt with user password
-
-    // Store encryption key
     const encryptionKey = await EncryptionService.storeEncryptionKey(
       userId,
       matchId,
       publicKey,
-      encryptedPrivateKey
+      privateKey
     );
 
     res.json({
@@ -259,7 +329,7 @@ router.post('/encryption/init', authenticate, async (req, res) => {
         publicKey: encryptionKey.public_key,
         keyVersion: encryptionKey.key_version
       },
-      message: 'Encryption initialized for this match'
+      message: 'Secure chat keys initialized for this match'
     });
   } catch (error) {
     console.error('Encryption init error:', error);
@@ -267,89 +337,42 @@ router.post('/encryption/init', authenticate, async (req, res) => {
   }
 });
 
-/**
- * POST /messaging/encryption/decrypt - Decrypt encrypted messages
- */
-router.post('/encryption/decrypt', authenticate, async (req, res) => {
+// GET /messaging/export
+router.get('/export', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { messageId, encryptionKey } = req.body;
-
-    if (!messageId || !encryptionKey) {
-      return res.status(400).json({ error: 'Message ID and encryption key required' });
-    }
-
-    const message = await db.models.Message.findByPk(messageId);
-    if (!message) {
-      return res.status(404).json({ error: 'Message not found' });
-    }
-
-    if (!message.is_encrypted) {
-      return res.status(400).json({ error: 'Message is not encrypted' });
-    }
-
-    const decrypted = EncryptionService.decryptMessage(
-      message.encrypted_content,
-      message.encryption_nonce,
-      message.auth_tag,
-      encryptionKey
-    );
-
-    res.json({ message: decrypted });
-  } catch (error) {
-    console.error('Decryption error:', error);
-    res.status(500).json({ error: 'Failed to decrypt message' });
-  }
-});
-
-// ============================================
-// MESSAGE EXPORT & BACKUP
-// ============================================
-
-/**
- * GET /messaging/export - Export messages
- */
-router.get('/export', authenticate, async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { matchId, format = 'json', startDate, endDate } = req.query;
+    const matchId = parseInteger(req.query.matchId);
+    const format = String(req.query.format || 'json').toLowerCase();
+    const startDate = req.query.startDate ? new Date(req.query.startDate) : null;
+    const endDate = req.query.endDate ? new Date(req.query.endDate) : null;
 
     if (!matchId) {
       return res.status(400).json({ error: 'Match ID required' });
     }
 
     const options = {
-      startDate: startDate ? new Date(startDate) : null,
-      endDate: endDate ? new Date(endDate) : null
+      startDate: startDate && !Number.isNaN(startDate.getTime()) ? startDate : null,
+      endDate: endDate && !Number.isNaN(endDate.getTime()) ? endDate : null
     };
 
     let exportData;
     let contentType = 'application/json';
     let fileName = `chat-export-${Date.now()}`;
 
-    switch (format) {
-      case 'json':
-        exportData = await MessageExportService.exportToJSON(userId, matchId, options);
-        fileName += '.json';
-        contentType = 'application/json';
-        break;
-      case 'csv':
-        exportData = await MessageExportService.exportToCSV(userId, matchId, options);
-        fileName += '.csv';
-        contentType = 'text/csv';
-        break;
-      case 'pdf':
-        exportData = await MessageExportService.exportToPDF(userId, matchId, options);
-        fileName += '.pdf';
-        contentType = 'application/pdf';
-        break;
-      case 'html':
-        exportData = await MessageExportService.exportToHTML(userId, matchId, options);
-        fileName += '.html';
-        contentType = 'text/html';
-        break;
-      default:
-        return res.status(400).json({ error: 'Invalid export format' });
+    if (format === 'json') {
+      exportData = await MessageExportService.exportToJSON(userId, matchId, options);
+      fileName += '.json';
+      contentType = 'application/json';
+    } else if (format === 'csv') {
+      exportData = await MessageExportService.exportToCSV(userId, matchId, options);
+      fileName += '.csv';
+      contentType = 'text/csv';
+    } else if (format === 'html') {
+      exportData = await MessageExportService.exportToHTML(userId, matchId, options);
+      fileName += '.html';
+      contentType = 'text/html';
+    } else {
+      return res.status(400).json({ error: 'Unsupported export format' });
     }
 
     res.setHeader('Content-Type', contentType);
@@ -357,18 +380,18 @@ router.get('/export', authenticate, async (req, res) => {
     res.send(exportData);
   } catch (error) {
     console.error('Export error:', error);
+    if (error.message === 'Unauthorized') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
     res.status(500).json({ error: 'Failed to export messages' });
   }
 });
 
-/**
- * GET /messaging/backups - List chat backups
- */
-router.get('/backups', authenticate, async (req, res) => {
+// GET /messaging/backups
+router.get('/backups', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { matchId } = req.query;
-
+    const matchId = req.query.matchId ? parseInteger(req.query.matchId) : null;
     const backups = await MessageExportService.listBackups(userId, matchId);
     res.json({ backups });
   } catch (error) {
@@ -377,13 +400,11 @@ router.get('/backups', authenticate, async (req, res) => {
   }
 });
 
-/**
- * POST /messaging/backups/create - Create manual backup
- */
-router.post('/backups/create', authenticate, async (req, res) => {
+// POST /messaging/backups/create
+router.post('/backups/create', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { matchId } = req.body;
+    const matchId = parseInteger(req.body.matchId);
 
     if (!matchId) {
       return res.status(400).json({ error: 'Match ID required' });
@@ -393,46 +414,83 @@ router.post('/backups/create', authenticate, async (req, res) => {
     res.status(201).json({ backup });
   } catch (error) {
     console.error('Create backup error:', error);
+    if (error.message === 'Unauthorized') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
     res.status(500).json({ error: 'Failed to create backup' });
   }
 });
 
-// ============================================
-// DISAPPEARING MESSAGES
-// ============================================
-
-/**
- * POST /messaging/disappearing - Send disappearing message
- */
-router.post('/disappearing', authenticate, async (req, res) => {
+// POST /messaging/disappearing
+router.post('/disappearing', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { matchId, message, disappearAfterSeconds = 3600 } = req.body;
+    const matchId = parseInteger(req.body.matchId);
+    const message = String(req.body.message || '').trim();
+    const disappearAfterSeconds = Math.min(
+      Math.max(parseInteger(req.body.disappearAfterSeconds, 3600), 60),
+      7 * 24 * 60 * 60
+    );
 
     if (!matchId || !message) {
       return res.status(400).json({ error: 'Match ID and message required' });
     }
 
-    const match = await db.models.Match.findByPk(matchId);
+    const match = await getMatchForUser(matchId, userId);
     if (!match) {
-      return res.status(404).json({ error: 'Match not found' });
+      return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const otherUserId = match.user_1_id === userId ? match.user_2_id : match.user_1_id;
+    const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : match.user_id_1;
     const disappearsAt = new Date(Date.now() + disappearAfterSeconds * 1000);
 
-    const msg = await db.models.Message.create({
-      match_id: matchId,
-      from_user_id: userId,
-      to_user_id: otherUserId,
-      message: message,
-      message_type: 'text',
-      is_disappearing: true,
-      disappears_at: disappearsAt,
-      disappear_after_seconds: disappearAfterSeconds
-    });
+    const result = await db.query(
+      `INSERT INTO messages (
+         match_id,
+         from_user_id,
+         to_user_id,
+         message,
+         message_type,
+         is_disappearing,
+         disappears_at,
+         disappear_after_seconds
+       )
+       VALUES ($1, $2, $3, $4, 'text', TRUE, $5, $6)
+       RETURNING *`,
+      [matchId, userId, toUserId, message, disappearsAt, disappearAfterSeconds]
+    );
 
-    res.status(201).json({ message: msg });
+    await db.query(
+      `UPDATE matches
+       SET last_message_at = CURRENT_TIMESTAMP,
+           message_count = message_count + 1
+       WHERE id = $1`,
+      [matchId]
+    );
+
+    const createdMessage = {
+      ...result.rows[0],
+      reactions: []
+    };
+
+    if (typeof req.emitToUser === 'function') {
+      req.emitToUser(toUserId, 'new_message', {
+        matchId,
+        messageId: createdMessage.id,
+        fromUserId: userId,
+        message,
+        timestamp: createdMessage.created_at,
+        isDisappearing: true,
+        disappearsAt: createdMessage.disappears_at,
+        disappearAfterSeconds,
+        reactions: []
+      });
+    }
+
+    res.status(201).json({
+      message: 'Disappearing message sent',
+      data: createdMessage
+    });
   } catch (error) {
     console.error('Send disappearing message error:', error);
     res.status(500).json({ error: 'Failed to send disappearing message' });

@@ -6932,4 +6932,734 @@ router.post('/profiles/me/heartbeat', async (req, res) => {
   }
 });
 
+// ========== TIER 1: ADVANCED ENGAGEMENT FEATURES ==========
+
+// 58. GET CONVERSATION QUALITY SCORE
+router.get('/conversation-quality/:matchId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { matchId } = req.params;
+
+    // Verify the user is part of this match
+    const matchResult = await db.query(
+      `SELECT * FROM matches WHERE id = $1 AND (user_id_1 = $2 OR user_id_2 = $2) AND status = 'active' LIMIT 1`,
+      [matchId, userId]
+    );
+
+    if (matchResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    const match = matchResult.rows[0];
+    const otherUserId = match.user_id_1 === userId ? match.user_id_2 : match.user_id_1;
+
+    // Get or create conversation quality metric
+    const qualityResult = await db.query(
+      `SELECT * FROM conversation_quality_metrics 
+       WHERE match_id = $1 LIMIT 1`,
+      [matchId]
+    );
+
+    if (qualityResult.rows.length === 0) {
+      return res.json({
+        matchId,
+        qualityScore: null,
+        status: 'initializing',
+        message: 'Conversation metrics will be tracked as you chat'
+      });
+    }
+
+    const quality = qualityResult.rows[0];
+    res.json({
+      matchId,
+      qualityScore: quality.quality_score || 0,
+      responseTimeAvg: quality.response_time_avg || null,
+      messageDepthAvg: quality.message_depth_avg || 0,
+      sentimentTrend: quality.sentiment_trend || 'neutral',
+      engagementLevel: quality.engagement_level || 'low',
+      languageQuality: quality.language_quality || 'basic',
+      matchesFromConversation: quality.matches_from_conversation || 0,
+      lastCalculatedAt: quality.updated_at,
+      conversationStatus: quality.quality_score >= 75 ? 'excellent' : quality.quality_score >= 50 ? 'good' : 'developing'
+    });
+  } catch (err) {
+    console.error('Get conversation quality error:', err);
+    res.status(500).json({ error: 'Failed to get conversation quality' });
+  }
+});
+
+// 59. CREATE DATE PROPOSAL
+router.post('/date-proposals', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { recipientId, proposedDate, proposedTime, suggestedActivity, locationId, notes } = req.body;
+
+    if (!recipientId || !proposedDate || !proposedTime || !suggestedActivity) {
+      return res.status(400).json({ error: 'recipientId, proposedDate, proposedTime, and suggestedActivity are required' });
+    }
+
+    // Verify match exists
+    const matchResult = await db.query(
+      `SELECT * FROM matches 
+       WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)
+       AND status = 'active' LIMIT 1`,
+      [userId, recipientId]
+    );
+
+    if (matchResult.rows.length === 0) {
+      return res.status(400).json({ error: 'You must be matched with this user to propose a date' });
+    }
+
+    const match = matchResult.rows[0];
+    const matchId = match.id;
+
+    // Set response deadline to 3 days from now
+    const responseDeadline = new Date();
+    responseDeadline.setDate(responseDeadline.getDate() + 3);
+
+    const result = await db.query(
+      `INSERT INTO date_proposals (
+        proposer_id, recipient_id, match_id, proposed_date, proposed_time,
+        suggested_activity, location_id, status, notes, response_deadline_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, $9)
+       RETURNING *`,
+      [userId, recipientId, matchId, proposedDate, proposedTime, suggestedActivity, locationId || null, notes || null, responseDeadline]
+    );
+
+    // Send notification to recipient
+    const proposerProfile = await db.query(
+      `SELECT first_name FROM dating_profiles WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+    const proposerName = proposerProfile.rows[0]?.first_name || 'Someone';
+
+    await userNotificationService.createNotification(recipientId, {
+      type: 'date_proposal',
+      title: `${proposerName} wants to take you on a date!`,
+      body: `${suggestedActivity} on ${proposedDate}`,
+      metadata: {
+        proposalId: result.rows[0].id,
+        proposerId: userId,
+        activity: suggestedActivity,
+        date: proposedDate
+      }
+    });
+
+    res.json({
+      message: 'Date proposal created',
+      proposal: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Create date proposal error:', err);
+    res.status(500).json({ error: 'Failed to create date proposal' });
+  }
+});
+
+// 60. GET MY DATE PROPOSALS (both sent and received)
+router.get('/date-proposals', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const type = req.query.type || 'all'; // 'sent', 'received', 'all'
+
+    let query = `SELECT dp.*, 
+                        p.first_name as proposer_name, p.location_city as proposer_city,
+                        r.first_name as recipient_name, r.location_city as recipient_city
+                 FROM date_proposals dp
+                 LEFT JOIN dating_profiles p ON p.user_id = dp.proposer_id
+                 LEFT JOIN dating_profiles r ON r.user_id = dp.recipient_id
+                 WHERE `;
+
+    const params = [userId];
+    let paramIndex = 2;
+
+    if (type === 'sent') {
+      query += `dp.proposer_id = $1`;
+    } else if (type === 'received') {
+      query += `dp.recipient_id = $1`;
+    } else {
+      query += `(dp.proposer_id = $1 OR dp.recipient_id = $1)`;
+    }
+
+    query += ` ORDER BY dp.created_at DESC LIMIT 50`;
+
+    const result = await db.query(query, params);
+
+    res.json({
+      proposals: result.rows.map(p => ({
+        id: p.id,
+        proposerId: p.proposer_id,
+        proposerName: p.proposer_name,
+        proposerCity: p.proposer_city,
+        recipientId: p.recipient_id,
+        recipientName: p.recipient_name,
+        recipientCity: p.recipient_city,
+        proposedDate: p.proposed_date,
+        proposedTime: p.proposed_time,
+        suggestedActivity: p.suggested_activity,
+        locationId: p.location_id,
+        status: p.status,
+        notes: p.notes,
+        responseDeadlineAt: p.response_deadline_at,
+        createdAt: p.created_at,
+        respondedAt: p.responded_at,
+        isSent: p.proposer_id === userId,
+        isReceived: p.recipient_id === userId
+      }))
+    });
+  } catch (err) {
+    console.error('Get date proposals error:', err);
+    res.status(500).json({ error: 'Failed to get date proposals' });
+  }
+});
+
+// 61. ACCEPT DATE PROPOSAL
+router.patch('/date-proposals/:proposalId/accept', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { proposalId } = req.params;
+
+    // Verify user is the recipient
+    const proposalResult = await db.query(
+      `SELECT * FROM date_proposals WHERE id = $1 AND recipient_id = $2 LIMIT 1`,
+      [proposalId, userId]
+    );
+
+    if (proposalResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Proposal not found or you are not the recipient' });
+    }
+
+    const proposal = proposalResult.rows[0];
+
+    // Update status
+    const updateResult = await db.query(
+      `UPDATE date_proposals 
+       SET status = 'accepted', responded_at = CURRENT_TIMESTAMP
+       WHERE id = $1 RETURNING *`,
+      [proposalId]
+    );
+
+    // Send notification to proposer
+    const recipientProfile = await db.query(
+      `SELECT first_name FROM dating_profiles WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+    const recipientName = recipientProfile.rows[0]?.first_name || 'Someone';
+
+    await userNotificationService.createNotification(proposal.proposer_id, {
+      type: 'date_accepted',
+      title: `${recipientName} accepted your date proposal!`,
+      body: `${proposal.suggested_activity} on ${proposal.proposed_date} at ${proposal.proposed_time}`,
+      metadata: {
+        proposalId,
+        date: proposal.proposed_date,
+        time: proposal.proposed_time,
+        activity: proposal.suggested_activity
+      }
+    });
+
+    res.json({
+      message: 'Date proposal accepted',
+      proposal: updateResult.rows[0]
+    });
+  } catch (err) {
+    console.error('Accept date proposal error:', err);
+    res.status(500).json({ error: 'Failed to accept date proposal' });
+  }
+});
+
+// 62. DECLINE DATE PROPOSAL
+router.patch('/date-proposals/:proposalId/decline', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { proposalId } = req.params;
+    const { reason } = req.body;
+
+    const proposalResult = await db.query(
+      `SELECT * FROM date_proposals WHERE id = $1 AND recipient_id = $2 LIMIT 1`,
+      [proposalId, userId]
+    );
+
+    if (proposalResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Proposal not found or you are not the recipient' });
+    }
+
+    const proposal = proposalResult.rows[0];
+
+    const updateResult = await db.query(
+      `UPDATE date_proposals 
+       SET status = 'declined', responded_at = CURRENT_TIMESTAMP, notes = $1
+       WHERE id = $2 RETURNING *`,
+      [reason || 'Proposal was declined', proposalId]
+    );
+
+    res.json({
+      message: 'Date proposal declined',
+      proposal: updateResult.rows[0]
+    });
+  } catch (err) {
+    console.error('Decline date proposal error:', err);
+    res.status(500).json({ error: 'Failed to decline date proposal' });
+  }
+});
+
+// 63. CANCEL DATE PROPOSAL
+router.delete('/date-proposals/:proposalId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { proposalId } = req.params;
+
+    const proposalResult = await db.query(
+      `SELECT * FROM date_proposals WHERE id = $1 AND proposer_id = $2 AND status IN ('pending', 'accepted') LIMIT 1`,
+      [proposalId, userId]
+    );
+
+    if (proposalResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Proposal not found or you cannot cancel it' });
+    }
+
+    await db.query(`DELETE FROM date_proposals WHERE id = $1`, [proposalId]);
+
+    res.json({ message: 'Date proposal cancelled' });
+  } catch (err) {
+    console.error('Cancel date proposal error:', err);
+    res.status(500).json({ error: 'Failed to cancel date proposal' });
+  }
+});
+
+// 64. GET NEARBY DATE LOCATIONS (Smart Discovery)
+router.get('/date-locations/suggestions', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { latitude, longitude, ambiance, maxDistance = 5, limit = 10 } = req.query;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({ error: 'latitude and longitude are required' });
+    }
+
+    let query = `
+      SELECT *,
+             (6371 * acos(
+               LEAST(1, GREATEST(-1,
+                 cos(radians($1::float)) * cos(radians(coordinates->>'lat'::float)) *
+                 cos(radians(coordinates->>'lng'::float) - radians($2::float)) +
+                 sin(radians($1::float)) * sin(radians(coordinates->>'lat'::float))
+               ))
+             )) AS distance_km
+      FROM date_locations
+      WHERE verified_flag = true
+    `;
+
+    const params = [latitude, longitude];
+    let paramIndex = 3;
+
+    if (ambiance) {
+      query += ` AND ambiance_type = $${paramIndex++}`;
+      params.push(ambiance);
+    }
+
+    query += ` HAVING (6371 * acos(
+        LEAST(1, GREATEST(-1,
+          cos(radians($1::float)) * cos(radians(coordinates->>'lat'::float)) *
+          cos(radians(coordinates->>'lng'::float) - radians($2::float)) +
+          sin(radians($1::float)) * sin(radians(coordinates->>'lat'::float))
+        ))
+      )) <= $${paramIndex++}`;
+    params.push(maxDistance);
+
+    query += ` ORDER BY distance_km ASC LIMIT $${paramIndex++}`;
+    params.push(limit);
+
+    const result = await db.query(query, params);
+
+    res.json({
+      locations: result.rows.map(row => ({
+        id: row.id,
+        address: row.address,
+        city: row.city,
+        state: row.state,
+        country: row.country,
+        coordinates: row.coordinates,
+        category: row.location_category,
+        ambianceType: row.ambiance_type,
+        averageCost: row.average_cost,
+        hoursOfOperation: row.hours_of_operation,
+        verified: row.verified_flag,
+        distanceKm: Math.round(row.distance_km * 100) / 100
+      }))
+    });
+  } catch (err) {
+    console.error('Get location suggestions error:', err);
+    res.status(500).json({ error: 'Failed to get location suggestions' });
+  }
+});
+
+// 65. ADD NEW DATE LOCATION
+router.post('/date-locations', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { address, city, state, country, latitude, longitude, category, ambiance, averageCost, hoursOfOperation } = req.body;
+
+    if (!address || !city || !latitude || !longitude || !category) {
+      return res.status(400).json({ error: 'address, city, latitude, longitude, and category are required' });
+    }
+
+    const result = await db.query(
+      `INSERT INTO date_locations (
+        created_by_id, address, city, state, country, coordinates,
+        location_category, ambiance_type, average_cost, hours_of_operation, verified_flag
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false)
+       RETURNING *`,
+      [
+        userId,
+        address,
+        city,
+        state || null,
+        country,
+        JSON.stringify({ lat: parseFloat(latitude), lng: parseFloat(longitude) }),
+        category,
+        ambiance || null,
+        parseFloat(averageCost) || null,
+        hoursOfOperation || null
+      ]
+    );
+
+    res.json({
+      message: 'Location added and pending verification',
+      location: result.rows[0],
+      status: 'pending_verification'
+    });
+  } catch (err) {
+    console.error('Add date location error:', err);
+    res.status(500).json({ error: 'Failed to add date location' });
+  }
+});
+
+// 66. UPDATE USER PRESENCE/ONLINE STATUS
+router.patch('/presence/online', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { deviceType = 'web', statusMessage } = req.body;
+
+    const sessionId = `session_${userId}_${Date.now()}`;
+
+    const result = await db.query(
+      `INSERT INTO user_presence_sessions (
+        user_id, session_id, is_online, last_activity_at, device_type, status_message
+       ) VALUES ($1, $2, true, CURRENT_TIMESTAMP, $3, $4)
+       ON CONFLICT (user_id) DO UPDATE
+       SET is_online = true,
+           session_id = EXCLUDED.session_id,
+           last_activity_at = CURRENT_TIMESTAMP,
+           device_type = EXCLUDED.device_type,
+           status_message = EXCLUDED.status_message
+       RETURNING *`,
+      [userId, sessionId, deviceType, statusMessage || null]
+    );
+
+    res.json({
+      message: 'Status updated to online',
+      sessionId: sessionId,
+      isOnline: true,
+      deviceType: deviceType
+    });
+  } catch (err) {
+    console.error('Update presence online error:', err);
+    res.status(500).json({ error: 'Failed to update presence' });
+  }
+});
+
+// 67. UPDATE USER OFFLINE STATUS
+router.patch('/presence/offline', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `UPDATE user_presence_sessions
+       SET is_online = false, last_activity_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1
+       RETURNING *`,
+      [userId]
+    );
+
+    res.json({
+      message: 'Status updated to offline',
+      isOnline: false
+    });
+  } catch (err) {
+    console.error('Update presence offline error:', err);
+    res.status(500).json({ error: 'Failed to update presence' });
+  }
+});
+
+// 68. CHECK IF USER IS ONLINE (Premium Feature)
+router.get('/presence/:targetUserId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { targetUserId } = req.params;
+
+    // Check subscription - premium feature
+    const subResult = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [userId]
+    );
+    const sub = subResult.rows[0];
+    const isPremium = sub && ['premium', 'gold'].includes(sub.plan) && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+
+    if (!isPremium) {
+      return res.status(403).json({ error: 'This feature requires a Premium or Gold subscription' });
+    }
+
+    const result = await db.query(
+      `SELECT * FROM user_presence_sessions WHERE user_id = $1 LIMIT 1`,
+      [targetUserId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        userId: targetUserId,
+        isOnline: false,
+        lastActivity: null
+      });
+    }
+
+    const presence = result.rows[0];
+    res.json({
+      userId: targetUserId,
+      isOnline: presence.is_online,
+      deviceType: presence.device_type,
+      lastActivityAt: presence.last_activity_at,
+      statusMessage: presence.status_message
+    });
+  } catch (err) {
+    console.error('Check presence error:', err);
+    res.status(500).json({ error: 'Failed to check user presence' });
+  }
+});
+
+// 69. SUBMIT DATE COMPLETION FEEDBACK
+router.post('/date-completion-feedback/:proposalId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { proposalId } = req.params;
+    const { rating, feedbackText, wouldDateAgain, matchQualityRating, locationRating } = req.body;
+
+    // Verify proposal exists and user was involved
+    const proposalResult = await db.query(
+      `SELECT * FROM date_proposals 
+       WHERE id = $1 AND (proposer_id = $2 OR recipient_id = $2) AND status = 'accepted' LIMIT 1`,
+      [proposalId, userId]
+    );
+
+    if (proposalResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Proposal not found or not yet completed' });
+    }
+
+    const proposal = proposalResult.rows[0];
+    const otherUserId = proposal.proposer_id === userId ? proposal.recipient_id : proposal.proposer_id;
+
+    const result = await db.query(
+      `INSERT INTO date_completion_feedback (
+        date_proposal_id, rating, feedback_text, would_date_again, 
+        match_quality_rating, location_rating
+       ) VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (date_proposal_id) DO UPDATE
+       SET rating = EXCLUDED.rating,
+           feedback_text = EXCLUDED.feedback_text,
+           would_date_again = EXCLUDED.would_date_again,
+           match_quality_rating = EXCLUDED.match_quality_rating,
+           location_rating = EXCLUDED.location_rating,
+           updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [proposalId, rating, feedbackText || null, wouldDateAgain || null, matchQualityRating || null, locationRating || null]
+    );
+
+    // Send notification to the other person
+    const userProfile = await db.query(
+      `SELECT first_name FROM dating_profiles WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+    const userName = userProfile.rows[0]?.first_name || 'Someone';
+
+    await userNotificationService.createNotification(otherUserId, {
+      type: 'date_feedback_submitted',
+      title: `${userName} shared feedback about your date`,
+      body: `They rated the experience ${rating} stars`,
+      metadata: {
+        proposalId,
+        rating
+      }
+    });
+
+    res.json({
+      message: 'Date feedback submitted',
+      feedback: result.rows[0]
+    });
+  } catch (err) {
+    console.error('Submit date feedback error:', err);
+    res.status(500).json({ error: 'Failed to submit date feedback' });
+  }
+});
+
+// 70. GET DATE HISTORY WITH FEEDBACK
+router.get('/date-history', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 100);
+
+    const result = await db.query(
+      `SELECT dp.*, 
+              dcf.rating, dcf.feedback_text, dcf.would_date_again,
+              dcf.match_quality_rating, dcf.location_rating,
+              p.first_name as partner_name, p.location_city as partner_city,
+              dl.address as location_address, dl.city as location_city
+       FROM date_proposals dp
+       LEFT JOIN date_completion_feedback dcf ON dcf.date_proposal_id = dp.id
+       LEFT JOIN dating_profiles p ON p.user_id = (CASE WHEN dp.proposer_id = $1 THEN dp.recipient_id ELSE dp.proposer_id END)
+       LEFT JOIN date_locations dl ON dl.id = dp.location_id
+       WHERE (dp.proposer_id = $1 OR dp.recipient_id = $1) AND dp.status = 'accepted'
+       ORDER BY dp.created_at DESC LIMIT $2`,
+      [userId, limit]
+    );
+
+    res.json({
+      dateHistory: result.rows.map(row => ({
+        proposalId: row.id,
+        date: row.proposed_date,
+        time: row.proposed_time,
+        activity: row.suggested_activity,
+        partnerName: row.partner_name,
+        partnerCity: row.partner_city,
+        location: {
+          address: row.location_address,
+          city: row.location_city
+        },
+        feedback: row.rating ? {
+          rating: row.rating,
+          text: row.feedback_text,
+          wouldDateAgain: row.would_date_again,
+          matchQualityRating: row.match_quality_rating,
+          locationRating: row.location_rating
+        } : null,
+        hasFeedback: Boolean(row.rating)
+      }))
+    });
+  } catch (err) {
+    console.error('Get date history error:', err);
+    res.status(500).json({ error: 'Failed to get date history' });
+  }
+});
+
+// 71. ENABLE/DISABLE LOCATION SHARING
+router.post('/location-sharing', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { latitude, longitude, sharedStatus = 'matches' } = req.body;
+
+    // Validate shared status
+    if (!['private', 'matches', 'all'].includes(sharedStatus)) {
+      return res.status(400).json({ error: 'sharedStatus must be private, matches, or all' });
+    }
+
+    const result = await db.query(
+      `INSERT INTO user_locations (
+        user_id, latitude, longitude, shared_status, last_updated_at
+       ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id) DO UPDATE
+       SET latitude = EXCLUDED.latitude,
+           longitude = EXCLUDED.longitude,
+           shared_status = EXCLUDED.shared_status,
+           last_updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [userId, latitude, longitude, sharedStatus]
+    );
+
+    res.json({
+      message: 'Location sharing updated',
+      sharedStatus: sharedStatus,
+      location: {
+        latitude: result.rows[0].latitude,
+        longitude: result.rows[0].longitude
+      }
+    });
+  } catch (err) {
+    console.error('Update location sharing error:', err);
+    res.status(500).json({ error: 'Failed to update location sharing' });
+  }
+});
+
+// 72. GET NEARBY USERS (Location-based Discovery - Premium)
+router.get('/nearby-users', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { maxDistance = 5, limit = 20 } = req.query;
+
+    // Check subscription
+    const subResult = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [userId]
+    );
+    const sub = subResult.rows[0];
+    const isPremium = sub && ['premium', 'gold'].includes(sub.plan) && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+
+    if (!isPremium) {
+      return res.status(403).json({ error: 'This feature requires a Premium or Gold subscription' });
+    }
+
+    // Get user's location
+    const userLocationResult = await db.query(
+      `SELECT * FROM user_locations WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+
+    if (userLocationResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Please enable location sharing first' });
+    }
+
+    const userLocation = userLocationResult.rows[0];
+
+    const result = await db.query(
+      `SELECT ul.*, dp.first_name, dp.age, dp.gender, dp.location_city,
+              (SELECT photo_url FROM profile_photos WHERE user_id = ul.user_id LIMIT 1) as photo_url,
+              (6371 * acos(
+                LEAST(1, GREATEST(-1,
+                  cos(radians($1::float)) * cos(radians(ul.latitude)) *
+                  cos(radians(ul.longitude) - radians($2::float)) +
+                  sin(radians($1::float)) * sin(radians(ul.latitude))
+                ))
+              )) as distance_km
+       FROM user_locations ul
+       JOIN dating_profiles dp ON dp.user_id = ul.user_id
+       WHERE ul.user_id != $3
+         AND (ul.shared_status = 'all' OR (ul.shared_status = 'matches' AND EXISTS (
+           SELECT 1 FROM matches m WHERE (m.user_id_1 = $3 AND m.user_id_2 = ul.user_id)
+              OR (m.user_id_2 = $3 AND m.user_id_1 = ul.user_id)
+         )))
+         AND (6371 * acos(
+           LEAST(1, GREATEST(-1,
+             cos(radians($1::float)) * cos(radians(ul.latitude)) *
+             cos(radians(ul.longitude) - radians($2::float)) +
+             sin(radians($1::float)) * sin(radians(ul.latitude))
+           ))
+         )) <= $4::float
+       ORDER BY distance_km ASC LIMIT $5`,
+      [userLocation.latitude, userLocation.longitude, userId, maxDistance, limit]
+    );
+
+    res.json({
+      nearbyUsers: result.rows.map(row => ({
+        userId: row.user_id,
+        firstName: row.first_name,
+        age: row.age,
+        gender: row.gender,
+        city: row.location_city,
+        photoUrl: row.photo_url,
+        distanceKm: Math.round(row.distance_km * 100) / 100
+      }))
+    });
+  } catch (err) {
+    console.error('Get nearby users error:', err);
+    res.status(500).json({ error: 'Failed to get nearby users' });
+  }
+});
+
 module.exports = router;

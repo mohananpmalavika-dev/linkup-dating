@@ -162,6 +162,48 @@ const init = async () => {
     `);
 
       await client.query(`
+      ALTER TABLE messages
+      ADD COLUMN IF NOT EXISTS media_type VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS media_url TEXT,
+      ADD COLUMN IF NOT EXISTS duration INTEGER,
+      ADD COLUMN IF NOT EXISTS is_encrypted BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS encryption_algorithm VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS encrypted_content TEXT,
+      ADD COLUMN IF NOT EXISTS encryption_nonce VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS auth_tag VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS is_disappearing BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS disappears_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS disappear_after_seconds INTEGER,
+      ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS has_location BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS location_lat DECIMAL(10, 8),
+      ADD COLUMN IF NOT EXISTS location_lng DECIMAL(11, 8),
+      ADD COLUMN IF NOT EXISTS location_name VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS location_accuracy INTEGER,
+      ADD COLUMN IF NOT EXISTS message_type VARCHAR(50) DEFAULT 'text',
+      ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS edit_count INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS replied_to_message_id INTEGER REFERENCES messages(id) ON DELETE SET NULL;
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS message_attachments (
+        id SERIAL PRIMARY KEY,
+        message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+        file_name VARCHAR(255) NOT NULL,
+        file_type VARCHAR(100) NOT NULL,
+        file_path VARCHAR(500) NOT NULL,
+        file_size INTEGER NOT NULL,
+        attachment_type VARCHAR(50) NOT NULL,
+        thumbnail_path VARCHAR(500),
+        metadata JSONB DEFAULT '{}',
+        download_count INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
       CREATE TABLE IF NOT EXISTS message_reactions (
         id SERIAL PRIMARY KEY,
         message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
@@ -169,6 +211,58 @@ const init = async () => {
         emoji VARCHAR(16) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(message_id, user_id, emoji)
+      );
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS message_templates (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(100) NOT NULL,
+        content TEXT NOT NULL,
+        category VARCHAR(50) DEFAULT 'general',
+        emoji VARCHAR(10),
+        is_pinned BOOLEAN DEFAULT FALSE,
+        usage_count INTEGER DEFAULT 0,
+        last_used_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS encryption_keys (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+        public_key TEXT NOT NULL,
+        encrypted_private_key TEXT NOT NULL,
+        key_version INTEGER DEFAULT 1,
+        is_active BOOLEAN DEFAULT TRUE,
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, match_id)
+      );
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_backups (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
+        backup_type VARCHAR(50) NOT NULL,
+        format VARCHAR(20) NOT NULL,
+        file_path VARCHAR(500) NOT NULL,
+        file_size INTEGER NOT NULL,
+        message_count INTEGER DEFAULT 0,
+        start_date TIMESTAMP,
+        end_date TIMESTAMP,
+        expires_at TIMESTAMP,
+        download_count INTEGER DEFAULT 0,
+        is_encrypted BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -233,8 +327,20 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_interactions_users ON interactions(from_user_id, to_user_id);
       CREATE INDEX IF NOT EXISTS idx_messages_match_id ON messages(match_id);
       CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
+      CREATE INDEX IF NOT EXISTS idx_messages_media_type ON messages(media_type);
+      CREATE INDEX IF NOT EXISTS idx_messages_message_type ON messages(message_type);
+      CREATE INDEX IF NOT EXISTS idx_messages_is_deleted ON messages(is_deleted);
+      CREATE INDEX IF NOT EXISTS idx_messages_is_disappearing ON messages(is_disappearing);
+      CREATE INDEX IF NOT EXISTS idx_message_attachments_message_id ON message_attachments(message_id);
+      CREATE INDEX IF NOT EXISTS idx_message_attachments_type ON message_attachments(attachment_type);
       CREATE INDEX IF NOT EXISTS idx_message_reactions_message_id ON message_reactions(message_id);
       CREATE INDEX IF NOT EXISTS idx_message_reactions_user_id ON message_reactions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_message_templates_user_id ON message_templates(user_id);
+      CREATE INDEX IF NOT EXISTS idx_message_templates_pinned ON message_templates(user_id, is_pinned);
+      CREATE INDEX IF NOT EXISTS idx_encryption_keys_match_id ON encryption_keys(match_id);
+      CREATE INDEX IF NOT EXISTS idx_encryption_keys_active ON encryption_keys(is_active);
+      CREATE INDEX IF NOT EXISTS idx_chat_backups_user_id ON chat_backups(user_id);
+      CREATE INDEX IF NOT EXISTS idx_chat_backups_match_id ON chat_backups(match_id);
     `);
 
       // Migration: backfill legacy users columns expected by auth and profile flows
@@ -782,4 +888,3 @@ module.exports = {
   init,
   isAvailable
 };
-

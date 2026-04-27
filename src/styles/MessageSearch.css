@@ -29,6 +29,20 @@
   font-weight: 600;
 }
 
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  color: #999;
+  transition: color 0.2s;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
 .search-box {
   position: relative;
   padding: 12px 16px;

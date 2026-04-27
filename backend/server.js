@@ -11,6 +11,7 @@ const { apiLimiter, authLimiter, otpLimiter } = require('./middleware/rateLimit'
 const authRoutes = require('./routes/auth');
 const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
+const messagingEnhancedRoutes = require('./routes/messagingEnhanced');
 const chatroomsRoutes = require('./routes/chatrooms');
 const lobbyRoutes = require('./routes/lobby');
 const adminRoutes = require('./routes/admin');
@@ -406,6 +407,7 @@ app.use('/api/flashsales', flashsalesRoutes);
 app.use('/api/dating/video-calls', authenticateToken, videoCallRoutes);
 app.use('/api/dating', authenticateToken, datingRoutes);
 app.use('/api/messaging', authenticateToken, messagingRoutes);
+app.use('/api/messaging', authenticateToken, messagingEnhancedRoutes);
 app.use('/api/chatrooms', authenticateToken, chatroomsRoutes);
 app.use('/api/lobby', authenticateToken, lobbyRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);

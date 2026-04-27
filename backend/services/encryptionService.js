@@ -141,29 +141,29 @@ class EncryptionService {
    */
   static async storeEncryptionKey(userId, matchId, publicKey, encryptedPrivateKey) {
     try {
-      const { EncryptionKey } = db.models;
+      const result = await db.query(
+        `INSERT INTO encryption_keys (
+           user_id,
+           match_id,
+           public_key,
+           encrypted_private_key,
+           key_version,
+           is_active,
+           created_at,
+           updated_at
+         )
+         VALUES ($1, $2, $3, $4, 1, TRUE, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id, match_id) DO UPDATE
+         SET public_key = EXCLUDED.public_key,
+             encrypted_private_key = EXCLUDED.encrypted_private_key,
+             key_version = encryption_keys.key_version + 1,
+             is_active = TRUE,
+             updated_at = CURRENT_TIMESTAMP
+         RETURNING *`,
+        [userId, matchId, publicKey, encryptedPrivateKey]
+      );
 
-      const key = await EncryptionKey.findOne({
-        where: { user_id: userId, match_id: matchId }
-      });
-
-      if (key) {
-        return await key.update({
-          public_key: publicKey,
-          encrypted_private_key: encryptedPrivateKey,
-          key_version: key.key_version + 1,
-          is_active: true
-        });
-      }
-
-      return await EncryptionKey.create({
-        user_id: userId,
-        match_id: matchId,
-        public_key: publicKey,
-        encrypted_private_key: encryptedPrivateKey,
-        key_version: 1,
-        is_active: true
-      });
+      return result.rows[0] || null;
     } catch (error) {
       console.error('Store encryption key error:', error);
       throw new Error('Failed to store encryption key');
@@ -175,15 +175,17 @@ class EncryptionService {
    */
   static async getEncryptionKey(userId, matchId) {
     try {
-      const { EncryptionKey } = db.models;
+      const result = await db.query(
+        `SELECT *
+         FROM encryption_keys
+         WHERE user_id = $1
+           AND match_id = $2
+           AND is_active = TRUE
+         LIMIT 1`,
+        [userId, matchId]
+      );
 
-      return await EncryptionKey.findOne({
-        where: {
-          user_id: userId,
-          match_id: matchId,
-          is_active: true
-        }
-      });
+      return result.rows[0] || null;
     } catch (error) {
       console.error('Get encryption key error:', error);
       throw new Error('Failed to retrieve encryption key');

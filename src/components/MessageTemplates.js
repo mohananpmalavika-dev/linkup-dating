@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import messagingEnhancedService from '../../services/messagingEnhancedService';
-import '../../styles/MessageTemplates.css';
+import React, { useCallback, useEffect, useState } from 'react';
+import messagingEnhancedService from '../services/messagingEnhancedService';
+import '../styles/MessageTemplates.css';
 
 /**
  * MessageTemplates Component
@@ -15,15 +15,11 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
     title: '',
     content: '',
     category: 'general',
-    emoji: '💬'
+    emoji: 'Hi'
   });
   const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
-    loadTemplates();
-  }, [filter]);
-
-  const loadTemplates = async () => {
+  const loadTemplates = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -32,15 +28,19 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
         pinned: filter === 'pinned' ? 'true' : null
       });
       setTemplates(data);
-    } catch (err) {
-      setError(err || 'Failed to load templates');
+    } catch (loadError) {
+      setError(loadError || 'Failed to load templates');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]);
 
-  const handleCreateTemplate = async (e) => {
-    e.preventDefault();
+  useEffect(() => {
+    loadTemplates();
+  }, [loadTemplates]);
+
+  const handleCreateTemplate = async (event) => {
+    event.preventDefault();
 
     if (!formData.title.trim() || !formData.content.trim()) {
       setError('Title and content are required');
@@ -50,35 +50,35 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
     try {
       setError('');
       await messagingEnhancedService.createTemplate(formData);
-      setFormData({ title: '', content: '', category: 'general', emoji: '💬' });
+      setFormData({ title: '', content: '', category: 'general', emoji: 'Hi' });
       setShowForm(false);
       await loadTemplates();
-    } catch (err) {
-      setError(err || 'Failed to create template');
+    } catch (createError) {
+      setError(createError || 'Failed to create template');
     }
   };
 
   const handleSelectTemplate = async (template) => {
     try {
-      // Log usage
       await messagingEnhancedService.useTemplate(template.id);
-      onSelectTemplate(template.content);
-      onClose();
-    } catch (err) {
-      console.error('Error using template:', err);
+    } catch (usageError) {
+      console.error('Error using template:', usageError);
+    } finally {
       onSelectTemplate(template.content);
       onClose();
     }
   };
 
   const handleDeleteTemplate = async (templateId) => {
-    if (!window.confirm('Delete this template?')) return;
+    if (!window.confirm('Delete this template?')) {
+      return;
+    }
 
     try {
       await messagingEnhancedService.deleteTemplate(templateId);
       await loadTemplates();
-    } catch (err) {
-      setError(err || 'Failed to delete template');
+    } catch (deleteError) {
+      setError(deleteError || 'Failed to delete template');
     }
   };
 
@@ -94,7 +94,7 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
     <div className="message-templates">
       <div className="templates-header">
         <h3>Quick Reply Templates</h3>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        <button type="button" className="close-btn" onClick={onClose}>x</button>
       </div>
 
       {error && <div className="error-message">{error}</div>}
@@ -102,21 +102,24 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
       <div className="templates-controls">
         <div className="filter-buttons">
           <button
+            type="button"
             className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
             onClick={() => setFilter('all')}
           >
             All
           </button>
           <button
+            type="button"
             className={`filter-btn ${filter === 'pinned' ? 'active' : ''}`}
             onClick={() => setFilter('pinned')}
           >
-            ⭐ Pinned
+            Pinned
           </button>
         </div>
         <button
+          type="button"
           className="new-template-btn"
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => setShowForm((currentState) => !currentState)}
         >
           {showForm ? 'Cancel' : '+ New'}
         </button>
@@ -126,22 +129,22 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
         <form className="template-form" onSubmit={handleCreateTemplate}>
           <input
             type="text"
-            placeholder="Template title (e.g., 'Greeting')"
+            placeholder="Template title"
             value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+            onChange={(event) => setFormData({ ...formData, title: event.target.value })}
             className="form-input"
           />
           <textarea
             placeholder="Template content"
             value={formData.content}
-            onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+            onChange={(event) => setFormData({ ...formData, content: event.target.value })}
             className="form-textarea"
             rows="3"
           />
           <div className="form-row">
             <select
               value={formData.category}
-              onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              onChange={(event) => setFormData({ ...formData, category: event.target.value })}
               className="form-select"
             >
               <option value="general">General</option>
@@ -152,10 +155,10 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
             </select>
             <input
               type="text"
-              placeholder="Emoji (optional)"
-              maxLength="2"
+              placeholder="Label"
+              maxLength="4"
               value={formData.emoji}
-              onChange={(e) => setFormData({ ...formData, emoji: e.target.value })}
+              onChange={(event) => setFormData({ ...formData, emoji: event.target.value })}
               className="form-input emoji-input"
             />
           </div>
@@ -171,7 +174,7 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
             <div key={template.id} className="template-card">
               <div className="template-header">
                 <div className="template-title">
-                  <span className="emoji">{template.emoji || '💬'}</span>
+                  <span className="emoji">{template.emoji || 'Msg'}</span>
                   <h4>{template.title}</h4>
                 </div>
                 <div className="template-meta">
@@ -182,12 +185,14 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
               <p className="template-content">{template.content}</p>
               <div className="template-actions">
                 <button
+                  type="button"
                   className="use-btn"
                   onClick={() => handleSelectTemplate(template)}
                 >
                   Use
                 </button>
                 <button
+                  type="button"
                   className="delete-btn"
                   onClick={() => handleDeleteTemplate(template.id)}
                 >
@@ -198,7 +203,7 @@ const MessageTemplates = ({ onSelectTemplate, onClose }) => {
           ))
         ) : (
           <div className="empty-state">
-            <p>No templates yet. Create one to get started!</p>
+            <p>No templates yet. Create one to get started.</p>
           </div>
         )}
       </div>

@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
-import messagingEnhancedService from '../../services/messagingEnhancedService';
-import '../../styles/MessageSearch.css';
+import React, { useRef, useState } from 'react';
+import messagingEnhancedService from '../services/messagingEnhancedService';
+import '../styles/MessageSearch.css';
 
 /**
  * MessageSearch Component
@@ -16,13 +16,11 @@ const MessageSearch = ({ matchId, onSelectMessage, onClose }) => {
     endDate: '',
     type: 'all'
   });
-  const [currentPage, setCurrentPage] = useState(0);
   const searchTimeoutRef = useRef(null);
 
   const handleSearch = async (query) => {
     setSearchQuery(query);
 
-    // Clear previous timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
@@ -32,26 +30,23 @@ const MessageSearch = ({ matchId, onSelectMessage, onClose }) => {
       return;
     }
 
-    // Debounce search
     searchTimeoutRef.current = setTimeout(async () => {
       try {
         setLoading(true);
         setError('');
-        setCurrentPage(0);
 
-        const searchFilters = {
+        const response = await messagingEnhancedService.searchMessages(query, {
           matchId,
           startDate: filters.startDate || null,
           endDate: filters.endDate || null,
           type: filters.type === 'all' ? null : filters.type,
           limit: 50,
           offset: 0
-        };
+        });
 
-        const response = await messagingEnhancedService.searchMessages(query, searchFilters);
         setResults(response.results);
-      } catch (err) {
-        setError(err || 'Search failed');
+      } catch (searchError) {
+        setError(searchError || 'Search failed');
       } finally {
         setLoading(false);
       }
@@ -59,11 +54,11 @@ const MessageSearch = ({ matchId, onSelectMessage, onClose }) => {
   };
 
   const handleFilterChange = (filterName, value) => {
-    setFilters((prev) => ({
-      ...prev,
+    setFilters((currentFilters) => ({
+      ...currentFilters,
       [filterName]: value
     }));
-    // Re-search with new filters
+
     if (searchQuery.trim()) {
       handleSearch(searchQuery);
     }
@@ -71,17 +66,21 @@ const MessageSearch = ({ matchId, onSelectMessage, onClose }) => {
 
   const getMessagePreview = (message) => {
     if (message.message_type === 'image') {
-      return '[📷 Image]';
+      return '[Image]';
     }
     if (message.message_type === 'video') {
-      return '[🎬 Video]';
+      return '[Video]';
+    }
+    if (message.message_type === 'audio') {
+      return '[Audio]';
     }
     if (message.message_type === 'location') {
-      return `[📍 ${message.location_name || 'Location'}]`;
+      return `[Location] ${message.location_name || 'Shared location'}`;
     }
     if (message.message_type === 'document') {
-      return '[📄 Document]';
+      return '[Document]';
     }
+
     return message.message?.substring(0, 100) || '[Message]';
   };
 
@@ -89,7 +88,7 @@ const MessageSearch = ({ matchId, onSelectMessage, onClose }) => {
     <div className="message-search">
       <div className="search-header">
         <h3>Search Messages</h3>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        <button type="button" className="close-btn" onClick={onClose}>x</button>
       </div>
 
       <div className="search-box">
@@ -97,11 +96,11 @@ const MessageSearch = ({ matchId, onSelectMessage, onClose }) => {
           type="text"
           placeholder="Search messages..."
           value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
+          onChange={(event) => handleSearch(event.target.value)}
           className="search-input"
           autoFocus
         />
-        {loading && <span className="search-spinner">⟳</span>}
+        {loading && <span className="search-spinner">...</span>}
       </div>
 
       {error && <div className="error-message">{error}</div>}
@@ -112,13 +111,15 @@ const MessageSearch = ({ matchId, onSelectMessage, onClose }) => {
           <select
             id="message-type"
             value={filters.type}
-            onChange={(e) => handleFilterChange('type', e.target.value)}
+            onChange={(event) => handleFilterChange('type', event.target.value)}
             className="filter-select"
           >
             <option value="all">All Types</option>
             <option value="text">Text</option>
             <option value="image">Images</option>
             <option value="video">Videos</option>
+            <option value="audio">Audio</option>
+            <option value="document">Documents</option>
             <option value="location">Locations</option>
           </select>
         </div>
@@ -129,7 +130,7 @@ const MessageSearch = ({ matchId, onSelectMessage, onClose }) => {
             id="start-date"
             type="date"
             value={filters.startDate}
-            onChange={(e) => handleFilterChange('startDate', e.target.value)}
+            onChange={(event) => handleFilterChange('startDate', event.target.value)}
             className="filter-input"
           />
         </div>
@@ -140,7 +141,7 @@ const MessageSearch = ({ matchId, onSelectMessage, onClose }) => {
             id="end-date"
             type="date"
             value={filters.endDate}
-            onChange={(e) => handleFilterChange('endDate', e.target.value)}
+            onChange={(event) => handleFilterChange('endDate', event.target.value)}
             className="filter-input"
           />
         </div>

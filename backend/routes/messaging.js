@@ -92,6 +92,12 @@ router.get('/matches/:matchId/messages', async (req, res) => {
               ), '[]'::json) AS reactions
        FROM messages m
        WHERE match_id = $1
+         AND COALESCE(m.is_deleted, FALSE) = FALSE
+         AND (
+           COALESCE(m.is_disappearing, FALSE) = FALSE
+           OR m.disappears_at IS NULL
+           OR m.disappears_at > CURRENT_TIMESTAMP
+         )
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
       [matchId, limit, offset, userId]
@@ -170,8 +176,8 @@ router.post('/matches/:matchId/messages', async (req, res) => {
     const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : match.user_id_1;
 
     const result = await db.query(
-      `INSERT INTO messages (match_id, from_user_id, to_user_id, message)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, message_type)
+       VALUES ($1, $2, $3, $4, 'text')
        RETURNING *`,
       [matchId, userId, toUserId, normalizedMessage]
     );
@@ -345,7 +351,14 @@ router.get('/unread-count', async (req, res) => {
 
     const result = await db.query(
       `SELECT COUNT(*) as unread_count FROM messages
-       WHERE to_user_id = $1 AND is_read = false`,
+       WHERE to_user_id = $1
+         AND is_read = false
+         AND COALESCE(is_deleted, FALSE) = FALSE
+         AND (
+           COALESCE(is_disappearing, FALSE) = FALSE
+           OR disappears_at IS NULL
+           OR disappears_at > CURRENT_TIMESTAMP
+         )`,
       [userId]
     );
 
@@ -365,7 +378,7 @@ router.post('/matches/:matchId/media', async (req, res) => {
     const duration = Number.parseInt(req.body.duration, 10) || null;
     const requestMetadata = getRequestMetadata(req);
 
-    if (!['image', 'voice'].includes(mediaType)) {
+    if (!['image', 'voice', 'audio', 'video', 'document'].includes(mediaType)) {
       return res.status(400).json({ error: 'Invalid media type' });
     }
 
@@ -378,7 +391,7 @@ router.post('/matches/:matchId/media', async (req, res) => {
     const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : match.user_id_1;
 
     // Handle file upload - collect from multipart or base64
-    const MAX_MEDIA_BYTES = mediaType === 'image' ? 5 * 1024 * 1024 : 2 * 1024 * 1024;
+    const MAX_MEDIA_BYTES = mediaType === 'image' ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
     let mediaUrl = null;
 
     if (req.body?.mediaBase64) {
@@ -398,14 +411,23 @@ router.post('/matches/:matchId/media', async (req, res) => {
     // Limit base64 size
     const base64Size = mediaUrl.length * 0.75;
     if (base64Size > MAX_MEDIA_BYTES) {
-      return res.status(413).json({ error: `Media too large. Max ${mediaType === 'image' ? '5MB' : '2MB'}` });
+      return res.status(413).json({ error: `Media too large. Max ${mediaType === 'image' ? '5MB' : '10MB'}` });
     }
 
     const result = await db.query(
-      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration, message_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [matchId, userId, toUserId, `[${mediaType}]`, mediaType, mediaUrl, duration]
+      [
+        matchId,
+        userId,
+        toUserId,
+        `[${mediaType}]`,
+        mediaType,
+        mediaUrl,
+        duration,
+        mediaType === 'voice' ? 'audio' : mediaType
+      ]
     );
 
     await db.query(
@@ -445,10 +467,36 @@ router.post('/matches/:matchId/media', async (req, res) => {
       });
     }
 
+    const mediaNotificationCopy = {
+      image: {
+        title: `New image from ${fromUserName}`,
+        body: 'Shared an image'
+      },
+      voice: {
+        title: `New voice note from ${fromUserName}`,
+        body: 'Voice message'
+      },
+      audio: {
+        title: `New audio from ${fromUserName}`,
+        body: 'Shared an audio file'
+      },
+      video: {
+        title: `New video from ${fromUserName}`,
+        body: 'Shared a video'
+      },
+      document: {
+        title: `New document from ${fromUserName}`,
+        body: 'Shared a document'
+      }
+    }[mediaType] || {
+      title: `New attachment from ${fromUserName}`,
+      body: 'Shared an attachment'
+    };
+
     await userNotificationService.createNotification(toUserId, {
       type: 'new_message',
-      title: `New ${mediaType === 'voice' ? 'voice note' : 'image'} from ${fromUserName}`,
-      body: mediaType === 'voice' ? 'Voice message' : 'Shared an image',
+      title: mediaNotificationCopy.title,
+      body: mediaNotificationCopy.body,
       metadata: {
         matchId: Number.parseInt(matchId, 10),
         messageId: createdMessage.id,

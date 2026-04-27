@@ -4,7 +4,7 @@ import MessageSearch from './MessageSearch';
 import MessageExport from './MessageExport';
 import AttachmentUpload from './AttachmentUpload';
 import LocationShare from './LocationShare';
-import '../../styles/MessageToolbar.css';
+import '../styles/MessageToolbar.css';
 
 /**
  * MessageToolbar Component
@@ -25,19 +25,68 @@ const MessageToolbar = ({
   const [showLocation, setShowLocation] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
+  const closePanels = () => {
+    setShowTemplates(false);
+    setShowSearch(false);
+    setShowExport(false);
+    setShowAttachments(false);
+    setShowLocation(false);
+    setShowMenu(false);
+  };
+
+  const togglePanel = (panelName) => {
+    const currentState = {
+      templates: showTemplates,
+      search: showSearch,
+      export: showExport,
+      attachments: showAttachments,
+      location: showLocation,
+      menu: showMenu
+    }[panelName];
+
+    closePanels();
+
+    if (currentState) {
+      return;
+    }
+
+    switch (panelName) {
+      case 'templates':
+        setShowTemplates(true);
+        break;
+      case 'search':
+        setShowSearch(true);
+        break;
+      case 'export':
+        setShowExport(true);
+        break;
+      case 'attachments':
+        setShowAttachments(true);
+        break;
+      case 'location':
+        setShowLocation(true);
+        break;
+      case 'menu':
+        setShowMenu(true);
+        break;
+      default:
+        break;
+    }
+  };
+
   const handleSelectTemplate = (content) => {
     onSelectTemplate?.(content);
-    setShowTemplates(false);
+    closePanels();
   };
 
   const handleSelectAttachment = (attachments) => {
     onAttachment?.(attachments);
-    setShowAttachments(false);
+    closePanels();
   };
 
   const handleSelectLocation = (location) => {
     onLocation?.(location);
-    setShowLocation(false);
+    closePanels();
   };
 
   return (
@@ -45,83 +94,89 @@ const MessageToolbar = ({
       <div className="message-toolbar">
         <div className="toolbar-actions">
           <button
+            type="button"
             className="toolbar-btn templates-btn"
-            onClick={() => setShowTemplates(!showTemplates)}
-            title="Quick Reply Templates"
+            onClick={() => togglePanel('templates')}
+            title="Quick reply templates"
           >
-            💬
+            Tpl
           </button>
 
           <button
+            type="button"
             className="toolbar-btn search-btn"
-            onClick={() => setShowSearch(!showSearch)}
-            title="Search Messages"
+            onClick={() => togglePanel('search')}
+            title="Search messages"
           >
-            🔍
+            Find
           </button>
 
           <button
+            type="button"
             className="toolbar-btn attachment-btn"
-            onClick={() => setShowAttachments(!showAttachments)}
-            title="Attach Files"
+            onClick={() => togglePanel('attachments')}
+            title="Attach files"
           >
-            📎
+            File
           </button>
 
           <button
+            type="button"
             className="toolbar-btn location-btn"
-            onClick={() => setShowLocation(!showLocation)}
-            title="Share Location"
+            onClick={() => togglePanel('location')}
+            title="Share location"
           >
-            📍
+            Map
           </button>
 
           <button
+            type="button"
             className="toolbar-btn menu-btn"
-            onClick={() => setShowMenu(!showMenu)}
-            title="More Options"
+            onClick={() => togglePanel('menu')}
+            title="More options"
           >
-            ⋮
+            More
           </button>
         </div>
 
         {showMenu && (
           <div className="toolbar-menu">
             <button
+              type="button"
               className="menu-item"
-              onClick={() => {
-                setShowExport(true);
-                setShowMenu(false);
-              }}
+              onClick={() => togglePanel('export')}
             >
-              📥 Export Chat
+              Export chat
             </button>
             <button
+              type="button"
               className="menu-item"
               onClick={() => {
                 onMore?.('encrypt');
-                setShowMenu(false);
+                closePanels();
               }}
             >
-              🔐 Encryption Settings
+              Security setup
             </button>
             <button
+              type="button"
               className="menu-item"
               onClick={() => {
                 onMore?.('disappearing');
-                setShowMenu(false);
+                closePanels();
               }}
             >
-              ⏰ Disappearing Messages
+              Disappearing mode
             </button>
             <button
+              type="button"
               className="menu-item"
               onClick={() => {
                 onMore?.('backup');
-                setShowMenu(false);
+                closePanels();
               }}
             >
-              💾 Backup Chat
+              Backup chat
             </button>
           </div>
         )}
@@ -130,15 +185,18 @@ const MessageToolbar = ({
       {showTemplates && (
         <MessageTemplates
           onSelectTemplate={handleSelectTemplate}
-          onClose={() => setShowTemplates(false)}
+          onClose={closePanels}
         />
       )}
 
       {showSearch && (
         <MessageSearch
           matchId={matchId}
-          onSelectMessage={onSearch}
-          onClose={() => setShowSearch(false)}
+          onSelectMessage={(message) => {
+            onSearch?.(message);
+            closePanels();
+          }}
+          onClose={closePanels}
         />
       )}
 
@@ -146,7 +204,7 @@ const MessageToolbar = ({
         <div className="toolbar-panel">
           <AttachmentUpload
             onAttachmentSelect={handleSelectAttachment}
-            maxFileSize={50}
+            maxFileSize={10}
             maxFiles={5}
           />
         </div>
@@ -155,14 +213,14 @@ const MessageToolbar = ({
       {showLocation && (
         <LocationShare
           onLocationSelect={handleSelectLocation}
-          onClose={() => setShowLocation(false)}
+          onClose={closePanels}
         />
       )}
 
       {showExport && (
         <MessageExport
           matchId={matchId}
-          onClose={() => setShowExport(false)}
+          onClose={closePanels}
         />
       )}
     </>

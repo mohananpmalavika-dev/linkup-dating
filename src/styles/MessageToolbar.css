@@ -15,19 +15,22 @@
   gap: 4px;
   flex: 1;
   overflow-x: auto;
+  white-space: nowrap;
 }
 
 .toolbar-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
+  min-width: 46px;
   height: 40px;
+  padding: 0 12px;
   border: 1px solid #ddd;
   background: white;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 12px;
+  font-weight: 700;
   transition: all 0.2s;
   flex-shrink: 0;
   position: relative;
@@ -133,9 +136,10 @@
   }
 
   .toolbar-btn {
-    width: 36px;
+    min-width: 42px;
     height: 36px;
-    font-size: 16px;
+    padding: 0 10px;
+    font-size: 11px;
   }
 
   .toolbar-menu {
@@ -152,9 +156,10 @@
 
 @media (max-width: 400px) {
   .toolbar-btn {
-    width: 32px;
+    min-width: 38px;
     height: 32px;
-    font-size: 14px;
+    padding: 0 8px;
+    font-size: 10px;
   }
 
   .toolbar-actions {

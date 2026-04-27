@@ -1,479 +1,378 @@
-# Dating App - Functional Improvements Analysis
-
-## Current Status Overview
-Your dating app has a solid foundation with:
-- ✅ Profile management & photo uploads
-- ✅ Discovery/swipe interface with smart matching
-- ✅ Trending & new profiles feeds
-- ✅ Match management
-- ✅ User preferences with deal breakers
-- ✅ Personality matching (compatibility questions)
-- ✅ Learning algorithm for personalized recommendations
-- ✅ Basic interaction tracking (like, pass, superlike)
-
----
-
-## HIGH PRIORITY Improvements (Must Have)
-
-### 1. **Like/Superlike Interactions Missing**
-**Issue**: No `like` or `superlike` endpoints in routes
-- Only `pass` endpoint exists
-- Frontend references `superlike` but backend doesn't track it
-
-**Implementation**:
-```
-POST /dating/interactions/like
-POST /dating/interactions/superlike  
-GET /dating/interactions/superlikes-received (for superlike feeds)
-```
-
-**Database**: Need to track in UserAnalytics:
-- superlikes_sent (already exists)
-- likes_sent (already exists)
-- Add notification trigger for superlikes
-
----
-
-### 2. **Rewind Feature Missing**
-**Issue**: `remainingRewinds` is tracked on frontend but no backend implementation
-- No way to undo last action (like/pass)
-
-**Implementation**:
-```
-POST /dating/interactions/rewind
-- Should reverse last interaction with a profile
-- Decrement daily rewind count
-- Return the un-passed profile to queue
-```
-
-**Business Logic**:
-- Limit: 3 rewinds/day
-- Premium upgrade: Unlimited rewinds
-- Only works immediately after action (not retroactive)
-
----
-
-### 3. **Boost/Premium Features Incomplete**
-**Issue**: Frontend references premium boost but backend lacks implementation
-
-**Implementation Needed**:
-```
-POST /dating/boost-profile (premium feature)
-POST /dating/purchase-credits
-POST /dating/redeem-boost
-GET /dating/boost-status
-```
-
-**Boost Effects**:
-- Show profile to 5x more users
-- Pin profile at top of discovery for 24h
-- Highlight badge on profile
-- 30 minutes = 1 use, 24h auto-expires
-
----
-
-### 4. **Daily Limits/Rate Limiting**
-**Issue**: Frontend tracks `remainingLikes` and `remainingSuperlikes` but server doesn't enforce
-
-**Implementation**:
-```
-GET /dating/daily-limits
-- Return: { remainingLikes: N, remainingSuperlikes: N, remainingRewinds: N }
-- Check UserAnalytics table for today's count
-- Premium users get higher limits (500 likes, 10 superlikes)
-- Free users get: 50 likes, 1 superlike, 3 rewinds
-```
-
-**Reset Logic**:
-- Daily reset at UTC midnight
-- Track reset_date to prevent abuse
-
----
-
-### 5. **Notification System for Dating Events**
-**Issue**: No notifications for likes, superlikes, matches
-
-**Implementation**:
-```
-Models needed:
-- DatingNotification (extends core notifications)
-  - notificationType: 'like', 'superlike', 'match', 'message'
-  - fromUserId, toUserId
-  - isRead, readAt
-
-Endpoints:
-POST /dating/notifications (trigger on like/superlike)
-GET /dating/notifications (with pagination)
-PATCH /dating/notifications/:id/read
-DELETE /dating/notifications/:id
-```
-
----
-
-### 6. **Mutual Likes / Match Creation Flow**
-**Issue**: Current flow is unclear - who initiates match creation?
-
-**Current**: Manual endpoint exists but not called from interactions
-**Needed**:
-```
-When User A likes User B:
-1. Record interaction (like)
-2. Check if User B already liked User A
-3. If mutual: Create Match automatically
-4. Trigger Match notification to both users
-5. Update UserAnalytics.matchesMade
-```
-
----
-
-### 7. **Block/Report Functionality**
-**Issue**: Mention in code but endpoints missing
-
-**Implementation**:
-```
-POST /dating/block-user/:userId
-POST /dating/unblock-user/:userId
-POST /dating/report-user/:userId
-GET /dating/blocked-users
-GET /dating/reports-filed (for self-review)
-
-Models needed:
-- UserBlock tracking
-- UserReport tracking
-- Auto-hide blocked users from discovery
-```
-
----
-
-## MEDIUM PRIORITY Improvements (Should Have)
-
-### 8. **Message Preview in Matches**
-**Currently**: `lastMessage` field in matches endpoint but not fully integrated
-
-**Enhancement**:
-```
-GET /dating/matches
-- Include unreadCount (already done ✓)
-- Show message preview (first 100 chars)
-- Add isRead status for last message
-- Add typing indicator status
-```
-
----
-
-### 9. **Profile Completion Progress**
-**Issue**: Profile completion percent tracked (0-100) but no endpoint to GET progress
-
-**Implementation**:
-```
-GET /dating/profiles/me/completion
-Returns: {
-  completionPercent: 60,
-  completed: ['firstName', 'age', 'photos'],
-  remaining: ['bio', 'interests', 'verification'],
-  tips: ['Add a bio', 'Verify your profile', ...]
-}
-```
-
----
-
-### 10. **Voice Introduction Feature**
-**Issue**: `voiceIntroUrl` field exists but no upload endpoint
-
-**Implementation**:
-```
-POST /dating/profiles/me/voice-intro
-- Accept audio file (WAV/MP3)
-- Store URL in voiceIntroUrl
-- Auto-play on profile view
-- 30-60 second limit
-```
-
----
-
-### 11. **Favorites / Likes (Personal Collection)**
-**Issue**: Referenced in DatingProfile component but missing endpoints
-
-**Implementation**:
-```
-POST /dating/favorites/:userId (add to favorites)
-DELETE /dating/favorites/:userId (remove)
-GET /dating/favorites (get all favorited profiles)
-GET /dating/favorites/count
-```
-
-**Use Case**: User can save profiles to review later without matching
-
----
-
-### 12. **Search History**
-**Issue**: `recordSearchHistory` function exists but endpoints missing
-
-**Implementation**:
-```
-GET /dating/search-history (with pagination)
-DELETE /dating/search-history/:id (clear specific search)
-DELETE /dating/search-history (clear all)
-GET /dating/search-history/stats (return popular filters)
-```
-
-**Analytics Value**: Show trending search filters to help users discover patterns
-
----
-
-### 13. **Profile Views Tracking**
-**Issue**: Basic tracking exists but no "who viewed me" endpoint
-
-**Implementation**:
-```
-GET /dating/profile-views
-- Return: { viewers: [...], isPremium: boolean, totalCount: N }
-- Premium: See who viewed you
-- Free: See count only
-
-POST /dating/profile-views/:userId (track view)
-- Called when profile is opened
-```
-
----
-
-### 14. **Visitor Queue/Analytics**
-**Issue**: ProfileView model exists but no endpoints
-
-**Implementation**:
-```
-GET /dating/visitors (chronological list of who viewed you)
-GET /dating/analytics
-- mostActiveHours
-- matchRate (matches/likes %)
-- averageMessageLength
-- responseTime
-```
-
----
-
-## LOW PRIORITY Improvements (Nice to Have)
-
-### 15. **Icebreaker Suggestions**
-**Backend Feature**: `buildIcebreakerSuggestions()` already exists!
-**Missing**: Endpoint to get suggestions
-
-**Implementation**:
-```
-GET /dating/icebreakers/:userId
-- Returns 4 suggested conversation starters based on compatibility
-- Already calculated in discovery, just need to expose via endpoint
-```
-
----
-
-### 16. **Compatibility Quiz**
-**Issue**: `compatibilityAnswers` stored but no quiz endpoints
-
-**Implementation**:
-```
-GET /dating/compatibility-quiz (get 6 questions)
-POST /dating/compatibility-quiz (save answers)
-GET /dating/compatibility/:userId (compare answers with match)
-```
-
-**Questions** (already defined):
-- Weekend style
-- Communication style
-- Social rhythm
-- Planning style
-- Connection style
-- Conflict approach
-
----
-
-### 17. **Advanced Filtering Presets**
-**Missing**: Save/load filter preferences
-
-**Implementation**:
-```
-POST /dating/filter-presets
-- Save current filters with a name
-- { name: 'Yoga Lovers', filters: {...} }
-
-GET /dating/filter-presets
-DELETE /dating/filter-presets/:id
-POST /dating/apply-preset/:id
-```
-
----
-
-### 18. **Trending/Suggestions Algorithm Enhancement**
-**Currently**:
-- Trending: Based on likes/views in last 7 days
-- Discovery Queue: 5-factor scoring
-
-**Enhancement Ideas**:
-```
-GET /dating/trending?timeframe=week|month
-GET /dating/top-matches (your best compatibility scores)
-GET /dating/online-now (users active in last 15 min)
-GET /dating/nearby (if location enabled)
-```
-
----
-
-### 19. **Batch Actions**
-**Missing**: Efficient bulk operations
-
-**Implementation**:
-```
-POST /dating/interactions/batch
-- Body: { actions: [{type: 'like', userId: X}, {type: 'pass', userId: Y}] }
-- Use transaction to ensure atomicity
-```
-
----
-
-### 20. **Export Data / Privacy**
-**Compliance**: GDPR/privacy regulations
-
-**Implementation**:
-```
-GET /dating/export-data
-- Download all personal data as JSON/CSV
-- Include messages, matches, interactions, preferences
-
-POST /dating/delete-account
-- Delete all dating data (irreversible)
-- Option to anonymize instead of delete
-```
-
----
-
-## Database Improvements
-
-### Missing Tables/Fields
-
-1. **dating_notifications** table
-   - Tracks likes, superlikes, matches, messages
-   - Enables read status tracking
-
-2. **user_rewinds** or UserRewind model
-   - Track rewind usage per day
-   - dailyCount, lastUsedAt
-
-3. **user_blocks** table (partially exists)
-   - blocking_user_id, blocked_user_id
-   - Add: reason, created_at, blockedUntil
-
-4. **user_reports** table (partially exists)
-   - from_user_id, to_user_id
-   - reason, description, status
-   - Add: photo_url (evidence), reviewed_by, review_notes
-
-5. **favorites** or UserFavorite model
-   - user_id, favorited_user_id, created_at
-
-6. **interaction_reactions** extension
-   - Track which users reacted to messages
-   - emoji, count (for emoji reactions)
-
----
-
-## Frontend Missing Features
-
-### Critical UI Components Needed
-
-1. **Like/Superlike Buttons**
-   - Currently only shows pass
-   - Add heart icons with animation
-   - Show remaining count
-
-2. **Rewind Button**
-   - Undo last action
-   - Show animation of profile returning to stack
-
-3. **Notifications Center**
-   - Drawer/modal showing recent likes/superlikes
-   - Badge with unread count
-   - Mark as read on view
-
-4. **Boost Modal**
-   - Purchase flow for boost
-   - Show 24h countdown
-   - Highlight badge indicator
-
-5. **Profile Completion Checklist**
-   - Show % complete
-   - List missing items
-   - Suggest completion benefits (more visibility, etc.)
-
----
-
-## Recommended Implementation Order
-
-### Phase 1 (1-2 weeks): Core Interactions
-1. Like endpoint (POST /interactions/like)
-2. Superlike endpoint (POST /interactions/superlike)
-3. Daily limits enforcement (GET /daily-limits, rate limiting middleware)
-4. Mutual like → auto-match logic
-5. Match creation notification
-
-### Phase 2 (1 week): User Experience
-6. Rewind feature
-7. Block/Report functionality
-8. Favorites system
-9. Profile views tracking
-
-### Phase 3 (1 week): Engagement Features
-10. Notifications system
-11. Icebreaker suggestions endpoint
-12. Search history endpoints
-13. Profile completion progress endpoint
-
-### Phase 4 (1 week): Premium Features
-14. Boost feature
-15. Advanced analytics endpoint
-16. Visitor list (premium only)
-
----
-
-## Testing Checklist
-
-- [ ] Like/superlike/pass/rewind interaction flows
-- [ ] Mutual like auto-match creation
-- [ ] Daily limit enforcement (cross 24h boundary)
-- [ ] Block prevents profile visibility
-- [ ] Report creates moderation task
-- [ ] Notifications trigger on match/like/message
-- [ ] Premium features hidden/disabled for free users
-- [ ] Favorite/unfavorite toggle
-- [ ] Discovery excludes blocked users
-- [ ] Learning algorithm updates on interaction
-- [ ] Voice intro upload/playback
-- [ ] Profile completion calculation accuracy
-- [ ] Boost expires after 24h
-- [ ] Rewind only works immediately after action
-- [ ] Icebreaker suggestions vary by compatibility
-
----
-
-## Performance Considerations
-
-⚠️ **Optimization Needed**:
-- Cache top 100 trending profiles (Redis TTL: 60s)
-- Pre-calculate compatibility scores async (background job)
-- Paginate all list endpoints (currently most have limit enforcement)
-- Add indices on: user_id + interaction_type, to_user_id + interaction_type
-- Consider denormalization for match counts on profile
-
----
-
-## Summary
-
-Your dating app has excellent core functionality. The main gaps are:
-1. **Incomplete interaction system** (missing like/superlike actions)
-2. **Daily limits not enforced** (frontend tracks, backend doesn't)
-3. **Missing notifications** (users won't know about likes/superlikes)
-4. **Rewind not implemented** (only tracked, no logic)
-5. **Premium features incomplete** (boost structure missing)
-
-**Estimated work**: ~40-50 hours across all improvements
-**MVP (most critical)**: 15-20 hours for Phase 1 + Phase 2
+# LinkUp Dating Module Roadmap
 
+Last reviewed: 2026-04-27
+
+## Current Reality
+
+The dating module is already strong. These areas are live in the current codebase:
+
+- Profile creation, editing, completion, verification, photos
+- Discovery feeds: regular, smart queue, trending, new profiles, top picks
+- Interactions: like, superlike, pass, rewind, favorites
+- Match management, likes received, who liked me, message requests
+- Direct messaging with reactions, read receipts, typing, media, voice notes
+- Video call scheduling and live calls
+- Daily prompts, compatibility scoring, icebreakers, profile views, subscriptions
+
+The biggest opportunity is no longer "add basic dating." It is:
+
+1. Finish the advanced features that already exist in pieces
+2. Reduce maintenance risk in the backend
+3. Add retention and conversion features that make the module feel premium
+
+## Main Gaps
+
+### Product gaps
+
+- Advanced messaging tools exist but are not fully activated in the dating chat flow
+- Voice intro support exists in backend planning but is not a core surfaced UX
+- Saved filter presets and discovery personalization are underexposed
+- Social features exist separately but are not connected tightly to dating
+- There is no full "date planning" layer after matching
+
+### Technical gaps
+
+- `backend/routes/dating.js` is too large and appears to contain duplicated legacy route blocks later in the file
+- `backend/routes/messagingEnhanced.js` exists, but the server currently mounts only the basic messaging router
+- Some rich components exist but are not surfaced in the current dating screens
+
+## Roadmap Principles
+
+- Favor features that reuse existing backend and UI work
+- Improve retention before adding broad new surface area
+- Keep premium features meaningful, not cosmetic only
+- Clean up route structure before adding too many more branches
+
+## Phase 0: Foundation Cleanup
+
+Target: 3-5 days
+
+### Goal
+
+Make the dating module safer to extend.
+
+### Tickets
+
+1. Split `backend/routes/dating.js` into smaller route modules
+- Suggested splits: `profiles`, `discovery`, `interactions`, `matches`, `premium`, `analytics`
+- Keep the existing API paths unchanged
+
+2. Remove or consolidate duplicated legacy dating endpoints
+- Audit the later repeated blocks in `backend/routes/dating.js`
+- Keep one canonical endpoint per feature
+- Add smoke tests for the kept endpoints
+
+3. Mount advanced messaging routes in the backend
+- Wire `backend/routes/messagingEnhanced.js` into `backend/server.js`
+- Decide whether to mount under `/api/messaging` or `/api/messaging/enhanced`
+
+4. Add a dating-module regression checklist
+- Like back
+- Match creation
+- Message requests
+- Rewind
+- Favorite
+- Block/report
+- Profile view tracking
+
+### Acceptance
+
+- One source of truth for dating endpoints
+- No duplicate active route definitions
+- Advanced messaging endpoints reachable from the server
+
+## Phase 1: Advanced Messaging for Dating
+
+Target: 1-2 weeks
+
+### Goal
+
+Turn chat into a strong retention feature.
+
+### Features
+
+1. Activate message toolbar inside dating chat
+- Use `MessageToolbar`
+- Enable templates, search, export, attachments, location share
+
+2. Add disappearing messages UX
+- Use the existing enhanced messaging API
+- Let users choose duration: 1 hour, 24 hours, 7 days
+- Show clear countdown/status in thread
+
+3. Add chat backup and export
+- Export formats: JSON, CSV, PDF
+- Manual backup per match
+- Optional "export conversation" entry from match actions
+
+4. Add encryption setup flow
+- Initialize per-match encryption from chat settings
+- Show key status and fallback state cleanly
+
+5. Improve first-message conversion
+- Reuse icebreakers and quick prompts in chat composer
+- Add "send opener" chips when a match is new
+
+### Suggested files
+
+- `backend/server.js`
+- `backend/routes/messagingEnhanced.js`
+- `src/components/DatingMessaging.js`
+- `src/components/MessageToolbar.js`
+- `src/components/MessageTemplates.js`
+- `src/components/MessageExport.js`
+- `src/components/MessageSearch.js`
+
+### Acceptance
+
+- Users can search, export, and enhance chats from the dating message screen
+- Enhanced messaging endpoints are actually used by the UI
+- New matches get better guided conversation starts
+
+## Phase 2: Discovery and Profile Expressiveness
+
+Target: 1 week
+
+### Goal
+
+Make profiles feel more human and discovery feel more intentional.
+
+### Features
+
+1. Voice intro on profiles
+- Upload 15-30 second intro
+- Show playback on profile cards and profile detail page
+- Add moderation/length validation
+
+2. Saved filter presets
+- Save current discovery filters with a name
+- Quick apply from discovery screen
+- Examples: `Nearby`, `Serious`, `Creative`, `Weekend vibe`
+
+3. Better discovery mode switching
+- Add a small "Discovery Hub" header with:
+  - For You
+  - Top Picks
+  - Trending
+  - New
+  - Presets
+
+4. Online/active now hints
+- Show "active recently" or "online now" where safe
+- Use existing heartbeat support
+
+5. Discovery explanation
+- Show why a person is being recommended:
+  - Shared interests
+  - Similar goals
+  - Close distance
+  - High compatibility
+
+### Suggested files
+
+- `backend/routes/dating.js`
+- `src/components/DiscoveryCards.js`
+- `src/components/DatingProfile.js`
+- `src/components/DatingProfileView.js`
+- `src/services/datingProfileService.js`
+
+### Acceptance
+
+- Users can save and reuse filters
+- Profiles support richer self-expression with voice
+- Discovery screens clearly explain recommendation quality
+
+## Phase 3: Match-to-Date Journey
+
+Target: 1-2 weeks
+
+### Goal
+
+Help matches turn into real conversations and planned dates.
+
+### Features
+
+1. Date planning flow
+- Add `Plan a Date` from match profile or chat
+- Suggest time slots
+- Suggest date type: coffee, walk, dinner, video date
+- Allow accept/reschedule/decline
+
+2. Match milestones
+- Show stages:
+  - New match
+  - First reply sent
+  - Conversation started
+  - Video date booked
+  - Met in person
+
+3. Post-date feedback
+- Private feedback after a video date or planned date
+- Signals for recommendation quality and safety
+
+4. Conversation nudges
+- If no one replies in 24-48 hours, suggest context-aware prompts
+- If both are active but stalled, suggest a video date or date-plan prompt
+
+5. Shared-interest actions
+- Create "mini activities" inside chat:
+  - Ask a question
+  - Share a playlist
+  - Share a location idea
+  - Vote on a plan
+
+### Suggested files
+
+- `backend/routes/video-calls.js`
+- `backend/routes/dating.js`
+- `src/components/DatingMessaging.js`
+- `src/components/Matches.js`
+- `src/components/DatingProfileView.js`
+
+### Acceptance
+
+- Matches can move from chat to scheduled plans without leaving the module
+- Users get useful nudges without spammy feeling
+
+## Phase 4: Social Layer and Retention
+
+Target: 1 week
+
+### Goal
+
+Use the existing social module to increase trust and recurring usage.
+
+### Features
+
+1. Connections hub
+- Surface friend requests, accepted friends, and referrals
+- Keep it adjacent to dating, not mixed into the core match flow
+
+2. Public social links on profiles
+- Let users optionally show linked Instagram/TikTok-style handles
+- Add visibility controls
+
+3. Referral rewards
+- Reward invited users and inviters with:
+  - Boost credits
+  - Extra superlikes
+  - Free premium trial days
+
+4. Interest-based rooms
+- Reuse chatrooms/lobby for dating-adjacent communities
+- Examples:
+  - City rooms
+  - Hobby rooms
+  - New here room
+  - Serious dating room
+
+### Suggested files
+
+- `src/components/FriendsList.js`
+- `src/components/SocialIntegration.js`
+- `src/components/ReferralShareModal.js`
+- `src/components/ChatRooms.js`
+- `src/components/LobbyChat.js`
+- `src/services/socialService.js`
+
+### Acceptance
+
+- Social features feel intentionally connected to dating
+- Community spaces increase repeat opens without distracting from matching
+
+## Phase 5: Premium and Conversion
+
+Target: 1 week
+
+### Goal
+
+Make premium feel worth paying for.
+
+### Features
+
+1. Premium dashboard in profile
+- Boost status
+- Remaining likes/superlikes/rewinds
+- Who viewed me
+- Who liked me
+- Best-performing prompts/photos
+
+2. Better boost UX
+- Clear timer, reach estimate, and outcome summary
+- Show visits/likes earned during boost window
+
+3. Gold-tier messaging privileges
+- Cleaner message-request flow
+- Better visibility into request outcomes
+
+4. Advanced analytics
+- Match rate
+- Reply rate
+- Average time to first reply
+- Best active hours
+- Which profile sections drive interaction
+
+### Suggested files
+
+- `src/components/DatingProfile.js`
+- `src/components/Matches.js`
+- `backend/routes/dating.js`
+- analytics and notification support services
+
+### Acceptance
+
+- Premium benefits are measurable
+- Users can see what they are paying for
+- Upgrade prompts are tied to value, not random gating
+
+## Priority Ranking
+
+If you want the most impact with the least waste, do it in this order:
+
+1. Phase 0 foundation cleanup
+2. Phase 1 advanced messaging activation
+3. Phase 2 voice intro + filter presets
+4. Phase 3 match-to-date workflow
+5. Phase 5 premium dashboard
+6. Phase 4 social layer
+
+Reason:
+
+- Phase 1 and Phase 2 reuse the most code you already have
+- Phase 3 improves actual dating outcomes
+- Phase 5 increases monetization only after the experience is stronger
+- Phase 4 is valuable, but it should not distract from the core dating loop too early
+
+## Recommended First Sprint
+
+Sprint length: 1 week
+
+### Sprint scope
+
+1. Route cleanup plan for `dating.js`
+2. Mount `messagingEnhanced` routes
+3. Add message toolbar to `DatingMessaging`
+4. Enable chat search and export from dating chat
+5. Add basic saved filter presets API wiring
+
+### Sprint outcome
+
+By the end of this sprint, the app should feel more polished immediately without inventing a brand-new subsystem.
+
+## Success Metrics
+
+Track these after rollout:
+
+- Match-to-first-message rate
+- First-message-to-reply rate
+- Average messages per match in first 72 hours
+- Video-date booking rate
+- Profile completion rate
+- Voice intro upload rate
+- Premium conversion rate after feature exposure
+
+## Notes
+
+- Keep commerce and marketplace work separate from this roadmap unless you decide dating is becoming a broader social super-app
+- Avoid adding too many tabs to the bottom navigation before the dating loop is fully polished
+- For the next iteration, the best move is depth, not breadth

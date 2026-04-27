@@ -3,6 +3,14 @@ import { API_BASE_URL } from '../utils/api';
 
 const API_URL = `${API_BASE_URL}/messaging`;
 
+const fileToDataUrl = (fileOrBlob) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(new Error('Failed to read attachment'));
+  reader.readAsDataURL(fileOrBlob);
+});
+
 const datingMessagingService = {
   getMessages: async (matchId, options = {}) => {
     try {
@@ -49,13 +57,13 @@ const datingMessagingService = {
     }
   },
 
-  sendMediaMessage: async (matchId, file, mediaType = 'image') => {
+  sendMediaMessage: async (matchId, file, mediaType = 'image', options = {}) => {
     try {
-      const formData = new FormData();
-      formData.append('media', file);
-      formData.append('mediaType', mediaType);
-      const response = await axios.post(`${API_URL}/matches/${matchId}/media`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      const mediaBase64 = await fileToDataUrl(file);
+      const response = await axios.post(`${API_URL}/matches/${matchId}/media`, {
+        mediaBase64,
+        mediaType,
+        duration: options.duration || null
       });
       return response.data;
     } catch (error) {
@@ -65,14 +73,9 @@ const datingMessagingService = {
 
   sendVoiceNote: async (matchId, audioBlob, duration = 0) => {
     try {
-      const formData = new FormData();
-      formData.append('media', audioBlob, 'voice-note.webm');
-      formData.append('mediaType', 'voice');
-      formData.append('duration', String(duration));
-      const response = await axios.post(`${API_URL}/matches/${matchId}/media`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+      return await datingMessagingService.sendMediaMessage(matchId, audioBlob, 'voice', {
+        duration
       });
-      return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to send voice note';
     }

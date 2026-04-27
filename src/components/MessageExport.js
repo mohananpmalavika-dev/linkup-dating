@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import messagingEnhancedService from '../../services/messagingEnhancedService';
-import '../../styles/MessageExport.css';
+import messagingEnhancedService from '../services/messagingEnhancedService';
+import '../styles/MessageExport.css';
 
 /**
  * MessageExport Component
@@ -16,47 +16,39 @@ const MessageExport = ({ matchId, onClose }) => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const handleExport = async (e) => {
-    e.preventDefault();
+  const handleExport = async (event) => {
+    event.preventDefault();
     setError('');
     setSuccess('');
 
     try {
       setLoading(true);
 
-      const selectedFormat = format;
-      const range = {
+      const fileName = await messagingEnhancedService.downloadExport(matchId, format, {
         startDate: dateRange.startDate || null,
         endDate: dateRange.endDate || null
-      };
-
-      const fileName = await messagingEnhancedService.downloadExport(
-        matchId,
-        selectedFormat,
-        range
-      );
+      });
 
       setSuccess(`Chat exported successfully as ${fileName}`);
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      setError(err || 'Failed to export chat');
+    } catch (exportError) {
+      setError(exportError || 'Failed to export chat');
     } finally {
       setLoading(false);
     }
   };
 
   const formatDescriptions = {
-    json: 'Complete structured format with all metadata',
-    csv: 'Spreadsheet format for data analysis',
-    pdf: 'Formatted document for printing/sharing',
-    html: 'Web-ready format for viewing in browser'
+    json: 'Complete structured format with metadata',
+    csv: 'Spreadsheet format for sorting and analysis',
+    html: 'Browser-friendly format for viewing or printing'
   };
 
   return (
     <div className="message-export">
       <div className="export-header">
         <h3>Export Chat</h3>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        <button type="button" className="close-btn" onClick={onClose}>x</button>
       </div>
 
       {error && <div className="error-message">{error}</div>}
@@ -66,17 +58,17 @@ const MessageExport = ({ matchId, onClose }) => {
         <div className="form-section">
           <h4>Export Format</h4>
           <div className="format-options">
-            {['json', 'csv', 'pdf', 'html'].map((fmt) => (
-              <label key={fmt} className="format-option">
+            {['json', 'csv', 'html'].map((nextFormat) => (
+              <label key={nextFormat} className="format-option">
                 <input
                   type="radio"
                   name="format"
-                  value={fmt}
-                  checked={format === fmt}
-                  onChange={(e) => setFormat(e.target.value)}
+                  value={nextFormat}
+                  checked={format === nextFormat}
+                  onChange={(event) => setFormat(event.target.value)}
                 />
-                <span className="format-name">{fmt.toUpperCase()}</span>
-                <span className="format-desc">{formatDescriptions[fmt]}</span>
+                <span className="format-name">{nextFormat.toUpperCase()}</span>
+                <span className="format-desc">{formatDescriptions[nextFormat]}</span>
               </label>
             ))}
           </div>
@@ -91,9 +83,12 @@ const MessageExport = ({ matchId, onClose }) => {
                 id="start-date"
                 type="date"
                 value={dateRange.startDate}
-                onChange={(e) =>
-                  setDateRange({ ...dateRange, startDate: e.target.value })
-                }
+                onChange={(event) => (
+                  setDateRange((currentRange) => ({
+                    ...currentRange,
+                    startDate: event.target.value
+                  }))
+                )}
                 className="date-input"
               />
             </div>
@@ -103,9 +98,12 @@ const MessageExport = ({ matchId, onClose }) => {
                 id="end-date"
                 type="date"
                 value={dateRange.endDate}
-                onChange={(e) =>
-                  setDateRange({ ...dateRange, endDate: e.target.value })
-                }
+                onChange={(event) => (
+                  setDateRange((currentRange) => ({
+                    ...currentRange,
+                    endDate: event.target.value
+                  }))
+                )}
                 className="date-input"
               />
             </div>
@@ -118,7 +116,7 @@ const MessageExport = ({ matchId, onClose }) => {
             disabled={loading}
             className="export-btn"
           >
-            {loading ? 'Exporting...' : '📥 Export Chat'}
+            {loading ? 'Exporting...' : 'Export chat'}
           </button>
           <button
             type="button"
@@ -134,11 +132,11 @@ const MessageExport = ({ matchId, onClose }) => {
       <div className="export-info">
         <h4>About Exports</h4>
         <ul>
-          <li>Exports include all messages, attachments metadata, and reactions</li>
-          <li>Files are encrypted and secure</li>
-          <li>Exports are saved to your device only</li>
-          <li>Disappearing messages are excluded</li>
-          <li>Attachments are referenced but not included (use backup for full content)</li>
+          <li>Exports include message text, timestamps, reactions, and supported media references</li>
+          <li>Date filters help you export only part of a conversation</li>
+          <li>Files are downloaded to your device from this browser session</li>
+          <li>Expired disappearing messages are not included</li>
+          <li>Use chat backup from the More menu when you want a server-side archive entry</li>
         </ul>
       </div>
     </div>
