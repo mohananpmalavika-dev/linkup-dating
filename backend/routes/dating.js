@@ -2416,6 +2416,9 @@ router.post('/interactions/pass', async (req, res) => {
       });
     }
 
+    // Invalidate discovery cache after pass
+    await invalidateDiscoveryCache(fromUserId);
+
     res.json({ message: 'Profile passed' });
   } catch (err) {
     console.error('Pass error:', err);
@@ -3342,6 +3345,9 @@ router.post('/interactions/superlike', async (req, res) => {
     );
 
     spamFraudService.trackUserActivity({ userId: fromUserId, action: 'superlike_profile', analyticsUpdates: { superlikes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
+
+    // Invalidate discovery cache after superlike
+    await invalidateDiscoveryCache(fromUserId);
 
     const mutualResult = await db.query(
       `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,

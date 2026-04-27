@@ -76,7 +76,7 @@ export const datingProfileService = {
   },
 
   /**
-   * Get profiles for discovery (with optional filters)
+   * Get profiles for discovery (with optional filters and cursor pagination)
    */
   getDiscoveryProfiles: async (filters = {}) => {
     try {
