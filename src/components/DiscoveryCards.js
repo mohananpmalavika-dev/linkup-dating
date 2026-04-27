@@ -352,7 +352,10 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     }
 
     try {
-      const data = await datingProfileService.getDiscoveryQueue(cursor ? { cursor, limit: 20 } : { limit: 20 });
+      // Use the new AI-powered smart suggestions endpoint for 70%+ compatibility matches
+      const data = await datingProfileService.getSmartSuggestions(
+        cursor ? { cursor, limit: 20 } : { limit: 20 }
+      );
       const newProfiles = data.profiles || [];
 
       if (cursor) {
@@ -365,9 +368,35 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       setNoMoreProfiles(!data.hasMore && newProfiles.length === 0);
       setNextCursor(data.nextCursor || null);
       setDiscoveryMode('smartQueue');
+
+      // Show feedback message about AI suggestions
+      if (!cursor && newProfiles.length > 0) {
+        showFeedback(
+          'success',
+          `Found ${newProfiles.length} AI-matched profiles (70%+ compatibility)`
+        );
+      }
     } catch (loadError) {
-      setError('Failed to load your personalized queue.');
-      console.error(loadError);
+      // Fallback to regular discovery queue if smart suggestions fail
+      console.warn('Smart suggestions failed, falling back to regular queue:', loadError);
+      try {
+        const data = await datingProfileService.getDiscoveryQueue(cursor ? { cursor, limit: 20 } : { limit: 20 });
+        const newProfiles = data.profiles || [];
+
+        if (cursor) {
+          setProfiles((currentProfiles) => [...currentProfiles, ...newProfiles]);
+        } else {
+          setProfiles(newProfiles);
+          setCurrentIndex(0);
+        }
+
+        setNoMoreProfiles(!data.hasMore && newProfiles.length === 0);
+        setNextCursor(data.nextCursor || null);
+        setDiscoveryMode('smartQueue');
+      } catch (fallbackError) {
+        setError('Failed to load your personalized queue.');
+        console.error(fallbackError);
+      }
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -1116,14 +1145,42 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
             {recommendationReasons.length > 0 ? (
               <div className="recommendation-panel">
-                <p className="recommendation-label">Why this profile is showing up</p>
+                <p className="recommendation-label">Why You Might Like Them</p>
                 <div className="compatibility-reasons">
                   {recommendationReasons.map((reason) => (
                     <span key={reason} className="compatibility-reason">{reason}</span>
                   ))}
                 </div>
+
+                {currentProfile.compatibilityFactors ? (
+                  <div className="compatibility-factors-breakdown">
+                    <p className="factors-label">Compatibility Breakdown:</p>
+                    <div className="factors-grid">
+                      {Object.entries(currentProfile.compatibilityFactors).map(([key, factor]) => (
+                        <div key={key} className="factor-item">
+                          <div className="factor-label">{factor.label}</div>
+                          <div className="factor-bar">
+                            <div
+                              className="factor-fill"
+                              style={{
+                                width: `${Math.min(factor.score, 100)}%`,
+                                backgroundColor:
+                                  factor.score >= 80 ? '#4CAF50' : factor.score >= 60 ? '#FFC107' : '#FF6B6B'
+                              }}
+                            />
+                          </div>
+                          <div className="factor-score">{Math.round(factor.score)}%</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {currentProfile.icebreakers?.[0] ? (
-                  <p className="compatibility-opener">Suggested opener: {currentProfile.icebreakers[0]}</p>
+                  <div className="icebreaker-suggestion">
+                    <p className="icebreaker-label">💬 Suggested Opener:</p>
+                    <p className="compatibility-opener">{currentProfile.icebreakers[0]}</p>
+                  </div>
                 ) : null}
               </div>
             ) : null}

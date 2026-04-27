@@ -995,6 +995,20 @@ export const datingProfileService = {
   },
 
   /**
+   * Get AI-powered smart profile suggestions based on swipe patterns and compatibility
+   * Returns 70%+ match profiles with detailed compatibility breakdown
+   */
+  getSmartSuggestions: async (options = {}) => {
+    try {
+      const params = typeof options === 'object' ? options : { limit: options || 20 };
+      const response = await axios.get(`${API_URL}/smart-suggestions`, { params });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch smart suggestions';
+    }
+  },
+
+  /**
    * Send heartbeat to update last active
    */
   sendHeartbeat: async () => {

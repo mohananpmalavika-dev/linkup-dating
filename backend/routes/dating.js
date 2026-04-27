@@ -12512,6 +12512,37 @@ router.get('/smart-suggestions', async (req, res) => {
     const currentProfile = normalizeProfileRow(currentProfileResult.rows[0]);
     const currentPreferences = normalizePreferenceRow(currentProfileResult.rows[0]?.preferences);
 
+    // Fetch user's swipe history for pattern learning (last 100 interactions)
+    let learnedPatterns = {};
+    try {
+      const interactionResult = await db.query(
+        `SELECT i.*, dp.age, dp.interests, dp.relationship_goals, dp.body_type, dp.activity_level
+         FROM interactions i
+         JOIN dating_profiles dp ON dp.user_id = i.to_user_id
+         WHERE i.from_user_id = $1 AND i.interaction_type IN ('like', 'superlike')
+         ORDER BY i.created_at DESC
+         LIMIT 100`,
+        [userId]
+      );
+
+      if (interactionResult.rows.length > 0) {
+        const profilesLiked = interactionResult.rows.map(row => ({
+          age: row.age,
+          interests: row.interests,
+          relationshipGoals: row.relationship_goals,
+          bodyType: row.body_type,
+          activityLevel: row.activity_level
+        }));
+
+        learnedPatterns = mlCompatibilityService.learnSwipePatterns(
+          interactionResult.rows,
+          profilesLiked
+        );
+      }
+    } catch (patternErr) {
+      console.warn('Could not learn swipe patterns:', patternErr.message);
+    }
+
     // Build discovery query with user's preferences
     const query = buildDiscoveryQuery({
       userId,
@@ -12539,13 +12570,12 @@ router.get('/smart-suggestions', async (req, res) => {
     const smartSuggestions = rows
       .map((profileRow) => {
         const normalizedProfile = normalizeProfileRow(profileRow);
-        const learning = normalizeLearningProfile(currentPreferences.learningProfile);
 
-        // Use ML service to calculate compatibility
+        // Use ML service to calculate compatibility with learned patterns
         const compatibilityScore = mlCompatibilityService.calculateCompatibilityScore(
           currentProfile,
           normalizedProfile,
-          learning
+          learnedPatterns
         );
 
         // Generate "Why You Might Like Them" reasons
@@ -12567,16 +12597,23 @@ router.get('/smart-suggestions', async (req, res) => {
           shared
         );
 
+        // Get detailed factors breakdown
+        const detailedFactors = mlCompatibilityService.calculateDetailedFactors(
+          currentProfile,
+          normalizedProfile
+        );
+
         return {
           ...normalizedProfile,
           compatibilityScore,
           compatibilityReasons: suggestions,
+          compatibilityFactors: detailedFactors.factors,
           icebreakers,
           aiSuggestion: true,
           scoreExplanation: `${compatibilityScore}% match based on profile preferences, interests, and your interaction patterns.`
         };
       })
-      .filter(profile => profile.compatibilityScore >= 50) // Only show 50%+ matches
+      .filter(profile => profile.compatibilityScore >= 70) // Only show 70%+ matches as requested
       .sort((a, b) => b.compatibilityScore - a.compatibilityScore)
       .slice(0, limit);
 
@@ -12588,7 +12625,8 @@ router.get('/smart-suggestions', async (req, res) => {
       factors_json: profile.compatibilityReasons,
       recommendations_json: {
         icebreakers: profile.icebreakers,
-        suggestions: profile.compatibilityReasons
+        suggestions: profile.compatibilityReasons,
+        factors: profile.compatibilityFactors
       }
     }));
 
@@ -12628,7 +12666,8 @@ router.get('/smart-suggestions', async (req, res) => {
       nextCursor,
       hasMore: Boolean(nextCursor),
       generatedAt: new Date().toISOString(),
-      message: `Found ${smartSuggestions.length} AI-matched profiles for you`
+      message: `Found ${smartSuggestions.length} AI-matched profiles for you (70%+ compatibility)`,
+      note: 'AI Powered: These suggestions are based on your profile, preferences, and swipe history patterns.'
     };
 
     await cacheSetPaginated(cacheKey, response, DISCOVERY_CACHE_TTL);

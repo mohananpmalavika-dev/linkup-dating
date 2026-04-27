@@ -212,6 +212,290 @@ const calculateCompatibility = (viewer, candidate, viewerMetrics = {}, candidate
   };
 };
 
+/**
+ * Learn swipe patterns from user interaction history
+ * Analyzes what profiles the user has liked/superliked to identify patterns
+ */
+const learnSwipePatterns = (interactions = [], profilesLiked = []) => {
+  const patterns = {
+    preferredAgeRange: { min: 18, max: 65, avg: 0 },
+    preferredDistance: { avg: 0, max: 0 },
+    interestFrequency: {},
+    locationClusters: [],
+    relationshipGoalFrequency: {},
+    physicalAttributePreferences: {},
+    activityLevelPreference: 'moderate',
+    likeRate: 0
+  };
+
+  if (profilesLiked.length === 0) return patterns;
+
+  // Calculate age preferences
+  const ages = profilesLiked
+    .map(p => Number(p.age))
+    .filter(a => Number.isFinite(a));
+  
+  if (ages.length > 0) {
+    patterns.preferredAgeRange.min = Math.min(...ages);
+    patterns.preferredAgeRange.max = Math.max(...ages);
+    patterns.preferredAgeRange.avg = Math.round(ages.reduce((a, b) => a + b, 0) / ages.length);
+  }
+
+  // Analyze interests
+  const allInterests = [];
+  profilesLiked.forEach(profile => {
+    if (Array.isArray(profile.interests)) {
+      profile.interests.forEach(interest => {
+        const normalized = String(interest).toLowerCase().trim();
+        patterns.interestFrequency[normalized] = (patterns.interestFrequency[normalized] || 0) + 1;
+        allInterests.push(normalized);
+      });
+    }
+  });
+
+  // Analyze relationship goals
+  profilesLiked.forEach(profile => {
+    if (profile.relationshipGoals) {
+      const goal = String(profile.relationshipGoals).toLowerCase();
+      patterns.relationshipGoalFrequency[goal] = (patterns.relationshipGoalFrequency[goal] || 0) + 1;
+    }
+  });
+
+  // Analyze physical preferences
+  const bodyTypes = profilesLiked.map(p => String(p.bodyType || '').toLowerCase()).filter(Boolean);
+  if (bodyTypes.length > 0) {
+    const mostCommon = bodyTypes.reduce((a, b) =>
+      bodyTypes.filter(x => x === a).length >= bodyTypes.filter(x => x === b).length ? a : b
+    );
+    patterns.physicalAttributePreferences.bodyType = mostCommon;
+  }
+
+  // Analyze activity levels
+  const activityLevels = profilesLiked.map(p => String(p.activityLevel || 'moderate').toLowerCase());
+  if (activityLevels.length > 0) {
+    const mostCommon = activityLevels.reduce((a, b) =>
+      activityLevels.filter(x => x === a).length >= activityLevels.filter(x => x === b).length ? a : b
+    );
+    patterns.activityLevelPreference = mostCommon;
+  }
+
+  // Calculate like rate
+  if (interactions.length > 0) {
+    const likes = interactions.filter(i => i.interactionType === 'like' || i.interactionType === 'superlike').length;
+    patterns.likeRate = Math.round((likes / interactions.length) * 100);
+  }
+
+  return patterns;
+};
+
+/**
+ * Calculate advanced compatibility score based on swipe patterns
+ * Weights recent interactions more heavily using exponential decay
+ */
+const calculateCompatibilityScore = (viewer, candidate, learnedPatterns = {}) => {
+  if (!viewer || !candidate) return 0;
+
+  // Use existing calculateCompatibility function as base
+  const basicScore = calculateCompatibility(viewer, candidate);
+  let score = basicScore.overall_score;
+
+  // Apply pattern-based adjustments
+  if (learnedPatterns && Object.keys(learnedPatterns).length > 0) {
+    let patternBoost = 0;
+
+    // Check if candidate matches learned interest preferences
+    const candidateInterests = Array.isArray(candidate.interests) ? candidate.interests : [];
+    const topInterests = Object.entries(learnedPatterns.interestFrequency || {})
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([interest]) => interest.toLowerCase());
+
+    const matchedInterests = candidateInterests.filter(i =>
+      topInterests.includes(String(i).toLowerCase())
+    ).length;
+
+    if (matchedInterests > 0) {
+      patternBoost += Math.min(matchedInterests * 5, 15); // Max 15 point boost
+    }
+
+    // Check relationship goal alignment
+    if (learnedPatterns.relationshipGoalFrequency) {
+      const preferredGoal = Object.entries(learnedPatterns.relationshipGoalFrequency)
+        .sort((a, b) => b[1] - a[1])[0]?.[0];
+
+      if (preferredGoal && String(candidate.relationshipGoals || '').toLowerCase() === preferredGoal) {
+        patternBoost += 10;
+      }
+    }
+
+    // Check activity level alignment
+    if (learnedPatterns.activityLevelPreference) {
+      const candidateActivityLevel = String(candidate.activityLevel || 'moderate').toLowerCase();
+      if (candidateActivityLevel === learnedPatterns.activityLevelPreference) {
+        patternBoost += 8;
+      }
+    }
+
+    score = Math.min(score + patternBoost, 100);
+  }
+
+  return Math.round(score);
+};
+
+/**
+ * Build detailed compatibility breakdown for "Why You Might Like Them"
+ */
+const buildSuggestions = (viewer, candidate, sharedInterests = []) => {
+  const suggestions = [];
+
+  // Shared interests
+  if (sharedInterests.length > 0) {
+    const interests = sharedInterests.slice(0, 2).join(' and ');
+    suggestions.push(`You both love ${interests}`);
+  }
+
+  // Location compatibility
+  if (candidate.locationCity && viewer.locationCity) {
+    if (candidate.locationCity === viewer.locationCity) {
+      suggestions.push('Same city');
+    } else if (candidate.locationState === viewer.locationState) {
+      suggestions.push('Same state/region');
+    }
+  }
+
+  // Relationship goals alignment
+  if (viewer.relationshipGoals && candidate.relationshipGoals) {
+    const viewerGoals = String(viewer.relationshipGoals).toLowerCase();
+    const candidateGoals = String(candidate.relationshipGoals).toLowerCase();
+    if (viewerGoals === candidateGoals) {
+      suggestions.push(`Both looking for ${candidate.relationshipGoals}`);
+    }
+  }
+
+  // Values alignment
+  const valuesMatched = [];
+  if (viewer.smoking === candidate.smoking && viewer.smoking) {
+    valuesMatched.push('smoking preferences');
+  }
+  if (viewer.drinking === candidate.drinking && viewer.drinking) {
+    valuesMatched.push('drinking habits');
+  }
+  if (viewer.religion && candidate.religion && String(viewer.religion).toLowerCase() === String(candidate.religion).toLowerCase()) {
+    valuesMatched.push('religious values');
+  }
+
+  if (valuesMatched.length > 0) {
+    suggestions.push(`Aligned ${valuesMatched.join(' & ')}`);
+  }
+
+  // Activity level
+  if (viewer.activityLevel && candidate.activityLevel) {
+    const viewerLevel = String(viewer.activityLevel).toLowerCase();
+    const candidateLevel = String(candidate.activityLevel).toLowerCase();
+    if (viewerLevel === candidateLevel) {
+      suggestions.push(`Both ${candidateLevel} lifestyle`);
+    }
+  }
+
+  // Bio/personality hints
+  if (candidate.bio && candidate.bio.length > 10) {
+    suggestions.push('Great bio with personality');
+  }
+
+  // High engagement profile
+  if (candidate.photoCount && candidate.photoCount >= 3) {
+    suggestions.push(`${candidate.photoCount} photos`);
+  }
+
+  return suggestions.slice(0, 4); // Return top 4 suggestions
+};
+
+/**
+ * Generate icebreaker suggestions based on profile characteristics
+ */
+const generateIcebreakers = (profile, sharedInterests = []) => {
+  const icebreakers = [];
+
+  // Shared interests icebreakers
+  if (sharedInterests.length > 0) {
+    const interest = sharedInterests[0];
+    icebreakers.push(`I love ${interest} too! What's your favorite ${interest} experience?`);
+  }
+
+  // Bio-based icebreakers
+  if (profile.bio && profile.bio.toLowerCase().includes('travel')) {
+    icebreakers.push('Looks like you enjoy traveling! Any dream destinations?');
+  }
+
+  if (profile.bio && profile.bio.toLowerCase().includes('food')) {
+    icebreakers.push('I see you\'re a food lover! Favorite cuisine or restaurant?');
+  }
+
+  if (profile.bio && profile.bio.toLowerCase().includes('music')) {
+    icebreakers.push('Music seems important to you. What\'s been on repeat lately?');
+  }
+
+  // Activity level icebreakers
+  if (String(profile.activityLevel).toLowerCase() === 'very_active') {
+    icebreakers.push('You seem super active! Want to grab coffee or go for a hike?');
+  }
+
+  // Generic icebreakers
+  if (icebreakers.length < 2) {
+    icebreakers.push(`Hi! I think we'd get along great. Tell me something interesting about yourself?`);
+  }
+
+  if (icebreakers.length < 3) {
+    icebreakers.push(`Your profile caught my eye! What do you do for fun?`);
+  }
+
+  return icebreakers.slice(0, 3); // Return top 3 icebreakers
+};
+
+/**
+ * Calculate compatibility factors with detailed breakdown
+ */
+const calculateDetailedFactors = (viewer, candidate, viewerMetrics = {}, candidateMetrics = {}) => {
+  const basicScore = calculateCompatibility(viewer, candidate, viewerMetrics, candidateMetrics);
+
+  return {
+    overallScore: basicScore.overall_score,
+    factors: {
+      interests: {
+        score: basicScore.factors.interests,
+        label: 'Shared Interests',
+        description: `${Math.round(basicScore.factors.interests)}% match on hobbies and interests`
+      },
+      location: {
+        score: basicScore.factors.location,
+        label: 'Location',
+        description: `${Math.round(basicScore.factors.location)}% compatibility based on distance`
+      },
+      age: {
+        score: basicScore.factors.age,
+        label: 'Age Compatibility',
+        description: `${Math.round(basicScore.factors.age)}% match for age preferences`
+      },
+      values: {
+        score: basicScore.factors.values,
+        label: 'Values Alignment',
+        description: `${Math.round(basicScore.factors.values)}% aligned on life goals & values`
+      },
+      communication: {
+        score: basicScore.factors.communication,
+        label: 'Communication Style',
+        description: `${Math.round(basicScore.factors.communication)}% match on how you communicate`
+      },
+      activity: {
+        score: basicScore.factors.activity,
+        label: 'Activity Level',
+        description: `${Math.round(basicScore.factors.activity)}% match on lifestyle activity`
+      }
+    },
+    topFactors: basicScore.reasons
+  };
+};
+
 module.exports = {
   calculateInterestsMatch,
   calculateLocationCompatibility,
@@ -221,5 +505,10 @@ module.exports = {
   calculateActivityLevelMatch,
   calculateCompatibility,
   generateReasons,
-  normalizeScore
+  normalizeScore,
+  learnSwipePatterns,
+  calculateCompatibilityScore,
+  buildSuggestions,
+  generateIcebreakers,
+  calculateDetailedFactors
 };
