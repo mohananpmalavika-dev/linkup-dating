@@ -3348,7 +3348,7 @@ router.post('/interactions/like', async (req, res) => {
       [fromUserId, today]
     );
 
-    spamFraudService.trackUserActivity({ userId: fromUserId, action: 'like_profile', analyticsUpdates: { likes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
+    await spamFraudService.trackUserActivity({ userId: fromUserId, action: 'like_profile', analyticsUpdates: { likes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
 
     const mutualResult = await db.query(
       `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,
@@ -3373,9 +3373,9 @@ router.post('/interactions/like', async (req, res) => {
         userNotificationService.createNotification(userId, { type: 'new_match', title: 'It is a match', body: 'You matched with someone new. Start the conversation when you are ready.', metadata: { matchId: persistedMatch.id, matchedUserId: fromUserId } })
       ]);
 
-      spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
-      spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
-      spamFraudService.refreshSystemMetrics();
+      await spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
+      await spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
+      await spamFraudService.refreshSystemMetrics();
 
       return res.json({ message: 'Its a match!', isMatch: true, match: persistedMatch });
     }
