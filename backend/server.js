@@ -460,9 +460,13 @@ const startServer = () => {
   }
 
   server.listen(PORT, () => {
-    logger.info(`🚀 Dating app backend running on http://localhost:${PORT}`);
-    logger.info(`📱 WebSocket enabled for real-time features`);
-    logger.info(`🗄️  Database: ${process.env.DB_NAME || 'linkup_dating'}`);
+    logger.info('Dating app backend running', {
+      url: `http://localhost:${PORT}`
+    });
+    logger.info('WebSocket enabled for real-time features');
+    logger.info('Database configuration loaded', {
+      database: process.env.DB_NAME || 'linkup_dating'
+    });
   });
 };
 
@@ -477,7 +481,10 @@ db.init()
         dbModels.sequelize.sync({ alter: true }).then(() => {
           logger.info('Sequelize models synchronized');
         }).catch(err => {
-          logger.error('Sequelize sync error:', err.message);
+          logger.error('Sequelize sync error', {
+            message: err.message,
+            stack: err.stack
+          });
         });
       } catch (err) {
         logger.error('Failed to load Sequelize models for sync', {
@@ -490,7 +497,10 @@ db.init()
     startServer();
   })
   .catch(err => {
-    logger.error('Failed to initialize database:', err);
+    logger.error('Failed to initialize database', {
+      message: err.message,
+      stack: err.stack
+    });
 
     if (process.env.NODE_ENV === 'production') {
       logger.warn('Starting server without database initialization so the app can stay online.');

@@ -77,17 +77,19 @@ module.exports = (sequelize) => {
     }
   );
 
-  SuspiciousProfileReport.belongsTo(sequelize.models.User, {
-    foreignKey: 'reporting_user_id',
-    as: 'ReportingUser',
-    onDelete: 'CASCADE'
-  });
+  SuspiciousProfileReport.associate = (models) => {
+    SuspiciousProfileReport.belongsTo(models.User, {
+      foreignKey: 'reporting_user_id',
+      as: 'ReportingUser',
+      onDelete: 'CASCADE'
+    });
 
-  SuspiciousProfileReport.belongsTo(sequelize.models.User, {
-    foreignKey: 'reported_user_id',
-    as: 'ReportedUser',
-    onDelete: 'CASCADE'
-  });
+    SuspiciousProfileReport.belongsTo(models.User, {
+      foreignKey: 'reported_user_id',
+      as: 'ReportedUser',
+      onDelete: 'CASCADE'
+    });
+  };
 
   return SuspiciousProfileReport;
 };

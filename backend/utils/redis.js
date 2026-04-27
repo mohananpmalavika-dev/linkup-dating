@@ -6,12 +6,26 @@ const OTP_EXPIRY = 600;
 const MAX_OTP_ATTEMPTS = 5;
 
 const isProduction = process.env.NODE_ENV === 'production';
-const shouldUseRedis = Boolean(process.env.REDIS_URL || process.env.REDIS_HOST);
+const redisUrl = process.env.REDIS_URL?.trim();
+const redisHost = process.env.REDIS_HOST?.trim();
+const shouldUseRedis = Boolean(redisUrl || redisHost);
 
 const fallbackStore = new Map();
+let redisReady = false;
+let hasLoggedFallback = false;
 
 const buildFallbackPattern = (pattern = '') =>
   new RegExp(`^${String(pattern).replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`);
+
+const logFallbackOnce = (reason) => {
+  if (hasLoggedFallback) {
+    return;
+  }
+
+  const suffix = reason ? ` (${reason})` : '';
+  console.warn(`Redis unavailable${suffix}; using in-memory fallback for OTP and cache data.`);
+  hasLoggedFallback = true;
+};
 
 const getFallbackEntry = (key) => {
   const entry = fallbackStore.get(key);
@@ -54,80 +68,123 @@ const createRedisClient = () => {
     return null;
   }
 
-  const redisConfig = process.env.REDIS_URL
-    ? {
-        url: process.env.REDIS_URL,
-        tls: isProduction ? { rejectUnauthorized: false } : undefined
-      }
-    : {
-        host: process.env.REDIS_HOST || 'localhost',
-        port: process.env.REDIS_PORT || 6379,
-        password: process.env.REDIS_PASSWORD || undefined,
-        db: process.env.REDIS_DB || 0,
-        retryStrategy: (times) => Math.min(times * 50, 2000),
-        maxRetriesPerRequest: 3
-      };
+  const sharedConfig = {
+    connectTimeout: 10000,
+    maxRetriesPerRequest: 1,
+    retryStrategy: (times) => Math.min(times * 100, 2000),
+    tls: isProduction ? { rejectUnauthorized: false } : undefined
+  };
 
-  const client = new Redis(redisConfig);
+  try {
+    const client = redisUrl
+      ? new Redis(redisUrl, sharedConfig)
+      : new Redis({
+          host: redisHost,
+          port: Number(process.env.REDIS_PORT) || 6379,
+          password: process.env.REDIS_PASSWORD || undefined,
+          db: Number(process.env.REDIS_DB) || 0,
+          ...sharedConfig
+        });
 
-  client.on('connect', () => {
-    console.log('Redis connected');
-  });
+    client.on('ready', () => {
+      redisReady = true;
+      hasLoggedFallback = false;
+      console.log('Redis connected');
+    });
 
-  client.on('error', (err) => {
-    console.error('Redis error:', err.message);
-  });
+    client.on('close', () => {
+      redisReady = false;
+    });
 
-  return client;
+    client.on('end', () => {
+      redisReady = false;
+    });
+
+    client.on('error', (err) => {
+      redisReady = false;
+      console.error('Redis error:', err?.message || String(err));
+    });
+
+    return client;
+  } catch (err) {
+    console.error('Redis configuration error:', err?.message || String(err));
+    logFallbackOnce('configuration error');
+    return null;
+  }
 };
 
 const redis = createRedisClient();
 
-const setWithExpiry = async (key, expirySeconds, value) => {
-  if (redis) {
-    await redis.setex(key, expirySeconds, value);
-    return;
+const canUseRedis = () => Boolean(redis && redisReady);
+
+const withRedisFallback = async (redisOperation, fallbackOperation, reason) => {
+  if (!canUseRedis()) {
+    if (shouldUseRedis) {
+      logFallbackOnce(reason);
+    }
+
+    return fallbackOperation();
   }
 
-  setFallbackEntry(key, value, expirySeconds);
+  try {
+    return await redisOperation();
+  } catch (err) {
+    redisReady = false;
+    console.error(`Redis ${reason} failed:`, err?.message || String(err));
+    logFallbackOnce(reason);
+    return fallbackOperation();
+  }
+};
+
+const setWithExpiry = async (key, expirySeconds, value) => {
+  await withRedisFallback(
+    () => redis.setex(key, expirySeconds, value),
+    async () => {
+      setFallbackEntry(key, value, expirySeconds);
+    },
+    'write'
+  );
 };
 
 const getValue = async (key) => {
-  if (redis) {
-    return redis.get(key);
-  }
-
-  return getFallbackEntry(key)?.value || null;
+  return withRedisFallback(
+    () => redis.get(key),
+    async () => getFallbackEntry(key)?.value || null,
+    'read'
+  );
 };
 
 const deleteValue = async (key) => {
-  if (redis) {
-    await redis.del(key);
-    return;
-  }
-
-  fallbackStore.delete(key);
+  await withRedisFallback(
+    () => redis.del(key),
+    async () => {
+      fallbackStore.delete(key);
+    },
+    'delete'
+  );
 };
 
 const getKeys = async (pattern) => {
-  if (redis) {
-    return redis.keys(pattern);
-  }
-
-  return getFallbackKeys(pattern);
+  return withRedisFallback(
+    () => redis.keys(pattern),
+    async () => getFallbackKeys(pattern),
+    'key lookup'
+  );
 };
 
 const getTtl = async (key) => {
-  if (redis) {
-    return redis.ttl(key);
-  }
+  return withRedisFallback(
+    () => redis.ttl(key),
+    async () => {
+      const entry = getFallbackEntry(key);
+      if (!entry) {
+        return -2;
+      }
 
-  const entry = getFallbackEntry(key);
-  if (!entry) {
-    return -2;
-  }
-
-  return Math.max(1, Math.ceil((entry.expiresAt - Date.now()) / 1000));
+      return Math.max(1, Math.ceil((entry.expiresAt - Date.now()) / 1000));
+    },
+    'ttl lookup'
+  );
 };
 
 const storeOTP = async (otpId, data) => {
@@ -211,12 +268,14 @@ const cacheDeletePattern = async (pattern) => {
     return true;
   }
 
-  if (redis) {
-    await redis.del(...keys);
-    return true;
-  }
+  await withRedisFallback(
+    () => redis.del(...keys),
+    async () => {
+      keys.forEach((key) => fallbackStore.delete(key));
+    },
+    'pattern delete'
+  );
 
-  keys.forEach((key) => fallbackStore.delete(key));
   return true;
 };
 
@@ -246,6 +305,7 @@ const invalidateDiscoveryCache = async (userId) => {
 
 module.exports = {
   redis,
+  isRedisReady: canUseRedis,
   storeOTP,
   getOTP,
   incrementOTPAttempts,

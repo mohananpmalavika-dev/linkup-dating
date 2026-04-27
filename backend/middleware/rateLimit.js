@@ -1,5 +1,5 @@
 const rateLimit = require('express-rate-limit');
-const { redis } = require('../utils/redis');
+const { redis, isRedisReady } = require('../utils/redis');
 
 let RedisStore = null;
 
@@ -13,7 +13,7 @@ try {
 const userOrIpKeyGenerator = (req) => req.user?.id || req.ip;
 
 const buildStore = (prefix) => {
-  if (!RedisStore || !redis) {
+  if (!RedisStore || !redis || !isRedisReady()) {
     return undefined;
   }
 

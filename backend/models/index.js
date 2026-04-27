@@ -8,10 +8,29 @@ const config = require('../config/sequelize.js')[env];
 const db = {};
 
 let sequelize;
-if (config.use_env_variable) {
-  sequelize = new Sequelize(process.env[config.use_env_variable], config);
+const envConnectionString = config.use_env_variable
+  ? process.env[config.use_env_variable]
+  : null;
+
+if (envConnectionString) {
+  sequelize = new Sequelize(envConnectionString, config);
 } else {
-  sequelize = new Sequelize(config.database, config.username, config.password, config);
+  if (config.use_env_variable) {
+    console.warn(
+      `${config.use_env_variable} is not set; falling back to discrete DB settings for Sequelize models.`
+    );
+  }
+
+  sequelize = new Sequelize(
+    config.database || process.env.DB_NAME || 'linkup_dating',
+    config.username || process.env.DB_USER || 'postgres',
+    config.password || process.env.DB_PASSWORD || 'postgres',
+    {
+      ...config,
+      host: config.host || process.env.DB_HOST || 'localhost',
+      port: config.port || process.env.DB_PORT || 5432
+    }
+  );
 }
 
 // Read all model files and import them

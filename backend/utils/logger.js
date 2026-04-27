@@ -1,5 +1,10 @@
+const fs = require('fs');
 const winston = require('winston');
 const path = require('path');
+
+const logDir = path.join(__dirname, '../logs');
+fs.mkdirSync(logDir, { recursive: true });
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Define log format
 const logFormat = winston.format.combine(
@@ -29,39 +34,41 @@ const logger = winston.createLogger({
   format: logFormat,
   defaultMeta: { service: 'linkup-dating-api' },
   transports: [
+    new winston.transports.Console({
+      format: consoleFormat,
+      level: isProduction ? 'info' : 'debug'
+    }),
     // Write all logs with level 'error' and below to error.log
     new winston.transports.File({
-      filename: path.join(__dirname, '../logs/error.log'),
+      filename: path.join(logDir, 'error.log'),
       level: 'error',
       maxsize: 5242880, // 5MB
       maxFiles: 5
     }),
     // Write all logs with level 'info' and below to combined.log
     new winston.transports.File({
-      filename: path.join(__dirname, '../logs/combined.log'),
+      filename: path.join(logDir, 'combined.log'),
       maxsize: 5242880, // 5MB
       maxFiles: 5
     })
   ],
   exceptionHandlers: [
+    new winston.transports.Console({
+      format: consoleFormat
+    }),
     new winston.transports.File({
-      filename: path.join(__dirname, '../logs/exceptions.log')
+      filename: path.join(logDir, 'exceptions.log')
     })
   ],
   rejectionHandlers: [
+    new winston.transports.Console({
+      format: consoleFormat
+    }),
     new winston.transports.File({
-      filename: path.join(__dirname, '../logs/rejections.log')
+      filename: path.join(logDir, 'rejections.log')
     })
   ]
 });
-
-// If we're not in production, also log to the console
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: consoleFormat,
-    level: 'debug'
-  }));
-}
 
 // Request logging helper
 const logRequest = (req, res, startTime) => {
