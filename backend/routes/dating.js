@@ -141,6 +141,49 @@ const normalizeInteger = (value) => {
   return Number.isFinite(parsedValue) ? parsedValue : null;
 };
 
+const normalizeMatchUserPair = (firstUserId, secondUserId) => {
+  const normalizedFirstUserId = normalizeInteger(firstUserId);
+  const normalizedSecondUserId = normalizeInteger(secondUserId);
+
+  if (!normalizedFirstUserId || !normalizedSecondUserId) {
+    return null;
+  }
+
+  return normalizedFirstUserId < normalizedSecondUserId
+    ? {
+        userId1: normalizedFirstUserId,
+        userId2: normalizedSecondUserId
+      }
+    : {
+        userId1: normalizedSecondUserId,
+        userId2: normalizedFirstUserId
+      };
+};
+
+const ensureActiveMatch = async (firstUserId, secondUserId) => {
+  const normalizedPair = normalizeMatchUserPair(firstUserId, secondUserId);
+
+  if (!normalizedPair) {
+    throw new Error('Valid user IDs are required to create a match');
+  }
+
+  if (normalizedPair.userId1 === normalizedPair.userId2) {
+    throw new Error('A user cannot match with themselves');
+  }
+
+  const result = await db.query(
+    `INSERT INTO matches (user_id_1, user_id_2, status, matched_at)
+     VALUES ($1, $2, 'active', CURRENT_TIMESTAMP)
+     ON CONFLICT (user_id_1, user_id_2) DO UPDATE
+     SET status = 'active',
+         matched_at = CURRENT_TIMESTAMP
+     RETURNING *`,
+    [normalizedPair.userId1, normalizedPair.userId2]
+  );
+
+  return result.rows[0] || null;
+};
+
 const normalizeBoolean = (value) => {
   if (typeof value === 'boolean') {
     return value;
@@ -3183,11 +3226,15 @@ router.post('/interactions/superlike', async (req, res) => {
   try {
     const fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
-    const userId = toUserId || targetUserId;
+    const userId = normalizeInteger(toUserId || targetUserId);
     const requestMetadata = getRequestMetadata(req);
 
     if (!userId) {
       return res.status(400).json({ error: 'toUserId or targetUserId required' });
+    }
+
+    if (Number(fromUserId) === Number(userId)) {
+      return res.status(400).json({ error: 'You cannot superlike your own profile' });
     }
 
     const today = new Date().toISOString().split('T')[0];
@@ -3236,11 +3283,11 @@ router.post('/interactions/superlike', async (req, res) => {
     );
 
     if (mutualResult.rows.length > 0) {
-      const matchResult = await db.query(
-        `INSERT INTO matches (user_id_1, user_id_2) VALUES (LEAST($1, $2), GREATEST($1, $2)) ON CONFLICT DO NOTHING RETURNING *`,
-        [fromUserId, userId]
-      );
-      const persistedMatch = matchResult.rows[0] || (await db.query(`SELECT * FROM matches WHERE user_id_1 = LEAST($1, $2) AND user_id_2 = GREATEST($1, $2) LIMIT 1`, [fromUserId, userId])).rows[0];
+      const persistedMatch = await ensureActiveMatch(fromUserId, userId);
+
+      if (!persistedMatch) {
+        throw new Error(`Failed to persist mutual superlike match for users ${fromUserId} and ${userId}`);
+      }
 
       if (typeof req.emitToUser === 'function') {
         [fromUserId, userId].forEach((pid) => {
@@ -3306,11 +3353,15 @@ router.post('/interactions/like', async (req, res) => {
   try {
     const fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
-    const userId = toUserId || targetUserId;
+    const userId = normalizeInteger(toUserId || targetUserId);
     const requestMetadata = getRequestMetadata(req);
 
     if (!userId) {
       return res.status(400).json({ error: 'toUserId or targetUserId required' });
+    }
+
+    if (Number(fromUserId) === Number(userId)) {
+      return res.status(400).json({ error: 'You cannot like your own profile' });
     }
 
     const today = new Date().toISOString().split('T')[0];
@@ -3356,11 +3407,11 @@ router.post('/interactions/like', async (req, res) => {
     );
 
     if (mutualResult.rows.length > 0) {
-      const matchResult = await db.query(
-        `INSERT INTO matches (user_id_1, user_id_2) VALUES (LEAST($1, $2), GREATEST($1, $2)) ON CONFLICT DO NOTHING RETURNING *`,
-        [fromUserId, userId]
-      );
-      const persistedMatch = matchResult.rows[0] || (await db.query(`SELECT * FROM matches WHERE user_id_1 = LEAST($1, $2) AND user_id_2 = GREATEST($1, $2) LIMIT 1`, [fromUserId, userId])).rows[0];
+      const persistedMatch = await ensureActiveMatch(fromUserId, userId);
+
+      if (!persistedMatch) {
+        throw new Error(`Failed to persist mutual like match for users ${fromUserId} and ${userId}`);
+      }
 
       if (typeof req.emitToUser === 'function') {
         [fromUserId, userId].forEach((pid) => {
@@ -4520,14 +4571,11 @@ router.post('/message-requests/:requestId/accept', async (req, res) => {
 
     // Create a match
     const fromUserId = request.from_user_id;
-    const matchResult = await db.query(
-      `INSERT INTO matches (user_id_1, user_id_2) VALUES (LEAST($1, $2), GREATEST($1, $2)) ON CONFLICT DO NOTHING RETURNING *`,
-      [fromUserId, userId]
-    );
-    const persistedMatch = matchResult.rows[0] || (await db.query(
-      `SELECT * FROM matches WHERE user_id_1 = LEAST($1, $2) AND user_id_2 = GREATEST($1, $2) LIMIT 1`,
-      [fromUserId, userId]
-    )).rows[0];
+    const persistedMatch = await ensureActiveMatch(fromUserId, userId);
+
+    if (!persistedMatch) {
+      throw new Error(`Failed to persist accepted message-request match for users ${fromUserId} and ${userId}`);
+    }
 
     // Notify both users
     await Promise.all([

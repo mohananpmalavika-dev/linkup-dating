@@ -1,0 +1,4 @@
+{"level":"info","message":"🚀 Dating app backend running on http://localhost:5000","service":"linkup-dating-api","timestamp":"2026-04-27 11:54:01"}
+{"level":"info","message":"📱 WebSocket enabled for real-time features","service":"linkup-dating-api","timestamp":"2026-04-27 11:54:01"}
+{"level":"info","message":"🗄️  Database: linkup_dating","service":"linkup-dating-api","timestamp":"2026-04-27 11:54:01"}
+{"level":"error","message":"Sequelize sync error:","service":"linkup-dating-api","timestamp":"2026-04-27 11:54:01"}

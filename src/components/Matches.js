@@ -123,7 +123,7 @@ const Matches = ({
     setRequestActionLoading(requestId);
 
     try {
-      const result = await datingProfileService.acceptMessageRequest(requestId);
+      await datingProfileService.acceptMessageRequest(requestId);
       setMessageRequests((current) => current.filter((req) => req.id !== requestId));
       await loadMatches();
       onMatchCreated?.();
@@ -185,6 +185,21 @@ const Matches = ({
       await loadMatches();
       onMatchCreated?.();
     } catch (likeError) {
+      try {
+        const existingMatch = await datingProfileService.checkMatch(like.from_user_id);
+
+        if (existingMatch?.isMatched && existingMatch.match?.status === 'active') {
+          setLikesReceived((currentLikes) => (
+            currentLikes.filter((currentLike) => currentLike.from_user_id !== like.from_user_id)
+          ));
+          await loadMatches();
+          onMatchCreated?.();
+          return;
+        }
+      } catch (recoveryError) {
+        console.error('Failed to recover like-back state:', recoveryError);
+      }
+
       setActionError('Failed to like this profile back');
       console.error('Failed to like back:', likeError);
     } finally {
