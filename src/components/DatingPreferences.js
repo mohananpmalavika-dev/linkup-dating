@@ -11,6 +11,46 @@ const INTEREST_SUGGESTIONS = [
   'yoga', 'technology', 'fashion', 'pets', 'politics', 'science'
 ];
 
+const FLEXIBILITY_MODES = [
+  { value: 'strict', label: 'Strict', description: 'Only show profiles that match all your preferences exactly.' },
+  { value: 'balanced', label: 'Balanced', description: 'A good mix of compatibility and variety.' },
+  { value: 'open', label: 'Open', description: 'Show a wider range of profiles, including some outside your preferences.' }
+];
+
+const COMPATIBILITY_QUESTIONS = [
+  { id: 'weekendStyle', label: 'Weekend Style', options: ['chill at home', 'outdoor adventure', 'social gatherings', 'productive projects'] },
+  { id: 'communicationStyle', label: 'Communication Style', options: ['text throughout the day', 'check in once daily', 'prefer calls', 'keep it light'] },
+  { id: 'socialEnergy', label: 'Social Energy', options: ['introvert', 'ambivert', 'extrovert', 'depends on the day'] },
+  { id: 'planningStyle', label: 'Planning Style', options: ['spontaneous', 'plan ahead', 'mix of both', 'go with the flow'] },
+  { id: 'affectionStyle', label: 'Affection Style', options: ['physical touch', 'words of affirmation', 'acts of service', 'quality time'] },
+  { id: 'conflictStyle', label: 'Conflict Approach', options: ['discuss immediately', 'cool off first', 'avoid confrontation', 'seek compromise'] }
+];
+
+const DEFAULT_DEAL_BREAKERS = {
+  enforceAgeRange: false,
+  enforceLocationRadius: false,
+  onlyVerifiedProfiles: false,
+  enforceRelationshipGoals: false,
+  requireSharedInterests: false,
+  enforceHeightRange: false,
+  enforceBodyType: false,
+  requireCompletedProfiles: false
+};
+
+const DEFAULT_FLEXIBILITY = {
+  mode: 'balanced',
+  learnFromActivity: true
+};
+
+const DEFAULT_COMPATIBILITY_ANSWERS = {
+  weekendStyle: '',
+  communicationStyle: '',
+  socialEnergy: '',
+  planningStyle: '',
+  affectionStyle: '',
+  conflictStyle: ''
+};
+
 const DatingPreferences = ({ onBack }) => {
   const [preferences, setPreferences] = useState({
     ageRangeMin: 18,
@@ -24,7 +64,10 @@ const DatingPreferences = ({ onBack }) => {
     bodyTypes: [],
     showMyProfile: true,
     allowMessages: true,
-    notificationsEnabled: true
+    notificationsEnabled: true,
+    dealBreakers: { ...DEFAULT_DEAL_BREAKERS },
+    preferenceFlexibility: { ...DEFAULT_FLEXIBILITY },
+    compatibilityAnswers: { ...DEFAULT_COMPATIBILITY_ANSWERS }
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -51,7 +94,10 @@ const DatingPreferences = ({ onBack }) => {
         bodyTypes: data.bodyTypes || [],
         showMyProfile: data.showMyProfile ?? true,
         allowMessages: data.allowMessages ?? true,
-        notificationsEnabled: data.notificationsEnabled ?? true
+        notificationsEnabled: data.notificationsEnabled ?? true,
+        dealBreakers: { ...DEFAULT_DEAL_BREAKERS, ...(data.dealBreakers || {}) },
+        preferenceFlexibility: { ...DEFAULT_FLEXIBILITY, ...(data.preferenceFlexibility || {}) },
+        compatibilityAnswers: { ...DEFAULT_COMPATIBILITY_ANSWERS, ...(data.compatibilityAnswers || {}) }
       });
     } catch (err) {
       console.error('Failed to load preferences:', err);
@@ -84,6 +130,34 @@ const DatingPreferences = ({ onBack }) => {
       const exists = current.includes(value);
       return { ...prev, [field]: exists ? current.filter((v) => v !== value) : [...current, value] };
     });
+  };
+
+  const toggleDealBreaker = (key) => {
+    setPreferences((prev) => ({
+      ...prev,
+      dealBreakers: { ...prev.dealBreakers, [key]: !prev.dealBreakers[key] }
+    }));
+  };
+
+  const setFlexibilityMode = (mode) => {
+    setPreferences((prev) => ({
+      ...prev,
+      preferenceFlexibility: { ...prev.preferenceFlexibility, mode }
+    }));
+  };
+
+  const toggleLearnFromActivity = () => {
+    setPreferences((prev) => ({
+      ...prev,
+      preferenceFlexibility: { ...prev.preferenceFlexibility, learnFromActivity: !prev.preferenceFlexibility.learnFromActivity }
+    }));
+  };
+
+  const setCompatibilityAnswer = (questionId, answer) => {
+    setPreferences((prev) => ({
+      ...prev,
+      compatibilityAnswers: { ...prev.compatibilityAnswers, [questionId]: answer }
+    }));
   };
 
   if (loading) {
@@ -135,6 +209,7 @@ const DatingPreferences = ({ onBack }) => {
               />
             </label>
           </div>
+        </div>
 
         {/* Location Radius */}
         <div className="preferences-group">
@@ -150,6 +225,7 @@ const DatingPreferences = ({ onBack }) => {
             />
             <span className="range-value">{preferences.locationRadius} km</span>
           </div>
+        </div>
 
         {/* Gender Preferences */}
         <div className="preferences-group">
@@ -166,6 +242,7 @@ const DatingPreferences = ({ onBack }) => {
               </label>
             ))}
           </div>
+        </div>
 
         {/* Relationship Goals */}
         <div className="preferences-group">
@@ -182,6 +259,7 @@ const DatingPreferences = ({ onBack }) => {
               </label>
             ))}
           </div>
+        </div>
 
         {/* Interests */}
         <div className="preferences-group">
@@ -198,6 +276,7 @@ const DatingPreferences = ({ onBack }) => {
               </label>
             ))}
           </div>
+        </div>
 
         {/* Height Range */}
         <div className="preferences-group">
@@ -229,6 +308,7 @@ const DatingPreferences = ({ onBack }) => {
               />
             </label>
           </div>
+        </div>
 
         {/* Body Types */}
         <div className="preferences-group">
@@ -245,6 +325,176 @@ const DatingPreferences = ({ onBack }) => {
               </label>
             ))}
           </div>
+        </div>
+
+        {/* Deal Breakers */}
+        <div className="preferences-group">
+          <h3>Deal Breakers</h3>
+          <p className="group-hint">Profiles matching these criteria will be excluded from your results.</p>
+          <div className="toggle-list">
+            <label className="toggle-item" htmlFor="deal-age">
+              <div className="toggle-info">
+                <strong>Enforce Age Range</strong>
+                <span>Hide profiles outside your preferred age range</span>
+              </div>
+              <input
+                id="deal-age"
+                type="checkbox"
+                checked={preferences.dealBreakers.enforceAgeRange}
+                onChange={() => toggleDealBreaker('enforceAgeRange')}
+                className="toggle-switch"
+              />
+            </label>
+            <label className="toggle-item" htmlFor="deal-distance">
+              <div className="toggle-info">
+                <strong>Enforce Distance</strong>
+                <span>Hide profiles outside your location radius</span>
+              </div>
+              <input
+                id="deal-distance"
+                type="checkbox"
+                checked={preferences.dealBreakers.enforceLocationRadius}
+                onChange={() => toggleDealBreaker('enforceLocationRadius')}
+                className="toggle-switch"
+              />
+            </label>
+            <label className="toggle-item" htmlFor="deal-verified">
+              <div className="toggle-info">
+                <strong>Verified Profiles Only</strong>
+                <span>Only show profiles that have been verified</span>
+              </div>
+              <input
+                id="deal-verified"
+                type="checkbox"
+                checked={preferences.dealBreakers.onlyVerifiedProfiles}
+                onChange={() => toggleDealBreaker('onlyVerifiedProfiles')}
+                className="toggle-switch"
+              />
+            </label>
+            <label className="toggle-item" htmlFor="deal-goals">
+              <div className="toggle-info">
+                <strong>Enforce Relationship Goals</strong>
+                <span>Hide profiles with different relationship goals</span>
+              </div>
+              <input
+                id="deal-goals"
+                type="checkbox"
+                checked={preferences.dealBreakers.enforceRelationshipGoals}
+                onChange={() => toggleDealBreaker('enforceRelationshipGoals')}
+                className="toggle-switch"
+              />
+            </label>
+            <label className="toggle-item" htmlFor="deal-interests">
+              <div className="toggle-info">
+                <strong>Require Shared Interests</strong>
+                <span>Only show profiles with at least one shared interest</span>
+              </div>
+              <input
+                id="deal-interests"
+                type="checkbox"
+                checked={preferences.dealBreakers.requireSharedInterests}
+                onChange={() => toggleDealBreaker('requireSharedInterests')}
+                className="toggle-switch"
+              />
+            </label>
+            <label className="toggle-item" htmlFor="deal-height">
+              <div className="toggle-info">
+                <strong>Enforce Height Range</strong>
+                <span>Hide profiles outside your preferred height range</span>
+              </div>
+              <input
+                id="deal-height"
+                type="checkbox"
+                checked={preferences.dealBreakers.enforceHeightRange}
+                onChange={() => toggleDealBreaker('enforceHeightRange')}
+                className="toggle-switch"
+              />
+            </label>
+            <label className="toggle-item" htmlFor="deal-body">
+              <div className="toggle-info">
+                <strong>Enforce Body Type</strong>
+                <span>Only show profiles matching your selected body types</span>
+              </div>
+              <input
+                id="deal-body"
+                type="checkbox"
+                checked={preferences.dealBreakers.enforceBodyType}
+                onChange={() => toggleDealBreaker('enforceBodyType')}
+                className="toggle-switch"
+              />
+            </label>
+            <label className="toggle-item" htmlFor="deal-complete">
+              <div className="toggle-info">
+                <strong>Require Completed Profiles</strong>
+                <span>Hide profiles with less than 60% completion</span>
+              </div>
+              <input
+                id="deal-complete"
+                type="checkbox"
+                checked={preferences.dealBreakers.requireCompletedProfiles}
+                onChange={() => toggleDealBreaker('requireCompletedProfiles')}
+                className="toggle-switch"
+              />
+            </label>
+          </div>
+        </div>
+
+        {/* Preference Flexibility */}
+        <div className="preferences-group">
+          <h3>Preference Flexibility</h3>
+          <div className="flexibility-modes">
+            {FLEXIBILITY_MODES.map((mode) => (
+              <label key={mode.value} className={`flexibility-card ${preferences.preferenceFlexibility.mode === mode.value ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  name="flexibility-mode"
+                  value={mode.value}
+                  checked={preferences.preferenceFlexibility.mode === mode.value}
+                  onChange={() => setFlexibilityMode(mode.value)}
+                />
+                <div className="flexibility-content">
+                  <strong>{mode.label}</strong>
+                  <span>{mode.description}</span>
+                </div>
+              </label>
+            ))}
+          </div>
+          <label className="toggle-item" htmlFor="learn-activity">
+            <div className="toggle-info">
+              <strong>Learn From My Activity</strong>
+              <span>Improve recommendations based on who you like and pass</span>
+            </div>
+            <input
+              id="learn-activity"
+              type="checkbox"
+              checked={preferences.preferenceFlexibility.learnFromActivity}
+              onChange={toggleLearnFromActivity}
+              className="toggle-switch"
+            />
+          </label>
+        </div>
+
+        {/* Compatibility Questions */}
+        <div className="preferences-group">
+          <h3>Compatibility Questions</h3>
+          <p className="group-hint">Answer these to improve your match compatibility scores.</p>
+          <div className="compatibility-questions">
+            {COMPATIBILITY_QUESTIONS.map((question) => (
+              <div key={question.id} className="question-card">
+                <label className="question-label">{question.label}</label>
+                <select
+                  value={preferences.compatibilityAnswers[question.id] || ''}
+                  onChange={(e) => setCompatibilityAnswer(question.id, e.target.value)}
+                >
+                  <option value="">Select...</option>
+                  {question.options.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Privacy Settings */}
         <div className="preferences-group">
@@ -290,12 +540,15 @@ const DatingPreferences = ({ onBack }) => {
               />
             </label>
           </div>
+        </div>
 
         <button type="button" className="btn-save-preferences" onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save Preferences'}
         </button>
       </div>
+    </div>
   );
 };
 
 export default DatingPreferences;
+

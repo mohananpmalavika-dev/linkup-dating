@@ -8,8 +8,8 @@ const defaultFilters = {
   interests: [],
   heightRange: { min: 150, max: 210 },
   bodyTypes: [],
-  genderPreferences: [],
-  distance: 100
+  distance: 100,
+  genderPreferences: []
 };
 
 const relationshipGoalOptions = [
@@ -44,20 +44,14 @@ const parseIntegerOrFallback = (value, fallbackValue) => {
 
 const truncateText = (value, limit = 60) => {
   const normalizedValue = String(value || '').trim();
-
   if (!normalizedValue) {
     return 'No bio yet.';
   }
-
   return normalizedValue.length > limit
     ? `${normalizedValue.slice(0, limit).trimEnd()}...`
     : normalizedValue;
 };
 
-/**
- * BrowseProfiles Component
- * Advanced profile search with filters that are fully supported by the backend
- */
 const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   const [profiles, setProfiles] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -73,11 +67,9 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
         datingProfileService.getFavorites(),
         datingProfileService.getSearchHistory(5)
       ]);
-
       const favoriteIds = new Set(
         (favoritesData.favorites || []).map((favorite) => String(favorite.userId))
       );
-
       setFavoriteUserIds(favoriteIds);
       setSearchHistory(Array.isArray(historyData.history) ? historyData.history : []);
     } catch (savedStateError) {
@@ -88,7 +80,6 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   const searchProfiles = useCallback(async (activeFilters) => {
     setLoading(true);
     setError('');
-
     try {
       const data = await datingProfileService.searchProfiles(activeFilters);
       setProfiles(data.profiles || []);
@@ -106,24 +97,15 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   }, [loadSavedState, searchProfiles]);
 
   const handleAgeChange = (min, max) => {
-    setFilters((prev) => ({
-      ...prev,
-      ageRange: { min, max }
-    }));
+    setFilters((prev) => ({ ...prev, ageRange: { min, max } }));
   };
 
   const handleHeightChange = (min, max) => {
-    setFilters((prev) => ({
-      ...prev,
-      heightRange: { min, max }
-    }));
+    setFilters((prev) => ({ ...prev, heightRange: { min, max } }));
   };
 
   const handleDistanceChange = (value) => {
-    setFilters((prev) => ({
-      ...prev,
-      distance: parseIntegerOrFallback(value, prev.distance)
-    }));
+    setFilters((prev) => ({ ...prev, distance: parseIntegerOrFallback(value, prev.distance) }));
   };
 
   const toggleArrayValue = (field, value) => {
@@ -139,10 +121,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
     try {
       const result = await datingProfileService.likeProfile(profile.userId);
       if (result.isMatch) {
-        onMatch?.({
-          ...profile,
-          matchId: result.match?.id || null
-        });
+        onMatch?.({ ...profile, matchId: result.match?.id || null });
       }
     } catch (err) {
       console.error('Failed to like profile:', err);
@@ -152,7 +131,6 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   const handleToggleFavorite = async (profile) => {
     const userId = String(profile.userId);
     const nextFavoriteIds = new Set(favoriteUserIds);
-
     try {
       if (nextFavoriteIds.has(userId)) {
         await datingProfileService.removeFavorite(profile.userId);
@@ -161,7 +139,6 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
         await datingProfileService.favoriteProfile(profile.userId);
         nextFavoriteIds.add(userId);
       }
-
       setFavoriteUserIds(nextFavoriteIds);
       await loadSavedState();
     } catch (favoriteError) {
@@ -171,7 +148,16 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   };
 
   const handleApplyFilters = () => {
-    searchProfiles(filters);
+    const apiFilters = {
+      ageRange: filters.ageRange,
+      relationshipGoals: filters.relationshipGoals,
+      heightRange: filters.heightRange,
+      interests: filters.interests,
+      bodyTypes: filters.bodyTypes,
+      distance: filters.distance,
+      genderPreferences: filters.genderPreferences
+    };
+    searchProfiles(apiFilters);
     setShowFilters(false);
   };
 
@@ -194,12 +180,11 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       bodyTypes: Array.isArray(entry.filters?.bodyTypes)
         ? entry.filters.bodyTypes
         : defaultFilters.bodyTypes,
+      distance: entry.filters?.distance || defaultFilters.distance,
       genderPreferences: Array.isArray(entry.filters?.genderPreferences)
         ? entry.filters.genderPreferences
-        : defaultFilters.genderPreferences,
-      distance: entry.filters?.distance || defaultFilters.distance
+        : defaultFilters.genderPreferences
     };
-
     setFilters(nextFilters);
     await searchProfiles(nextFilters);
   };
@@ -218,7 +203,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       <div className="browse-header">
         <div>
           <h1>Browse Profiles</h1>
-          <p className="browse-subtitle">Search by age, height, goals, body type, distance, and shared interests.</p>
+          <p className="browse-subtitle">Search by age, height, goals, and shared interests.</p>
         </div>
         <button
           type="button"
@@ -265,6 +250,37 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
+            <label>Distance (km)</label>
+            <div className="range-slider-container">
+              <input
+                type="range"
+                min="1"
+                max="500"
+                value={filters.distance}
+                onChange={(event) => handleDistanceChange(event.target.value)}
+                className="range-slider"
+              />
+              <span className="range-value">{filters.distance} km</span>
+            </div>
+          </div>
+
+          <div className="filter-group">
+            <label>Gender</label>
+            <div className="checkbox-group">
+              {genderOptions.map((gender) => (
+                <label key={gender} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={filters.genderPreferences.includes(gender)}
+                    onChange={() => toggleArrayValue('genderPreferences', gender)}
+                  />
+                  {gender.charAt(0).toUpperCase() + gender.slice(1)}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="filter-group">
             <label>Height Range (cm)</label>
             <div className="range-inputs">
               <input
@@ -298,37 +314,6 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label>Distance (km)</label>
-            <div className="range-slider-container">
-              <input
-                type="range"
-                min="1"
-                max="500"
-                value={filters.distance}
-                onChange={(event) => handleDistanceChange(event.target.value)}
-                className="range-slider"
-              />
-              <span className="range-value">{filters.distance} km</span>
-            </div>
-          </div>
-
-          <div className="filter-group">
-            <label>Gender Preferences</label>
-            <div className="checkbox-group">
-              {genderOptions.map((gender) => (
-                <label key={gender} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={filters.genderPreferences.includes(gender)}
-                    onChange={() => toggleArrayValue('genderPreferences', gender)}
-                  />
-                  {gender.charAt(0).toUpperCase() + gender.slice(1)}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="filter-group">
             <label>Relationship Goals</label>
             <div className="checkbox-group">
               {relationshipGoalOptions.map((goal) => (
@@ -345,22 +330,6 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label>Interests</label>
-            <div className="checkbox-group">
-              {interestOptions.map((interest) => (
-                <label key={interest} className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    checked={filters.interests.includes(interest)}
-                    onChange={() => toggleArrayValue('interests', interest)}
-                  />
-                  {interest}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="filter-group">
             <label>Body Types</label>
             <div className="checkbox-group">
               {bodyTypeOptions.map((type) => (
@@ -371,6 +340,22 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
                     onChange={() => toggleArrayValue('bodyTypes', type)}
                   />
                   {type}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="filter-group">
+            <label>Interests</label>
+            <div className="checkbox-group">
+              {interestOptions.map((interest) => (
+                <label key={interest} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={filters.interests.includes(interest)}
+                    onChange={() => toggleArrayValue('interests', interest)}
+                  />
+                  {interest}
                 </label>
               ))}
             </div>
@@ -409,7 +394,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
                 onClick={() => handleApplyHistoryEntry(entry)}
               >
                 <strong>{entry.source === 'browse_search' ? 'Browse search' : 'Discovery'}</strong>
-                <span>{entry.resultCount} results • {new Date(entry.createdAt).toLocaleString()}</span>
+                <span>{entry.resultCount} results &bull; {new Date(entry.createdAt).toLocaleString()}</span>
               </button>
             ))}
           </div>
@@ -443,3 +428,70 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
                     ? `url(${profile.photos[0]})`
                     : 'linear-gradient(135deg, #667eea, #764ba2)'
                 }}
+              >
+                {profile.profileVerified ? (
+                  <div className="verified-badge">Verified</div>
+                ) : null}
+                {profile.compatibilityScore ? (
+                  <div className="compatibility-badge-browse">{profile.compatibilityScore}%</div>
+                ) : null}
+              </button>
+
+              <div className="profile-card-info">
+                <h3>{profile.firstName}, {profile.age}</h3>
+                <p className="location">
+                  {profile.location?.city || 'Location unavailable'}
+                  {profile.distanceKm ? ` · ${profile.distanceKm} km` : ''}
+                </p>
+                <p className="bio-preview">{truncateText(profile.bio)}</p>
+
+                {profile.interests && profile.interests.length > 0 ? (
+                  <div className="interests-preview">
+                    {profile.interests.slice(0, 3).map((interest) => (
+                      <span key={interest} className="tag-small">{interest}</span>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="card-actions">
+                  <button
+                    type="button"
+                    className="btn-view-profile"
+                    onClick={() => onProfileSelect?.(profile)}
+                  >
+                    View Profile
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-view-profile"
+                    onClick={() => handleToggleFavorite(profile)}
+                  >
+                    {favoriteUserIds.has(String(profile.userId)) ? 'Unfavorite' : 'Favorite'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-like-small"
+                    onClick={() => handleLike(profile)}
+                    aria-label={`Like ${profile.firstName}`}
+                  >
+                    Like
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!loading && !error && profiles.length === 0 && (
+        <div className="no-profiles">
+          <p>No profiles found. Try adjusting your filters.</p>
+          <button type="button" onClick={() => setShowFilters(true)}>Adjust Filters</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default BrowseProfiles;
+

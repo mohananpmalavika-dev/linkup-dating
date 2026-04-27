@@ -272,6 +272,30 @@
   font-size: 11px;
 }
 
+.compatibility-badge-browse {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-weight: 700;
+  font-size: 12px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+.range-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.range-slider {
+  flex: 1;
+  accent-color: #667eea;
+}
+
 /* Profile Card Info */
 .profile-card-info {
   padding: 12px;
