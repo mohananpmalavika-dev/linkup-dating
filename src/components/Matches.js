@@ -20,6 +20,7 @@ const buildLikeProfileContext = (like) => ({
 const Matches = ({
   pageLabel = 'Matches',
   onMatchCreated,
+  onPlanDate,
   onScheduleVideoCall,
   onSelectMatch,
   onUnmatch,
@@ -35,7 +36,7 @@ const Matches = ({
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [navigationNotice, setNavigationNotice] = useState('');
-  const [filter, setFilter] = useState('all');
+  const [filter] = useState('all');
   const [activeTab, setActiveTab] = useState('matches'); // 'matches' | 'likes' | 'requests'
   const [whoLikedMe, setWhoLikedMe] = useState([]);
   const [loadingWhoLiked, setLoadingWhoLiked] = useState(false);
@@ -519,6 +520,33 @@ const Matches = ({
                         ? `${match.lastMessage.text.substring(0, 50)}${match.lastMessage.text.length > 50 ? '...' : ''}`
                         : 'Start the conversation'}
                     </p>
+                    {match.journey ? (
+                      <div className="match-journey">
+                        <div className="match-journey-top">
+                          <span className="match-journey-progress">
+                            {match.journey.progressCount || 0}/{match.journey.milestones?.length || 5} milestones
+                          </span>
+                          {match.journey.nudge ? (
+                            <span className="match-journey-pill">{match.journey.nudge.title}</span>
+                          ) : null}
+                        </div>
+                        {match.journey.milestones?.length ? (
+                          <div className="match-milestone-list">
+                            {match.journey.milestones.map((milestone) => (
+                              <span
+                                key={`${match.id}-${milestone.key}`}
+                                className={`match-milestone-chip ${milestone.achieved ? 'achieved' : ''}`}
+                              >
+                                {milestone.label}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                        {match.journey.nudge ? (
+                          <p className="match-journey-copy">{match.journey.nudge.message}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="match-actions">
@@ -537,6 +565,13 @@ const Matches = ({
                       📹
                     </button>
                     <button
+                      className="btn-plan"
+                      onClick={() => onPlanDate?.(match, location.pathname)}
+                      title="Plan a date"
+                    >
+                      Plan
+                    </button>
+                    <button
                       className="btn-more"
                       onClick={() => {
                         const menu = document.querySelector(`#menu-${match.id}`);
@@ -549,6 +584,9 @@ const Matches = ({
                     <div id={`menu-${match.id}`} className="action-menu">
                       <button onClick={() => onViewProfile?.(match)}>
                         View Profile
+                      </button>
+                      <button onClick={() => onPlanDate?.(match, location.pathname)}>
+                        Plan Date
                       </button>
                       <button onClick={() => onScheduleVideoCall?.(match, location.pathname)}>
                         Schedule Video Call

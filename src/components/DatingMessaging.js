@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import io from 'socket.io-client';
 import MessageToolbar from './MessageToolbar';
+import DateJourneyPanel from './DateJourneyPanel';
 import { useLocation } from '../router';
 import datingMessagingService from '../services/datingMessagingService';
 import datingProfileService from '../services/datingProfileService';
@@ -193,6 +194,7 @@ const DatingMessaging = ({
   const [disappearAfterSeconds, setDisappearAfterSeconds] = useState(3600);
   const [securitySetupReady, setSecuritySetupReady] = useState(false);
   const [countdownNow, setCountdownNow] = useState(Date.now());
+  const [showDatePlanner, setShowDatePlanner] = useState(Boolean(location.state?.focusPlanner));
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
@@ -205,6 +207,8 @@ const DatingMessaging = ({
   const activeMatch = conversationMatch || matchedProfile || null;
   const activeMatchId = activeMatch?.matchId || matchId || null;
   const activeMatchUserId = activeMatch?.userId || null;
+  const journey = activeMatch?.journey || null;
+  const sharedActionSuggestions = Array.isArray(journey?.sharedActions) ? journey.sharedActions : [];
   const notificationsAvailable = notificationService.getPermissionStatus().available;
   const icebreakers = useMemo(() => buildIcebreakers(activeMatch), [activeMatch]);
   const showComposerStarters = messages.length < 3 && icebreakers.length > 0;
@@ -326,7 +330,12 @@ const DatingMessaging = ({
     setDisappearingEnabled(false);
     setSecuritySetupReady(false);
     setStatusBanner(null);
-  }, [activeMatchId]);
+    setInputMessage(location.state?.prefillMessage || '');
+  }, [activeMatchId, location.state?.prefillMessage]);
+
+  useEffect(() => {
+    setShowDatePlanner(Boolean(location.state?.focusPlanner));
+  }, [activeMatchId, location.state?.focusPlanner, location.state?.prefillMessage]);
 
   useEffect(() => {
     if (activeMatchId && currentUserId) {
@@ -575,6 +584,19 @@ const DatingMessaging = ({
 
   const handleUseIcebreaker = (text) => {
     setInputMessage(text);
+    inputRef.current?.focus();
+  };
+
+  const handleSharedAction = (action) => {
+    if (!action?.message) {
+      return;
+    }
+
+    if (action.type === 'vote') {
+      setShowDatePlanner(true);
+    }
+
+    setInputMessage(action.message);
     inputRef.current?.focus();
   };
 
@@ -947,10 +969,10 @@ const DatingMessaging = ({
           <button
             type="button"
             className="btn-schedule-call"
-            onClick={() => onScheduleVideoCall?.(activeMatch, location.pathname)}
-            title="Schedule video call"
+            onClick={() => setShowDatePlanner((currentValue) => !currentValue)}
+            title="Plan a date"
           >
-            Plan
+            {journey?.pendingProposal?.isReceived ? 'Review Plan' : showDatePlanner ? 'Hide Plan' : 'Plan Date'}
           </button>
 
           <button
@@ -973,6 +995,50 @@ const DatingMessaging = ({
       {statusBanner ? (
         <div className={`messaging-status messaging-status-${statusBanner.tone}`}>
           {statusBanner.message}
+        </div>
+      ) : null}
+
+      {journey ? (
+        <div className="messaging-journey-card">
+          <div className="messaging-journey-top">
+            <div>
+              <strong>Date Journey</strong>
+              <p>
+                {journey.progressCount || 0}/{journey.milestones?.length || 5} milestones reached with {activeMatch.firstName}.
+              </p>
+            </div>
+            {journey.nudge ? (
+              <span className="messaging-journey-nudge-pill">{journey.nudge.title}</span>
+            ) : null}
+          </div>
+
+          {journey.milestones?.length ? (
+            <div className="messaging-journey-milestones">
+              {journey.milestones.map((milestone) => (
+                <span
+                  key={milestone.key}
+                  className={`messaging-journey-milestone ${milestone.achieved ? 'achieved' : ''}`}
+                >
+                  {milestone.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {journey.nudge ? (
+            <p className="messaging-journey-copy">{journey.nudge.message}</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showDatePlanner ? (
+        <div className="messaging-planner-wrap">
+          <DateJourneyPanel
+            matchId={activeMatchId}
+            match={activeMatch}
+            onMatchUpdated={setConversationMatch}
+            onScheduleVideoCall={(profile) => onScheduleVideoCall?.(profile, location.pathname)}
+          />
         </div>
       ) : null}
 
@@ -1107,6 +1173,24 @@ const DatingMessaging = ({
         onLocation={handleShareLocation}
         onMore={handleToolbarMore}
       />
+
+      {sharedActionSuggestions.length > 0 ? (
+        <div className="shared-actions-strip">
+          <span className="composer-starters-label">Shared-interest actions:</span>
+          <div className="composer-starters-list">
+            {sharedActionSuggestions.map((action) => (
+              <button
+                key={`${action.type}-${action.label}`}
+                type="button"
+                className="composer-starter-chip"
+                onClick={() => handleSharedAction(action)}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {showComposerStarters ? (
         <div className="composer-starters">

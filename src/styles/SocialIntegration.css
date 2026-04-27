@@ -101,7 +101,9 @@
 }
 
 .platform-icon {
-  font-size: 32px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .platform-name {
@@ -318,6 +320,21 @@
   cursor: pointer;
   font-size: 12px;
   color: #ef4444;
+}
+
+.visibility-toggle-btn {
+  background: white;
+  border: 1px solid #c7d2fe;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #4338ca;
+}
+
+.visibility-toggle-btn:hover {
+  border-color: #4338ca;
+  background: #eef2ff;
 }
 
 .remove-btn:hover {

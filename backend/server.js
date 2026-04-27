@@ -411,7 +411,7 @@ app.use('/api/messaging', authenticateToken, messagingEnhancedRoutes);
 app.use('/api/chatrooms', authenticateToken, chatroomsRoutes);
 app.use('/api/lobby', authenticateToken, lobbyRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
-app.use('/api/social', authenticateToken, socialRoutes);
+app.use('/api/social', socialRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

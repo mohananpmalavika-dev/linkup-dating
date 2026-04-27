@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import '../styles/DatingSignUp.css';
@@ -22,6 +22,10 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [verifiedUser, setVerifiedUser] = useState(null);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [referralCode, setReferralCode] = useState('');
+  const [referralValidated, setReferralValidated] = useState(false);
+  const [referralMessage, setReferralMessage] = useState('');
+  const [validatingReferral, setValidatingReferral] = useState(false);
   
   // Username state
   const [username, setUsername] = useState('');
@@ -57,11 +61,63 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
     return /^[a-zA-Z0-9_-]{3,20}$/.test(value);
   };
 
+  useEffect(() => {
+    const urlCode = new URLSearchParams(window.location.search).get('ref');
+    if (urlCode) {
+      const normalizedCode = urlCode.trim().toUpperCase();
+      setReferralCode(normalizedCode);
+      void validateReferralCode(normalizedCode, true);
+    }
+
+    return () => {
+      if (usernameCheckTimeoutRef.current) {
+        clearTimeout(usernameCheckTimeoutRef.current);
+      }
+      if (resendTimerRef.current) {
+        clearInterval(resendTimerRef.current);
+      }
+    };
+  }, []);
+
+  const validateReferralCode = async (value, silent = false) => {
+    const normalizedCode = String(value || '').trim().toUpperCase();
+
+    if (!normalizedCode) {
+      setReferralValidated(false);
+      setReferralMessage('');
+      return true;
+    }
+
+    setValidatingReferral(true);
+    try {
+      await axios.post(`${API_BASE_URL}/social/referral/validate`, {
+        code: normalizedCode
+      });
+      setReferralValidated(true);
+      setReferralMessage('Referral code validated. Rewards will be applied after signup.');
+      return true;
+    } catch (err) {
+      setReferralValidated(false);
+      setReferralMessage(silent ? 'Referral code could not be validated yet.' : 'Referral code is invalid or expired.');
+      return false;
+    } finally {
+      setValidatingReferral(false);
+    }
+  };
+
   // Send OTP to email
   const handleSendOtp = async (e) => {
     e.preventDefault();
     setError('');
     setDevOtp('');
+
+    if (referralCode.trim()) {
+      const validReferral = await validateReferralCode(referralCode, false);
+      if (!validReferral) {
+        setError('Please use a valid referral code or clear the field to continue.');
+        return;
+      }
+    }
 
     if (!email.trim()) {
       setError('Please enter your email');
@@ -341,7 +397,25 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
         });
       }
 
-      setSuccess('Account created successfully!');
+      let referralApplied = false;
+      if (referralValidated && referralCode.trim()) {
+        try {
+          await axios.post(`${API_BASE_URL}/social/referral/complete`, {
+            code: referralCode.trim().toUpperCase()
+          }, {
+            headers: { Authorization: `Bearer ${verifiedToken}` }
+          });
+          referralApplied = true;
+        } catch (referralError) {
+          console.error('Referral application error:', referralError);
+        }
+      }
+
+      setSuccess(
+        referralApplied
+          ? 'Account created successfully and referral rewards were applied.'
+          : 'Account created successfully!'
+      );
       onSignUpSuccess?.(verifiedToken, verifiedUser);
     } catch (err) {
       console.error('Signup error:', err);
@@ -396,6 +470,30 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                     placeholder="your@email.com"
                     disabled={loading}
                   />
+                </div>
+                <div className="form-group">
+                  <label>Referral Code (Optional)</label>
+                  <input
+                    type="text"
+                    value={referralCode}
+                    onChange={(e) => {
+                      setReferralCode(e.target.value.toUpperCase());
+                      setReferralValidated(false);
+                      setReferralMessage('');
+                    }}
+                    onBlur={() => {
+                      if (referralCode.trim()) {
+                        void validateReferralCode(referralCode, false);
+                      }
+                    }}
+                    placeholder="Paste invite code"
+                    disabled={loading || validatingReferral}
+                  />
+                  {referralMessage ? (
+                    <small className="helper-text" style={{ color: referralValidated ? '#4CAF50' : '#F44336' }}>
+                      {validatingReferral ? 'Validating referral code...' : referralMessage}
+                    </small>
+                  ) : null}
                 </div>
                 <button type="submit" className="btn-submit" disabled={loading}>
                   {loading ? 'Sending OTP...' : 'Send OTP'}

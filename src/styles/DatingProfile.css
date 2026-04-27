@@ -287,6 +287,34 @@
   font-size: 13px;
 }
 
+.public-social-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.public-social-link {
+  min-width: 150px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.public-social-link strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.public-social-link span {
+  color: #4f46e5;
+  font-size: 13px;
+}
+
 /* Photos Gallery */
 .photos-gallery {
   display: grid;

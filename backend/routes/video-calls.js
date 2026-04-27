@@ -72,6 +72,22 @@ const normalizeDateInput = (value) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+const normalizeSettingsSnapshot = (value) => {
+  if (!value) {
+    return {};
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return {};
+  }
+};
+
 const getRequestMetadata = (req) => ({
   ipAddress: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
   userAgent: req.headers['user-agent'] || null
@@ -177,6 +193,13 @@ const buildTimeline = (row, currentUserId) => {
 };
 
 const normalizeVideoDateRow = (row, currentUserId) => {
+  const settingsSnapshot = normalizeSettingsSnapshot(row.settings_snapshot);
+  const privateFeedback =
+    settingsSnapshot?.privateFeedback && typeof settingsSnapshot.privateFeedback === 'object'
+      ? settingsSnapshot.privateFeedback
+      : {};
+  const currentUserFeedback = privateFeedback[String(currentUserId)] || null;
+  const otherUserFeedback = privateFeedback[String(row.other_user_id)] || null;
   const userSlot = getUserSlot(row, currentUserId);
   const currentUserConsented =
     userSlot === 1 ? row.recording_consented_user_1 : row.recording_consented_user_2;
@@ -247,13 +270,18 @@ const normalizeVideoDateRow = (row, currentUserId) => {
       otherUserBackground: otherUserBackground || 'none',
       screenShareEnabled: Boolean(row.screen_share_enabled),
       screenShareUserId: row.screen_share_user_id || null,
-      snapshot: row.settings_snapshot || {}
+      snapshot: settingsSnapshot
     },
     presence: {
       currentUserJoinedAt,
       otherUserJoinedAt,
       currentUserLeftAt,
       otherUserLeftAt
+    },
+    postDateFeedback: {
+      submitted: Boolean(currentUserFeedback),
+      currentUser: currentUserFeedback,
+      partnerSubmitted: Boolean(otherUserFeedback)
     },
     timeline: buildTimeline(row, currentUserId)
   };
@@ -964,6 +992,58 @@ router.post('/:videoDateId/recording-consent', async (req, res) => {
   } catch (error) {
     console.error('Update recording consent error:', error);
     res.status(500).json({ error: 'Failed to update recording consent' });
+  }
+});
+
+router.post('/:videoDateId/feedback', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const videoDateId = parseInteger(req.params.videoDateId);
+    const sessionRow = await loadVideoDateForUser(userId, videoDateId);
+
+    if (!sessionRow) {
+      return res.status(404).json({ error: 'Video call session not found' });
+    }
+
+    if (!TERMINAL_STATUSES.has(sessionRow.status)) {
+      return res.status(400).json({ error: 'Feedback can be added after the video date ends' });
+    }
+
+    const rating = Math.min(5, Math.max(1, parseInteger(req.body?.rating, 0) || 0));
+    const summary = normalizeOptionalText(req.body?.summary, MAX_NOTE_LENGTH);
+    const wouldMeetInPerson = normalizeBoolean(req.body?.wouldMeetInPerson, false);
+
+    if (!rating) {
+      return res.status(400).json({ error: 'A rating between 1 and 5 is required' });
+    }
+
+    const feedbackPayload = {
+      rating,
+      summary,
+      wouldMeetInPerson,
+      submittedAt: new Date().toISOString()
+    };
+
+    await db.query(
+      `UPDATE video_dates
+       SET settings_snapshot = jsonb_set(
+         COALESCE(settings_snapshot, '{}'::jsonb),
+         '{privateFeedback}',
+         COALESCE(settings_snapshot->'privateFeedback', '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb),
+         true
+       )
+       WHERE id = $1`,
+      [videoDateId, String(userId), JSON.stringify(feedbackPayload)]
+    );
+
+    const updatedSession = await loadVideoDateForUser(userId, videoDateId);
+    res.json({
+      message: 'Private video date feedback saved',
+      session: normalizeVideoDateRow(updatedSession, userId)
+    });
+  } catch (error) {
+    console.error('Save video date feedback error:', error);
+    res.status(500).json({ error: 'Failed to save video date feedback' });
   }
 });
 

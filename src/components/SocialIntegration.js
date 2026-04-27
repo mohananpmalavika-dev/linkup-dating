@@ -3,10 +3,10 @@ import socialService from '../services/socialService';
 import '../styles/SocialIntegration.css';
 
 const PLATFORMS = [
-  { id: 'instagram', name: 'Instagram', icon: '📷', color: '#E4405F' },
-  { id: 'tiktok', name: 'TikTok', icon: '🎵', color: '#000' },
-  { id: 'twitter', name: 'Twitter', icon: '𝕏', color: '#000' },
-  { id: 'facebook', name: 'Facebook', icon: '📘', color: '#1877F2' }
+  { id: 'instagram', name: 'Instagram', icon: 'IG', color: '#E4405F' },
+  { id: 'tiktok', name: 'TikTok', icon: 'TT', color: '#000000' },
+  { id: 'twitter', name: 'Twitter', icon: 'X', color: '#111827' },
+  { id: 'facebook', name: 'Facebook', icon: 'FB', color: '#1877F2' }
 ];
 
 const SocialIntegration = ({ onClose }) => {
@@ -26,7 +26,7 @@ const SocialIntegration = ({ onClose }) => {
     setLoading(true);
     try {
       const data = await socialService.getSocialIntegrations();
-      setIntegrations(data || []);
+      setIntegrations(Array.isArray(data) ? data : []);
     } catch (err) {
       setError('Failed to load integrations');
       console.error(err);
@@ -35,63 +35,81 @@ const SocialIntegration = ({ onClose }) => {
     }
   };
 
-  const handleAddIntegration = async (e) => {
-    e.preventDefault();
+  const handleAddIntegration = async (event) => {
+    event.preventDefault();
     if (!selectedPlatform || !username.trim()) {
-      setError('Please select a platform and enter username');
+      setError('Please select a platform and enter a username');
       return;
     }
 
     setSubmitting(true);
     try {
-      const result = await socialService.addSocialIntegration(
-        selectedPlatform,
-        username,
-        isPublic
-      );
-      setIntegrations([...integrations, result]);
+      const result = await socialService.addSocialIntegration(selectedPlatform, username.trim(), isPublic);
+      setIntegrations((currentIntegrations) => {
+        const remaining = currentIntegrations.filter((integration) => integration.platform !== result.platform);
+        return [...remaining, result];
+      });
       setSelectedPlatform(null);
       setUsername('');
       setIsPublic(false);
       setError('');
     } catch (err) {
-      setError(err.message || 'Failed to add integration');
+      setError(err || 'Failed to add integration');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleToggleVisibility = async (integration) => {
+    try {
+      const updated = await socialService.updateSocialIntegration(integration.id, {
+        isPublic: !(integration.isPublic ?? integration.is_public)
+      });
+      setIntegrations((currentIntegrations) =>
+        currentIntegrations.map((currentIntegration) =>
+          currentIntegration.id === integration.id ? updated : currentIntegration
+        )
+      );
+    } catch (err) {
+      setError(err || 'Failed to update visibility');
+    }
+  };
+
   const handleRemoveIntegration = async (integrationId) => {
-    if (!window.confirm('Remove this social link?')) return;
+    if (!window.confirm('Remove this social link?')) {
+      return;
+    }
 
     try {
       await socialService.removeSocialIntegration(integrationId);
-      setIntegrations(integrations.filter(i => i.id !== integrationId));
+      setIntegrations((currentIntegrations) =>
+        currentIntegrations.filter((integration) => integration.id !== integrationId)
+      );
     } catch (err) {
       setError('Failed to remove integration');
     }
   };
 
-  const getPlatformInfo = (platformId) => PLATFORMS.find(p => p.id === platformId);
+  const getPlatformInfo = (platformId) => PLATFORMS.find((platform) => platform.id === platformId);
 
   return (
     <div className="social-integration-modal-overlay" onClick={onClose}>
-      <div className="social-integration-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="social-integration-modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <h2>Social Media Links</h2>
-          <button className="close-btn" onClick={onClose}>✕</button>
+          <button className="close-btn" onClick={onClose}>x</button>
         </div>
 
-        {error && <div className="error-banner">{error}</div>}
+        {error ? <div className="error-banner">{error}</div> : null}
 
-        {/* Add New Integration */}
         {!selectedPlatform ? (
           <div className="platform-selector">
             <h3>Connect Your Social Media</h3>
-            <p>Make your profile more discoverable</p>
+            <p>Choose which handles you want to connect and whether they should appear on your dating profile.</p>
             <div className="platform-grid">
               {PLATFORMS.map((platform) => {
-                const isAlreadyAdded = integrations.some(i => i.platform === platform.id);
+                const isAlreadyAdded = integrations.some((integration) => integration.platform === platform.id);
+
                 return (
                   <button
                     key={platform.id}
@@ -102,7 +120,7 @@ const SocialIntegration = ({ onClose }) => {
                   >
                     <span className="platform-icon">{platform.icon}</span>
                     <span className="platform-name">{platform.name}</span>
-                    {isAlreadyAdded && <span className="added-badge">✓ Added</span>}
+                    {isAlreadyAdded ? <span className="added-badge">Added</span> : null}
                   </button>
                 );
               })}
@@ -111,14 +129,14 @@ const SocialIntegration = ({ onClose }) => {
         ) : (
           <form onSubmit={handleAddIntegration} className="add-integration-form">
             <h3>Add {getPlatformInfo(selectedPlatform)?.name}</h3>
-            
+
             <div className="form-group">
-              <label>Username/Handle</label>
+              <label>Username or handle</label>
               <input
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder={`@username`}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="@username"
                 className="form-input"
                 disabled={submitting}
               />
@@ -129,10 +147,10 @@ const SocialIntegration = ({ onClose }) => {
                 <input
                   type="checkbox"
                   checked={isPublic}
-                  onChange={(e) => setIsPublic(e.target.checked)}
+                  onChange={(event) => setIsPublic(event.target.checked)}
                   disabled={submitting}
                 />
-                <span>Make profile link visible to other users</span>
+                <span>Show this link publicly on my profile</span>
               </label>
             </div>
 
@@ -145,24 +163,24 @@ const SocialIntegration = ({ onClose }) => {
               >
                 Cancel
               </button>
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={submitting}
-              >
-                {submitting ? 'Adding...' : 'Add Account'}
+              <button type="submit" className="btn-primary" disabled={submitting}>
+                {submitting ? 'Saving...' : 'Add Account'}
               </button>
             </div>
           </form>
         )}
 
-        {/* Current Integrations */}
-        {integrations.length > 0 && (
+        {loading ? <div className="loading">Loading linked accounts...</div> : null}
+
+        {integrations.length > 0 ? (
           <div className="current-integrations">
             <h3>Your Connected Accounts</h3>
             <div className="integration-list">
               {integrations.map((integration) => {
                 const platformInfo = getPlatformInfo(integration.platform);
+                const isVisible = integration.isPublic ?? integration.is_public;
+                const verifiedAt = integration.verifiedAt ?? integration.verified_at;
+
                 return (
                   <div key={integration.id} className="integration-item">
                     <div className="integration-info">
@@ -172,21 +190,27 @@ const SocialIntegration = ({ onClose }) => {
                         <p className="integration-username">@{integration.username}</p>
                       </div>
                     </div>
+
                     <div className="integration-actions">
-                      {integration.verified_at && (
-                        <span className="verified-badge">✓ Verified</span>
-                      )}
-                      {integration.is_public ? (
-                        <span className="public-badge">🔓 Public</span>
+                      {verifiedAt ? <span className="verified-badge">Verified</span> : null}
+                      {isVisible ? (
+                        <span className="public-badge">Public</span>
                       ) : (
-                        <span className="private-badge">🔒 Private</span>
+                        <span className="private-badge">Private</span>
                       )}
+                      <button
+                        className="visibility-toggle-btn"
+                        onClick={() => handleToggleVisibility(integration)}
+                        title={isVisible ? 'Make private' : 'Make public'}
+                      >
+                        {isVisible ? 'Hide' : 'Show'}
+                      </button>
                       <button
                         className="remove-btn"
                         onClick={() => handleRemoveIntegration(integration.id)}
                         title="Remove account"
                       >
-                        ✕
+                        Remove
                       </button>
                     </div>
                   </div>
@@ -194,7 +218,7 @@ const SocialIntegration = ({ onClose }) => {
               })}
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

@@ -69,6 +69,7 @@ module.exports = (sequelize, DataTypes) => {
     User.hasMany(models.FriendRelationship, { foreignKey: 'user_id_1', as: 'friendRequestsSent', onDelete: 'CASCADE' });
     User.hasMany(models.FriendRelationship, { foreignKey: 'user_id_2', as: 'friendRequestsReceived', onDelete: 'CASCADE' });
     User.hasMany(models.SocialIntegration, { foreignKey: 'user_id', as: 'socialIntegrations', onDelete: 'CASCADE' });
+    User.hasOne(models.UserRewardBalance, { foreignKey: 'user_id', as: 'rewardBalance', onDelete: 'CASCADE' });
     User.hasMany(models.GroupChat, { foreignKey: 'created_by_user_id', as: 'groupChatsCreated', onDelete: 'CASCADE' });
     User.hasMany(models.GroupChatMember, { foreignKey: 'user_id', as: 'groupChatMemberships', onDelete: 'CASCADE' });
     User.hasMany(models.GroupChatMessage, { foreignKey: 'from_user_id', as: 'groupChatMessages', onDelete: 'CASCADE' });

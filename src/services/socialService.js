@@ -9,6 +9,20 @@ const API_URL = `${API_BASE_URL}/social`;
  */
 
 export const socialService = {
+  // ========== HUB METHODS ==========
+
+  /**
+   * Get the consolidated social hub payload
+   */
+  getHub: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/hub`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to load social hub';
+    }
+  },
+
   // ========== REFERRAL METHODS ==========
 
   /**
@@ -44,6 +58,18 @@ export const socialService = {
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Invalid referral code';
+    }
+  },
+
+  /**
+   * Complete referral reward application for the signed-in user
+   */
+  completeReferral: async (code) => {
+    try {
+      const response = await axios.post(`${API_URL}/referral/complete`, { code });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to apply referral';
     }
   },
 
@@ -88,14 +114,26 @@ export const socialService = {
   /**
    * Get user's friends list
    */
-  getFriends: async (status = 'accepted', limit = 50, offset = 0) => {
+  getFriends: async (status = 'accepted', limit = 50, offset = 0, direction = 'all') => {
     try {
       const response = await axios.get(`${API_URL}/friends/list`, {
-        params: { status, limit, offset }
+        params: { status, limit, offset, direction }
       });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to get friends';
+    }
+  },
+
+  /**
+   * Get friendship status with another user
+   */
+  getFriendStatus: async (targetUserId) => {
+    try {
+      const response = await axios.get(`${API_URL}/friends/status/${targetUserId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get friendship status';
     }
   },
 
@@ -142,6 +180,18 @@ export const socialService = {
   },
 
   /**
+   * Update an existing social integration
+   */
+  updateSocialIntegration: async (integrationId, updates) => {
+    try {
+      const response = await axios.patch(`${API_URL}/integrations/${integrationId}`, updates);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to update integration';
+    }
+  },
+
+  /**
    * Remove social integration
    */
   removeSocialIntegration: async (integrationId) => {
@@ -162,6 +212,34 @@ export const socialService = {
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to fetch social profiles';
+    }
+  },
+
+  // ========== COMMUNITY ROOM METHODS ==========
+
+  /**
+   * Join or create a curated community room
+   */
+  joinCommunityRoom: async (roomSlug) => {
+    try {
+      const response = await axios.post(`${API_URL}/community-rooms/${roomSlug}/join`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to join community room';
+    }
+  },
+
+  // ========== DATING REFERRAL METHODS ==========
+
+  /**
+   * Accept a dating introduction/referral
+   */
+  acceptDatingReferral: async (referralId) => {
+    try {
+      const response = await axios.post(`${API_BASE_URL}/dating/referrals/${referralId}/accept`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to accept referral';
     }
   },
 

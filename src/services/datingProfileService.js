@@ -814,6 +814,110 @@ export const datingProfileService = {
     }
   },
 
+  // ========== PHASE 3: MATCH-TO-DATE JOURNEY ==========
+
+  /**
+   * Create a date proposal for a match
+   */
+  createDateProposal: async (payload) => {
+    try {
+      const response = await axios.post(`${API_URL}/date-proposals`, payload);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to create date proposal';
+    }
+  },
+
+  /**
+   * Get date proposals across sent and received plans
+   */
+  getDateProposals: async (type = 'all') => {
+    try {
+      const response = await axios.get(`${API_URL}/date-proposals`, {
+        params: { type }
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to load date proposals';
+    }
+  },
+
+  /**
+   * Accept a pending date proposal
+   */
+  acceptDateProposal: async (proposalId) => {
+    try {
+      const response = await axios.patch(`${API_URL}/date-proposals/${proposalId}/accept`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to accept date proposal';
+    }
+  },
+
+  /**
+   * Decline a pending date proposal
+   */
+  declineDateProposal: async (proposalId, reason = '') => {
+    try {
+      const response = await axios.patch(`${API_URL}/date-proposals/${proposalId}/decline`, {
+        reason
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to decline date proposal';
+    }
+  },
+
+  /**
+   * Reschedule an existing date proposal
+   */
+  rescheduleDateProposal: async (proposalId, payload) => {
+    try {
+      const response = await axios.patch(`${API_URL}/date-proposals/${proposalId}/reschedule`, payload);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to reschedule date proposal';
+    }
+  },
+
+  /**
+   * Cancel a sent date proposal
+   */
+  cancelDateProposal: async (proposalId) => {
+    try {
+      const response = await axios.delete(`${API_URL}/date-proposals/${proposalId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to cancel date proposal';
+    }
+  },
+
+  /**
+   * Submit private post-date feedback
+   */
+  submitDateFeedback: async (proposalId, payload) => {
+    try {
+      const response = await axios.post(`${API_URL}/date-completion-feedback/${proposalId}`, payload);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to submit date feedback';
+    }
+  },
+
+  /**
+   * Get accepted date history and feedback state
+   */
+  getDateHistory: async (limit = 20) => {
+    try {
+      const response = await axios.get(`${API_URL}/date-history`, {
+        params: { limit }
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to load date history';
+    }
+  },
+
   // ========== PHASE 4: ADVANCED PROFILE ANALYTICS & INSIGHTS ==========
 
   /**

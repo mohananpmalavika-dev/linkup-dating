@@ -338,6 +338,65 @@
   text-overflow: ellipsis;
 }
 
+.match-journey {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.match-journey-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.match-journey-progress,
+.match-journey-pill,
+.match-milestone-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.match-journey-progress {
+  background: #eef4ff;
+  color: #3150a6;
+}
+
+.match-journey-pill {
+  background: #fff1f5;
+  color: #9d174d;
+}
+
+.match-milestone-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.match-milestone-chip {
+  background: #f8f4f6;
+  color: #705d67;
+}
+
+.match-milestone-chip.achieved {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.match-journey-copy {
+  margin: 0;
+  color: #705d67;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* Match Actions */
 .match-actions {
   display: flex;
@@ -349,6 +408,7 @@
 
 .btn-message,
 .btn-video,
+.btn-plan,
 .btn-more {
   width: 40px;
   height: 40px;
@@ -372,6 +432,21 @@
 .btn-video:hover {
   background: #764ba2;
   color: white;
+}
+
+.btn-plan {
+  width: auto;
+  min-width: 58px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: #fff1f5;
+  color: #8a285f;
+}
+
+.btn-plan:hover {
+  background: #ffe4ec;
 }
 
 .btn-more:hover {
@@ -470,5 +545,11 @@
     width: 36px;
     height: 36px;
     font-size: 16px;
+  }
+
+  .btn-plan {
+    min-width: 52px;
+    height: 36px;
+    padding: 0 12px;
   }
 }

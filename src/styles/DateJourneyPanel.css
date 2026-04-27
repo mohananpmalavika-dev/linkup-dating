@@ -1,0 +1,304 @@
+.date-journey-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid #f1d7df;
+  background:
+    radial-gradient(circle at top right, rgba(251, 113, 133, 0.12), transparent 42%),
+    linear-gradient(180deg, #fff9fb 0%, #ffffff 100%);
+}
+
+.date-journey-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.date-journey-header h3,
+.date-planner-header h4,
+.date-feedback-header h4,
+.date-proposal-card-header h4 {
+  margin: 0;
+  color: #2f1f35;
+}
+
+.date-journey-header p,
+.date-feedback-header p,
+.date-proposal-notes,
+.date-planner-field span,
+.date-type-chip span,
+.date-proposal-time {
+  margin: 0;
+  color: #705d67;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.date-journey-progress {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #fff1f5;
+  color: #9d174d;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.date-journey-banner {
+  padding: 11px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.date-journey-banner.error {
+  background: #fff1f2;
+  color: #be123c;
+}
+
+.date-journey-banner.success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.date-journey-empty,
+.date-journey-nudge-card,
+.date-proposal-card,
+.date-feedback-card,
+.date-planner-form {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(240, 194, 209, 0.78);
+}
+
+.date-journey-nudge-card {
+  background: linear-gradient(135deg, #fff1f5, #fff7ed);
+}
+
+.date-journey-nudge-card strong {
+  color: #7a284b;
+}
+
+.date-journey-nudge-card p {
+  margin: 6px 0 0;
+}
+
+.date-journey-suggestions,
+.date-journey-milestones,
+.date-proposal-actions,
+.date-slot-list,
+.date-type-grid,
+.date-feedback-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.date-journey-suggestion,
+.date-journey-milestone,
+.date-slot-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 11px;
+  border-radius: 999px;
+  background: #f8f4f6;
+  color: #735964;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.date-journey-milestone.achieved {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.date-proposal-card.waiting {
+  border-color: #f59e0b;
+}
+
+.date-proposal-card.outgoing {
+  border-color: #c7d2fe;
+}
+
+.date-proposal-card.accepted {
+  border-color: #86efac;
+}
+
+.date-proposal-card-header,
+.date-planner-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.date-proposal-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #fdf2f8;
+  color: #9d174d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.date-proposal-primary,
+.date-proposal-secondary,
+.date-proposal-ghost,
+.date-planner-submit,
+.date-planner-reset,
+.date-slot-chip,
+.date-type-chip {
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  font: inherit;
+}
+
+.date-proposal-primary,
+.date-planner-submit {
+  background: linear-gradient(135deg, #fb7185, #f97316);
+  color: #ffffff;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.date-proposal-secondary,
+.date-proposal-ghost,
+.date-planner-reset {
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #fff1f5;
+  color: #8a285f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.date-proposal-ghost {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.date-planner-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.date-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.date-type-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff7ed;
+  color: #7c2d12;
+  border: 1px solid #fed7aa;
+  text-align: left;
+}
+
+.date-type-chip strong {
+  font-size: 13px;
+}
+
+.date-type-chip.active {
+  background: linear-gradient(135deg, #fff1f5, #ffedd5);
+  border-color: #fb7185;
+  box-shadow: 0 12px 26px rgba(249, 115, 22, 0.12);
+}
+
+.date-slot-chip {
+  background: #f8f4f6;
+}
+
+.date-slot-chip.active {
+  background: #ffe4e6;
+  color: #9d174d;
+}
+
+.date-planner-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.date-planner-field input,
+.date-planner-field textarea,
+.date-feedback-grid select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e8d7dd;
+  background: #ffffff;
+  color: #2f1f35;
+  font: inherit;
+}
+
+.date-feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.date-feedback-grid label,
+.date-feedback-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #4b3942;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.date-feedback-toggle {
+  flex-direction: row;
+  align-items: center;
+}
+
+.date-proposal-primary:hover,
+.date-proposal-secondary:hover,
+.date-proposal-ghost:hover,
+.date-planner-submit:hover,
+.date-planner-reset:hover,
+.date-slot-chip:hover,
+.date-type-chip:hover {
+  transform: translateY(-1px);
+}
+
+.date-proposal-primary:disabled,
+.date-proposal-secondary:disabled,
+.date-proposal-ghost:disabled,
+.date-planner-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  .date-journey-header,
+  .date-proposal-card-header,
+  .date-planner-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .date-type-grid,
+  .date-feedback-grid {
+    grid-template-columns: 1fr;
+  }
+}

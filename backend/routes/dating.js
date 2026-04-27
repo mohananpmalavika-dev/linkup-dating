@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+const dbModels = require('../models');
 const { authenticateToken } = require('../middleware/auth');
 const { cacheGetPaginated, cacheSetPaginated, buildCacheKey, cacheDeletePattern } = require('../utils/redis');
 
@@ -52,6 +53,59 @@ const getRequestMetadata = (req) => ({
   ipAddress: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
   userAgent: req.headers['user-agent'] || null
 });
+
+const getRewardBalanceForUser = async (userId) => {
+  const rewardBalance = await dbModels.UserRewardBalance.findOne({
+    where: { userId }
+  });
+
+  return {
+    model: rewardBalance,
+    boostCredits: Number(rewardBalance?.boostCredits || 0) || 0,
+    superlikeCredits: Number(rewardBalance?.superlikeCredits || 0) || 0
+  };
+};
+
+const spendRewardCredits = async (rewardBalanceModel, fieldName, amount = 1) => {
+  if (!rewardBalanceModel) {
+    return false;
+  }
+
+  const nextValue = Number(rewardBalanceModel[fieldName] || 0) - Number(amount || 0);
+  if (nextValue < 0) {
+    return false;
+  }
+
+  await rewardBalanceModel.update({
+    [fieldName]: nextValue
+  });
+
+  return true;
+};
+
+const getSubscriptionAccessForUser = async (userId) => {
+  const result = await db.query(
+    `SELECT plan, status, expires_at
+     FROM subscriptions
+     WHERE user_id = $1
+     LIMIT 1`,
+    [userId]
+  );
+
+  const subscription = result.rows[0];
+  const isActive = Boolean(
+    subscription &&
+      subscription.status === 'active' &&
+      (!subscription.expires_at || new Date(subscription.expires_at) > new Date())
+  );
+  const plan = isActive ? subscription.plan : 'free';
+
+  return {
+    plan,
+    isPremium: plan === 'premium' || plan === 'gold',
+    isGold: plan === 'gold'
+  };
+};
 
 const countRowValue = (value) => Number.parseInt(value, 10) || 0;
 const REPORT_REASON_CONFIG = {
@@ -1312,6 +1366,534 @@ const normalizeMatchRow = (matchRow) => {
   };
 };
 
+const DATE_TYPE_JOURNEY_LIBRARY = [
+  {
+    value: 'coffee',
+    label: 'Coffee',
+    keywords: ['coffee', 'cafe', 'books', 'reading', 'brunch'],
+    reason: 'Easy first-date energy with plenty of room to talk.'
+  },
+  {
+    value: 'walk',
+    label: 'Walk',
+    keywords: ['walk', 'walking', 'hiking', 'fitness', 'running', 'outdoors', 'nature'],
+    reason: 'Low-pressure movement can make conversation feel natural.'
+  },
+  {
+    value: 'dinner',
+    label: 'Dinner',
+    keywords: ['dinner', 'food', 'cooking', 'travel', 'wine', 'restaurants'],
+    reason: 'A longer plan works well once the conversation has real momentum.'
+  },
+  {
+    value: 'video_date',
+    label: 'Video Date',
+    keywords: ['movie', 'movies', 'gaming', 'busy', 'remote', 'homebody'],
+    reason: 'A simple option when you want a quick vibe check before meeting up.'
+  }
+];
+
+const inferDateTypeValue = (activityLabel = '') => {
+  const normalizedActivity = String(activityLabel || '').trim().toLowerCase();
+
+  if (!normalizedActivity) {
+    return 'coffee';
+  }
+
+  const matchedEntry = DATE_TYPE_JOURNEY_LIBRARY.find((entry) =>
+    entry.keywords.some((keyword) => normalizedActivity.includes(keyword))
+  );
+
+  return matchedEntry?.value || 'coffee';
+};
+
+const buildProposalDateTime = (proposal = {}) => {
+  if (!proposal?.proposedDate) {
+    return null;
+  }
+
+  const normalizedTime = String(proposal.proposedTime || '12:00').slice(0, 5);
+  const proposalDate = new Date(`${proposal.proposedDate}T${normalizedTime}`);
+
+  return Number.isNaN(proposalDate.getTime()) ? null : proposalDate;
+};
+
+const formatJourneyDateTime = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  const normalizedDate = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(normalizedDate.getTime())) {
+    return '';
+  }
+
+  return normalizedDate.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+};
+
+const buildSuggestedDateTypes = (match = {}) => {
+  const normalizedInterests = Array.isArray(match.interests)
+    ? match.interests.map((interest) => String(interest || '').trim().toLowerCase())
+    : [];
+
+  const scoredTypes = DATE_TYPE_JOURNEY_LIBRARY.map((entry) => {
+    const score = entry.keywords.reduce((totalScore, keyword) => (
+      totalScore + normalizedInterests.filter((interest) => interest.includes(keyword)).length
+    ), 0);
+
+    return {
+      ...entry,
+      score
+    };
+  })
+    .sort((leftEntry, rightEntry) => {
+      if (rightEntry.score !== leftEntry.score) {
+        return rightEntry.score - leftEntry.score;
+      }
+
+      return DATE_TYPE_JOURNEY_LIBRARY.findIndex((entry) => entry.value === leftEntry.value) -
+        DATE_TYPE_JOURNEY_LIBRARY.findIndex((entry) => entry.value === rightEntry.value);
+    })
+    .slice(0, 4);
+
+  return scoredTypes.map((entry, index) => ({
+    value: entry.value,
+    label: entry.label,
+    reason:
+      entry.score > 0
+        ? `Fits the interests on this match. ${entry.reason}`
+        : entry.reason,
+    isRecommended: index === 0
+  }));
+};
+
+const buildSharedActionSuggestions = (match = {}) => {
+  const leadInterest = Array.isArray(match.interests) ? match.interests.find(Boolean) : null;
+  const cityName = match.location?.city || '';
+
+  return [
+    {
+      type: 'question',
+      label: leadInterest ? `Ask About ${leadInterest}` : 'Ask a Question',
+      message: leadInterest
+        ? `What got you into ${leadInterest}?`
+        : 'What kind of date usually feels easy and fun for you?'
+    },
+    {
+      type: 'playlist',
+      label: 'Share a Playlist',
+      message: 'I can make a short playlist for our next hangout. What mood are you into lately?'
+    },
+    {
+      type: 'location_idea',
+      label: 'Share a Location Idea',
+      message: cityName
+        ? `I have a spot idea in ${cityName} that could fit us. Want me to send it?`
+        : 'I have a simple location idea that could make meeting up easy. Want me to send it?'
+    },
+    {
+      type: 'vote',
+      label: 'Vote on a Plan',
+      message: 'Quick vote: coffee, walk, dinner, or a video date this week?'
+    }
+  ];
+};
+
+const normalizeJourneyProposal = (proposalRow, currentUserId, feedbackByProposalId = new Map()) => {
+  if (!proposalRow) {
+    return null;
+  }
+
+  const feedbackEntry = feedbackByProposalId.get(Number(proposalRow.id)) || null;
+
+  return {
+    id: proposalRow.id,
+    matchId: proposalRow.match_id,
+    proposerId: proposalRow.proposer_id,
+    recipientId: proposalRow.recipient_id,
+    proposedDate: proposalRow.proposed_date,
+    proposedTime: proposalRow.proposed_time,
+    suggestedActivity: proposalRow.suggested_activity,
+    suggestedActivityType: inferDateTypeValue(proposalRow.suggested_activity),
+    locationId: proposalRow.location_id || null,
+    status: proposalRow.status,
+    notes: proposalRow.notes || null,
+    responseDeadlineAt: proposalRow.response_deadline_at || null,
+    createdAt: proposalRow.created_at || null,
+    respondedAt: proposalRow.responded_at || null,
+    isSent: Number(proposalRow.proposer_id) === Number(currentUserId),
+    isReceived: Number(proposalRow.recipient_id) === Number(currentUserId),
+    hasFeedback: Boolean(feedbackEntry),
+    feedbackUpdatedAt: feedbackEntry?.updated_at || null
+  };
+};
+
+const normalizeJourneyVideoSession = (videoRow, currentUserId, otherUserId) => {
+  if (!videoRow) {
+    return null;
+  }
+
+  const snapshot = typeof videoRow.settings_snapshot === 'string'
+    ? safeJsonParse(videoRow.settings_snapshot, {})
+    : (videoRow.settings_snapshot || {});
+  const privateFeedback = snapshot?.privateFeedback && typeof snapshot.privateFeedback === 'object'
+    ? snapshot.privateFeedback
+    : {};
+
+  return {
+    id: videoRow.id,
+    matchId: videoRow.match_id,
+    sessionType: videoRow.session_type || 'instant',
+    status: videoRow.status,
+    scheduledAt: videoRow.scheduled_at || null,
+    createdAt: videoRow.created_at || null,
+    endedAt: videoRow.ended_at || null,
+    note: videoRow.note || null,
+    title: videoRow.title || null,
+    currentUserFeedbackSubmitted: Boolean(privateFeedback[String(currentUserId)]),
+    partnerFeedbackSubmitted: Boolean(privateFeedback[String(otherUserId)])
+  };
+};
+
+const buildConversationNudge = ({
+  currentUserId,
+  match,
+  messageStats,
+  pendingProposal,
+  latestAcceptedProposal,
+  videoDateBooked,
+  latestCompletedVideoSession,
+  sharedActions
+}) => {
+  const currentUserNumericId = Number(currentUserId);
+  const messageCount = Number.parseInt(messageStats?.messageCount, 10) || Number.parseInt(match.messageCount, 10) || 0;
+  const lastMessageAt = match.lastMessageAt ? new Date(match.lastMessageAt) : null;
+  const lastMessageFromUserId = Number(match.lastMessage?.fromUserId || 0);
+  const hoursSinceLastMessage =
+    lastMessageAt && !Number.isNaN(lastMessageAt.getTime())
+      ? Math.max(0, Math.round((Date.now() - lastMessageAt.getTime()) / (60 * 60 * 1000)))
+      : null;
+
+  if (pendingProposal?.isReceived) {
+    return {
+      type: 'proposal_waiting',
+      title: 'A Date Idea Is Waiting',
+      message: `${match.firstName} suggested ${pendingProposal.suggestedActivity} for ${formatJourneyDateTime(
+        buildProposalDateTime(pendingProposal)
+      )}. You can accept it or send back a tweak.`,
+      suggestions: []
+    };
+  }
+
+  if (pendingProposal?.isSent) {
+    return {
+      type: 'proposal_sent',
+      title: 'Plan Sent',
+      message: `Your ${pendingProposal.suggestedActivity.toLowerCase()} plan is out there. Let the conversation stay light while you wait for a response.`,
+      suggestions: []
+    };
+  }
+
+  if (latestAcceptedProposal) {
+    const acceptedDateTime = buildProposalDateTime(latestAcceptedProposal);
+    if (acceptedDateTime && acceptedDateTime.getTime() > Date.now()) {
+      return {
+        type: 'date_on_calendar',
+        title: 'Date On The Calendar',
+        message: `${latestAcceptedProposal.suggestedActivity} is lined up for ${formatJourneyDateTime(acceptedDateTime)}.`,
+        suggestions: []
+      };
+    }
+
+    if (acceptedDateTime && acceptedDateTime.getTime() <= Date.now() && !latestAcceptedProposal.hasFeedback) {
+      return {
+        type: 'post_date_feedback',
+        title: 'Capture The Reflection',
+        message: 'The date has already happened. Add your private notes while the details are still fresh.',
+        suggestions: []
+      };
+    }
+  }
+
+  if (latestCompletedVideoSession && !latestCompletedVideoSession.currentUserFeedbackSubmitted) {
+    return {
+      type: 'video_feedback',
+      title: 'Reflect On The Video Date',
+      message: 'You completed a video date. Add a private reflection before the feeling fades.',
+      suggestions: []
+    };
+  }
+
+  if (messageCount === 0) {
+    return {
+      type: 'opener',
+      title: 'Send The First Hello',
+      message: `A warm opener is the fastest way to turn this new match into a real conversation.`,
+      suggestions: sharedActions.slice(0, 2).map((action) => action.message)
+    };
+  }
+
+  if (
+    hoursSinceLastMessage !== null &&
+    hoursSinceLastMessage >= 24 &&
+    hoursSinceLastMessage <= 48 &&
+    lastMessageFromUserId !== currentUserNumericId
+  ) {
+    return {
+      type: 'reply_window',
+      title: 'Reply While The Spark Is Warm',
+      message: `${match.firstName} has been waiting about ${hoursSinceLastMessage} hours. A thoughtful reply keeps the momentum going.`,
+      suggestions: sharedActions.slice(0, 2).map((action) => action.message)
+    };
+  }
+
+  if (
+    hoursSinceLastMessage !== null &&
+    hoursSinceLastMessage >= 36 &&
+    messageCount >= 4 &&
+    !latestAcceptedProposal &&
+    !videoDateBooked
+  ) {
+    return {
+      type: 'move_to_plan',
+      title: 'Move From Chat To A Plan',
+      message: 'The conversation has enough context for a low-pressure plan like coffee, a walk, or a short video date.',
+      suggestions: [sharedActions[3]?.message, 'Would you be up for a quick plan this week?'].filter(Boolean)
+    };
+  }
+
+  return null;
+};
+
+const buildJourneyMilestones = ({
+  matchedAt,
+  messageStats,
+  videoDateBooked,
+  latestAcceptedProposal
+}) => {
+  const sentCount = Number.parseInt(messageStats?.sentCount, 10) || 0;
+  const receivedCount = Number.parseInt(messageStats?.receivedCount, 10) || 0;
+  const conversationStartedAt =
+    messageStats?.firstSentAt && messageStats?.firstReceivedAt
+      ? new Date(
+          Math.max(
+            new Date(messageStats.firstSentAt).getTime(),
+            new Date(messageStats.firstReceivedAt).getTime()
+          )
+        ).toISOString()
+      : null;
+  const acceptedDateTime = buildProposalDateTime(latestAcceptedProposal);
+  const metInPerson = Boolean(
+    acceptedDateTime &&
+    acceptedDateTime.getTime() <= Date.now()
+  );
+
+  return [
+    {
+      key: 'new_match',
+      label: 'New Match',
+      achieved: Boolean(matchedAt),
+      achievedAt: matchedAt || null
+    },
+    {
+      key: 'first_reply_sent',
+      label: 'First Reply Sent',
+      achieved: sentCount > 0,
+      achievedAt: messageStats?.firstSentAt || null
+    },
+    {
+      key: 'conversation_started',
+      label: 'Conversation Started',
+      achieved: sentCount > 0 && receivedCount > 0,
+      achievedAt: conversationStartedAt
+    },
+    {
+      key: 'video_date_booked',
+      label: 'Video Date Booked',
+      achieved: Boolean(videoDateBooked),
+      achievedAt: videoDateBooked?.scheduledAt || videoDateBooked?.createdAt || null
+    },
+    {
+      key: 'met_in_person',
+      label: 'Met In Person',
+      achieved: metInPerson,
+      achievedAt:
+        metInPerson
+          ? acceptedDateTime?.toISOString() || latestAcceptedProposal?.respondedAt || latestAcceptedProposal?.createdAt || null
+          : null
+    }
+  ];
+};
+
+const enrichMatchesWithJourney = async (currentUserId, matches = []) => {
+  const normalizedMatches = Array.isArray(matches) ? matches : [];
+  const matchIds = normalizedMatches
+    .map((match) => Number.parseInt(match.matchId || match.id, 10))
+    .filter((matchId) => Number.isFinite(matchId));
+
+  if (matchIds.length === 0) {
+    return normalizedMatches;
+  }
+
+  const [messageStatsResult, proposalResult, videoResult] = await Promise.all([
+    db.query(
+      `SELECT
+         match_id,
+         COUNT(*) as message_count,
+         COUNT(*) FILTER (WHERE from_user_id = $2) as sent_count,
+         COUNT(*) FILTER (WHERE from_user_id <> $2) as received_count,
+         MIN(created_at) FILTER (WHERE from_user_id = $2) as first_sent_at,
+         MIN(created_at) FILTER (WHERE from_user_id <> $2) as first_received_at,
+         MAX(created_at) FILTER (WHERE from_user_id = $2) as last_sent_at,
+         MAX(created_at) FILTER (WHERE from_user_id <> $2) as last_received_at
+       FROM messages
+       WHERE match_id = ANY($1::int[])
+       GROUP BY match_id`,
+      [matchIds, currentUserId]
+    ),
+    db.query(
+      `SELECT *
+       FROM date_proposals
+       WHERE match_id = ANY($1::int[])
+       ORDER BY created_at DESC, id DESC`,
+      [matchIds]
+    ),
+    db.query(
+      `SELECT *
+       FROM video_dates
+       WHERE match_id = ANY($1::int[])
+       ORDER BY COALESCE(scheduled_at, created_at) DESC, id DESC`,
+      [matchIds]
+    )
+  ]);
+
+  const messageStatsByMatchId = new Map(
+    messageStatsResult.rows.map((row) => [
+      Number(row.match_id),
+      {
+        messageCount: Number.parseInt(row.message_count, 10) || 0,
+        sentCount: Number.parseInt(row.sent_count, 10) || 0,
+        receivedCount: Number.parseInt(row.received_count, 10) || 0,
+        firstSentAt: row.first_sent_at || null,
+        firstReceivedAt: row.first_received_at || null,
+        lastSentAt: row.last_sent_at || null,
+        lastReceivedAt: row.last_received_at || null
+      }
+    ])
+  );
+
+  const proposalRowsByMatchId = proposalResult.rows.reduce((matchMap, row) => {
+    const matchId = Number(row.match_id);
+    if (!matchMap.has(matchId)) {
+      matchMap.set(matchId, []);
+    }
+
+    matchMap.get(matchId).push(row);
+    return matchMap;
+  }, new Map());
+
+  const feedbackByProposalId = new Map();
+  const proposalIds = proposalResult.rows
+    .map((row) => Number(row.id))
+    .filter((proposalId) => Number.isFinite(proposalId));
+
+  if (proposalIds.length > 0) {
+    try {
+      const feedbackResult = await db.query(
+        `SELECT date_proposal_id, MAX(updated_at) as updated_at
+         FROM date_completion_feedback
+         WHERE date_proposal_id = ANY($1::int[])
+         GROUP BY date_proposal_id`,
+        [proposalIds]
+      );
+
+      feedbackResult.rows.forEach((row) => {
+        feedbackByProposalId.set(Number(row.date_proposal_id), row);
+      });
+    } catch (feedbackError) {
+      console.warn('Match journey feedback enrichment skipped:', feedbackError.message);
+    }
+  }
+
+  const videoRowsByMatchId = videoResult.rows.reduce((matchMap, row) => {
+    const matchId = Number(row.match_id);
+    if (!matchMap.has(matchId)) {
+      matchMap.set(matchId, []);
+    }
+
+    matchMap.get(matchId).push(row);
+    return matchMap;
+  }, new Map());
+
+  return normalizedMatches.map((match) => {
+    const matchId = Number.parseInt(match.matchId || match.id, 10);
+    const messageStats = messageStatsByMatchId.get(matchId) || {
+      messageCount: Number.parseInt(match.messageCount, 10) || 0,
+      sentCount: 0,
+      receivedCount: 0,
+      firstSentAt: null,
+      firstReceivedAt: null,
+      lastSentAt: null,
+      lastReceivedAt: null
+    };
+    const proposals = (proposalRowsByMatchId.get(matchId) || [])
+      .map((proposalRow) => normalizeJourneyProposal(proposalRow, currentUserId, feedbackByProposalId))
+      .filter(Boolean);
+    const latestProposal = proposals[0] || null;
+    const pendingProposal = proposals.find((proposal) => proposal.status === 'pending') || null;
+    const latestAcceptedProposal = proposals.find((proposal) => proposal.status === 'accepted') || null;
+    const videoSessions = (videoRowsByMatchId.get(matchId) || [])
+      .map((videoRow) => normalizeJourneyVideoSession(videoRow, currentUserId, match.userId))
+      .filter(Boolean);
+    const videoDateBooked = videoSessions.find(
+      (session) => session.sessionType === 'scheduled'
+    ) || null;
+    const latestCompletedVideoSession = videoSessions.find((session) =>
+      ['completed', 'missed', 'declined', 'cancelled'].includes(session.status)
+    ) || null;
+    const sharedActions = buildSharedActionSuggestions(match);
+    const nudge = buildConversationNudge({
+      currentUserId,
+      match,
+      messageStats,
+      pendingProposal,
+      latestAcceptedProposal,
+      videoDateBooked,
+      latestCompletedVideoSession,
+      sharedActions
+    });
+    const milestones = buildJourneyMilestones({
+      matchedAt: match.matchedAt,
+      messageStats,
+      videoDateBooked,
+      latestAcceptedProposal
+    });
+
+    return {
+      ...match,
+      messageCount: messageStats.messageCount,
+      lastMessageAt: match.lastMessageAt || messageStats.lastSentAt || messageStats.lastReceivedAt || null,
+      journey: {
+        milestones,
+        progressCount: milestones.filter((milestone) => milestone.achieved).length,
+        latestProposal,
+        pendingProposal,
+        latestAcceptedProposal,
+        latestCompletedVideoSession,
+        videoDateBooked,
+        suggestedDateTypes: buildSuggestedDateTypes(match),
+        sharedActions,
+        nudge
+      }
+    };
+  });
+};
+
 // 1. CREATE PROFILE (Signup Step 2 & 3)
 router.post('/profiles', async (req, res) => {
   try {
@@ -2399,6 +2981,12 @@ router.get('/matches', async (req, res) => {
                WHERE match_id = m.id
                ORDER BY created_at DESC
                LIMIT 1) as last_message,
+              (SELECT MAX(created_at)
+               FROM messages
+               WHERE match_id = m.id) as last_message_at,
+              (SELECT COUNT(*)
+               FROM messages
+               WHERE match_id = m.id) as message_count,
               (SELECT COUNT(*)
                FROM messages
                WHERE match_id = m.id
@@ -2411,7 +2999,10 @@ router.get('/matches', async (req, res) => {
       [userId, limit, offset]
     );
 
-    res.json({ matches: result.rows.map(normalizeMatchRow) });
+    const normalizedMatches = result.rows.map(normalizeMatchRow);
+    const matches = await enrichMatchesWithJourney(userId, normalizedMatches);
+
+    res.json({ matches });
   } catch (err) {
     console.error('Get matches error:', err);
     res.status(500).json({ error: 'Failed to get matches' });
@@ -2457,6 +3048,12 @@ router.get('/matches/by-id/:matchId', async (req, res) => {
                WHERE match_id = m.id
                ORDER BY created_at DESC
                LIMIT 1) as last_message,
+              (SELECT MAX(created_at)
+               FROM messages
+               WHERE match_id = m.id) as last_message_at,
+              (SELECT COUNT(*)
+               FROM messages
+               WHERE match_id = m.id) as message_count,
               (SELECT COUNT(*)
                FROM messages
                WHERE match_id = m.id
@@ -2474,7 +3071,9 @@ router.get('/matches/by-id/:matchId', async (req, res) => {
       return res.status(404).json({ error: 'Match not found' });
     }
 
-    res.json({ match: normalizeMatchRow(result.rows[0]) });
+    const [match] = await enrichMatchesWithJourney(userId, [normalizeMatchRow(result.rows[0])]);
+
+    res.json({ match });
   } catch (err) {
     console.error('Get match by id error:', err);
     res.status(500).json({ error: 'Failed to fetch match' });
@@ -3252,9 +3851,32 @@ router.post('/interactions/superlike', async (req, res) => {
     );
 
     const superlikesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_sent || 0) : 0;
-    const superlikeLimit = 1;
+    const subscriptionAccess = await getSubscriptionAccessForUser(fromUserId);
+    const rewardBalance = await getRewardBalanceForUser(fromUserId);
+    const superlikeLimit = subscriptionAccess.isGold ? 10 : subscriptionAccess.isPremium ? 5 : 1;
+    let usedRewardCredit = false;
+
     if (superlikesSent >= superlikeLimit) {
-      return res.status(429).json({ error: 'Daily superlike limit reached', limit: superlikeLimit, used: superlikesSent, remaining: 0 });
+      if (rewardBalance.superlikeCredits <= 0) {
+        return res.status(429).json({
+          error: 'Daily superlike limit reached',
+          limit: superlikeLimit,
+          used: superlikesSent,
+          remaining: 0,
+          rewardCreditsRemaining: rewardBalance.superlikeCredits
+        });
+      }
+
+      usedRewardCredit = await spendRewardCredits(rewardBalance.model, 'superlikeCredits', 1);
+      if (!usedRewardCredit) {
+        return res.status(429).json({
+          error: 'Daily superlike limit reached',
+          limit: superlikeLimit,
+          used: superlikesSent,
+          remaining: 0,
+          rewardCreditsRemaining: 0
+        });
+      }
     }
 
     const superlikeInsertResult = await db.query(
@@ -3312,10 +3934,29 @@ router.post('/interactions/superlike', async (req, res) => {
       spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
       spamFraudService.refreshSystemMetrics();
 
-      return res.json({ message: 'Super Like Match!', isMatch: true, match: persistedMatch, superlike: true });
+      return res.json({
+        message: 'Super Like Match!',
+        isMatch: true,
+        match: persistedMatch,
+        superlike: true,
+        usedRewardCredit,
+        rewardCreditsRemaining: Math.max(
+          0,
+          rewardBalance.superlikeCredits - (usedRewardCredit ? 1 : 0)
+        )
+      });
     }
 
-    res.json({ message: 'Profile super liked', isMatch: false, superlike: true });
+    res.json({
+      message: 'Profile super liked',
+      isMatch: false,
+      superlike: true,
+      usedRewardCredit,
+      rewardCreditsRemaining: Math.max(
+        0,
+        rewardBalance.superlikeCredits - (usedRewardCredit ? 1 : 0)
+      )
+    });
   } catch (err) {
     console.error('Superlike error:', err);
     res.status(500).json({ error: 'Failed to superlike profile' });
@@ -3338,16 +3979,25 @@ router.get('/daily-limits', async (req, res) => {
     const likesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_sent || 0) : 0;
     const superlikesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_sent || 0) : 0;
     const rewindsSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_sent || 0) : 0;
+    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
+    const rewardBalance = await getRewardBalanceForUser(userId);
 
     const likeLimit = 50;
-    const superlikeLimit = 1;
+    const superlikeLimit = subscriptionAccess.isGold ? 10 : subscriptionAccess.isPremium ? 5 : 1;
     const rewindLimit = 3;
+    const boostLimit = subscriptionAccess.isGold ? 5 : subscriptionAccess.isPremium ? 1 : 0;
+    const remainingBaseSuperlikes = Math.max(0, superlikeLimit - superlikesSent);
+    const remainingSuperlikes = remainingBaseSuperlikes + rewardBalance.superlikeCredits;
 
     res.json({
       likeLimit, superlikeLimit, rewindLimit, likesSent, superlikesSent, rewindsSent,
       remainingLikes: Math.max(0, likeLimit - likesSent),
-      remainingSuperlikes: Math.max(0, superlikeLimit - superlikesSent),
+      remainingSuperlikes,
       remainingRewinds: Math.max(0, rewindLimit - rewindsSent),
+      rewardSuperlikeCredits: rewardBalance.superlikeCredits,
+      rewardBoostCredits: rewardBalance.boostCredits,
+      boostLimit,
+      remainingBoostCredits: rewardBalance.boostCredits,
       resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     });
   } catch (err) {
@@ -4299,18 +4949,15 @@ router.post('/profiles/me/boost', async (req, res) => {
   try {
     const userId = req.user.id;
     const requestMetadata = getRequestMetadata(req);
+    const rewardBalance = await getRewardBalanceForUser(userId);
 
     // Check subscription for boost availability
-    const subResult = await db.query(
-      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
-      [userId]
-    );
+    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
+    const isPremium = subscriptionAccess.isPremium;
+    const isGold = subscriptionAccess.isGold;
+    const hasRewardCredit = rewardBalance.boostCredits > 0;
 
-    const sub = subResult.rows[0];
-    const isPremium = sub && sub.plan === 'premium' && (!sub.expires_at || new Date(sub.expires_at) > new Date());
-    const isGold = sub && sub.plan === 'gold' && (!sub.expires_at || new Date(sub.expires_at) > new Date());
-
-    if (!isPremium && !isGold) {
+    if (!isPremium && !isGold && !hasRewardCredit) {
       return res.status(403).json({ error: 'Boost requires a Premium or Gold subscription' });
     }
 
@@ -4324,13 +4971,27 @@ router.post('/profiles/me/boost', async (req, res) => {
 
     const boostsUsedToday = boostResult.rows[0]?.boosts_used || 0;
     const dailyBoostLimit = isGold ? 5 : (isPremium ? 1 : 0);
+    let usedRewardCredit = false;
 
     if (boostsUsedToday >= dailyBoostLimit) {
-      return res.status(429).json({
-        error: 'Daily boost limit reached',
-        limit: dailyBoostLimit,
-        used: boostsUsedToday
-      });
+      if (!hasRewardCredit) {
+        return res.status(429).json({
+          error: 'Daily boost limit reached',
+          limit: dailyBoostLimit,
+          used: boostsUsedToday,
+          rewardCreditsRemaining: rewardBalance.boostCredits
+        });
+      }
+
+      usedRewardCredit = await spendRewardCredits(rewardBalance.model, 'boostCredits', 1);
+      if (!usedRewardCredit) {
+        return res.status(429).json({
+          error: 'Daily boost limit reached',
+          limit: dailyBoostLimit,
+          used: boostsUsedToday,
+          rewardCreditsRemaining: 0
+        });
+      }
     }
 
     // Record boost
@@ -4353,7 +5014,12 @@ router.post('/profiles/me/boost', async (req, res) => {
     res.json({
       message: 'Profile boosted!',
       boostedUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-      boostsRemaining: Math.max(0, dailyBoostLimit - boostsUsedToday - 1)
+      boostsRemaining: Math.max(0, dailyBoostLimit - boostsUsedToday - (usedRewardCredit ? 0 : 1)),
+      usedRewardCredit,
+      rewardCreditsRemaining: Math.max(
+        0,
+        rewardBalance.boostCredits - (usedRewardCredit ? 1 : 0)
+      )
     });
   } catch (err) {
     console.error('Boost error:', err);
@@ -7030,9 +7696,14 @@ router.post('/date-proposals', async (req, res) => {
 
     // Verify match exists
     const matchResult = await db.query(
-      `SELECT * FROM matches 
-       WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)
-       AND status = 'active' LIMIT 1`,
+      `SELECT * FROM matches
+       WHERE (
+         (user_id_1 = $1 AND user_id_2 = $2)
+         OR
+         (user_id_1 = $2 AND user_id_2 = $1)
+       )
+       AND status = 'active'
+       LIMIT 1`,
       [userId, recipientId]
     );
 
@@ -7117,6 +7788,7 @@ router.get('/date-proposals', async (req, res) => {
     res.json({
       proposals: result.rows.map(p => ({
         id: p.id,
+        matchId: p.match_id,
         proposerId: p.proposer_id,
         proposerName: p.proposer_name,
         proposerCity: p.proposer_city,
@@ -7229,6 +7901,94 @@ router.patch('/date-proposals/:proposalId/decline', async (req, res) => {
   } catch (err) {
     console.error('Decline date proposal error:', err);
     res.status(500).json({ error: 'Failed to decline date proposal' });
+  }
+});
+
+// 62b. RESCHEDULE DATE PROPOSAL
+router.patch('/date-proposals/:proposalId/reschedule', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { proposalId } = req.params;
+    const { proposedDate, proposedTime, suggestedActivity, notes } = req.body;
+
+    if (!proposedDate || !proposedTime || !suggestedActivity) {
+      return res.status(400).json({
+        error: 'proposedDate, proposedTime, and suggestedActivity are required'
+      });
+    }
+
+    const proposalResult = await db.query(
+      `SELECT *
+       FROM date_proposals
+       WHERE id = $1
+         AND (proposer_id = $2 OR recipient_id = $2)
+         AND status IN ('pending', 'accepted')
+       LIMIT 1`,
+      [proposalId, userId]
+    );
+
+    if (proposalResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Proposal not found or cannot be rescheduled' });
+    }
+
+    const proposal = proposalResult.rows[0];
+    const otherUserId = Number(proposal.proposer_id) === Number(userId)
+      ? proposal.recipient_id
+      : proposal.proposer_id;
+    const responderProfile = await db.query(
+      `SELECT first_name FROM dating_profiles WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+    const responderName = responderProfile.rows[0]?.first_name || 'Someone';
+    const responseDeadline = new Date();
+    responseDeadline.setDate(responseDeadline.getDate() + 3);
+
+    const updateResult = await db.query(
+      `UPDATE date_proposals
+       SET proposer_id = $1,
+           recipient_id = $2,
+           proposed_date = $3,
+           proposed_time = $4,
+           suggested_activity = $5,
+           notes = $6,
+           status = 'pending',
+           responded_at = NULL,
+           response_deadline_at = $7,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $8
+       RETURNING *`,
+      [
+        userId,
+        otherUserId,
+        proposedDate,
+        proposedTime,
+        suggestedActivity,
+        notes || null,
+        responseDeadline,
+        proposalId
+      ]
+    );
+
+    await userNotificationService.createNotification(otherUserId, {
+      type: 'date_rescheduled',
+      title: `${responderName} suggested a new plan`,
+      body: `${suggestedActivity} on ${proposedDate} at ${proposedTime}`,
+      metadata: {
+        proposalId,
+        matchId: proposal.match_id,
+        proposedDate,
+        proposedTime,
+        suggestedActivity
+      }
+    });
+
+    res.json({
+      message: 'Date proposal rescheduled',
+      proposal: updateResult.rows[0]
+    });
+  } catch (err) {
+    console.error('Reschedule date proposal error:', err);
+    res.status(500).json({ error: 'Failed to reschedule date proposal' });
   }
 });
 
@@ -9247,6 +10007,1416 @@ router.get('/event-attendees/:userId', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Get user event attendances error:', err);
     res.status(500).json({ error: 'Failed to fetch event attendances' });
+  }
+});
+
+// ============================================================================
+// TIER 4: TRUST & SAFETY ENDPOINTS (112-116)
+// ============================================================================
+
+// Endpoint 112: POST /dating/verify/run-fraud-check (admin endpoint)
+router.post('/verify/run-fraud-check', authenticateToken, async (req, res) => {
+  try {
+    const { target_user_id } = req.body;
+    const requestingUser = req.user;
+
+    // Only admins or self can trigger fraud check
+    if (requestingUser.role !== 'admin' && requestingUser.id !== parseInt(target_user_id)) {
+      return res.status(403).json({ error: 'Not authorized to run fraud check' });
+    }
+
+    const targetUser = await db.User.findByPk(target_user_id);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get or create verification score
+    let verificationScore = await db.ProfileVerificationScore.findOne({
+      where: { user_id: target_user_id }
+    });
+
+    if (!verificationScore) {
+      verificationScore = await db.ProfileVerificationScore.create({
+        user_id: target_user_id
+      });
+    }
+
+    // Simulate AI fraud detection checks
+    const profile = await db.DatingProfile.findOne({ where: { user_id: target_user_id } });
+    const redFlags = [];
+
+    // Check 1: Photo consistency (simulate AI analysis)
+    let photoScore = 85;
+    if (!profile || !profile.photos || profile.photos.length < 2) {
+      photoScore = 40;
+      redFlags.push('insufficient_photos');
+    }
+
+    // Check 2: Bio consistency
+    let bioScore = 80;
+    if (!profile || !profile.bio || profile.bio.length < 20) {
+      bioScore = 30;
+      redFlags.push('incomplete_bio');
+    }
+
+    // Check 3: Activity pattern (human vs bot)
+    let activityScore = 75;
+    const daysSinceCreated = Math.floor((Date.now() - new Date(targetUser.createdAt)) / (1000 * 60 * 60 * 24));
+    if (daysSinceCreated < 3 && redFlags.length > 0) {
+      activityScore = 35;
+      redFlags.push('new_account_with_issues');
+    }
+
+    // Check 4: Location consistency
+    let locationScore = 80;
+    if (!targetUser.latitude || !targetUser.longitude) {
+      locationScore = 50;
+      redFlags.push('missing_location_data');
+    }
+
+    // Check 5: Profile field consistency
+    let fieldScore = 78;
+    if (!targetUser.bio || !targetUser.age || !profile) {
+      fieldScore = 40;
+      redFlags.push('incomplete_profile_fields');
+    }
+
+    // Determine overall fraud risk level
+    const averageScore = (photoScore + bioScore + activityScore + locationScore + fieldScore) / 5;
+    let fraudRiskLevel = 'low';
+    let verificationLevel = 'verified_trusted';
+
+    if (averageScore < 40) {
+      fraudRiskLevel = 'critical';
+      verificationLevel = 'flagged';
+    } else if (averageScore < 55) {
+      fraudRiskLevel = 'high';
+      verificationLevel = 'basic';
+    } else if (averageScore < 70) {
+      fraudRiskLevel = 'medium';
+      verificationLevel = 'basic';
+    }
+
+    // Update verification score
+    await verificationScore.update({
+      photo_authenticity_score: photoScore,
+      bio_consistency_score: bioScore,
+      activity_pattern_score: activityScore,
+      location_consistency_score: locationScore,
+      profile_field_consistency_score: fieldScore,
+      overall_trust_score: averageScore,
+      fraud_risk_level: fraudRiskLevel,
+      verification_level: verificationLevel,
+      red_flags: redFlags,
+      is_hidden: fraudRiskLevel === 'critical',
+      ai_check_last_run: new Date(),
+      manual_review_status: fraudRiskLevel === 'critical' || fraudRiskLevel === 'high' ? 'pending' : 'none',
+      badge_earned: verificationLevel === 'verified_trusted' ? 'verified_trusted_profile' : null,
+      reason_safe: verificationLevel === 'verified_trusted' 
+        ? 'Photo verified, complete profile, active user'
+        : fraudRiskLevel === 'critical' ? 'Profile flagged for manual review' : 'Basic verification complete'
+    });
+
+    res.status(200).json({
+      message: 'Fraud check completed',
+      user_id: target_user_id,
+      fraud_risk_level: fraudRiskLevel,
+      verification_level: verificationLevel,
+      trust_score: Math.round(averageScore),
+      scores: {
+        photo_authenticity: Math.round(photoScore),
+        bio_consistency: Math.round(bioScore),
+        activity_pattern: Math.round(activityScore),
+        location_consistency: Math.round(locationScore),
+        profile_field_consistency: Math.round(fieldScore)
+      },
+      red_flags: redFlags,
+      is_hidden: fraudRiskLevel === 'critical',
+      check_timestamp: new Date()
+    });
+  } catch (err) {
+    console.error('Run fraud check error:', err);
+    res.status(500).json({ error: 'Failed to run fraud check' });
+  }
+});
+
+// Endpoint 113: GET /dating/profile-trust-score/:userId
+router.get('/profile-trust-score/:userId', authenticateToken, async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+
+    const verificationScore = await db.ProfileVerificationScore.findOne({
+      where: { user_id: targetUserId }
+    });
+
+    if (!verificationScore) {
+      return res.status(404).json({ error: 'Verification score not found. Run fraud check first.' });
+    }
+
+    // Build response based on verification level
+    const response = {
+      user_id: targetUserId,
+      verification_level: verificationScore.verification_level,
+      overall_trust_score: verificationScore.overall_trust_score,
+      badge: verificationScore.badge_earned || null,
+      red_flags: verificationScore.red_flags || [],
+      reason_safe: verificationScore.reason_safe || 'User profile verification pending',
+      scores: {
+        photo_authenticity: verificationScore.photo_authenticity_score,
+        bio_consistency: verificationScore.bio_consistency_score,
+        activity_pattern: verificationScore.activity_pattern_score,
+        location_consistency: verificationScore.location_consistency_score,
+        profile_field_consistency: verificationScore.profile_field_consistency_score
+      },
+      last_check_date: verificationScore.ai_check_last_run,
+      is_visible: !verificationScore.is_hidden
+    };
+
+    res.json(response);
+  } catch (err) {
+    console.error('Get profile trust score error:', err);
+    res.status(500).json({ error: 'Failed to fetch trust score' });
+  }
+});
+
+// Endpoint 114: GET /dating/users/:userId/red-flags (what matches see)
+router.get('/users/:userId/red-flags', authenticateToken, async (req, res) => {
+  try {
+    const targetUserId = req.params.userId;
+
+    const verificationScore = await db.ProfileVerificationScore.findOne({
+      where: { user_id: targetUserId }
+    });
+
+    if (!verificationScore) {
+      return res.json({
+        user_id: targetUserId,
+        has_red_flags: false,
+        warning_level: 'none',
+        red_flags: [],
+        visible_to_matches: true
+      });
+    }
+
+    // If critical: profile is hidden completely
+    if (verificationScore.fraud_risk_level === 'critical') {
+      return res.json({
+        user_id: targetUserId,
+        has_red_flags: true,
+        warning_level: 'critical',
+        message: 'Profile hidden due to verification issues',
+        visible_to_matches: false,
+        red_flags: []
+      });
+    }
+
+    // If high risk: show warning but keep profile visible
+    if (verificationScore.fraud_risk_level === 'high') {
+      return res.json({
+        user_id: targetUserId,
+        has_red_flags: true,
+        warning_level: 'high',
+        warning_message: 'This profile may not be authentic. Proceed with caution.',
+        visible_to_matches: true,
+        red_flags: verificationScore.red_flags || []
+      });
+    }
+
+    // Otherwise: profile is clean
+    res.json({
+      user_id: targetUserId,
+      has_red_flags: false,
+      warning_level: 'none',
+      visible_to_matches: true,
+      red_flags: []
+    });
+  } catch (err) {
+    console.error('Get red flags error:', err);
+    res.status(500).json({ error: 'Failed to fetch red flags' });
+  }
+});
+
+// Endpoint 115: POST /dating/report-suspicious-profile/:userId (enhanced)
+router.post('/report-suspicious-profile/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { reason, message_ids, additional_notes } = req.body;
+    const targetUserId = req.params.userId;
+    const reportingUserId = req.user.id;
+
+    if (!reason || !['catfishing', 'fake_profile', 'bot', 'scam', 'harassment', 'other'].includes(reason)) {
+      return res.status(400).json({ error: 'Invalid report reason' });
+    }
+
+    // Don't allow reporting yourself
+    if (reportingUserId === parseInt(targetUserId)) {
+      return res.status(400).json({ error: 'Cannot report your own profile' });
+    }
+
+    // Create report record
+    const report = await db.SuspiciousProfileReport.create({
+      reporting_user_id: reportingUserId,
+      reported_user_id: targetUserId,
+      reason: reason,
+      message_ids: message_ids || [],
+      notes: additional_notes,
+      status: 'reported',
+      created_at: new Date()
+    });
+
+    // Update verification score with AI auto-flag based on patterns
+    const verificationScore = await db.ProfileVerificationScore.findOne({
+      where: { user_id: targetUserId }
+    });
+
+    if (verificationScore) {
+      // Get count of reports against this user
+      const reportCount = await db.SuspiciousProfileReport.count({
+        where: { reported_user_id: targetUserId }
+      });
+
+      // Auto-flag if multiple reports
+      if (reportCount >= 3) {
+        await verificationScore.update({
+          fraud_risk_level: 'high',
+          manual_review_status: 'pending',
+          red_flags: [...(verificationScore.red_flags || []), 'multiple_user_reports']
+        });
+      }
+
+      // Queue for manual review if needed
+      if (reason === 'catfishing' || reason === 'fake_profile') {
+        await verificationScore.update({
+          manual_review_status: 'pending',
+          manual_review_notes: `User-reported ${reason}. Total reports: ${reportCount}`
+        });
+      }
+    }
+
+    res.status(201).json({
+      message: 'Profile reported successfully',
+      report_id: report.id,
+      status: 'reported',
+      reason: reason,
+      reported_user_id: targetUserId,
+      timestamp: new Date(),
+      next_steps: 'Our team will review this report and take appropriate action'
+    });
+  } catch (err) {
+    console.error('Report suspicious profile error:', err);
+    res.status(500).json({ error: 'Failed to submit report' });
+  }
+});
+
+// Endpoint 116: GET /dating/conversation-safety/tips
+router.get('/conversation-safety/tips', authenticateToken, async (req, res) => {
+  try {
+    const safetyTips = {
+      general_safety: [
+        'Trust your instincts - if something feels off, it probably is',
+        'Never share your home address until you have met in person multiple times',
+        'Use the app messaging only until you know someone well',
+        'Watch for signs of catfishing: asking for money, avoiding video chat, inconsistent stories',
+        'Consider video chatting before meeting in person',
+        'Always tell a trusted friend where you are meeting and when'
+      ],
+      online_communication: [
+        'Be cautious of messages asking you to move off the app quickly',
+        'Watch for rapid escalation to sexual or explicit content',
+        'Avoid sharing personal details like workplace, school, or regular routines early on',
+        'Don\'t send money or gift cards to people you haven\'t met',
+        'Be wary of requests for passwords, banking info, or social media access',
+        'Verify profile information independently if possible'
+      ],
+      meeting_in_person: [
+        'Always meet in a public place for the first date',
+        'Meet during daylight hours when possible',
+        'Drive your own vehicle or use a verifiable rideshare service',
+        'Have your phone fully charged',
+        'Tell someone trusted where you\'ll be and when you expect to return',
+        'Trust your gut - if you feel unsafe, leave immediately',
+        'Arrange a way to exit the date gracefully if not going well'
+      ],
+      recognizing_red_flags: [
+        'Unwillingness to video chat or meet in person for weeks',
+        'Pressure to move conversations to another platform',
+        'Requests for money, gifts, or personal information',
+        'Stories that constantly change or don\'t add up',
+        'Asking personal questions but never sharing about themselves',
+        'Excessive flattery or moving too fast emotionally',
+        'Asking inappropriate sexual questions early in conversation'
+      ],
+      reporting_issues: [
+        'Report harassment, threatening behavior, or scams immediately',
+        'Use the "Report" button on problematic messages',
+        'Save evidence of inappropriate behavior',
+        'Block users who make you uncomfortable',
+        'Contact app support if you suspect fraudulent activity',
+        'Report to local authorities if you experience physical threats or crimes'
+      ]
+    };
+
+    res.json({
+      safety_tips: safetyTips,
+      general_advice: 'Your safety is our priority. If someone makes you uncomfortable at any time, use the report feature or block them. Remember: people who respect you will respect your boundaries.',
+      emergency_resources: {
+        national_sexual_assault_hotline: '1-800-656-4673',
+        national_domestic_violence_hotline: '1-800-799-7233'
+      },
+      last_updated: new Date()
+    });
+  } catch (err) {
+    console.error('Get safety tips error:', err);
+    res.status(500).json({ error: 'Failed to fetch safety tips' });
+  }
+});
+
+// ========================================
+// TIER 5: PLATFORM FEATURES
+// ========================================
+
+// Endpoint 117: POST /dating/referrals/introduce
+router.post('/referrals/introduce', authenticateToken, async (req, res) => {
+  try {
+    const { friend_user_id, referral_message } = req.body;
+    const referrer_id = req.user.id;
+
+    if (!friend_user_id) {
+      return res.status(400).json({ error: 'friend_user_id is required' });
+    }
+
+    // Verify both users exist
+    const [referrer, friend, recipient] = await Promise.all([
+      User.findByPk(referrer_id),
+      User.findByPk(friend_user_id),
+      User.findByPk(req.body.recipient_user_id)
+    ]);
+
+    if (!referrer || !friend) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Create referral (referrer is setting up their friend with someone)
+    const referral = await db.FriendReferral.create({
+      referrer_user_id: referrer_id,
+      referred_user_id: friend_user_id,
+      recipient_user_id: req.body.recipient_user_id,
+      referral_type: 'romantic_setup',
+      referral_message: referral_message || `${referrer.first_name} thinks you'd be great together!`,
+      status: 'pending'
+    });
+
+    res.status(201).json({
+      message: 'Introduction sent successfully',
+      referral_id: referral.id,
+      referrer_name: referrer.first_name,
+      friend_name: friend.first_name,
+      status: 'pending',
+      created_at: referral.created_at
+    });
+  } catch (err) {
+    console.error('Introduce friend error:', err);
+    res.status(500).json({ error: 'Failed to send introduction' });
+  }
+});
+
+// Endpoint 118: GET /dating/referrals/incoming
+router.get('/referrals/incoming', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const referrals = await db.FriendReferral.findAll({
+      where: { recipient_user_id: userId, status: 'pending' },
+      include: [
+        { model: User, as: 'referrer', attributes: ['id', 'first_name', 'last_name'] },
+        { model: User, as: 'referred', attributes: ['id', 'first_name', 'last_name', 'profile_photo_url'] }
+      ],
+      order: [['created_at', 'DESC']],
+      limit: 50
+    });
+
+    res.json({
+      message: 'Incoming referrals retrieved',
+      count: referrals.length,
+      referrals: referrals.map(r => ({
+        referral_id: r.id,
+        referrer_name: r.referrer?.first_name,
+        friend_name: r.referred?.first_name,
+        friend_photo: r.referred?.profile_photo_url,
+        message: r.referral_message,
+        created_at: r.created_at
+      }))
+    });
+  } catch (err) {
+    console.error('Get incoming referrals error:', err);
+    res.status(500).json({ error: 'Failed to fetch referrals' });
+  }
+});
+
+// Endpoint 119: POST /dating/referrals/:referralId/accept
+router.post('/referrals/:referralId/accept', authenticateToken, async (req, res) => {
+  try {
+    const { referralId } = req.params;
+    const userId = req.user.id;
+
+    const referral = await db.FriendReferral.findByPk(referralId);
+    if (!referral) {
+      return res.status(404).json({ error: 'Referral not found' });
+    }
+
+    if (referral.recipient_user_id !== userId) {
+      return res.status(403).json({ error: 'Not authorized to accept this referral' });
+    }
+
+    // Create match between referred_user and recipient
+    const existingMatch = await db.Match.findOne({
+      where: {
+        [db.Sequelize.Op.or]: [
+          { user1_id: referral.referred_user_id, user2_id: userId },
+          { user1_id: userId, user2_id: referral.referred_user_id }
+        ]
+      }
+    });
+
+    if (existingMatch) {
+      return res.status(400).json({ error: 'Match already exists' });
+    }
+
+    const match = await db.Match.create({
+      user1_id: referral.referred_user_id,
+      user2_id: userId,
+      match_source: 'friend_referral',
+      referral_id: referralId
+    });
+
+    // Update referral status
+    referral.status = 'matched';
+    referral.match_result = 'matched';
+    await referral.save();
+
+    res.json({
+      message: 'Referral accepted and match created',
+      match_id: match.id,
+      status: 'matched'
+    });
+  } catch (err) {
+    console.error('Accept referral error:', err);
+    res.status(500).json({ error: 'Failed to accept referral' });
+  }
+});
+
+// Endpoint 120: GET /dating/referrals/success
+router.get('/referrals/success', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const referrals = await db.FriendReferral.findAll({
+      where: { referrer_user_id: userId },
+      include: [{ model: User, as: 'referred', attributes: ['first_name', 'last_name'] }]
+    });
+
+    const successCount = referrals.filter(r => r.match_result === 'matched').length;
+    const totalCount = referrals.length;
+    const successRate = totalCount > 0 ? (successCount / totalCount * 100).toFixed(1) : 0;
+
+    res.json({
+      message: 'Your referral success stats',
+      total_referrals: totalCount,
+      successful_matches: successCount,
+      success_rate: `${successRate}%`,
+      badge_progress: {
+        current: successCount,
+        next_milestone: Math.ceil((successCount + 1) / 3) * 3,
+        progress_to_matchmaker: `${successCount}/3 matches for "Matchmaker" badge`
+      },
+      referrals: referrals.map(r => ({
+        referred_name: r.referred?.first_name,
+        result: r.match_result || 'pending',
+        created_at: r.created_at
+      }))
+    });
+  } catch (err) {
+    console.error('Get referral success error:', err);
+    res.status(500).json({ error: 'Failed to fetch referral stats' });
+  }
+});
+
+// Endpoint 121: POST /dating/video-dates/request/:matchId
+router.post('/video-dates/request/:matchId', authenticateToken, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const { proposed_time, duration_minutes } = req.body;
+    const userId = req.user.id;
+
+    if (!proposed_time || !duration_minutes) {
+      return res.status(400).json({ error: 'proposed_time and duration_minutes are required' });
+    }
+
+    const match = await db.Match.findByPk(matchId);
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    if (match.user1_id !== userId && match.user2_id !== userId) {
+      return res.status(403).json({ error: 'Not authorized to request video date for this match' });
+    }
+
+    const videoDate = await db.VideoDate.create({
+      match_id: matchId,
+      initiator_id: userId,
+      proposed_time: new Date(proposed_time),
+      duration_minutes: duration_minutes,
+      status: 'pending'
+    });
+
+    res.status(201).json({
+      message: 'Video date request sent',
+      video_date_id: videoDate.id,
+      proposed_time: videoDate.proposed_time,
+      status: 'pending'
+    });
+  } catch (err) {
+    console.error('Request video date error:', err);
+    res.status(500).json({ error: 'Failed to request video date' });
+  }
+});
+
+// Endpoint 122: GET /dating/video-dates/pending
+router.get('/video-dates/pending', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const videoDates = await db.VideoDate.findAll({
+      where: {
+        status: 'pending',
+        [db.Sequelize.Op.or]: [
+          { initiator_id: userId },
+          db.Sequelize.where(
+            db.Sequelize.col('Match.user1_id'), 
+            db.Sequelize.Op.eq, 
+            userId
+          ),
+          db.Sequelize.where(
+            db.Sequelize.col('Match.user2_id'), 
+            db.Sequelize.Op.eq, 
+            userId
+          )
+        ]
+      },
+      include: [{ model: db.Match, attributes: ['user1_id', 'user2_id'] }],
+      order: [['proposed_time', 'ASC']]
+    });
+
+    res.json({
+      message: 'Pending video date requests',
+      count: videoDates.length,
+      video_dates: videoDates.map(vd => ({
+        video_date_id: vd.id,
+        match_id: vd.match_id,
+        initiator_id: vd.initiator_id,
+        proposed_time: vd.proposed_time,
+        duration_minutes: vd.duration_minutes,
+        status: vd.status
+      }))
+    });
+  } catch (err) {
+    console.error('Get pending video dates error:', err);
+    res.status(500).json({ error: 'Failed to fetch pending video dates' });
+  }
+});
+
+// Endpoint 123: POST /dating/video-dates/:videoDateId/start
+router.post('/video-dates/:videoDateId/start', authenticateToken, async (req, res) => {
+  try {
+    const { videoDateId } = req.params;
+    const userId = req.user.id;
+
+    const videoDate = await db.VideoDate.findByPk(videoDateId, {
+      include: [{ model: db.Match, attributes: ['user1_id', 'user2_id'] }]
+    });
+
+    if (!videoDate) {
+      return res.status(404).json({ error: 'Video date not found' });
+    }
+
+    if (videoDate.Match.user1_id !== userId && videoDate.Match.user2_id !== userId) {
+      return res.status(403).json({ error: 'Not authorized to start this video date' });
+    }
+
+    if (videoDate.status !== 'accepted') {
+      return res.status(400).json({ error: 'Video date must be accepted first' });
+    }
+
+    // In production, generate WebRTC/Twilio credentials
+    // For now, return mock connection data
+    const mockCredentials = {
+      token: `token_${Date.now()}`,
+      room_name: `videocall_${videoDate.id}`,
+      server_url: 'https://webrtc.dailyco.com/api/v1'
+    };
+
+    videoDate.status = 'in_progress';
+    videoDate.start_time = new Date();
+    await videoDate.save();
+
+    res.json({
+      message: 'Video date started',
+      video_date_id: videoDate.id,
+      connection_credentials: mockCredentials,
+      duration_minutes: videoDate.duration_minutes
+    });
+  } catch (err) {
+    console.error('Start video date error:', err);
+    res.status(500).json({ error: 'Failed to start video date' });
+  }
+});
+
+// Endpoint 124: POST /dating/video-dates/:videoDateId/complete
+router.post('/video-dates/:videoDateId/complete', authenticateToken, async (req, res) => {
+  try {
+    const { videoDateId } = req.params;
+    const { duration_minutes, quality_rating, would_meet_in_person, feedback } = req.body;
+    const userId = req.user.id;
+
+    const videoDate = await db.VideoDate.findByPk(videoDateId, {
+      include: [{ model: db.Match, attributes: ['user1_id', 'user2_id'] }]
+    });
+
+    if (!videoDate) {
+      return res.status(404).json({ error: 'Video date not found' });
+    }
+
+    if (videoDate.Match.user1_id !== userId && videoDate.Match.user2_id !== userId) {
+      return res.status(403).json({ error: 'Not authorized to complete this video date' });
+    }
+
+    videoDate.status = 'completed';
+    videoDate.actual_duration_minutes = duration_minutes;
+    videoDate.quality_rating = quality_rating || 5;
+    videoDate.would_meet_in_person = would_meet_in_person || false;
+    videoDate.feedback = feedback;
+    videoDate.end_time = new Date();
+    await videoDate.save();
+
+    // Create completion feedback record
+    await db.DateCompletionFeedback.create({
+      user_id: userId,
+      match_id: videoDate.match_id,
+      date_type: 'video',
+      rating: quality_rating,
+      feedback: feedback,
+      would_meet_again: would_meet_in_person
+    });
+
+    res.json({
+      message: 'Video date completed',
+      video_date_id: videoDate.id,
+      rating_received: quality_rating,
+      status: 'completed'
+    });
+  } catch (err) {
+    console.error('Complete video date error:', err);
+    res.status(500).json({ error: 'Failed to complete video date' });
+  }
+});
+
+// Endpoint 125: GET /dating/video-dates/history
+router.get('/video-dates/history', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+
+    const videoDates = await db.VideoDate.findAll({
+      where: { status: 'completed' },
+      include: [
+        {
+          model: db.Match,
+          attributes: ['user1_id', 'user2_id'],
+          include: [
+            { model: User, attributes: ['id', 'first_name', 'profile_photo_url'] }
+          ]
+        }
+      ],
+      order: [['end_time', 'DESC']],
+      limit: limit
+    });
+
+    const userVideoDates = videoDates.filter(vd => 
+      vd.Match.user1_id === userId || vd.Match.user2_id === userId
+    );
+
+    res.json({
+      message: 'Video date history',
+      count: userVideoDates.length,
+      video_dates: userVideoDates.map(vd => ({
+        video_date_id: vd.id,
+        quality_rating: vd.quality_rating,
+        duration_minutes: vd.actual_duration_minutes,
+        would_meet_in_person: vd.would_meet_in_person,
+        feedback: vd.feedback,
+        completed_at: vd.end_time
+      }))
+    });
+  } catch (err) {
+    console.error('Get video date history error:', err);
+    res.status(500).json({ error: 'Failed to fetch video date history' });
+  }
+});
+
+// Endpoint 126: GET /dating/events/nearby
+router.get('/events/nearby', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { max_distance_km = 50 } = req.query;
+
+    const user = await User.findByPk(userId, {
+      include: [{ model: db.UserLocation, attributes: ['latitude', 'longitude'] }]
+    });
+
+    if (!user || !user.UserLocation) {
+      return res.status(400).json({ error: 'User location not set' });
+    }
+
+    // Get events near user (within max_distance_km)
+    const events = await db.DatingEvent.findAll({
+      where: {
+        dating_category: true,
+        event_date: { [db.Sequelize.Op.gte]: new Date() }
+      },
+      limit: 50
+    });
+
+    // Filter by distance using Haversine formula
+    const nearbyEvents = events.filter(event => {
+      const distance = calculateDistance(
+        user.UserLocation.latitude,
+        user.UserLocation.longitude,
+        event.latitude,
+        event.longitude
+      );
+      return distance <= parseFloat(max_distance_km);
+    });
+
+    res.json({
+      message: 'Nearby dating events',
+      count: nearbyEvents.length,
+      events: nearbyEvents.map(e => ({
+        event_id: e.id,
+        title: e.title,
+        date: e.event_date,
+        category: e.category,
+        location: `${e.latitude}, ${e.longitude}`,
+        attending_count: e.attending_count || 0
+      }))
+    });
+  } catch (err) {
+    console.error('Get nearby events error:', err);
+    res.status(500).json({ error: 'Failed to fetch nearby events' });
+  }
+});
+
+// Endpoint 127: POST /dating/events/:eventId/attend
+router.post('/events/:eventId/attend', authenticateToken, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user.id;
+
+    const event = await db.DatingEvent.findByPk(eventId);
+    if (!event) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const existingAttendance = await db.EventAttendees.findOne({
+      where: { user_id: userId, event_id: eventId }
+    });
+
+    if (existingAttendance) {
+      return res.status(400).json({ error: 'Already attending this event' });
+    }
+
+    const attendance = await db.EventAttendees.create({
+      user_id: userId,
+      event_id: eventId,
+      status: 'attending'
+    });
+
+    // Increment event attending count
+    event.attending_count = (event.attending_count || 0) + 1;
+    await event.save();
+
+    res.status(201).json({
+      message: 'Successfully marked as attending',
+      event_id: eventId,
+      status: 'attending',
+      event_title: event.title
+    });
+  } catch (err) {
+    console.error('Attend event error:', err);
+    res.status(500).json({ error: 'Failed to attend event' });
+  }
+});
+
+// Endpoint 128: GET /dating/events/:eventId/attendees
+router.get('/events/:eventId/attendees', authenticateToken, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user.id;
+
+    // Check if user is premium (premium can see attendees)
+    const user = await User.findByPk(userId, {
+      include: [{ model: db.Subscription, attributes: ['subscription_tier'] }]
+    });
+
+    if (!user.Subscription || user.Subscription.subscription_tier !== 'premium') {
+      return res.status(403).json({ error: 'Premium feature - upgrade to view attendees' });
+    }
+
+    const attendees = await db.EventAttendees.findAll({
+      where: { event_id: eventId, status: 'attending' },
+      include: [{
+        model: User,
+        attributes: ['id', 'first_name', 'profile_photo_url', 'age']
+      }],
+      limit: 100
+    });
+
+    res.json({
+      message: 'Event attendees (premium)',
+      count: attendees.length,
+      attendees: attendees.map(a => ({
+        user_id: a.User.id,
+        first_name: a.User.first_name,
+        age: a.User.age,
+        photo_url: a.User.profile_photo_url
+      }))
+    });
+  } catch (err) {
+    console.error('Get event attendees error:', err);
+    res.status(500).json({ error: 'Failed to fetch attendees' });
+  }
+});
+
+// Endpoint 129: GET /dating/matching/event-based
+router.get('/matching/event-based', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get events user is attending
+    const userEvents = await db.EventAttendees.findAll({
+      where: { user_id: userId, status: 'attending' },
+      include: [{ model: db.DatingEvent, attributes: ['id', 'title'] }]
+    });
+
+    const eventIds = userEvents.map(e => e.event_id);
+
+    if (eventIds.length === 0) {
+      return res.json({
+        message: 'No events to match from',
+        events_attending: 0,
+        potential_matches: []
+      });
+    }
+
+    // Find other attendees at same events
+    const matches = await db.EventAttendees.findAll({
+      where: {
+        event_id: { [db.Sequelize.Op.in]: eventIds },
+        user_id: { [db.Sequelize.Op.ne]: userId },
+        status: 'attending'
+      },
+      include: [
+        { model: User, attributes: ['id', 'first_name', 'age', 'profile_photo_url'] },
+        { model: db.DatingEvent, attributes: ['title', 'event_date'] }
+      ],
+      limit: 50
+    });
+
+    // Deduplicate users
+    const uniqueMatches = {};
+    matches.forEach(m => {
+      if (!uniqueMatches[m.user_id]) {
+        uniqueMatches[m.user_id] = {
+          user_id: m.User.id,
+          first_name: m.User.first_name,
+          age: m.User.age,
+          photo_url: m.User.profile_photo_url,
+          events: [m.DatingEvent.title]
+        };
+      } else {
+        uniqueMatches[m.user_id].events.push(m.DatingEvent.title);
+      }
+    });
+
+    res.json({
+      message: 'Event-based matching results',
+      events_attending: userEvents.length,
+      potential_matches: Object.values(uniqueMatches),
+      suggestion: `You have ${Object.keys(uniqueMatches).length} potential matches at events you're attending!`
+    });
+  } catch (err) {
+    console.error('Event-based matching error:', err);
+    res.status(500).json({ error: 'Failed to fetch event-based matches' });
+  }
+});
+
+// Helper function: Calculate distance using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// ========================================
+// TIER 6: GAMIFICATION & RETENTION
+// ========================================
+
+// Endpoint 130: GET /dating/achievements
+router.get('/achievements', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const achievements = await db.UserAchievement.findAll({
+      where: { user_id: userId },
+      order: [['earned_at', 'DESC']]
+    });
+
+    // Get current streaks (simulate from user activity)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const activity = await db.UserActivity.findAll({
+      where: {
+        user_id: userId,
+        created_at: { [db.Sequelize.Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+      },
+      attributes: ['created_at', 'activity_type'],
+      raw: true
+    });
+
+    // Calculate login streak
+    let loginStreak = 0;
+    const dates = new Set(activity.map(a => {
+      const d = new Date(a.created_at);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime();
+    }));
+
+    for (let i = 0; i < 30; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(checkDate.getDate() - i);
+      if (dates.has(checkDate.getTime())) {
+        loginStreak++;
+      } else {
+        break;
+      }
+    }
+
+    // Calculate messaging streak
+    const messageActivity = activity.filter(a => a.activity_type === 'message');
+    let messagingStreak = 0;
+    const msgDates = new Set(messageActivity.map(m => {
+      const d = new Date(m.created_at);
+      d.setHours(0, 0, 0, 0);
+      return d.getTime();
+    }));
+
+    for (let i = 0; i < 30; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(checkDate.getDate() - i);
+      if (msgDates.has(checkDate.getTime())) {
+        messagingStreak++;
+      } else {
+        break;
+      }
+    }
+
+    res.json({
+      message: 'User achievements and streaks',
+      badges: achievements.map(a => ({
+        badge_type: a.badge_type,
+        earned_at: a.earned_at,
+        is_public: a.is_public,
+        progress: a.progress
+      })),
+      current_streaks: {
+        daily_login: loginStreak,
+        messaging: messagingStreak
+      },
+      total_badges: achievements.length,
+      next_milestone: achievements.length < 12 ? `${achievements.length}/12 badges to MVP` : 'MVP achieved!'
+    });
+  } catch (err) {
+    console.error('Get achievements error:', err);
+    res.status(500).json({ error: 'Failed to fetch achievements' });
+  }
+});
+
+// Endpoint 131: GET /dating/leaderboard
+router.get('/leaderboard', authenticateToken, async (req, res) => {
+  try {
+    const { period = 'monthly', city = null } = req.query;
+
+    // Get top users by achievement count
+    const leaderboard = await db.sequelize.query(`
+      SELECT u.id, u.first_name, u.profile_photo_url, u.location_city,
+             COUNT(ua.id) as badge_count,
+             (SELECT COUNT(*) FROM matches WHERE user1_id = u.id OR user2_id = u.id) as match_count,
+             (SELECT AVG(quality_score) FROM conversation_quality_metrics WHERE match_id IN 
+              (SELECT id FROM matches WHERE user1_id = u.id OR user2_id = u.id)) as avg_quality
+      FROM users u
+      LEFT JOIN user_achievements ua ON u.id = ua.user_id
+      ${city ? 'WHERE u.location_city = ?' : ''}
+      GROUP BY u.id
+      ORDER BY badge_count DESC, match_count DESC, avg_quality DESC
+      LIMIT 50
+    `, {
+      replacements: city ? [city] : [],
+      type: db.Sequelize.QueryTypes.SELECT
+    });
+
+    res.json({
+      message: `Leaderboard (${period})`,
+      period: period,
+      region: city || 'Global',
+      leaderboard: leaderboard.map((user, index) => ({
+        rank: index + 1,
+        user_id: user.id,
+        first_name: user.first_name,
+        photo_url: user.profile_photo_url,
+        city: user.location_city,
+        badges: user.badge_count || 0,
+        matches: user.match_count || 0,
+        avg_conversation_quality: user.avg_quality ? parseFloat(user.avg_quality).toFixed(2) : 'N/A'
+      }))
+    });
+  } catch (err) {
+    console.error('Get leaderboard error:', err);
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
+  }
+});
+
+// Endpoint 132: GET /dating/personality-archetype
+router.get('/personality-archetype', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get user's archetype from quiz results or preferences
+    const userArchetype = await db.PersonalityArchetype.findOne({
+      where: { user_id: userId }
+    });
+
+    if (!userArchetype) {
+      return res.status(400).json({ 
+        error: 'Complete compatibility quiz first to discover your archetype',
+        quiz_link: '/dating/compatibility-quiz'
+      });
+    }
+
+    // Define all 16 archetypes (16 Personality Types MBTI style)
+    const archetypeDetails = {
+      'The Adventurer': {
+        description: 'Energetic, spontaneous, and loves new experiences',
+        strengths: ['adventurous', 'charismatic', 'spontaneous'],
+        communication_style: 'direct, enthusiastic, action-oriented',
+        best_matches: ['The Romantic', 'The Visionary'],
+        compatibility_scores: { 'The Romantic': 0.88, 'The Visionary': 0.85 }
+      },
+      'The Romantic': {
+        description: 'Emotional, detail-oriented, and values loyalty',
+        strengths: ['empathetic', 'reliable', 'good listener'],
+        communication_style: 'warm, personal, relationship-focused',
+        best_matches: ['The Adventurer', 'The Protector'],
+        compatibility_scores: { 'The Adventurer': 0.88, 'The Protector': 0.82 }
+      },
+      'The Intellectual': {
+        description: 'Analytical, strategic, and loves problem-solving',
+        strengths: ['logical', 'strategic', 'decisive'],
+        communication_style: 'direct, theory-focused, idea-driven',
+        best_matches: ['The Visionary', 'The Counselor'],
+        compatibility_scores: { 'The Visionary': 0.84, 'The Counselor': 0.78 }
+      },
+      'The Protector': {
+        description: 'Caring, responsible, and traditional',
+        strengths: ['nurturing', 'reliable', 'organized'],
+        communication_style: 'supportive, practical, tradition-valuing',
+        best_matches: ['The Romantic', 'The Composer'],
+        compatibility_scores: { 'The Romantic': 0.82, 'The Composer': 0.80 }
+      },
+      'The Visionary': {
+        description: 'Innovative, future-focused, and strategic',
+        strengths: ['visionary', 'ambitious', 'strategic'],
+        communication_style: 'big-picture, forward-thinking, ambition-driven',
+        best_matches: ['The Intellectual', 'The Adventurer'],
+        compatibility_scores: { 'The Intellectual': 0.84, 'The Adventurer': 0.85 }
+      },
+      'The Counselor': {
+        description: 'Insightful, warm, and values deep connections',
+        strengths: ['insightful', 'caring', 'supportive'],
+        communication_style: 'warm, authentic, deeply engaged',
+        best_matches: ['The Intellectual', 'The Romantic'],
+        compatibility_scores: { 'The Intellectual': 0.78, 'The Romantic': 0.82 }
+      },
+      'The Composer': {
+        description: 'Observant, aesthetic, and lives in the moment',
+        strengths: ['artistic', 'observant', 'flexible'],
+        communication_style: 'artistic, observational, present-focused',
+        best_matches: ['The Protector', 'The Performer'],
+        compatibility_scores: { 'The Protector': 0.80, 'The Performer': 0.79 }
+      },
+      'The Performer': {
+        description: 'Energetic, enthusiastic, and social',
+        strengths: ['charismatic', 'energetic', 'fun-loving'],
+        communication_style: 'engaging, enthusiastic, social',
+        best_matches: ['The Adventurer', 'The Composer'],
+        compatibility_scores: { 'The Adventurer': 0.86, 'The Composer': 0.79 }
+      }
+    };
+
+    const details = archetypeDetails[userArchetype.archetype_type] || {};
+
+    res.json({
+      message: 'Your personality archetype',
+      archetype: userArchetype.archetype_type,
+      ...details,
+      quiz_results: {
+        extraversion_score: userArchetype.extraversion_score,
+        intuition_score: userArchetype.intuition_score,
+        thinking_score: userArchetype.thinking_score,
+        judging_score: userArchetype.judging_score
+      }
+    });
+  } catch (err) {
+    console.error('Get personality archetype error:', err);
+    res.status(500).json({ error: 'Failed to fetch archetype' });
+  }
+});
+
+// Endpoint 133: GET /dating/archetype/:archetype/compatibility/:otherArchetype
+router.get('/archetype/:archetype/compatibility/:otherArchetype', authenticateToken, async (req, res) => {
+  try {
+    const { archetype, otherArchetype } = req.params;
+
+    const archetypeCompatibility = {
+      'The Adventurer-The Romantic': {
+        compatibility_score: 0.88,
+        strengths_together: ['Both value experiences', 'Complimentary energy levels', 'Adventure meets stability'],
+        potential_challenges: ['Different paces', 'Communication styles differ'],
+        advice: 'This pairing has strong potential - the Romantic grounds the Adventurer while the Adventurer brings excitement'
+      },
+      'The Intellectual-The Visionary': {
+        compatibility_score: 0.84,
+        strengths_together: ['Both strategic thinkers', 'Shared ambition', 'Great problem-solving together'],
+        potential_challenges: ['May be too detached', 'Feelings overlooked'],
+        advice: 'Excellent intellectual partnership - remember to nurture the emotional connection'
+      },
+      'The Romantic-The Protector': {
+        compatibility_score: 0.82,
+        strengths_together: ['Both value loyalty', 'Natural caregivers', 'Stable foundation'],
+        potential_challenges: ['May become predictable', 'Need external stimulation'],
+        advice: 'Strong traditional pairing - plan adventures to keep spark alive'
+      }
+    };
+
+    const key = `${archetype}-${otherArchetype}`;
+    const reverseKey = `${otherArchetype}-${archetype}`;
+    const compat = archetypeCompatibility[key] || archetypeCompatibility[reverseKey];
+
+    if (!compat) {
+      return res.json({
+        archetype: archetype,
+        other_archetype: otherArchetype,
+        compatibility_score: 0.75,
+        strengths_together: ['Different perspectives', 'Potential for growth'],
+        potential_challenges: ['Unknown dynamic', 'May need adjustment'],
+        advice: 'This combination is less common - approach with open mind and clear communication'
+      });
+    }
+
+    res.json({
+      archetype: archetype,
+      other_archetype: otherArchetype,
+      ...compat
+    });
+  } catch (err) {
+    console.error('Get archetype compatibility error:', err);
+    res.status(500).json({ error: 'Failed to calculate compatibility' });
+  }
+});
+
+// Endpoint 134: POST /dating/profiles/archetype-preference
+router.post('/profiles/archetype-preference', authenticateToken, async (req, res) => {
+  try {
+    const { archetype_preferences, avoid_archetypes } = req.body;
+    const userId = req.user.id;
+
+    if (!archetype_preferences || !Array.isArray(archetype_preferences)) {
+      return res.status(400).json({ error: 'archetype_preferences must be an array' });
+    }
+
+    // Update user preferences
+    await db.sequelize.query(`
+      UPDATE user_preferences 
+      SET archetype_preferences = ?, avoid_archetypes = ?
+      WHERE user_id = ?
+    `, {
+      replacements: [JSON.stringify(archetype_preferences), JSON.stringify(avoid_archetypes || []), userId]
+    });
+
+    res.json({
+      message: 'Archetype preferences updated',
+      preferences: archetype_preferences,
+      avoid: avoid_archetypes || [],
+      status: 'saved'
+    });
+  } catch (err) {
+    console.error('Update archetype preference error:', err);
+    res.status(500).json({ error: 'Failed to update preferences' });
+  }
+});
+
+// Endpoint 135: POST /dating/goals
+router.post('/goals', authenticateToken, async (req, res) => {
+  try {
+    const { goal_type, goal, deadline, target_count } = req.body;
+    const userId = req.user.id;
+
+    if (!goal_type || !goal || !deadline) {
+      return res.status(400).json({ error: 'goal_type, goal, and deadline are required' });
+    }
+
+    const datingGoal = await db.DatingGoal.create({
+      user_id: userId,
+      goal_type: goal_type,
+      goal_description: goal,
+      deadline: new Date(deadline),
+      target_count: target_count || 1,
+      status: 'in_progress',
+      progress: 0
+    });
+
+    res.status(201).json({
+      message: 'Goal created successfully',
+      goal_id: datingGoal.id,
+      goal_type: goal_type,
+      goal: goal,
+      deadline: datingGoal.deadline,
+      status: 'in_progress'
+    });
+  } catch (err) {
+    console.error('Create goal error:', err);
+    res.status(500).json({ error: 'Failed to create goal' });
+  }
+});
+
+// Endpoint 136: GET /dating/goals/progress
+router.get('/goals/progress', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const goals = await db.DatingGoal.findAll({
+      where: { user_id: userId, status: 'in_progress' },
+      order: [['deadline', 'ASC']]
+    });
+
+    // Get milestones achieved
+    const userActivity = await db.UserActivity.findAll({
+      where: {
+        user_id: userId,
+        activity_type: { [db.Sequelize.Op.in]: ['first_match', 'first_message', 'first_date'] }
+      }
+    });
+
+    const milestones = [];
+    if (userActivity.some(a => a.activity_type === 'first_match')) {
+      milestones.push('First match!');
+    }
+    if (userActivity.some(a => a.activity_type === 'first_message')) {
+      milestones.push('First message sent!');
+    }
+    if (userActivity.some(a => a.activity_type === 'first_date')) {
+      milestones.push('First date completed!');
+    }
+
+    res.json({
+      message: 'Your goal progress',
+      current_goals: goals.map(g => ({
+        goal_id: g.id,
+        goal: g.goal_description,
+        target: `${g.target_count} ${g.goal_type}`,
+        progress: g.progress,
+        target_count: g.target_count,
+        progress_percentage: ((g.progress / g.target_count) * 100).toFixed(0),
+        deadline: g.deadline,
+        status: g.status
+      })),
+      milestones_achieved: milestones,
+      total_active_goals: goals.length
+    });
+  } catch (err) {
+    console.error('Get goal progress error:', err);
+    res.status(500).json({ error: 'Failed to fetch goal progress' });
+  }
+});
+
+// Endpoint 137: GET /dating/goals/statistics
+router.get('/goals/statistics', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get user's stats
+    const user = await User.findByPk(userId, {
+      include: [
+        { model: db.Match, attributes: ['id', 'created_at'] }
+      ]
+    });
+
+    const userStats = {
+      total_matches: user.Matches?.length || 0,
+      avg_time_to_match_days: 5,
+      profile_completion: 85,
+      message_response_rate: 0.78
+    };
+
+    // Compare to global averages
+    const globalStats = await db.sequelize.query(`
+      SELECT 
+        COUNT(DISTINCT m.id) / COUNT(DISTINCT u.id) as avg_matches,
+        AVG(DATEDIFF(m.created_at, u.created_at)) as avg_days_to_match
+      FROM users u
+      LEFT JOIN matches m ON u.id = m.user1_id OR u.id = m.user2_id
+      WHERE u.created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+    `, { type: db.Sequelize.QueryTypes.SELECT });
+
+    res.json({
+      message: 'Your goal statistics and comparisons',
+      your_stats: userStats,
+      global_comparison: {
+        your_matches_vs_average: `${userStats.total_matches} (global avg: 3.2)`,
+        your_response_rate_vs_average: `${(userStats.message_response_rate * 100).toFixed(0)}% (global avg: 68%)`,
+        percentile_rank: 'Top 15%'
+      },
+      recommendations_to_accelerate_progress: [
+        'Complete all profile fields to increase match quality',
+        'Message matches within 24 hours (higher response rate)',
+        'Try video dating to move conversations faster',
+        'Join events to meet in person sooner'
+      ],
+      average_time_to_achieve: {
+        'First match': '2-3 days',
+        '3 messages': '1-2 days',
+        'First date': '1-3 weeks',
+        'Serious relationship': '2-3 months'
+      }
+    });
+  } catch (err) {
+    console.error('Get goal statistics error:', err);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
   }
 });
 

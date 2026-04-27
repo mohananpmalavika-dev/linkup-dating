@@ -26,6 +26,7 @@ import VideoDating from './components/VideoDating';
 import ChatRooms from './components/ChatRooms';
 import ChatRoomView from './components/ChatRoomView';
 import LobbyChat from './components/LobbyChat';
+import SocialHub from './components/SocialHub';
 import AdminDashboard from './components/AdminDashboard';
 import datingProfileService from './services/datingProfileService';
 import datingMessagingService from './services/datingMessagingService';
@@ -90,16 +91,20 @@ const inferNavigationPage = (pathname, returnPath = '') => {
     return 'browse';
   }
 
+  if (targetPath.startsWith('/social')) {
+    return 'social';
+  }
+
   if (/^\/chatrooms\/[^/]+$/i.test(targetPath)) {
-    return 'chatrooms';
+    return 'social';
   }
 
   if (targetPath.startsWith('/chatrooms')) {
-    return 'chatrooms';
+    return 'social';
   }
 
   if (targetPath.startsWith('/lobby')) {
-    return 'lobby';
+    return 'social';
   }
 
   if (targetPath.startsWith('/profile')) {
@@ -177,7 +182,7 @@ const ProfileDetailRoute = ({
       profileId={userId}
       profile={normalizeProfileContext(location.state?.profile)}
       onBack={() => onNavigateToPath(location.state?.returnPath || DEFAULT_AUTHENTICATED_ROUTE)}
-      onMessage={(profile) => onOpenMessages(profile, location.pathname)}
+      onMessage={(profile, prefillMessage) => onOpenMessages(profile, location.pathname, { prefillMessage })}
       onScheduleVideoCall={onScheduleVideoCall}
       onVideoCall={onVideoCall}
     />
@@ -217,7 +222,7 @@ const ChatRoomDetailRoute = ({
   return (
     <ChatRoomView
       chatroomId={chatroomId}
-      onBack={() => onNavigateToChatrooms()}
+      onBack={() => onNavigateToChatrooms(location.state?.returnPath || '/chatrooms')}
     />
   );
 };
@@ -529,7 +534,7 @@ const AppContent = () => {
     navigate('/matches');
   };
 
-  const handleOpenMessages = (profile, returnPath = DEFAULT_MESSAGES_ROUTE) => {
+  const handleOpenMessages = (profile, returnPath = DEFAULT_MESSAGES_ROUTE, options = {}) => {
     const nextMatch = normalizeProfileContext(profile);
 
     if (!nextMatch?.matchId) {
@@ -541,7 +546,9 @@ const AppContent = () => {
     navigate(nextRoute, {
       state: {
         match: nextMatch,
-        returnPath
+        returnPath,
+        focusPlanner: Boolean(options.focusPlanner),
+        prefillMessage: options.prefillMessage || ''
       }
     });
   };
@@ -632,11 +639,8 @@ const AppContent = () => {
           }
         });
         break;
-      case 'chatrooms':
-        navigate('/chatrooms');
-        break;
-      case 'lobby':
-        navigate('/lobby');
+      case 'social':
+        navigate('/social');
         break;
       case 'profile':
         navigate('/profile');
@@ -781,6 +785,7 @@ const AppContent = () => {
                 <Matches
                   pageLabel="Messages"
                   onSelectMatch={(match) => handleOpenMessages(match, '/messages')}
+                  onPlanDate={(match) => handleOpenMessages(match, '/messages', { focusPlanner: true })}
                   onMatchCreated={refreshDatingCounts}
                   onUnmatch={handleUnmatch}
                   onViewProfile={(profile) => handleOpenProfile(profile, '/messages')}
@@ -800,6 +805,7 @@ const AppContent = () => {
                 <Matches
                   pageLabel="Matches"
                   onSelectMatch={(match) => handleOpenMessages(match, '/matches')}
+                  onPlanDate={(match) => handleOpenMessages(match, '/matches', { focusPlanner: true })}
                   onMatchCreated={refreshDatingCounts}
                   onUnmatch={handleUnmatch}
                   onViewProfile={(profile) => handleOpenProfile(profile, '/matches')}
@@ -856,13 +862,28 @@ const AppContent = () => {
               }
             />
             <Route
+              path="social"
+              element={
+                <SocialHub
+                  onMatchCreated={refreshDatingCounts}
+                  onOpenLobby={() => navigate('/lobby', { state: { returnPath: '/social' } })}
+                  onOpenChatroom={(chatroomId) =>
+                    navigate(`/chatrooms/${chatroomId}`, { state: { returnPath: '/social' } })
+                  }
+                  onOpenProfile={(profile) => handleOpenProfile(profile, '/social')}
+                />
+              }
+            />
+            <Route
               path="chatrooms"
               element={
                 <ChatRooms
                   onSelectChatroom={(chatroom) => {
-                    navigate(`/chatrooms/${chatroom.id}`);
+                    navigate(`/chatrooms/${chatroom.id}`, {
+                      state: { returnPath: '/chatrooms' }
+                    });
                   }}
-                  onBack={() => navigate('/discover')}
+                  onBack={() => navigate(location.state?.returnPath || '/social')}
                 />
               }
             />
@@ -880,7 +901,7 @@ const AppContent = () => {
               path="lobby"
               element={
                 <LobbyChat
-                  onBack={() => navigate('/discover')}
+                  onBack={() => navigate(location.state?.returnPath || '/social')}
                 />
               }
             />

@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from '../router';
 import datingProfileService from '../services/datingProfileService';
+import socialService from '../services/socialService';
 import BlockReportModal from './BlockReportModal';
+import DateJourneyPanel from './DateJourneyPanel';
+import { getStoredUserData } from '../utils/auth';
 import '../styles/DatingProfile.css';
 
 const getProfileActivityHint = (lastActive) => {
@@ -26,6 +29,37 @@ const getProfileActivityHint = (lastActive) => {
   return null;
 };
 
+const SOCIAL_PLATFORM_LABELS = {
+  instagram: 'Instagram',
+  tiktok: 'TikTok',
+  twitter: 'Twitter',
+  facebook: 'Facebook'
+};
+
+const buildPublicSocialUrl = (platform, username, fallbackUrl) => {
+  if (fallbackUrl) {
+    return fallbackUrl;
+  }
+
+  const normalizedUsername = String(username || '').replace(/^@+/, '');
+  if (!normalizedUsername) {
+    return '#';
+  }
+
+  switch (platform) {
+    case 'instagram':
+      return `https://www.instagram.com/${normalizedUsername}`;
+    case 'tiktok':
+      return `https://www.tiktok.com/@${normalizedUsername}`;
+    case 'twitter':
+      return `https://x.com/${normalizedUsername}`;
+    case 'facebook':
+      return `https://www.facebook.com/${normalizedUsername}`;
+    default:
+      return '#';
+  }
+};
+
 const DatingProfileView = ({
   profile: initialProfile,
   profileId,
@@ -35,6 +69,8 @@ const DatingProfileView = ({
   onVideoCall
 }) => {
   const location = useLocation();
+  const currentUser = getStoredUserData();
+  const currentUserId = currentUser?.id;
   const [profile, setProfile] = useState(initialProfile || null);
   const [loading, setLoading] = useState(Boolean(initialProfile?.userId || profileId));
   const [error, setError] = useState('');
@@ -45,6 +81,14 @@ const DatingProfileView = ({
   const [subscription, setSubscription] = useState(null);
   const [compatibility, setCompatibility] = useState(null);
   const [loadingCompatibility, setLoadingCompatibility] = useState(false);
+  const [showDatePlanner, setShowDatePlanner] = useState(Boolean(location.state?.focusPlanner));
+  const [publicSocialProfiles, setPublicSocialProfiles] = useState([]);
+  const [friendshipStatus, setFriendshipStatus] = useState(null);
+  const [friendActionLoading, setFriendActionLoading] = useState(false);
+
+  useEffect(() => {
+    setShowDatePlanner(Boolean(location.state?.focusPlanner));
+  }, [location.state?.focusPlanner]);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,9 +104,13 @@ const DatingProfileView = ({
       setError('');
 
       try {
-        const [latestProfile, subData] = await Promise.all([
+        const [latestProfile, subData, publicLinks, friendStatus] = await Promise.all([
           datingProfileService.getProfileById(resolvedProfileId),
-          datingProfileService.getMySubscription().catch(() => ({ plan: 'free', isGold: false }))
+          datingProfileService.getMySubscription().catch(() => ({ plan: 'free', isGold: false })),
+          socialService.getPublicSocialProfiles(resolvedProfileId).catch(() => []),
+          Number(currentUserId) !== Number(resolvedProfileId)
+            ? socialService.getFriendStatus(resolvedProfileId).catch(() => null)
+            : Promise.resolve({ status: 'self', canSendRequest: false })
         ]);
 
         // Record profile view and load compatibility
@@ -73,6 +121,8 @@ const DatingProfileView = ({
             matchId: currentProfile?.matchId || initialProfile?.matchId || latestProfile.matchId || null
           }));
           setSubscription(subData);
+          setPublicSocialProfiles(Array.isArray(publicLinks) ? publicLinks : []);
+          setFriendshipStatus(friendStatus);
 
           // Load compatibility score
           setLoadingCompatibility(true);
@@ -109,7 +159,7 @@ const DatingProfileView = ({
     return () => {
       cancelled = true;
     };
-  }, [initialProfile, profileId]);
+  }, [currentUserId, initialProfile, profileId]);
 
   if (loading && !profile) {
     return (
@@ -173,6 +223,55 @@ const DatingProfileView = ({
       setSendingRequest(false);
     }
   };
+
+  const handleSendFriendRequest = async () => {
+    if (!profile?.userId) {
+      return;
+    }
+
+    try {
+      setFriendActionLoading(true);
+      setError('');
+      const response = await socialService.sendFriendRequest(profile.userId);
+      setFriendshipStatus({
+        status: 'outgoing_pending',
+        canSendRequest: false,
+        friendshipId: response.friendshipId || response.id,
+        friendship_id: response.friendshipId || response.id
+      });
+    } catch (err) {
+      setError(err || 'Failed to send friend request');
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+
+  const handleAcceptFriendRequest = async () => {
+    const friendshipId = friendshipStatus?.friendshipId || friendshipStatus?.friendship_id;
+    if (!friendshipId) {
+      return;
+    }
+
+    try {
+      setFriendActionLoading(true);
+      setError('');
+      await socialService.acceptFriendRequest(friendshipId);
+      setFriendshipStatus({
+        status: 'accepted',
+        canSendRequest: false,
+        friendshipId,
+        friendship_id: friendshipId
+      });
+    } catch (err) {
+      setError(err || 'Failed to accept friend request');
+    } finally {
+      setFriendActionLoading(false);
+    }
+  };
+
+  const isOwnProfile = Number(currentUserId) === Number(profile.userId);
+  const friendshipState = friendshipStatus?.status || (isOwnProfile ? 'self' : 'none');
+  const showFriendAction = !isOwnProfile && Boolean(profile.userId);
 
   return (
     <div className="dating-profile-container">
@@ -351,6 +450,42 @@ const DatingProfileView = ({
           </div>
         ) : null}
 
+        {publicSocialProfiles.length > 0 ? (
+          <div className="profile-section social-links-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Public social links</h3>
+                <p>These handles were shared intentionally on this profile.</p>
+              </div>
+            </div>
+
+            <div className="public-social-links">
+              {publicSocialProfiles.map((socialLink) => {
+                const isPublic = socialLink.isPublic ?? socialLink.is_public;
+                if (!isPublic) {
+                  return null;
+                }
+
+                const platform = socialLink.platform || 'social';
+                const username = socialLink.username || '';
+
+                return (
+                  <a
+                    key={socialLink.id}
+                    className="public-social-link"
+                    href={buildPublicSocialUrl(platform, username, socialLink.profileUrl)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <strong>{SOCIAL_PLATFORM_LABELS[platform] || platform}</strong>
+                    <span>@{username}</span>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {profile.photos?.length > 1 ? (
           <div className="profile-section">
             <h3>Photos</h3>
@@ -363,6 +498,36 @@ const DatingProfileView = ({
         ) : null}
 
         <div className="profile-actions">
+          {showFriendAction && friendshipState === 'none' ? (
+            <button
+              type="button"
+              className="btn-save"
+              onClick={handleSendFriendRequest}
+              disabled={friendActionLoading}
+            >
+              {friendActionLoading ? 'Sending...' : 'Add Friend'}
+            </button>
+          ) : null}
+          {showFriendAction && friendshipState === 'incoming_pending' ? (
+            <button
+              type="button"
+              className="btn-save"
+              onClick={handleAcceptFriendRequest}
+              disabled={friendActionLoading}
+            >
+              {friendActionLoading ? 'Saving...' : 'Accept Friend Request'}
+            </button>
+          ) : null}
+          {showFriendAction && friendshipState === 'outgoing_pending' ? (
+            <button type="button" className="btn-cancel" disabled>
+              Friend Request Sent
+            </button>
+          ) : null}
+          {showFriendAction && friendshipState === 'accepted' ? (
+            <button type="button" className="btn-cancel" disabled>
+              Friends on LinkUp
+            </button>
+          ) : null}
           {canMessage ? (
             <button type="button" className="btn-edit" onClick={() => onMessage(profile)}>
               Open Chat
@@ -374,6 +539,15 @@ const DatingProfileView = ({
               onClick={() => setShowMessageRequest(true)}
             >
               💌 Send Message Request
+            </button>
+          ) : null}
+          {profile.matchId ? (
+            <button
+              type="button"
+              className="btn-edit"
+              onClick={() => setShowDatePlanner((currentValue) => !currentValue)}
+            >
+              {showDatePlanner ? 'Hide Date Plan' : 'Plan a Date'}
             </button>
           ) : null}
           {canScheduleVideoCall ? (
@@ -401,6 +575,16 @@ const DatingProfileView = ({
             Back
           </button>
         </div>
+
+        {showDatePlanner && profile.matchId ? (
+          <div className="profile-section">
+            <DateJourneyPanel
+              matchId={profile.matchId}
+              match={profile}
+              onScheduleVideoCall={(resolvedMatch) => onScheduleVideoCall?.(resolvedMatch, location.pathname)}
+            />
+          </div>
+        ) : null}
 
         {showMessageRequest && (
           <div className="profile-section message-request-form">

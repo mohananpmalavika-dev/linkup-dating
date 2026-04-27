@@ -13,7 +13,7 @@ const DatingNavigation = ({ currentPage, onPageChange, unreadCount = 0, matchCou
         onClick={() => onPageChange('discover')}
         title="Discover"
       >
-        <span className="nav-icon">🔥</span>
+        <span className="nav-icon">D</span>
         <span className="nav-label">Discover</span>
       </button>
 
@@ -22,7 +22,7 @@ const DatingNavigation = ({ currentPage, onPageChange, unreadCount = 0, matchCou
         onClick={() => onPageChange('browse')}
         title="Browse"
       >
-        <span className="nav-icon">👀</span>
+        <span className="nav-icon">B</span>
         <span className="nav-label">Browse</span>
       </button>
 
@@ -31,7 +31,7 @@ const DatingNavigation = ({ currentPage, onPageChange, unreadCount = 0, matchCou
         onClick={() => onPageChange('matches')}
         title="Matches"
       >
-        <span className="nav-icon">❤️</span>
+        <span className="nav-icon">M</span>
         <span className="nav-label">Matches</span>
         {matchCount > 0 && <span className="badge">{matchCount}</span>}
       </button>
@@ -41,27 +41,18 @@ const DatingNavigation = ({ currentPage, onPageChange, unreadCount = 0, matchCou
         onClick={() => onPageChange('messages')}
         title="Messages"
       >
-        <span className="nav-icon">💬</span>
+        <span className="nav-icon">C</span>
         <span className="nav-label">Messages</span>
         {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
       </button>
 
       <button
-        className={`nav-btn ${currentPage === 'chatrooms' ? 'active' : ''}`}
-        onClick={() => onPageChange('chatrooms')}
-        title="Chat Rooms"
+        className={`nav-btn ${currentPage === 'social' ? 'active' : ''}`}
+        onClick={() => onPageChange('social')}
+        title="Social"
       >
-        <span className="nav-icon">🛋️</span>
-        <span className="nav-label">Rooms</span>
-      </button>
-
-      <button
-        className={`nav-btn ${currentPage === 'lobby' ? 'active' : ''}`}
-        onClick={() => onPageChange('lobby')}
-        title="Lobby"
-      >
-        <span className="nav-icon">🌍</span>
-        <span className="nav-label">Lobby</span>
+        <span className="nav-icon">S</span>
+        <span className="nav-label">Social</span>
       </button>
 
       <button
@@ -69,7 +60,7 @@ const DatingNavigation = ({ currentPage, onPageChange, unreadCount = 0, matchCou
         onClick={() => onPageChange('profile')}
         title="Profile"
       >
-        <span className="nav-icon">👤</span>
+        <span className="nav-icon">P</span>
         <span className="nav-label">Profile</span>
       </button>
     </nav>

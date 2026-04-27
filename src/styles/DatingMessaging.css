@@ -110,6 +110,78 @@
   color: #047857;
 }
 
+.messaging-journey-card,
+.messaging-planner-wrap,
+.shared-actions-strip {
+  margin: 0 12px;
+}
+
+.messaging-journey-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid #e5e7eb;
+  background:
+    radial-gradient(circle at top right, rgba(251, 113, 133, 0.1), transparent 48%),
+    linear-gradient(180deg, #fff7fb 0%, #ffffff 100%);
+}
+
+.messaging-journey-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.messaging-journey-top strong {
+  color: #2f1f35;
+  font-size: 14px;
+}
+
+.messaging-journey-top p,
+.messaging-journey-copy {
+  margin: 4px 0 0;
+  color: #705d67;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.messaging-journey-nudge-pill,
+.messaging-journey-milestone {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.messaging-journey-nudge-pill {
+  background: #fff1f5;
+  color: #9d174d;
+}
+
+.messaging-journey-milestones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.messaging-journey-milestone {
+  background: #f8f4f6;
+  color: #705d67;
+}
+
+.messaging-journey-milestone.achieved {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.messaging-planner-wrap {
+  margin-bottom: 12px;
+}
+
 .btn-enable-notifications {
   min-width: 110px;
   height: 36px;
@@ -465,6 +537,11 @@
   background: white;
 }
 
+.shared-actions-strip {
+  padding: 10px 12px 0;
+  background: white;
+}
+
 .composer-starters-label {
   display: block;
   margin-bottom: 8px;
@@ -631,6 +708,12 @@
 
   .messaging-header-actions {
     gap: 6px;
+  }
+
+  .messaging-journey-card,
+  .messaging-planner-wrap,
+  .shared-actions-strip {
+    margin: 0 10px;
   }
 
   .profile-info img,

@@ -88,6 +88,15 @@ const videoCallService = {
     }
   },
 
+  submitFeedback: async (videoDateId, payload = {}) => {
+    try {
+      const response = await axios.post(`${API_URL}/${videoDateId}/feedback`, payload);
+      return response.data;
+    } catch (error) {
+      throw unwrapError(error, 'Failed to save video date feedback');
+    }
+  },
+
   completeSession: async (videoDateId, payload = {}) => {
     try {
       const response = await axios.post(`${API_URL}/${videoDateId}/complete`, payload);
