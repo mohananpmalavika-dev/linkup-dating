@@ -108,6 +108,446 @@ const getSubscriptionAccessForUser = async (userId) => {
 };
 
 const countRowValue = (value) => Number.parseInt(value, 10) || 0;
+const OPTIONAL_ANALYTICS_ERROR_CODES = new Set(['42P01', '42703']);
+
+const isOptionalAnalyticsError = (error) => OPTIONAL_ANALYTICS_ERROR_CODES.has(error?.code);
+
+const optionalQuery = async (queryText, values = [], fallbackRows = []) => {
+  try {
+    return await db.query(queryText, values);
+  } catch (error) {
+    if (isOptionalAnalyticsError(error)) {
+      return { rows: fallbackRows };
+    }
+
+    throw error;
+  }
+};
+
+const roundNumber = (value, digits = 1) => {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return 0;
+  }
+
+  const factor = 10 ** digits;
+  return Math.round(numericValue * factor) / factor;
+};
+
+const percentage = (numerator, denominator) =>
+  denominator > 0 ? Math.round((Number(numerator || 0) / Number(denominator || 0)) * 100) : 0;
+
+const formatHourRangeLabel = (hourValue) => {
+  const parsedHour = Number.parseInt(hourValue, 10);
+  const safeHour = Number.isFinite(parsedHour) ? ((parsedHour % 24) + 24) % 24 : 0;
+  const nextHour = (safeHour + 1) % 24;
+
+  const formatSingleHour = (hour) => {
+    const suffix = hour >= 12 ? 'PM' : 'AM';
+    const normalizedHour = hour % 12 === 0 ? 12 : hour % 12;
+    return `${normalizedHour}${suffix}`;
+  };
+
+  return `${formatSingleHour(safeHour)}-${formatSingleHour(nextHour)}`;
+};
+
+const formatDurationLabel = (minutesValue) => {
+  const minutes = Math.max(0, Math.round(Number(minutesValue || 0)));
+
+  if (!minutes) {
+    return 'Not enough replies yet';
+  }
+
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+
+  return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+};
+
+const getSubscriptionSnapshotForUser = async (userId) => {
+  const [subscriptionAccess, result] = await Promise.all([
+    getSubscriptionAccessForUser(userId),
+    db.query(
+      `SELECT plan, status, started_at, expires_at
+       FROM subscriptions
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    )
+  ]);
+
+  const subscription = result.rows[0] || null;
+  const hasPaidAccess = subscriptionAccess.isPremium || subscriptionAccess.isGold;
+
+  return {
+    plan: subscriptionAccess.plan,
+    status: subscription ? (hasPaidAccess ? subscription.status : 'expired') : 'active',
+    startedAt: subscription?.started_at || null,
+    expiresAt: subscription?.expires_at || null,
+    isPremium: subscriptionAccess.isPremium,
+    isGold: subscriptionAccess.isGold
+  };
+};
+
+const getDailyLimitSnapshot = async (userId) => {
+  const today = new Date().toISOString().split('T')[0];
+  const [analyticsResult, subscriptionAccess, rewardBalance] = await Promise.all([
+    db.query(
+      `SELECT likes_sent, superlikes_sent, rewinds_sent, boosts_used
+       FROM user_analytics
+       WHERE user_id = $1 AND activity_date = $2`,
+      [userId, today]
+    ),
+    getSubscriptionAccessForUser(userId),
+    getRewardBalanceForUser(userId)
+  ]);
+
+  const analyticsRow = analyticsResult.rows[0] || {};
+  const likesSent = countRowValue(analyticsRow.likes_sent);
+  const superlikesSent = countRowValue(analyticsRow.superlikes_sent);
+  const rewindsSent = countRowValue(analyticsRow.rewinds_sent);
+  const boostsUsedToday = countRowValue(analyticsRow.boosts_used);
+
+  const likeLimit = 50;
+  const superlikeLimit = subscriptionAccess.isGold ? 10 : subscriptionAccess.isPremium ? 5 : 1;
+  const rewindLimit = 3;
+  const boostLimit = subscriptionAccess.isGold ? 5 : subscriptionAccess.isPremium ? 1 : 0;
+  const remainingBaseSuperlikes = Math.max(0, superlikeLimit - superlikesSent);
+  const remainingBaseBoosts = Math.max(0, boostLimit - boostsUsedToday);
+
+  return {
+    likeLimit,
+    superlikeLimit,
+    rewindLimit,
+    boostLimit,
+    likesSent,
+    superlikesSent,
+    rewindsSent,
+    boostsUsedToday,
+    remainingLikes: Math.max(0, likeLimit - likesSent),
+    remainingSuperlikes: remainingBaseSuperlikes + rewardBalance.superlikeCredits,
+    remainingRewinds: Math.max(0, rewindLimit - rewindsSent),
+    remainingBaseBoosts,
+    remainingBoostCredits: rewardBalance.boostCredits,
+    remainingBoosts: remainingBaseBoosts + rewardBalance.boostCredits,
+    rewardSuperlikeCredits: rewardBalance.superlikeCredits,
+    rewardBoostCredits: rewardBalance.boostCredits,
+    resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    rewardBalance,
+    subscriptionAccess
+  };
+};
+
+const getLatestBoostRecordForUser = async (userId, { activeOnly = false } = {}) => {
+  const result = await optionalQuery(
+    `SELECT *
+     FROM profile_boosts
+     WHERE user_id = $1
+       ${activeOnly ? 'AND boost_expires_at > CURRENT_TIMESTAMP' : ''}
+     ORDER BY boost_expires_at DESC
+     LIMIT 1`,
+    [userId]
+  );
+
+  return result.rows[0] || null;
+};
+
+const getBoostWindow = (boostRecord) => {
+  if (!boostRecord?.boost_expires_at) {
+    return null;
+  }
+
+  const expiresAt = new Date(boostRecord.boost_expires_at);
+  if (Number.isNaN(expiresAt.getTime())) {
+    return null;
+  }
+
+  const fallbackStartedAt = new Date(expiresAt.getTime() - 30 * 60 * 1000);
+  const candidateStartedAt = boostRecord.started_at || boostRecord.created_at || fallbackStartedAt;
+  const startedAt = new Date(candidateStartedAt);
+
+  return {
+    startedAt: Number.isNaN(startedAt.getTime()) ? fallbackStartedAt : startedAt,
+    expiresAt
+  };
+};
+
+const summarizeBoostRecord = async (userId, boostRecord, baselineViewsLast7Days = 0) => {
+  const boostWindow = getBoostWindow(boostRecord);
+  if (!boostRecord || !boostWindow) {
+    return null;
+  }
+
+  const [viewsResult, interactionsResult] = await Promise.all([
+    db.query(
+      `SELECT COUNT(*) as profile_views,
+              COUNT(DISTINCT viewer_user_id) as unique_viewers
+       FROM profile_views
+       WHERE viewed_user_id = $1
+         AND viewed_at >= $2
+         AND viewed_at <= $3`,
+      [userId, boostWindow.startedAt.toISOString(), boostWindow.expiresAt.toISOString()]
+    ),
+    db.query(
+      `SELECT
+         COUNT(CASE WHEN interaction_type = 'like' THEN 1 END) as likes_received,
+         COUNT(CASE WHEN interaction_type = 'superlike' THEN 1 END) as superlikes_received
+       FROM interactions
+       WHERE to_user_id = $1
+         AND interaction_type IN ('like', 'superlike')
+         AND created_at >= $2
+         AND created_at <= $3`,
+      [userId, boostWindow.startedAt.toISOString(), boostWindow.expiresAt.toISOString()]
+    )
+  ]);
+
+  const profileViews = countRowValue(viewsResult.rows[0]?.profile_views);
+  const uniqueViewers = countRowValue(viewsResult.rows[0]?.unique_viewers);
+  const likesReceived = countRowValue(interactionsResult.rows[0]?.likes_received);
+  const superlikesReceived = countRowValue(interactionsResult.rows[0]?.superlikes_received);
+  const totalPositiveActions = likesReceived + superlikesReceived;
+  const visibilityMultiplier = roundNumber(boostRecord.visibility_multiplier || 5, 1);
+  const averageDailyViews = baselineViewsLast7Days > 0 ? baselineViewsLast7Days / 7 : 0;
+  const estimatedAdditionalViews = Math.max(
+    8,
+    Math.round(Math.max(averageDailyViews, 6) * Math.max(1.5, visibilityMultiplier * 0.45))
+  );
+  const secondsRemaining = Math.max(
+    0,
+    Math.ceil((boostWindow.expiresAt.getTime() - Date.now()) / 1000)
+  );
+
+  return {
+    id: boostRecord.id || null,
+    active: boostWindow.expiresAt.getTime() > Date.now(),
+    startedAt: boostWindow.startedAt.toISOString(),
+    expiresAt: boostWindow.expiresAt.toISOString(),
+    visibilityMultiplier,
+    secondsRemaining,
+    minutesRemaining: Math.ceil(secondsRemaining / 60),
+    reachEstimate: {
+      estimatedAdditionalViews,
+      low: Math.max(3, Math.round(estimatedAdditionalViews * 0.7)),
+      high: Math.max(estimatedAdditionalViews, Math.round(estimatedAdditionalViews * 1.3)),
+      baselineViewsLast7Days
+    },
+    outcome: {
+      profileViews,
+      uniqueViewers,
+      likesReceived,
+      superlikesReceived,
+      totalPositiveActions,
+      likeConversionRate: percentage(totalPositiveActions, profileViews)
+    }
+  };
+};
+
+const getPhotoPerformanceSummary = async (userId, limit = 3) => {
+  const performanceResult = await optionalQuery(
+    `SELECT
+       pp.photo_id,
+       pp.photo_position,
+       pp.profile_views,
+       pp.likes_received,
+       pp.superlikes_received,
+       pp.right_swipe_rate,
+       pp.left_swipe_rate,
+       pp.engagement_score,
+       ph.photo_url
+     FROM photo_performance pp
+     LEFT JOIN profile_photos ph ON ph.id = pp.photo_id
+     WHERE pp.user_id = $1
+     ORDER BY pp.engagement_score DESC, pp.photo_position ASC
+     LIMIT $2`,
+    [userId, limit]
+  );
+
+  if (performanceResult.rows.length > 0) {
+    return performanceResult.rows.map((row) => ({
+      photoId: row.photo_id,
+      photoUrl: row.photo_url || null,
+      position: countRowValue(row.photo_position) || 1,
+      views: countRowValue(row.profile_views),
+      likes: countRowValue(row.likes_received),
+      superlikes: countRowValue(row.superlikes_received),
+      rightSwipeRate: roundNumber(row.right_swipe_rate || 0),
+      leftSwipeRate: roundNumber(row.left_swipe_rate || 0),
+      engagementScore: roundNumber(row.engagement_score || 0, 2),
+      summary:
+        countRowValue(row.profile_views) > 0
+          ? `Photo ${countRowValue(row.photo_position) || 1} converts ${percentage(
+              countRowValue(row.likes_received) + countRowValue(row.superlikes_received),
+              countRowValue(row.profile_views)
+            )}% of views into positive actions.`
+          : 'This photo is live, but it still needs more impressions before it can be ranked.'
+    }));
+  }
+
+  const fallbackPhotosResult = await db.query(
+    `SELECT id, photo_url, position
+     FROM profile_photos
+     WHERE user_id = $1
+     ORDER BY position ASC
+     LIMIT $2`,
+    [userId, limit]
+  );
+
+  return fallbackPhotosResult.rows.map((row, index) => ({
+    photoId: row.id,
+    photoUrl: row.photo_url || null,
+    position: countRowValue(row.position) || index + 1,
+    views: 0,
+    likes: 0,
+    superlikes: 0,
+    rightSwipeRate: 0,
+    leftSwipeRate: 0,
+    engagementScore: 0,
+    summary: 'We need more profile traffic before photo-level performance can be ranked.'
+  }));
+};
+
+const getPromptPerformanceSummary = async (
+  userId,
+  { likesReceived = 0, replyRate = 0 } = {},
+  limit = 3
+) => {
+  const promptResult = await optionalQuery(
+    `SELECT prompt_id, response, created_at
+     FROM daily_prompt_responses
+     WHERE user_id = $1
+     ORDER BY created_at DESC`,
+    [userId]
+  );
+
+  const promptRows = Array.isArray(promptResult.rows) ? promptResult.rows : [];
+  if (promptRows.length === 0) {
+    return [];
+  }
+
+  const promptCount = promptRows.length;
+  const scoredPrompts = promptRows.map((row) => {
+    const promptMeta = DAILY_PROMPTS.find((prompt) => prompt.id === row.prompt_id);
+    const response = String(row.response || '').trim();
+    const responseLengthScore = Math.min(55, Math.round(response.length / 4));
+    const answeredAt = row.created_at ? new Date(row.created_at) : null;
+    const daysSinceAnswer =
+      answeredAt && !Number.isNaN(answeredAt.getTime())
+        ? Math.max(0, Math.floor((Date.now() - answeredAt.getTime()) / (24 * 60 * 60 * 1000)))
+        : 90;
+    const freshnessScore = daysSinceAnswer <= 7 ? 20 : daysSinceAnswer <= 30 ? 14 : 8;
+    const supportScore = Math.min(
+      20,
+      Math.round((Number(likesReceived || 0) + Number(replyRate || 0) / 5) / Math.max(promptCount, 1))
+    );
+    const impactScore = Math.min(100, responseLengthScore + freshnessScore + supportScore + 10);
+
+    return {
+      promptId: row.prompt_id,
+      text: promptMeta?.text || 'Profile prompt',
+      icon: promptMeta?.icon || null,
+      response,
+      answeredAt: row.created_at,
+      impactScore,
+      summary:
+        response.length >= 120
+          ? 'Detailed answer gives matches an easy opening line.'
+          : 'Add a little more specificity so people know what to ask you about next.'
+    };
+  });
+
+  return scoredPrompts
+    .sort((leftPrompt, rightPrompt) => rightPrompt.impactScore - leftPrompt.impactScore)
+    .slice(0, limit);
+};
+
+const buildSectionInsights = ({
+  profile,
+  photoPerformance = [],
+  promptPerformance = [],
+  views = {},
+  interactions = {},
+  replyRate = 0
+}) => {
+  const bioLength = String(profile?.bio || '').trim().length;
+  const photoCount = countRowValue(profile?.photo_count);
+  const totalPositiveInbound =
+    countRowValue(interactions.likesReceived) + countRowValue(interactions.superlikesReceived);
+  const profileConversionRate = percentage(totalPositiveInbound, countRowValue(views.total));
+  const leadingPhoto = photoPerformance[0] || null;
+  const promptCount = promptPerformance.length;
+
+  return [
+    {
+      section: 'Photos',
+      impactScore: Math.min(
+        100,
+        Math.round(
+          Math.min(30, photoCount * 5) +
+            Math.min(45, Number(leadingPhoto?.engagementScore || 0) * 8) +
+            Math.min(20, totalPositiveInbound)
+        )
+      ),
+      summary: leadingPhoto
+        ? `Photo ${leadingPhoto.position} is currently your strongest visual hook.`
+        : photoCount > 0
+        ? 'Your photo stack is live, but it still needs more engagement data.'
+        : 'Missing photos are almost certainly holding your profile back.',
+      nextMove: leadingPhoto
+        ? 'Keep your highest-performing photo near the front of the stack.'
+        : 'Add at least 3 clear photos, including one bright lead image.'
+    },
+    {
+      section: 'Prompts',
+      impactScore: promptCount > 0 ? Math.round(promptPerformance[0].impactScore) : 0,
+      summary:
+        promptCount > 0
+          ? `${promptCount} prompt${promptCount === 1 ? '' : 's'} are giving people conversation starters.`
+          : 'No prompts answered yet, so you are missing a major conversation driver.',
+      nextMove:
+        promptCount > 0
+          ? 'Keep your top prompt personal and specific instead of broad or generic.'
+          : 'Answer 2 or 3 prompts to create more natural first messages.'
+    },
+    {
+      section: 'Bio',
+      impactScore: Math.min(100, Math.round(Math.min(50, bioLength / 3) + profileConversionRate)),
+      summary:
+        bioLength >= 150
+          ? 'Your bio has enough detail to support better conversion from views to likes.'
+          : bioLength > 0
+          ? 'Your bio exists, but more detail could improve conversion.'
+          : 'A missing bio is likely costing you likes and replies.',
+      nextMove:
+        bioLength >= 150
+          ? 'Refresh one line if it no longer sounds current or personal.'
+          : 'Aim for at least 150 characters with specifics people can respond to.'
+    },
+    {
+      section: 'Voice Intro',
+      impactScore: profile?.voice_intro_url ? Math.min(100, 55 + Math.round(replyRate / 3)) : 0,
+      summary: profile?.voice_intro_url
+        ? 'Voice makes your profile feel more human before the first message.'
+        : 'No voice intro yet, so you are missing a warm differentiator.',
+      nextMove: profile?.voice_intro_url
+        ? 'Re-record it if the clip no longer sounds like your best current self.'
+        : 'Add a 15-30 second intro to make your profile feel more memorable.'
+    },
+    {
+      section: 'Verification',
+      impactScore: profile?.profile_verified ? 82 : 18,
+      summary: profile?.profile_verified
+        ? 'Verification adds trust right at the decision point.'
+        : 'Trust signals are lighter without a verified badge.',
+      nextMove: profile?.profile_verified
+        ? 'Keep your photos current so the verification badge keeps working for you.'
+        : 'Complete photo verification to reduce hesitation for new matches.'
+    }
+  ].sort((leftSection, rightSection) => rightSection.impactScore - leftSection.impactScore);
+};
 const REPORT_REASON_CONFIG = {
   inappropriate_photos: {
     category: 'content',
@@ -3967,38 +4407,25 @@ router.post('/interactions/superlike', async (req, res) => {
 router.get('/daily-limits', async (req, res) => {
   try {
     const userId = req.user.id;
-    const today = new Date().toISOString().split('T')[0];
-
-    const analyticsResult = await db.query(
-      `SELECT likes_sent, superlikes_sent, rewinds_sent
-       FROM user_analytics
-       WHERE user_id = $1 AND activity_date = $2`,
-      [userId, today]
-    );
-
-    const likesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_sent || 0) : 0;
-    const superlikesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_sent || 0) : 0;
-    const rewindsSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_sent || 0) : 0;
-    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
-    const rewardBalance = await getRewardBalanceForUser(userId);
-
-    const likeLimit = 50;
-    const superlikeLimit = subscriptionAccess.isGold ? 10 : subscriptionAccess.isPremium ? 5 : 1;
-    const rewindLimit = 3;
-    const boostLimit = subscriptionAccess.isGold ? 5 : subscriptionAccess.isPremium ? 1 : 0;
-    const remainingBaseSuperlikes = Math.max(0, superlikeLimit - superlikesSent);
-    const remainingSuperlikes = remainingBaseSuperlikes + rewardBalance.superlikeCredits;
+    const limits = await getDailyLimitSnapshot(userId);
 
     res.json({
-      likeLimit, superlikeLimit, rewindLimit, likesSent, superlikesSent, rewindsSent,
-      remainingLikes: Math.max(0, likeLimit - likesSent),
-      remainingSuperlikes,
-      remainingRewinds: Math.max(0, rewindLimit - rewindsSent),
-      rewardSuperlikeCredits: rewardBalance.superlikeCredits,
-      rewardBoostCredits: rewardBalance.boostCredits,
-      boostLimit,
-      remainingBoostCredits: rewardBalance.boostCredits,
-      resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      likeLimit: limits.likeLimit,
+      superlikeLimit: limits.superlikeLimit,
+      rewindLimit: limits.rewindLimit,
+      boostLimit: limits.boostLimit,
+      likesSent: limits.likesSent,
+      superlikesSent: limits.superlikesSent,
+      rewindsSent: limits.rewindsSent,
+      boostsUsedToday: limits.boostsUsedToday,
+      remainingLikes: limits.remainingLikes,
+      remainingSuperlikes: limits.remainingSuperlikes,
+      remainingRewinds: limits.remainingRewinds,
+      remainingBoosts: limits.remainingBoosts,
+      remainingBoostCredits: limits.remainingBoostCredits,
+      rewardSuperlikeCredits: limits.rewardSuperlikeCredits,
+      rewardBoostCredits: limits.rewardBoostCredits,
+      resetsAt: limits.resetsAt
     });
   } catch (err) {
     console.error('Get daily limits error:', err);
@@ -4949,28 +5376,27 @@ router.post('/profiles/me/boost', async (req, res) => {
   try {
     const userId = req.user.id;
     const requestMetadata = getRequestMetadata(req);
-    const rewardBalance = await getRewardBalanceForUser(userId);
-
-    // Check subscription for boost availability
-    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
+    const limits = await getDailyLimitSnapshot(userId);
+    const { rewardBalance, subscriptionAccess } = limits;
     const isPremium = subscriptionAccess.isPremium;
     const isGold = subscriptionAccess.isGold;
     const hasRewardCredit = rewardBalance.boostCredits > 0;
+    const activeBoost = await getLatestBoostRecordForUser(userId, { activeOnly: true });
 
     if (!isPremium && !isGold && !hasRewardCredit) {
       return res.status(403).json({ error: 'Boost requires a Premium or Gold subscription' });
     }
 
-    // Check if already boosted in last 30 minutes
-    const boostResult = await db.query(
-      `SELECT * FROM user_analytics
-       WHERE user_id = $1 AND activity_date = $2
-       LIMIT 1`,
-      [userId, new Date().toISOString().split('T')[0]]
-    );
+    if (activeBoost) {
+      const activeSummary = await summarizeBoostRecord(userId, activeBoost, 0);
+      return res.status(409).json({
+        error: 'Boost already active',
+        boost: activeSummary
+      });
+    }
 
-    const boostsUsedToday = boostResult.rows[0]?.boosts_used || 0;
-    const dailyBoostLimit = isGold ? 5 : (isPremium ? 1 : 0);
+    const boostsUsedToday = limits.boostsUsedToday;
+    const dailyBoostLimit = limits.boostLimit;
     let usedRewardCredit = false;
 
     if (boostsUsedToday >= dailyBoostLimit) {
@@ -5003,6 +5429,23 @@ router.post('/profiles/me/boost', async (req, res) => {
       [userId, new Date().toISOString().split('T')[0]]
     );
 
+    const boostedUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+    let persistedBoostRecord = null;
+
+    try {
+      const persistedBoostResult = await db.query(
+        `INSERT INTO profile_boosts (user_id, boost_expires_at, visibility_multiplier)
+         VALUES ($1, $2, $3)
+         RETURNING *`,
+        [userId, boostedUntil, isGold ? 6 : 5]
+      );
+      persistedBoostRecord = persistedBoostResult.rows[0] || null;
+    } catch (persistError) {
+      if (!isOptionalAnalyticsError(persistError)) {
+        throw persistError;
+      }
+    }
+
     spamFraudService.trackUserActivity({
       userId,
       action: 'profile_boosted',
@@ -5011,19 +5454,64 @@ router.post('/profiles/me/boost', async (req, res) => {
       userAgent: requestMetadata.userAgent
     });
 
+    const boostSummary = await summarizeBoostRecord(
+      userId,
+      persistedBoostRecord || {
+        id: null,
+        boost_expires_at: boostedUntil,
+        visibility_multiplier: isGold ? 6 : 5,
+        created_at: new Date().toISOString()
+      },
+      0
+    );
+
     res.json({
       message: 'Profile boosted!',
-      boostedUntil: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      boostedUntil,
       boostsRemaining: Math.max(0, dailyBoostLimit - boostsUsedToday - (usedRewardCredit ? 0 : 1)),
       usedRewardCredit,
       rewardCreditsRemaining: Math.max(
         0,
         rewardBalance.boostCredits - (usedRewardCredit ? 1 : 0)
-      )
+      ),
+      boost: boostSummary
     });
   } catch (err) {
     console.error('Boost error:', err);
     res.status(500).json({ error: 'Failed to boost profile' });
+  }
+});
+
+router.get('/profiles/me/boost-status', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const [activeBoostRecord, latestBoostRecord, analyticsData] = await Promise.all([
+      getLatestBoostRecordForUser(userId, { activeOnly: true }),
+      getLatestBoostRecordForUser(userId),
+      db.query(
+        `SELECT COUNT(*) as views_last_7_days
+         FROM profile_views
+         WHERE viewed_user_id = $1
+           AND viewed_at >= $2`,
+        [userId, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()]
+      )
+    ]);
+
+    const baselineViewsLast7Days = countRowValue(analyticsData.rows[0]?.views_last_7_days);
+    const activeBoost = await summarizeBoostRecord(userId, activeBoostRecord, baselineViewsLast7Days);
+    const recentBoost =
+      latestBoostRecord && latestBoostRecord.id !== activeBoostRecord?.id
+        ? await summarizeBoostRecord(userId, latestBoostRecord, baselineViewsLast7Days)
+        : activeBoost;
+
+    res.json({
+      active: Boolean(activeBoost),
+      current: activeBoost,
+      recent: recentBoost
+    });
+  } catch (err) {
+    console.error('Get boost status error:', err);
+    res.status(500).json({ error: 'Failed to get boost status' });
   }
 });
 
@@ -5103,8 +5591,8 @@ router.post('/message-requests', async (req, res) => {
     // Check if already matched
     const matchCheck = await db.query(
       `SELECT * FROM matches
-       WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)
-       AND status = 'active'
+       WHERE ((user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1))
+         AND status = 'active'
        LIMIT 1`,
       [fromUserId, toUserId]
     );
@@ -5126,27 +5614,40 @@ router.post('/message-requests', async (req, res) => {
       return res.status(403).json({ error: 'Message requests require a Gold subscription' });
     }
 
-    // Check for existing pending request
     const existingResult = await db.query(
-      `SELECT * FROM message_requests
-       WHERE from_user_id = $1 AND to_user_id = $2 AND status = 'pending'
+      `SELECT *
+       FROM message_requests
+       WHERE from_user_id = $1 AND to_user_id = $2
+       ORDER BY updated_at DESC NULLS LAST, created_at DESC
        LIMIT 1`,
       [fromUserId, toUserId]
     );
 
-    if (existingResult.rows.length > 0) {
+    if (existingResult.rows[0]?.status === 'pending') {
       return res.status(409).json({ error: 'A pending message request already exists' });
     }
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    const result = await db.query(
-      `INSERT INTO message_requests (from_user_id, to_user_id, message, status, expires_at)
-       VALUES ($1, $2, $3, 'pending', $4)
-       RETURNING *`,
-      [fromUserId, toUserId, trimmedMessage, expiresAt]
-    );
+    const result =
+      existingResult.rows.length > 0
+        ? await db.query(
+            `UPDATE message_requests
+             SET message = $2,
+                 status = 'pending',
+                 expires_at = $3,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1
+             RETURNING *`,
+            [existingResult.rows[0].id, trimmedMessage, expiresAt]
+          )
+        : await db.query(
+            `INSERT INTO message_requests (from_user_id, to_user_id, message, status, expires_at)
+             VALUES ($1, $2, $3, 'pending', $4)
+             RETURNING *`,
+            [fromUserId, toUserId, trimmedMessage, expiresAt]
+          );
 
     const fromProfile = await db.query(
       `SELECT first_name FROM dating_profiles WHERE user_id = $1 LIMIT 1`,
@@ -5188,8 +5689,20 @@ router.post('/message-requests', async (req, res) => {
 router.get('/message-requests', async (req, res) => {
   try {
     const userId = req.user.id;
+    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
 
-    const result = await db.query(
+    await db.query(
+      `UPDATE message_requests
+       SET status = 'expired',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE status = 'pending'
+         AND expires_at IS NOT NULL
+         AND expires_at < CURRENT_TIMESTAMP
+         AND (to_user_id = $1 OR from_user_id = $1)`,
+      [userId]
+    );
+
+    const incomingResult = await db.query(
       `SELECT mr.*,
               dp.first_name, dp.age, dp.location_city,
               (SELECT photo_url FROM profile_photos WHERE user_id = mr.from_user_id LIMIT 1) as photo_url
@@ -5200,19 +5713,83 @@ router.get('/message-requests', async (req, res) => {
       [userId]
     );
 
+    const sentResult = await db.query(
+      `SELECT mr.*,
+              dp.first_name, dp.age, dp.location_city,
+              (SELECT photo_url FROM profile_photos WHERE user_id = mr.to_user_id LIMIT 1) as photo_url,
+              (
+                SELECT id
+                FROM matches
+                WHERE ((user_id_1 = mr.from_user_id AND user_id_2 = mr.to_user_id)
+                  OR (user_id_1 = mr.to_user_id AND user_id_2 = mr.from_user_id))
+                  AND status = 'active'
+                LIMIT 1
+              ) as match_id
+       FROM message_requests mr
+       JOIN dating_profiles dp ON dp.user_id = mr.to_user_id
+       WHERE mr.from_user_id = $1
+       ORDER BY mr.updated_at DESC NULLS LAST, mr.created_at DESC
+       LIMIT 25`,
+      [userId]
+    );
+
+    const requests = incomingResult.rows.map((row) => ({
+      id: row.id,
+      fromUserId: row.from_user_id,
+      firstName: row.first_name,
+      age: row.age,
+      location: { city: row.location_city },
+      photoUrl: row.photo_url,
+      message: row.message,
+      status: row.status,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at
+    }));
+
+    const sentRequests = sentResult.rows.map((row) => ({
+      id: row.id,
+      toUserId: row.to_user_id,
+      firstName: row.first_name,
+      age: row.age,
+      location: { city: row.location_city },
+      photoUrl: row.photo_url,
+      message: row.message,
+      status: row.status,
+      matchId: row.match_id || null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      expiresAt: row.expires_at
+    }));
+
+    const summary = sentRequests.reduce(
+      (accumulator, request) => {
+        const statusKey =
+          request.status === 'accepted' ||
+          request.status === 'declined' ||
+          request.status === 'expired'
+            ? request.status
+            : 'pending';
+
+        accumulator[`sent${statusKey.charAt(0).toUpperCase()}${statusKey.slice(1)}`] += 1;
+        return accumulator;
+      },
+      {
+        incomingPending: requests.length,
+        sentPending: 0,
+        sentAccepted: 0,
+        sentDeclined: 0,
+        sentExpired: 0
+      }
+    );
+
     res.json({
-      requests: result.rows.map(row => ({
-        id: row.id,
-        fromUserId: row.from_user_id,
-        firstName: row.first_name,
-        age: row.age,
-        location: { city: row.location_city },
-        photoUrl: row.photo_url,
-        message: row.message,
-        status: row.status,
-        createdAt: row.created_at,
-        expiresAt: row.expires_at
-      }))
+      requests,
+      incoming: requests,
+      sent: sentRequests,
+      summary,
+      capabilities: {
+        canSendRequests: subscriptionAccess.isGold
+      }
     });
   } catch (err) {
     console.error('Get message requests error:', err);
@@ -5308,6 +5885,16 @@ router.post('/message-requests/:requestId/decline', async (req, res) => {
       return res.status(404).json({ error: 'Message request not found' });
     }
 
+    await userNotificationService.createNotification(result.rows[0].from_user_id, {
+      type: 'message_request_declined',
+      title: 'Your message request was declined',
+      body: 'You can always try again later with a different opener.',
+      metadata: {
+        requestId: result.rows[0].id,
+        declinedByUserId: userId
+      }
+    });
+
     res.json({ message: 'Message request declined' });
   } catch (err) {
     console.error('Decline message request error:', err);
@@ -5386,7 +5973,6 @@ router.post('/profiles/:userId/view', async (req, res) => {
 router.get('/profiles/me/analytics', async (req, res) => {
   try {
     const userId = req.user.id;
-    const today = new Date().toISOString().split('T')[0];
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -5394,6 +5980,7 @@ router.get('/profiles/me/analytics', async (req, res) => {
     const profileResult = await db.query(
       `SELECT first_name, age, gender, location_city, bio, interests, occupation,
               education, relationship_goals, height, body_type, profile_verified,
+              voice_intro_url,
               profile_completion_percent, last_active,
               (SELECT COUNT(*) FROM profile_photos WHERE user_id = $1) as photo_count
        FROM dating_profiles WHERE user_id = $1`,
@@ -5434,8 +6021,157 @@ router.get('/profiles/me/analytics', async (req, res) => {
       [userId]
     );
 
+    const conversationMetricsResult = await db.query(
+      `WITH user_matches AS (
+         SELECT id
+         FROM matches
+         WHERE (user_id_1 = $1 OR user_id_2 = $1)
+           AND status = 'active'
+       ),
+       ordered_messages AS (
+         SELECT
+           m.match_id,
+           m.from_user_id,
+           m.created_at,
+           ROW_NUMBER() OVER (PARTITION BY m.match_id ORDER BY m.created_at ASC) as message_order
+         FROM messages m
+         JOIN user_matches um ON um.id = m.match_id
+         WHERE COALESCE(m.is_deleted, FALSE) = FALSE
+       ),
+       first_messages AS (
+         SELECT match_id, from_user_id as first_sender_id, created_at as first_message_at
+         FROM ordered_messages
+         WHERE message_order = 1
+       ),
+       first_replies AS (
+         SELECT DISTINCT ON (om.match_id)
+           om.match_id,
+           om.from_user_id as reply_sender_id,
+           om.created_at as reply_at
+         FROM ordered_messages om
+         JOIN first_messages fm ON fm.match_id = om.match_id
+         WHERE om.created_at > fm.first_message_at
+           AND om.from_user_id <> fm.first_sender_id
+         ORDER BY om.match_id, om.created_at ASC
+       ),
+       message_totals AS (
+         SELECT
+           match_id,
+           COUNT(*) as message_count,
+           COUNT(DISTINCT from_user_id) as distinct_senders
+         FROM ordered_messages
+         GROUP BY match_id
+       )
+       SELECT
+         COUNT(*) FILTER (WHERE fm.first_sender_id = $1) as user_started_conversations,
+         COUNT(*) FILTER (WHERE fm.first_sender_id = $1 AND fr.reply_at IS NOT NULL) as user_started_with_reply,
+         COUNT(*) FILTER (WHERE mt.message_count > 0) as conversations_with_messages,
+         COUNT(*) FILTER (WHERE mt.distinct_senders >= 2) as reciprocal_conversations,
+         AVG(EXTRACT(EPOCH FROM (fr.reply_at - fm.first_message_at)) / 60.0)
+           FILTER (WHERE fr.reply_at IS NOT NULL) as avg_first_reply_minutes
+       FROM user_matches um
+       LEFT JOIN first_messages fm ON fm.match_id = um.id
+       LEFT JOIN first_replies fr ON fr.match_id = um.id
+       LEFT JOIN message_totals mt ON mt.match_id = um.id`,
+      [userId]
+    );
+
+    let bestActiveHoursResult = await db.query(
+      `SELECT EXTRACT(HOUR FROM activity_at)::int as hour_of_day,
+              COUNT(*)::int as engagement_count
+       FROM (
+         SELECT viewed_at as activity_at
+         FROM profile_views
+         WHERE viewed_user_id = $1
+           AND viewed_at >= $2
+         UNION ALL
+         SELECT created_at
+         FROM interactions
+         WHERE to_user_id = $1
+           AND interaction_type IN ('like', 'superlike')
+           AND created_at >= $2
+         UNION ALL
+         SELECT created_at
+         FROM messages
+         WHERE to_user_id = $1
+           AND COALESCE(is_deleted, FALSE) = FALSE
+           AND created_at >= $2
+       ) engagement_events
+       GROUP BY hour_of_day
+       ORDER BY engagement_count DESC, hour_of_day ASC
+       LIMIT 4`,
+      [userId, thirtyDaysAgo]
+    );
+
+    if (bestActiveHoursResult.rows.length === 0) {
+      bestActiveHoursResult = await db.query(
+        `SELECT EXTRACT(HOUR FROM activity_at)::int as hour_of_day,
+                COUNT(*)::int as engagement_count
+         FROM (
+           SELECT created_at as activity_at
+           FROM interactions
+           WHERE from_user_id = $1
+             AND created_at >= $2
+           UNION ALL
+           SELECT created_at
+           FROM messages
+           WHERE from_user_id = $1
+             AND COALESCE(is_deleted, FALSE) = FALSE
+             AND created_at >= $2
+         ) activity_events
+         GROUP BY hour_of_day
+         ORDER BY engagement_count DESC, hour_of_day ASC
+         LIMIT 4`,
+        [userId, thirtyDaysAgo]
+      );
+    }
+
     // Calculate profile strength
     const profileStrength = calculateProfileStrength(profile);
+    const likesSent = countRowValue(interactionsResult.rows[0]?.likes_sent);
+    const likesReceived = countRowValue(interactionsResult.rows[0]?.likes_received);
+    const superlikesSent = countRowValue(interactionsResult.rows[0]?.superlikes_sent);
+    const superlikesReceived = countRowValue(interactionsResult.rows[0]?.superlikes_received);
+    const totalMatches = countRowValue(interactionsResult.rows[0]?.total_matches);
+    const passesSent = countRowValue(interactionsResult.rows[0]?.passes_sent);
+    const totalPositiveOutbound = likesSent + superlikesSent;
+    const conversationMetrics = conversationMetricsResult.rows[0] || {};
+    const userStartedConversations = countRowValue(conversationMetrics.user_started_conversations);
+    const userStartedWithReply = countRowValue(conversationMetrics.user_started_with_reply);
+    const conversationsWithMessages = countRowValue(conversationMetrics.conversations_with_messages);
+    const reciprocalConversations = countRowValue(conversationMetrics.reciprocal_conversations);
+    const replyRateSourceCount =
+      userStartedConversations > 0 ? userStartedConversations : conversationsWithMessages;
+    const replyRateValue =
+      userStartedConversations > 0
+        ? percentage(userStartedWithReply, userStartedConversations)
+        : percentage(reciprocalConversations, conversationsWithMessages);
+    const averageFirstReplyMinutes = roundNumber(
+      conversationMetrics.avg_first_reply_minutes || 0,
+      0
+    );
+    const photoPerformance = await getPhotoPerformanceSummary(userId, 3);
+    const promptPerformance = await getPromptPerformanceSummary(
+      userId,
+      {
+        likesReceived,
+        replyRate: replyRateValue
+      },
+      3
+    );
+    const sectionInsights = buildSectionInsights({
+      profile,
+      photoPerformance,
+      promptPerformance,
+      views: {
+        total: countRowValue(viewsResult.rows[0]?.total_views)
+      },
+      interactions: {
+        likesReceived,
+        superlikesReceived
+      },
+      replyRate: replyRateValue
+    });
 
     res.json({
       profileStrength: {
@@ -5455,13 +6191,31 @@ router.get('/profiles/me/analytics', async (req, res) => {
         }))
       },
       interactions: {
-        likesSent: Number.parseInt(interactionsResult.rows[0]?.likes_sent || 0),
-        likesReceived: Number.parseInt(interactionsResult.rows[0]?.likes_received || 0),
-        superlikesSent: Number.parseInt(interactionsResult.rows[0]?.superlikes_sent || 0),
-        superlikesReceived: Number.parseInt(interactionsResult.rows[0]?.superlikes_received || 0),
-        totalMatches: Number.parseInt(interactionsResult.rows[0]?.total_matches || 0),
-        passesSent: Number.parseInt(interactionsResult.rows[0]?.passes_sent || 0)
+        likesSent,
+        likesReceived,
+        superlikesSent,
+        superlikesReceived,
+        totalMatches,
+        passesSent
       },
+      advanced: {
+        matchRate: Math.min(100, percentage(totalMatches, totalPositiveOutbound)),
+        replyRate: replyRateValue,
+        averageTimeToFirstReplyMinutes: averageFirstReplyMinutes,
+        averageTimeToFirstReplyLabel: formatDurationLabel(averageFirstReplyMinutes),
+        bestActiveHours: bestActiveHoursResult.rows.map((row) => ({
+          hour: countRowValue(row.hour_of_day),
+          label: formatHourRangeLabel(row.hour_of_day),
+          engagementCount: countRowValue(row.engagement_count)
+        })),
+        replyRateBasis:
+          userStartedConversations > 0
+            ? 'Matches where your first message got a reply'
+            : 'Conversations that became two-way'
+      },
+      photoPerformance,
+      promptPerformance,
+      sectionInsights,
       lastActive: profile?.last_active,
       profileCompletionPercent: profile?.profile_completion_percent || 0
     });
@@ -5613,6 +6367,162 @@ router.get('/profiles/me/profile-views', async (req, res) => {
   } catch (err) {
     console.error('Get profile views error:', err);
     res.status(500).json({ error: 'Failed to get profile views' });
+  }
+});
+
+router.get('/profiles/me/premium-dashboard', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const [subscription, limits, profileResult, viewsResult, likersResult, viewersResult, latestBoostRecord] =
+      await Promise.all([
+        getSubscriptionSnapshotForUser(userId),
+        getDailyLimitSnapshot(userId),
+        db.query(
+          `SELECT bio, profile_verified, voice_intro_url,
+                  (SELECT COUNT(*) FROM profile_photos WHERE user_id = $1) as photo_count
+           FROM dating_profiles
+           WHERE user_id = $1`,
+          [userId]
+        ),
+        db.query(
+          `SELECT COUNT(*) as total_views,
+                  COUNT(CASE WHEN viewed_at >= $2 THEN 1 END) as views_last_7_days
+           FROM profile_views
+           WHERE viewed_user_id = $1`,
+          [userId, sevenDaysAgo]
+        ),
+        db.query(
+          `SELECT
+             i.from_user_id,
+             MAX(i.created_at) as liked_at,
+             MAX(CASE WHEN i.interaction_type = 'superlike' THEN 2 ELSE 1 END) as interaction_priority,
+             dp.first_name,
+             dp.age,
+             dp.location_city,
+             (SELECT photo_url FROM profile_photos WHERE user_id = i.from_user_id LIMIT 1) as photo_url
+           FROM interactions i
+           JOIN dating_profiles dp ON dp.user_id = i.from_user_id
+           WHERE i.to_user_id = $1
+             AND i.interaction_type IN ('like', 'superlike')
+             AND i.from_user_id NOT IN (
+               SELECT CASE WHEN user_id_1 = $1 THEN user_id_2 ELSE user_id_1 END
+               FROM matches
+               WHERE (user_id_1 = $1 OR user_id_2 = $1)
+                 AND status = 'active'
+             )
+           GROUP BY i.from_user_id, dp.first_name, dp.age, dp.location_city, photo_url
+           ORDER BY liked_at DESC
+           LIMIT 3`,
+          [userId]
+        ),
+        db.query(
+          `SELECT pv.viewer_user_id, pv.viewed_at,
+                  dp.first_name, dp.age, dp.location_city,
+                  (SELECT photo_url FROM profile_photos WHERE user_id = pv.viewer_user_id LIMIT 1) as photo_url
+           FROM profile_views pv
+           JOIN dating_profiles dp ON dp.user_id = pv.viewer_user_id
+           WHERE pv.viewed_user_id = $1
+           ORDER BY pv.viewed_at DESC
+           LIMIT 3`,
+          [userId]
+        ),
+        getLatestBoostRecordForUser(userId)
+      ]);
+
+    const profile = profileResult.rows[0] || {};
+    const viewsTotal = countRowValue(viewsResult.rows[0]?.total_views);
+    const viewsLast7Days = countRowValue(viewsResult.rows[0]?.views_last_7_days);
+    const hasPremiumViewerAccess = subscription.isPremium || subscription.isGold;
+    const activeBoost = latestBoostRecord?.boost_expires_at &&
+      new Date(latestBoostRecord.boost_expires_at).getTime() > Date.now()
+      ? await summarizeBoostRecord(userId, latestBoostRecord, viewsLast7Days)
+      : null;
+    const recentBoost = latestBoostRecord
+      ? await summarizeBoostRecord(userId, latestBoostRecord, viewsLast7Days)
+      : null;
+    const topPhotos = await getPhotoPerformanceSummary(userId, 3);
+    const topPrompts = await getPromptPerformanceSummary(userId, {}, 3);
+
+    const likedPreview = likersResult.rows.map((row) => ({
+      userId: row.from_user_id,
+      firstName: hasPremiumViewerAccess ? row.first_name : 'Someone',
+      age: hasPremiumViewerAccess ? row.age : null,
+      location: { city: hasPremiumViewerAccess ? row.location_city : '' },
+      photoUrl: row.photo_url,
+      likedAt: row.liked_at,
+      interactionStrength: countRowValue(row.interaction_priority),
+      isRevealed: hasPremiumViewerAccess
+    }));
+
+    const viewerPreview = viewersResult.rows.map((row) => ({
+      userId: row.viewer_user_id,
+      firstName: hasPremiumViewerAccess ? row.first_name : 'Someone',
+      age: hasPremiumViewerAccess ? row.age : null,
+      location: { city: hasPremiumViewerAccess ? row.location_city : '' },
+      photoUrl: row.photo_url,
+      viewedAt: row.viewed_at,
+      isRevealed: hasPremiumViewerAccess
+    }));
+
+    const upgradeReasons = [];
+    if (!hasPremiumViewerAccess && likedPreview.length > 0) {
+      upgradeReasons.push(`${likedPreview.length} people already liked your profile.`);
+    }
+    if (!hasPremiumViewerAccess && viewsTotal > 0) {
+      upgradeReasons.push(`${viewsTotal} people have viewed your profile so far.`);
+    }
+    if (!subscription.isGold) {
+      upgradeReasons.push('Gold lets you send first-message requests before you match.');
+    }
+    if (!profile.voice_intro_url) {
+      upgradeReasons.push('A voice intro can lift conversion once premium increases your reach.');
+    }
+
+    res.json({
+      subscription,
+      limits: {
+        remainingLikes: limits.remainingLikes,
+        likeLimit: limits.likeLimit,
+        remainingSuperlikes: limits.remainingSuperlikes,
+        superlikeLimit: limits.superlikeLimit,
+        remainingRewinds: limits.remainingRewinds,
+        rewindLimit: limits.rewindLimit,
+        remainingBoostCredits: limits.remainingBoostCredits,
+        remainingBoosts: limits.remainingBoosts,
+        boostLimit: limits.boostLimit,
+        boostsUsedToday: limits.boostsUsedToday,
+        resetsAt: limits.resetsAt
+      },
+      boost: {
+        active: Boolean(activeBoost),
+        current: activeBoost,
+        recent: recentBoost
+      },
+      likedYou: {
+        totalCount: likedPreview.length,
+        preview: likedPreview,
+        isRevealed: hasPremiumViewerAccess
+      },
+      viewedYou: {
+        totalCount: viewsTotal,
+        last7Days: viewsLast7Days,
+        preview: viewerPreview,
+        isRevealed: hasPremiumViewerAccess
+      },
+      bestPerformingPhotos: topPhotos,
+      bestPerformingPrompts: topPrompts,
+      upgradeReasons,
+      completionSignals: {
+        photoCount: countRowValue(profile.photo_count),
+        hasVoiceIntro: Boolean(profile.voice_intro_url),
+        profileVerified: Boolean(profile.profile_verified),
+        hasBio: Boolean(String(profile.bio || '').trim())
+      }
+    });
+  } catch (err) {
+    console.error('Get premium dashboard error:', err);
+    res.status(500).json({ error: 'Failed to get premium dashboard' });
   }
 });
 

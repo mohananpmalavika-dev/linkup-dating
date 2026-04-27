@@ -755,6 +755,30 @@ export const datingProfileService = {
   },
 
   /**
+   * Get current and recent boost status
+   */
+  getBoostStatus: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/profiles/me/boost-status`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get boost status';
+    }
+  },
+
+  /**
+   * Get premium dashboard data for profile insights
+   */
+  getPremiumDashboard: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/profiles/me/premium-dashboard`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get premium dashboard';
+    }
+  },
+
+  /**
    * Get who liked me (requires premium)
    */
   getWhoLikedMe: async () => {
