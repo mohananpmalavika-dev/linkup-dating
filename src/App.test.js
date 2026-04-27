@@ -616,5 +616,5 @@ test("messages route renders the inbox view for authenticated users", async () =
   render(<App />);
 
   expect(await screen.findByRole("heading", { level: 2, name: /messages/i })).toBeInTheDocument();
-  expect(screen.getByText(/no matches yet\. start swiping to find someone!/i)).toBeInTheDocument();
+  expect(screen.getByText(/no messages yet\. start a conversation from your matches!/i)).toBeInTheDocument();
 });

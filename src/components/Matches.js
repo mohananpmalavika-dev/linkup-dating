@@ -210,6 +210,21 @@ const Matches = ({
       return 0;
     });
 
+  const messageMatches = matches
+    .filter((match) => {
+      if (filter === 'unread') {
+        return (match.unreadCount || 0) > 0;
+      }
+      return Boolean(match.lastMessage || match.messageCount > 0);
+    })
+    .sort((leftMatch, rightMatch) => {
+      const leftDate = leftMatch.lastMessageAt || leftMatch.matchedAt || leftMatch.createdAt || '';
+      const rightDate = rightMatch.lastMessageAt || rightMatch.matchedAt || rightMatch.createdAt || '';
+      return new Date(rightDate).getTime() - new Date(leftDate).getTime();
+    });
+
+  const displayMatches = isMessagesPage ? messageMatches : filteredMatches;
+
   if (loading) {
     return (
       <div className="matches-container loading">
@@ -231,23 +246,25 @@ const Matches = ({
   return (
     <div className="matches-container">
       <div className="matches-header">
-        <h2>{isMessagesPage ? 'Messages' : 'My Matches'} ({matches.length})</h2>
+        <h2>{isMessagesPage ? 'Messages' : 'My Matches'} ({displayMatches.length})</h2>
         <div className="filter-tabs">
           <button
             className={`filter-btn ${activeTab === 'matches' ? 'active' : ''}`}
             onClick={() => setActiveTab('matches')}
           >
-            Matches
+            {isMessagesPage ? 'Conversations' : 'Matches'}
           </button>
-          <button
-            className={`filter-btn ${activeTab === 'likes' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('likes');
-              loadWhoLikedMe();
-            }}
-          >
-            Who Liked You
-          </button>
+          {!isMessagesPage && (
+            <button
+              className={`filter-btn ${activeTab === 'likes' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('likes');
+                loadWhoLikedMe();
+              }}
+            >
+              Who Liked You
+            </button>
+          )}
           <button
             className={`filter-btn ${activeTab === 'requests' ? 'active' : ''}`}
             onClick={() => {
@@ -377,86 +394,88 @@ const Matches = ({
         </div>
       ) : (
         <>
-          <div className="likes-you-section">
-            <div className="likes-you-header">
-              <div>
-                <h3>Likes You</h3>
-                <p>People who already showed interest in you.</p>
+          {!isMessagesPage && (
+            <div className="likes-you-section">
+              <div className="likes-you-header">
+                <div>
+                  <h3>Likes You</h3>
+                  <p>People who already showed interest in you.</p>
+                </div>
+                <button type="button" className="likes-refresh-btn" onClick={loadLikesReceived}>
+                  Refresh
+                </button>
               </div>
-              <button type="button" className="likes-refresh-btn" onClick={loadLikesReceived}>
-                Refresh
-              </button>
-            </div>
 
-            {actionError ? (
-              <div className="likes-you-feedback" role="status">
-                {actionError}
-              </div>
-            ) : null}
+              {actionError ? (
+                <div className="likes-you-feedback" role="status">
+                  {actionError}
+                </div>
+              ) : null}
 
-            {navigationNotice ? (
-              <div className="matches-navigation-notice" role="status">
-                {navigationNotice}
-              </div>
-            ) : null}
+              {navigationNotice ? (
+                <div className="matches-navigation-notice" role="status">
+                  {navigationNotice}
+                </div>
+              ) : null}
 
-            {loadingLikes ? (
-              <div className="likes-you-empty">
-                <p>
-                  {isMessagesPage
-                    ? 'No conversations yet. Start swiping to find someone!'
-                    : 'No matches yet. Start swiping to find someone!'}
-                </p>
-              </div>
-            ) : likesReceived.length > 0 ? (
-              <div className="likes-you-list">
-                {likesReceived.map((like) => (
-                  <div key={`${like.from_user_id}-${like.created_at}`} className="like-card">
-                    <div
-                      className="like-card-photo"
-                      style={{
-                        backgroundImage: like.photo_url
-                          ? `url(${like.photo_url})`
-                          : 'linear-gradient(135deg, #f97316, #fb7185)'
-                      }}
-                    />
-                    <div className="like-card-body">
-                      <h4>
-                        {like.first_name}
-                        {like.age ? `, ${like.age}` : ''}
-                      </h4>
-                      <p>{like.location_city || 'Nearby'}</p>
-                      <div className="like-card-actions">
-                        <button
-                          type="button"
-                          className="like-card-secondary"
-                          onClick={() => onViewProfile?.(buildLikeProfileContext(like))}
-                        >
-                          View
-                        </button>
-                        <button
-                          type="button"
-                          className="like-card-primary"
-                          onClick={() => handleLikeBack(like)}
-                          disabled={likingBackUserId === like.from_user_id}
-                        >
-                          {likingBackUserId === like.from_user_id ? 'Matching...' : 'Like Back'}
-                        </button>
+              {loadingLikes ? (
+                <div className="likes-you-empty">
+                  <p>
+                    {isMessagesPage
+                      ? 'No conversations yet. Start swiping to find someone!'
+                      : 'No matches yet. Start swiping to find someone!'}
+                  </p>
+                </div>
+              ) : likesReceived.length > 0 ? (
+                <div className="likes-you-list">
+                  {likesReceived.map((like) => (
+                    <div key={`${like.from_user_id}-${like.created_at}`} className="like-card">
+                      <div
+                        className="like-card-photo"
+                        style={{
+                          backgroundImage: like.photo_url
+                            ? `url(${like.photo_url})`
+                            : 'linear-gradient(135deg, #f97316, #fb7185)'
+                        }}
+                      />
+                      <div className="like-card-body">
+                        <h4>
+                          {like.first_name}
+                          {like.age ? `, ${like.age}` : ''}
+                        </h4>
+                        <p>{like.location_city || 'Nearby'}</p>
+                        <div className="like-card-actions">
+                          <button
+                            type="button"
+                            className="like-card-secondary"
+                            onClick={() => onViewProfile?.(buildLikeProfileContext(like))}
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            className="like-card-primary"
+                            onClick={() => handleLikeBack(like)}
+                            disabled={likingBackUserId === like.from_user_id}
+                          >
+                            {likingBackUserId === like.from_user_id ? 'Matching...' : 'Like Back'}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="likes-you-empty">
-                <p>No likes yet. Keep your profile active and check back soon.</p>
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="likes-you-empty">
+                  <p>No likes yet. Keep your profile active and check back soon.</p>
+                </div>
+              )}
+            </div>
+          )}
 
-          {filteredMatches.length > 0 ? (
+          {displayMatches.length > 0 ? (
             <div className="matches-list">
-              {filteredMatches.map((match) => (
+              {displayMatches.map((match) => (
                 <div key={match.id} className="match-item">
                   <div
                     className="match-photo"
@@ -529,7 +548,7 @@ const Matches = ({
             </div>
           ) : (
             <div className="no-matches">
-              <p>No matches yet. Start swiping to find someone!</p>
+              <p>{isMessagesPage ? 'No messages yet. Start a conversation from your matches!' : 'No matches yet. Start swiping to find someone!'}</p>
             </div>
           )}
         </>
