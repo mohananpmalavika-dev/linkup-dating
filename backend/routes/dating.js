@@ -138,6 +138,88 @@ const optionalQuery = async (queryText, values = [], fallbackRows = []) => {
   }
 };
 
+const PHASE_ONE_FUNNEL_TARGETS = {
+  firstMessageRateLiftPercent: 20,
+  datePlanCreationRateLiftPercent: 15,
+  profileCompletionLiftPercent: 10
+};
+
+const ALLOWED_FUNNEL_EVENTS = new Set([
+  'dating_positioning_viewed',
+  'dating_onboarding_started',
+  'dating_onboarding_email_verified',
+  'dating_onboarding_username_set',
+  'dating_onboarding_profile_details_saved',
+  'dating_onboarding_completed',
+  'dating_profile_completion_viewed',
+  'dating_compatibility_viewed',
+  'dating_compatibility_opener_used',
+  'dating_action_inbox_viewed',
+  'dating_action_inbox_item_opened',
+  'dating_date_planner_opened',
+  'dating_check_in_reminder_created',
+  'dating_safety_plan_shared'
+]);
+
+const sanitizeFunnelContext = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.entries(value).reduce((context, [key, entryValue]) => {
+    if (!key || context[key] !== undefined) {
+      return context;
+    }
+
+    if (
+      typeof entryValue === 'string' ||
+      typeof entryValue === 'number' ||
+      typeof entryValue === 'boolean'
+    ) {
+      context[key] = entryValue;
+      return context;
+    }
+
+    if (Array.isArray(entryValue)) {
+      context[key] = entryValue
+        .filter((item) =>
+          typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'
+        )
+        .slice(0, 8);
+    }
+
+    return context;
+  }, {});
+};
+
+const trackDatingFunnelEvent = async ({
+  userId,
+  eventName,
+  matchId = null,
+  context = {}
+}) => {
+  if (!userId || !ALLOWED_FUNNEL_EVENTS.has(eventName)) {
+    return;
+  }
+
+  try {
+    await db.query(
+      `INSERT INTO dating_funnel_events (user_id, event_name, match_id, context)
+       VALUES ($1, $2, $3, $4)`,
+      [
+        userId,
+        eventName,
+        normalizeInteger(matchId),
+        JSON.stringify(sanitizeFunnelContext(context))
+      ]
+    );
+  } catch (error) {
+    if (!isOptionalAnalyticsError(error)) {
+      console.error('Track dating funnel event error:', error);
+    }
+  }
+};
+
 const roundNumber = (value, digits = 1) => {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) {
@@ -949,6 +1031,43 @@ const normalizeStringArray = (values = []) =>
     .map((value) => String(value || '').trim())
     .filter(Boolean);
 
+const normalizeLanguageList = (values = []) =>
+  normalizeStringArray(values).slice(0, 5);
+
+const calculatePhaseOneProfileCompletionPercent = ({
+  firstName,
+  age,
+  gender,
+  city,
+  bio,
+  interests,
+  relationshipGoals,
+  languages,
+  conversationStyle,
+  religion,
+  communityPreference,
+  photoCount = 0,
+  profileVerified = false
+}) => {
+  const completionChecks = [
+    Boolean(normalizeOptionalText(firstName)),
+    Boolean(normalizeInteger(age)),
+    Boolean(normalizeOptionalText(gender)),
+    Boolean(normalizeOptionalText(city)),
+    Boolean(normalizeOptionalText(bio)),
+    normalizeInterestList(interests).length > 0,
+    Boolean(normalizeOptionalText(relationshipGoals)),
+    normalizeLanguageList(languages).length > 0,
+    Boolean(normalizeOptionalText(conversationStyle)),
+    Boolean(normalizeOptionalText(religion) || normalizeOptionalText(communityPreference)),
+    Number(photoCount) > 0,
+    Boolean(profileVerified)
+  ];
+
+  const completedCount = completionChecks.filter(Boolean).length;
+  return Math.round((completedCount / completionChecks.length) * 100);
+};
+
 const COMPATIBILITY_QUESTION_LABELS = {
   weekendStyle: 'weekend style',
   communicationStyle: 'communication style',
@@ -1369,6 +1488,8 @@ const buildIcebreakerSuggestions = (profile, sharedInterests = []) => {
   const suggestions = [];
   const firstSharedInterest = sharedInterests[0];
   const firstInterest = normalizeInterestList(profile?.interests)[0];
+  const firstLanguage = normalizeLanguageList(profile?.languages)[0];
+  const conversationStyle = normalizeOptionalText(profile?.conversationStyle);
 
   if (firstSharedInterest) {
     suggestions.push(`I noticed we both like ${firstSharedInterest}. What got you into it?`);
@@ -1380,6 +1501,14 @@ const buildIcebreakerSuggestions = (profile, sharedInterests = []) => {
 
   if (profile?.relationshipGoals) {
     suggestions.push(`What does a great ${profile.relationshipGoals} connection look like to you?`);
+  }
+
+  if (firstLanguage) {
+    suggestions.push(`I saw ${firstLanguage} on your profile. Do you have a favorite phrase or expression in it?`);
+  }
+
+  if (conversationStyle) {
+    suggestions.push(`Your profile made me curious: what does a ${conversationStyle} conversation feel like to you?`);
   }
 
   if (profile?.location?.city) {
@@ -1431,6 +1560,12 @@ const buildCompatibilitySuggestion = ({
   const currentInterestLookup = new Set(currentInterests.map((interest) => interest.toLowerCase()));
   const sharedInterests = candidateInterests.filter((interest) =>
     currentInterestLookup.has(interest.toLowerCase())
+  );
+  const currentLanguages = normalizeLanguageList(currentProfile.languages);
+  const candidateLanguages = normalizeLanguageList(candidateProfile.languages);
+  const currentLanguageLookup = new Set(currentLanguages.map((language) => language.toLowerCase()));
+  const sharedLanguages = candidateLanguages.filter((language) =>
+    currentLanguageLookup.has(language.toLowerCase())
   );
 
   const preferredInterestLookup = new Set(
@@ -1553,6 +1688,12 @@ const buildCompatibilitySuggestion = ({
     );
   }
 
+  if (sharedLanguages.length > 0) {
+    const sharedLanguageScore = Math.min(8, sharedLanguages.length * 4);
+    score += sharedLanguageScore;
+    addReason(`You can both chat in ${sharedLanguages.slice(0, 2).join(' and ')}`, sharedLanguageScore);
+  }
+
   if (relationshipMatchesPreference === true) {
     score += 12;
     addReason(`Fits your relationship goals`, 12);
@@ -1633,6 +1774,35 @@ const buildCompatibilitySuggestion = ({
   if (candidateProfile.profileVerified) {
     score += 4;
     addReason(`Verified profile`, 4);
+  }
+
+  if (
+    currentProfile.conversationStyle &&
+    candidateProfile.conversationStyle &&
+    String(currentProfile.conversationStyle).toLowerCase() ===
+      String(candidateProfile.conversationStyle).toLowerCase()
+  ) {
+    score += 6;
+    addReason(`You share a ${candidateProfile.conversationStyle} conversation style`, 6);
+  }
+
+  if (
+    currentProfile.religion &&
+    candidateProfile.religion &&
+    String(currentProfile.religion).toLowerCase() === String(candidateProfile.religion).toLowerCase()
+  ) {
+    score += 5;
+    addReason(`Shared religion: ${candidateProfile.religion}`, 5);
+  }
+
+  if (
+    currentProfile.communityPreference &&
+    candidateProfile.communityPreference &&
+    String(currentProfile.communityPreference).toLowerCase() ===
+      String(candidateProfile.communityPreference).toLowerCase()
+  ) {
+    score += 4;
+    addReason(`Shared community context: ${candidateProfile.communityPreference}`, 4);
   }
 
   if (candidateProfile.bio) {
@@ -1752,10 +1922,13 @@ const normalizeProfileRow = (profileRow) => {
     bodyType: profileRow.body_type || null,
     ethnicity: profileRow.ethnicity || null,
     religion: profileRow.religion || null,
+    communityPreference: profileRow.community_preference || null,
     smoking: profileRow.smoking || null,
     drinking: profileRow.drinking || null,
     hasKids: Boolean(profileRow.has_kids),
     wantsKids: Boolean(profileRow.wants_kids),
+    languages: normalizeLanguageList(profileRow.languages),
+    conversationStyle: profileRow.conversation_style || null,
     profileVerified: Boolean(profileRow.profile_verified),
     profileCompletionPercent: profileRow.profile_completion_percent || 0,
     isActive: profileRow.is_active !== false,
@@ -1803,6 +1976,10 @@ const normalizeMatchRow = (matchRow) => {
     education: matchedProfile.education || '',
     relationshipGoals: matchedProfile.relationship_goals || null,
     interests: Array.isArray(matchedProfile.interests) ? matchedProfile.interests : [],
+    languages: normalizeLanguageList(matchedProfile.languages),
+    conversationStyle: matchedProfile.conversation_style || null,
+    religion: matchedProfile.religion || null,
+    communityPreference: matchedProfile.community_preference || null,
     profileVerified: Boolean(matchedProfile.profile_verified),
     matchedAt: matchRow.matched_at || null,
     createdAt: matchRow.created_at || null,
@@ -2123,6 +2300,20 @@ const buildConversationNudge = ({
   }
 
   if (
+    messageCount >= 3 &&
+    messageCount <= 5 &&
+    !latestAcceptedProposal &&
+    !videoDateBooked
+  ) {
+    return {
+      type: 'next_best_step',
+      title: 'Good Time For A Clear Next Step',
+      message: 'You already have enough back-and-forth for something simple: suggest coffee, a walk, or a quick video check-in before the chat cools off.',
+      suggestions: [sharedActions[3]?.message, sharedActions[1]?.message].filter(Boolean)
+    };
+  }
+
+  if (
     hoursSinceLastMessage !== null &&
     hoursSinceLastMessage >= 24 &&
     hoursSinceLastMessage <= 48 &&
@@ -2402,6 +2593,9 @@ router.post('/profiles', async (req, res) => {
       bodyType,
       ethnicity,
       religion,
+      communityPreference,
+      conversationStyle,
+      languages,
       smoking,
       drinking,
       hasKids,
@@ -2421,10 +2615,28 @@ router.post('/profiles', async (req, res) => {
     const normalizedBodyType = normalizeOptionalText(bodyType);
     const normalizedEthnicity = normalizeOptionalText(ethnicity);
     const normalizedReligion = normalizeOptionalText(religion);
+    const normalizedCommunityPreference = normalizeOptionalText(communityPreference);
+    const normalizedConversationStyle = normalizeOptionalText(conversationStyle);
+    const normalizedLanguages = normalizeLanguageList(languages);
     const normalizedSmoking = normalizeOptionalText(smoking);
     const normalizedDrinking = normalizeOptionalText(drinking);
     const normalizedRelationshipGoals = normalizeOptionalText(relationshipGoals);
     const normalizedInterests = Array.isArray(interests) ? interests.filter(Boolean) : [];
+    const completionPercent = calculatePhaseOneProfileCompletionPercent({
+      firstName: normalizedFirstName,
+      age: normalizedAge,
+      gender: normalizedGender,
+      city: normalizedCity,
+      bio: normalizedBio,
+      interests: normalizedInterests,
+      relationshipGoals: normalizedRelationshipGoals,
+      languages: normalizedLanguages,
+      conversationStyle: normalizedConversationStyle,
+      religion: normalizedReligion,
+      communityPreference: normalizedCommunityPreference,
+      photoCount: 0,
+      profileVerified: false
+    });
 
     if (!normalizedFirstName || !normalizedAge || !normalizedGender || !normalizedCity) {
       return res.status(400).json({ error: 'Required fields missing' });
@@ -2434,14 +2646,15 @@ router.post('/profiles', async (req, res) => {
       `INSERT INTO dating_profiles (
          user_id, first_name, age, gender, location_city, location_state,
          location_country, bio, relationship_goals, interests, height,
-         occupation, education, body_type, ethnicity, religion, smoking,
-         drinking, has_kids, wants_kids, profile_completion_percent, last_active
+         occupation, education, body_type, ethnicity, religion, community_preference,
+         languages, conversation_style, smoking, drinking, has_kids, wants_kids,
+         profile_completion_percent, last_active
        )
        VALUES (
          $1, $2, $3, $4, $5, $6,
          $7, $8, $9, $10, $11,
          $12, $13, $14, $15, $16, $17,
-         $18, $19, $20, $21, CURRENT_TIMESTAMP
+         $18, $19, $20, $21, $22, $23, $24, CURRENT_TIMESTAMP
        )
        ON CONFLICT (user_id) DO UPDATE
        SET first_name = EXCLUDED.first_name,
@@ -2459,21 +2672,39 @@ router.post('/profiles', async (req, res) => {
            body_type = EXCLUDED.body_type,
            ethnicity = EXCLUDED.ethnicity,
            religion = EXCLUDED.religion,
+           community_preference = EXCLUDED.community_preference,
+           languages = EXCLUDED.languages,
+           conversation_style = EXCLUDED.conversation_style,
            smoking = EXCLUDED.smoking,
            drinking = EXCLUDED.drinking,
            has_kids = EXCLUDED.has_kids,
            wants_kids = EXCLUDED.wants_kids,
-           profile_completion_percent = GREATEST(COALESCE(dating_profiles.profile_completion_percent, 0), EXCLUDED.profile_completion_percent),
+           profile_completion_percent = EXCLUDED.profile_completion_percent,
            updated_at = CURRENT_TIMESTAMP,
            last_active = CURRENT_TIMESTAMP
        RETURNING *`,
       [
         userId, normalizedFirstName, normalizedAge, normalizedGender, normalizedCity, normalizedState,
         normalizedCountry, normalizedBio, normalizedRelationshipGoals, normalizedInterests, normalizedHeight,
-        normalizedOccupation, normalizedEducation, normalizedBodyType, normalizedEthnicity, normalizedReligion, normalizedSmoking,
-        normalizedDrinking, normalizeBoolean(hasKids), normalizeBoolean(wantsKids), 60
+        normalizedOccupation, normalizedEducation, normalizedBodyType, normalizedEthnicity, normalizedReligion, normalizedCommunityPreference,
+        normalizedLanguages, normalizedConversationStyle, normalizedSmoking, normalizedDrinking, normalizeBoolean(hasKids), normalizeBoolean(wantsKids), completionPercent
       ]
     );
+
+    if (normalizedConversationStyle) {
+      await db.query(
+        `UPDATE user_preferences
+         SET compatibility_answers = jsonb_set(
+               COALESCE(compatibility_answers, '{}'::jsonb),
+               '{communicationStyle}',
+               to_jsonb($2::text),
+               true
+             ),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $1`,
+        [userId, normalizedConversationStyle]
+      );
+    }
 
     res.json({ message: 'Profile created', profile: normalizeProfileRow(result.rows[0]) });
   } catch (err) {
@@ -2548,24 +2779,106 @@ router.get('/profiles/:userId', async (req, res) => {
 router.put('/profiles/me', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { bio, interests, relationshipGoals } = req.body;
+    const {
+      bio,
+      interests,
+      relationshipGoals,
+      city,
+      religion,
+      communityPreference,
+      conversationStyle,
+      languages
+    } = req.body;
+    const normalizedBio = bio === undefined ? null : normalizeOptionalText(bio);
+    const normalizedInterests = interests === undefined ? null : normalizeInterestList(interests);
+    const normalizedRelationshipGoals =
+      relationshipGoals === undefined ? null : normalizeOptionalText(relationshipGoals);
+    const normalizedCity = city === undefined ? null : normalizeOptionalText(city);
+    const normalizedReligion = religion === undefined ? null : normalizeOptionalText(religion);
+    const normalizedCommunityPreference =
+      communityPreference === undefined ? null : normalizeOptionalText(communityPreference);
+    const normalizedConversationStyle =
+      conversationStyle === undefined ? null : normalizeOptionalText(conversationStyle);
+    const normalizedLanguages = languages === undefined ? null : normalizeLanguageList(languages);
 
     const result = await db.query(
       `UPDATE dating_profiles 
        SET bio = COALESCE($1, bio),
            interests = COALESCE($2, interests),
            relationship_goals = COALESCE($3, relationship_goals),
+           location_city = COALESCE($4, location_city),
+           religion = COALESCE($5, religion),
+           community_preference = COALESCE($6, community_preference),
+           conversation_style = COALESCE($7, conversation_style),
+           languages = COALESCE($8, languages),
            updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = $4
+       WHERE user_id = $9
        RETURNING *`,
-      [bio, interests, relationshipGoals, userId]
+      [
+        normalizedBio,
+        normalizedInterests,
+        normalizedRelationshipGoals,
+        normalizedCity,
+        normalizedReligion,
+        normalizedCommunityPreference,
+        normalizedConversationStyle,
+        normalizedLanguages,
+        userId
+      ]
     );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Profile not found' });
     }
 
-    res.json({ message: 'Profile updated', profile: normalizeProfileRow(result.rows[0]) });
+    const photoCountResult = await db.query(
+      `SELECT COUNT(*) as photo_count
+       FROM profile_photos
+       WHERE user_id = $1`,
+      [userId]
+    );
+    const updatedProfile = result.rows[0];
+    const nextCompletionPercent = calculatePhaseOneProfileCompletionPercent({
+      firstName: updatedProfile.first_name,
+      age: updatedProfile.age,
+      gender: updatedProfile.gender,
+      city: updatedProfile.location_city,
+      bio: updatedProfile.bio,
+      interests: updatedProfile.interests,
+      relationshipGoals: updatedProfile.relationship_goals,
+      languages: updatedProfile.languages,
+      conversationStyle: updatedProfile.conversation_style,
+      religion: updatedProfile.religion,
+      communityPreference: updatedProfile.community_preference,
+      photoCount: photoCountResult.rows[0]?.photo_count,
+      profileVerified: Boolean(updatedProfile.profile_verified)
+    });
+
+    const completionUpdateResult = await db.query(
+      `UPDATE dating_profiles
+       SET profile_completion_percent = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2
+       RETURNING *`,
+      [nextCompletionPercent, userId]
+    );
+
+    if (normalizedConversationStyle) {
+      await db.query(
+        `UPDATE user_preferences
+         SET compatibility_answers = jsonb_set(
+               COALESCE(compatibility_answers, '{}'::jsonb),
+               '{communicationStyle}',
+               to_jsonb($2::text),
+               true
+             ),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $1`,
+        [userId, normalizedConversationStyle]
+      );
+    }
+
+    res.json({ message: 'Profile updated', profile: normalizeProfileRow(completionUpdateResult.rows[0]) });
   } catch (err) {
     console.error('Update profile error:', err);
     res.status(500).json({ error: 'Failed to update profile' });
@@ -2621,14 +2934,38 @@ router.post('/profiles/me/photos', async (req, res) => {
       }
     }
 
-    // Update profile completion
+    const profileResult = await db.query(
+      `SELECT first_name, age, gender, location_city, bio, interests, relationship_goals,
+              languages, religion, community_preference, conversation_style, profile_verified
+       FROM dating_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const profile = profileResult.rows[0] || {};
+    const profileCompletionPercent = calculatePhaseOneProfileCompletionPercent({
+      firstName: profile.first_name,
+      age: profile.age,
+      gender: profile.gender,
+      city: profile.location_city,
+      bio: profile.bio,
+      interests: profile.interests,
+      relationshipGoals: profile.relationship_goals,
+      languages: profile.languages,
+      conversationStyle: profile.conversation_style,
+      religion: profile.religion,
+      communityPreference: profile.community_preference,
+      photoCount: photoUrls.length,
+      profileVerified: Boolean(profile.profile_verified)
+    });
+
     await db.query(
       `UPDATE dating_profiles
-       SET profile_completion_percent = GREATEST(COALESCE(profile_completion_percent, 0), 80),
+       SET profile_completion_percent = $2,
            updated_at = CURRENT_TIMESTAMP,
            last_active = CURRENT_TIMESTAMP
        WHERE user_id = $1`,
-      [userId]
+      [userId, profileCompletionPercent]
     );
 
     await spamFraudService.refreshSystemMetrics();
@@ -3447,6 +3784,10 @@ router.get('/matches', async (req, res) => {
                   'education', education,
                   'relationship_goals', relationship_goals,
                   'interests', interests,
+                  'languages', languages,
+                  'conversation_style', conversation_style,
+                  'religion', religion,
+                  'community_preference', community_preference,
                   'location_city', location_city,
                   'location_state', location_state,
                   'location_country', location_country,
@@ -3514,6 +3855,10 @@ router.get('/matches/by-id/:matchId', async (req, res) => {
                   'education', education,
                   'relationship_goals', relationship_goals,
                   'interests', interests,
+                  'languages', languages,
+                  'conversation_style', conversation_style,
+                  'religion', religion,
+                  'community_preference', community_preference,
                   'location_city', location_city,
                   'location_state', location_state,
                   'location_country', location_country,
@@ -3765,6 +4110,38 @@ const verifyIdentityHandler = async (req, res) => {
       ]
     );
 
+    const profile = result.rows[0];
+    const photoCountResult = await db.query(
+      `SELECT COUNT(*) as photo_count
+       FROM profile_photos
+       WHERE user_id = $1`,
+      [userId]
+    );
+    const recalculatedCompletionPercent = calculatePhaseOneProfileCompletionPercent({
+      firstName: profile.first_name,
+      age: profile.age,
+      gender: profile.gender,
+      city: profile.location_city,
+      bio: profile.bio,
+      interests: profile.interests,
+      relationshipGoals: profile.relationship_goals,
+      languages: profile.languages,
+      conversationStyle: profile.conversation_style,
+      religion: profile.religion,
+      communityPreference: profile.community_preference,
+      photoCount: photoCountResult.rows[0]?.photo_count,
+      profileVerified: true
+    });
+
+    const completionUpdateResult = await db.query(
+      `UPDATE dating_profiles
+       SET profile_completion_percent = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2
+       RETURNING *`,
+      [recalculatedCompletionPercent, userId]
+    );
+
     await userNotificationService.createNotification(userId, {
       type: 'verification_complete',
       title: 'Verification updated',
@@ -3775,7 +4152,7 @@ const verifyIdentityHandler = async (req, res) => {
       }
     });
 
-    res.json({ message: 'Profile verified', profile: normalizeProfileRow(result.rows[0]) });
+    res.json({ message: 'Profile verified', profile: normalizeProfileRow(completionUpdateResult.rows[0]) });
   } catch (err) {
     console.error('Verification error:', err);
     res.status(500).json({ error: 'Verification failed' });
@@ -3792,6 +4169,8 @@ router.get('/profiles/me/completion', async (req, res) => {
 
     const result = await db.query(
       `SELECT profile_completion_percent, first_name, age, gender, location_city, bio, interests,
+              profile_verified,
+              relationship_goals, languages, religion, community_preference, conversation_style,
               (SELECT COUNT(*) FROM profile_photos WHERE user_id = $1) as photo_count
        FROM dating_profiles WHERE user_id = $1`,
       [userId]
@@ -3801,21 +4180,78 @@ router.get('/profiles/me/completion', async (req, res) => {
       return res.status(404).json({ error: 'Profile not found' });
     }
 
+    const profile = result.rows[0];
+    const calculatedCompletionPercent = calculatePhaseOneProfileCompletionPercent({
+      firstName: profile.first_name,
+      age: profile.age,
+      gender: profile.gender,
+      city: profile.location_city,
+      bio: profile.bio,
+      interests: profile.interests,
+      relationshipGoals: profile.relationship_goals,
+      languages: profile.languages,
+      conversationStyle: profile.conversation_style,
+      religion: profile.religion,
+      communityPreference: profile.community_preference,
+      photoCount: profile.photo_count,
+      profileVerified: Boolean(profile.profile_verified)
+    });
+
+    const nextBestSteps = [];
+    if (!normalizeLanguageList(profile.languages).length) nextBestSteps.push('Add at least one language');
+    if (!profile.conversation_style) nextBestSteps.push('Choose your conversation style');
+    if (!profile.relationship_goals) nextBestSteps.push('Set your relationship intent');
+    if (!profile.bio) nextBestSteps.push('Write a short bio');
+    if ((Number.parseInt(profile.photo_count, 10) || 0) < 3) nextBestSteps.push('Upload 3 clear photos');
+
     res.json({
-      profileCompletionPercent: result.rows[0].profile_completion_percent || 0,
-      firstName: result.rows[0].first_name || '',
-      age: result.rows[0].age,
-      gender: result.rows[0].gender || null,
-      bio: result.rows[0].bio || '',
-      interests: Array.isArray(result.rows[0].interests) ? result.rows[0].interests : [],
-      photoCount: Number.parseInt(result.rows[0].photo_count, 10) || 0,
+      profileCompletionPercent: calculatedCompletionPercent,
+      storedProfileCompletionPercent: profile.profile_completion_percent || 0,
+      firstName: profile.first_name || '',
+      age: profile.age,
+      gender: profile.gender || null,
+      bio: profile.bio || '',
+      interests: Array.isArray(profile.interests) ? profile.interests : [],
+      relationshipGoals: profile.relationship_goals || null,
+      languages: normalizeLanguageList(profile.languages),
+      religion: profile.religion || null,
+      communityPreference: profile.community_preference || null,
+      conversationStyle: profile.conversation_style || null,
+      photoCount: Number.parseInt(profile.photo_count, 10) || 0,
+      nextBestSteps: nextBestSteps.slice(0, 4),
       location: {
-        city: result.rows[0].location_city || ''
+        city: profile.location_city || ''
       }
     });
   } catch (err) {
     console.error('Completion check error:', err);
     res.status(500).json({ error: 'Failed to get completion status' });
+  }
+});
+
+router.post('/funnel/events', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { eventName, matchId, context } = req.body || {};
+
+    if (!ALLOWED_FUNNEL_EVENTS.has(eventName)) {
+      return res.status(400).json({ error: 'Unsupported funnel event' });
+    }
+
+    await trackDatingFunnelEvent({
+      userId,
+      eventName,
+      matchId,
+      context
+    });
+
+    res.json({
+      success: true,
+      eventName
+    });
+  } catch (err) {
+    console.error('Track funnel event error:', err);
+    res.status(500).json({ error: 'Failed to track funnel event' });
   }
 });
 
@@ -6129,6 +6565,26 @@ router.get('/profiles/me/analytics', async (req, res) => {
       [userId]
     );
 
+    const [datePlanMetricsResult, funnelEventsResult] = await Promise.all([
+      db.query(
+        `SELECT
+           COUNT(*) as total_date_plans,
+           COUNT(DISTINCT match_id) as matches_with_date_plans,
+           COUNT(*) FILTER (WHERE proposer_id = $1) as date_plans_created_by_you
+         FROM date_proposals
+         WHERE proposer_id = $1 OR recipient_id = $1`,
+        [userId]
+      ),
+      optionalQuery(
+        `SELECT event_name, MAX(created_at) as last_seen_at, COUNT(*)::int as event_count
+         FROM dating_funnel_events
+         WHERE user_id = $1
+         GROUP BY event_name`,
+        [userId],
+        []
+      )
+    ]);
+
     let bestActiveHoursResult = await db.query(
       `SELECT EXTRACT(HOUR FROM activity_at)::int as hour_of_day,
               COUNT(*)::int as engagement_count
@@ -6189,10 +6645,14 @@ router.get('/profiles/me/analytics', async (req, res) => {
     const passesSent = countRowValue(interactionsResult.rows[0]?.passes_sent);
     const totalPositiveOutbound = likesSent + superlikesSent;
     const conversationMetrics = conversationMetricsResult.rows[0] || {};
+    const datePlanMetrics = datePlanMetricsResult.rows[0] || {};
     const userStartedConversations = countRowValue(conversationMetrics.user_started_conversations);
     const userStartedWithReply = countRowValue(conversationMetrics.user_started_with_reply);
     const conversationsWithMessages = countRowValue(conversationMetrics.conversations_with_messages);
     const reciprocalConversations = countRowValue(conversationMetrics.reciprocal_conversations);
+    const matchesWithDatePlans = countRowValue(datePlanMetrics.matches_with_date_plans);
+    const totalDatePlans = countRowValue(datePlanMetrics.total_date_plans);
+    const datePlansCreatedByYou = countRowValue(datePlanMetrics.date_plans_created_by_you);
     const replyRateSourceCount =
       userStartedConversations > 0 ? userStartedConversations : conversationsWithMessages;
     const replyRateValue =
@@ -6203,6 +6663,16 @@ router.get('/profiles/me/analytics', async (req, res) => {
       conversationMetrics.avg_first_reply_minutes || 0,
       0
     );
+    const firstMessageRate = percentage(conversationsWithMessages, totalMatches);
+    const datePlanCreationRate = percentage(matchesWithDatePlans, conversationsWithMessages);
+    const likeToMatchRate = Math.min(100, percentage(totalMatches, totalPositiveOutbound));
+    const funnelEventLookup = funnelEventsResult.rows.reduce((lookup, row) => {
+      lookup[row.event_name] = {
+        count: countRowValue(row.event_count),
+        lastSeenAt: row.last_seen_at || null
+      };
+      return lookup;
+    }, {});
     const photoPerformance = await getPhotoPerformanceSummary(userId, 3);
     const promptPerformance = await getPromptPerformanceSummary(
       userId,
@@ -6252,7 +6722,7 @@ router.get('/profiles/me/analytics', async (req, res) => {
         passesSent
       },
       advanced: {
-        matchRate: Math.min(100, percentage(totalMatches, totalPositiveOutbound)),
+        matchRate: likeToMatchRate,
         replyRate: replyRateValue,
         averageTimeToFirstReplyMinutes: averageFirstReplyMinutes,
         averageTimeToFirstReplyLabel: formatDurationLabel(averageFirstReplyMinutes),
@@ -6265,6 +6735,35 @@ router.get('/profiles/me/analytics', async (req, res) => {
           userStartedConversations > 0
             ? 'Matches where your first message got a reply'
             : 'Conversations that became two-way'
+      },
+      funnel: {
+        onboarding: {
+          startedAt: funnelEventLookup.dating_onboarding_started?.lastSeenAt || null,
+          emailVerifiedAt: funnelEventLookup.dating_onboarding_email_verified?.lastSeenAt || null,
+          usernameSetAt: funnelEventLookup.dating_onboarding_username_set?.lastSeenAt || null,
+          profileSavedAt: funnelEventLookup.dating_onboarding_profile_details_saved?.lastSeenAt || null,
+          completedAt: funnelEventLookup.dating_onboarding_completed?.lastSeenAt || null
+        },
+        metrics: {
+          likeToMatchRate,
+          firstMessageRate,
+          datePlanCreationRate,
+          profileCompletionRate: profile?.profile_completion_percent || 0,
+          matchesWithMessages,
+          matchesWithDatePlans,
+          totalDatePlans,
+          datePlansCreatedByYou
+        },
+        actions: {
+          positioningViews: funnelEventLookup.dating_positioning_viewed?.count || 0,
+          compatibilityViews: funnelEventLookup.dating_compatibility_viewed?.count || 0,
+          openerUses: funnelEventLookup.dating_compatibility_opener_used?.count || 0,
+          inboxViews: funnelEventLookup.dating_action_inbox_viewed?.count || 0,
+          plannerOpens: funnelEventLookup.dating_date_planner_opened?.count || 0,
+          safetyShares: funnelEventLookup.dating_safety_plan_shared?.count || 0,
+          checkInReminders: funnelEventLookup.dating_check_in_reminder_created?.count || 0
+        },
+        targets: PHASE_ONE_FUNNEL_TARGETS
       },
       photoPerformance,
       promptPerformance,

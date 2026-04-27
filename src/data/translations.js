@@ -16,14 +16,20 @@ const translations = {
     },
     launch: {
       brand: "LinkUp Dating",
-      title: "Modern Dating Made Simple",
+      title: "Real Matches Start Here",
+      promise: "Real matches, safe dates, better conversations.",
       intro:
-        "LinkUp Dating is a modern dating platform designed to help you find meaningful connections. Discover profiles, chat with matches, enjoy video dating, and build real relationships with people in your area and beyond.",
+        "LinkUp Dating helps you move from profile to first message to real plans with more clarity, safer date tools, and stronger conversation prompts.",
       languageLabel: "Language",
       login: "Login",
       loginHelp: "Sign in to your LinkUp account with verified email.",
       user: "Sign Up",
-      userHelp: "Create a dating profile and find your match.",
+      userHelp: "Build your profile, get better matches, and start safer conversations.",
+      highlights: [
+        "Real matches",
+        "Safe dates",
+        "Better conversations"
+      ],
       entrepreneur: "Register as an Entrepreneur",
       entrepreneurHelp: "Sell, list, promote, and grow beyond borders.",
       featuresLabel: "Features",

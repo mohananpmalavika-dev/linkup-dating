@@ -80,6 +80,7 @@ const DatingProfileView = ({
   const [sendingRequest, setSendingRequest] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const [compatibility, setCompatibility] = useState(null);
+  const [matchExplanation, setMatchExplanation] = useState(null);
   const [loadingCompatibility, setLoadingCompatibility] = useState(false);
   const [showDatePlanner, setShowDatePlanner] = useState(Boolean(location.state?.focusPlanner));
   const [publicSocialProfiles, setPublicSocialProfiles] = useState([]);
@@ -102,6 +103,7 @@ const DatingProfileView = ({
 
       setLoading(true);
       setError('');
+      setMatchExplanation(null);
 
       try {
         const [latestProfile, subData, publicLinks, friendStatus] = await Promise.all([
@@ -127,10 +129,19 @@ const DatingProfileView = ({
           // Load compatibility score
           setLoadingCompatibility(true);
           try {
-            const compatData = await datingProfileService.getCompatibility(resolvedProfileId);
+            const [compatData, explanationData] = await Promise.all([
+              datingProfileService.getCompatibility(resolvedProfileId),
+              datingProfileService.getMatchExplanation(resolvedProfileId).catch(() => null)
+            ]);
             if (!cancelled) {
               setCompatibility(compatData);
+              setMatchExplanation(explanationData?.explanation || null);
             }
+            datingProfileService.trackFunnelEvent('dating_compatibility_viewed', {
+              context: {
+                viewedUserId: resolvedProfileId
+              }
+            }).catch(() => {});
           } catch (compatErr) {
             console.error('Failed to load compatibility:', compatErr);
           } finally {

@@ -11,7 +11,15 @@ const LaunchPage = ({ language, onSelectRegistrationType }) => {
         <img src="/logo.svg" alt="LinkUp" className="launch-logo" />
         <p className="launch-brand">{launch.brand}</p>
         <h1>{launch.title}</h1>
+        <p className="launch-promise">{launch.promise || "Real matches, safe dates, better conversations."}</p>
         <p className="launch-intro">{launch.intro}</p>
+        <div className="launch-highlights" aria-label="Product promise">
+          {(launch.highlights || ["Real matches", "Safe dates", "Better conversations"]).map((highlight) => (
+            <span key={highlight} className="launch-highlight">
+              {highlight}
+            </span>
+          ))}
+        </div>
 
         <div className="launch-actions" aria-label="Registration options">
           <button

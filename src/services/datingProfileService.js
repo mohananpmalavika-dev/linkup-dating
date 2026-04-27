@@ -250,6 +250,21 @@ export const datingProfileService = {
   },
 
   /**
+   * Track a product or funnel event for Phase 1 optimization work
+   */
+  trackFunnelEvent: async (eventName, payload = {}) => {
+    try {
+      const response = await axios.post(`${API_URL}/funnel/events`, {
+        eventName,
+        ...payload
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to track funnel event';
+    }
+  },
+
+  /**
    * Verify identity
    */
   verifyIdentity: async (verificationData) => {

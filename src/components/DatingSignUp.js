@@ -3,6 +3,31 @@ import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
 import '../styles/DatingSignUp.css';
 
+const RELATIONSHIP_INTENT_OPTIONS = [
+  { value: 'dating', label: 'Looking to date' },
+  { value: 'relationship', label: 'Serious relationship' },
+  { value: 'marriage', label: 'Marriage minded' },
+  { value: 'casual', label: 'Casual dating' },
+  { value: 'friendship', label: 'Friendship first' }
+];
+
+const LANGUAGE_OPTIONS = [
+  'English',
+  'Hindi',
+  'Malayalam',
+  'Tamil',
+  'Telugu',
+  'Kannada',
+  'Bengali',
+  'Marathi'
+];
+
+const CONVERSATION_STYLE_OPTIONS = [
+  { value: 'direct', label: 'Direct and honest' },
+  { value: 'steady', label: 'Consistent check-ins' },
+  { value: 'deep', label: 'Long thoughtful talks' }
+];
+
 /**
  * DatingSignUp Component
  * Sign up for dating app with profile creation
@@ -43,6 +68,10 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
     country: '',
     bio: '',
     relationshipGoals: 'dating',
+    languages: ['English'],
+    religion: '',
+    communityPreference: '',
+    conversationStyle: '',
     interests: [],
     height: '',
     occupation: '',
@@ -59,6 +88,27 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
 
   const validateUsername = (value) => {
     return /^[a-zA-Z0-9_-]{3,20}$/.test(value);
+  };
+
+  const trackFunnelEvent = async (eventName, payload = {}) => {
+    if (!verifiedToken) {
+      return;
+    }
+
+    try {
+      await axios.post(
+        `${API_BASE_URL}/dating/funnel/events`,
+        {
+          eventName,
+          ...payload
+        },
+        {
+          headers: { Authorization: `Bearer ${verifiedToken}` }
+        }
+      );
+    } catch (eventError) {
+      console.error('Failed to track funnel event:', eventError);
+    }
   };
 
   useEffect(() => {
@@ -228,6 +278,18 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
       setSuccess('Email verified! Now set your username.');
       setOtp('');
       setOtpSent(false);
+      await Promise.all([
+        axios.post(
+          `${API_BASE_URL}/dating/funnel/events`,
+          { eventName: 'dating_onboarding_started' },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ).catch(() => {}),
+        axios.post(
+          `${API_BASE_URL}/dating/funnel/events`,
+          { eventName: 'dating_onboarding_email_verified' },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ).catch(() => {})
+      ]);
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid OTP');
     } finally {
@@ -304,6 +366,12 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
         headers: { Authorization: `Bearer ${verifiedToken}` }
       });
 
+      await trackFunnelEvent('dating_onboarding_username_set', {
+        context: {
+          usernameLength: username.trim().length
+        }
+      });
+
       setStep(3); // Move to profile setup
       setSuccess('Username set! Now complete your dating profile.');
     } catch (err) {
@@ -327,6 +395,15 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
     }));
   };
 
+  const handleLanguageToggle = (language) => {
+    setFormData((prev) => ({
+      ...prev,
+      languages: prev.languages.includes(language)
+        ? prev.languages.filter((currentLanguage) => currentLanguage !== language)
+        : [...prev.languages, language]
+    }));
+  };
+
   const handlePhotoUpload = (e) => {
     const files = Array.from(e.target.files);
     setFormData(prev => ({
@@ -337,10 +414,27 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
 
   const handleNext = () => {
     setError('');
-    if (!formData.firstName || !formData.age || !formData.city) {
-      setError('Please fill in all required fields');
+    if (
+      !formData.firstName ||
+      !formData.age ||
+      !formData.city ||
+      !formData.relationshipGoals ||
+      !formData.languages.length ||
+      !formData.conversationStyle
+    ) {
+      setError('Add your intent, language, city, and conversation style before continuing.');
       return;
     }
+
+    void trackFunnelEvent('dating_onboarding_profile_details_saved', {
+      context: {
+        relationshipGoals: formData.relationshipGoals,
+        languageCount: formData.languages.length,
+        hasReligion: Boolean(formData.religion),
+        hasCommunityPreference: Boolean(formData.communityPreference),
+        conversationStyle: formData.conversationStyle
+      }
+    });
     setStep(4);
   };
 
@@ -361,6 +455,10 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
         country: formData.country,
         bio: formData.bio,
         relationshipGoals: formData.relationshipGoals,
+        languages: formData.languages,
+        religion: formData.religion,
+        communityPreference: formData.communityPreference,
+        conversationStyle: formData.conversationStyle,
         interests: formData.interests,
         height: formData.height,
         occupation: formData.occupation,
@@ -411,6 +509,14 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
         }
       }
 
+      await trackFunnelEvent('dating_onboarding_completed', {
+        context: {
+          photoCount: formData.photos.length,
+          relationshipGoals: formData.relationshipGoals,
+          languageCount: formData.languages.length
+        }
+      });
+
       setSuccess(
         referralApplied
           ? 'Account created successfully and referral rewards were applied.'
@@ -441,6 +547,7 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
           </div>
         )}
         <h1>Create Your Dating Profile</h1>
+        <p className="signup-positioning">Real matches, safe dates, better conversations.</p>
 
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
@@ -589,6 +696,7 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
         {step === 3 && (
           <div className="signup-step">
             <h2>Tell Us About Yourself</h2>
+            <p>We use these answers to make your profile clearer and your first matches more relevant.</p>
             <div className="form-group">
               <label>First Name *</label>
               <input
@@ -654,6 +762,47 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
               </div>
             </div>
             <div className="form-group">
+              <label>Relationship Intent *</label>
+              <select name="relationshipGoals" value={formData.relationshipGoals} onChange={handleProfileInputChange}>
+                {RELATIONSHIP_INTENT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Languages You Speak *</label>
+              <div className="interests-grid">
+                {LANGUAGE_OPTIONS.map((language) => (
+                  <button
+                    key={language}
+                    type="button"
+                    className={`interest-tag ${formData.languages.includes(language) ? 'selected' : ''}`}
+                    onClick={() => handleLanguageToggle(language)}
+                  >
+                    {language}
+                  </button>
+                ))}
+              </div>
+              <small className="helper-text">Pick at least one so matches know how to start the conversation.</small>
+            </div>
+            <div className="form-group">
+              <label>Conversation Style *</label>
+              <div className="interests-grid">
+                {CONVERSATION_STYLE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`interest-tag ${formData.conversationStyle === option.value ? 'selected' : ''}`}
+                    onClick={() => setFormData((prev) => ({ ...prev, conversationStyle: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="form-group">
               <label>Height</label>
               <input
                 type="text"
@@ -683,6 +832,28 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                 placeholder="Your education"
               />
             </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Religion (Optional)</label>
+                <input
+                  type="text"
+                  name="religion"
+                  value={formData.religion}
+                  onChange={handleProfileInputChange}
+                  placeholder="Only if it matters to you"
+                />
+              </div>
+              <div className="form-group">
+                <label>Community Preference (Optional)</label>
+                <input
+                  type="text"
+                  name="communityPreference"
+                  value={formData.communityPreference}
+                  onChange={handleProfileInputChange}
+                  placeholder="Optional community preference"
+                />
+              </div>
+            </div>
             <div className="form-group">
               <label>About You</label>
               <textarea
@@ -692,15 +863,6 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                 placeholder="Tell us about yourself..."
                 rows="3"
               />
-            </div>
-            <div className="form-group">
-              <label>Relationship Goals</label>
-              <select name="relationshipGoals" value={formData.relationshipGoals} onChange={handleProfileInputChange}>
-                <option value="dating">Dating</option>
-                <option value="relationship">Serious Relationship</option>
-                <option value="casual">Casual</option>
-                <option value="unsure">Not Sure</option>
-              </select>
             </div>
             <div className="form-group">
               <label>Interests</label>

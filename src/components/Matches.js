@@ -3,6 +3,7 @@ import { useLocation } from '../router';
 import '../styles/Matches.css';
 import datingProfileService from '../services/datingProfileService';
 import { getActionableMatches } from '../utils/datingRescue';
+import { buildActionInboxItems } from '../utils/actionInbox';
 
 /**
  * Matches Component
@@ -15,6 +16,16 @@ const buildLikeProfileContext = (like) => ({
   photos: like.photo_url ? [like.photo_url] : [],
   location: {
     city: like.location_city || ''
+  }
+});
+
+const buildInboxLikeProfileContext = (like) => ({
+  userId: like.userId || like.from_user_id,
+  firstName: like.firstName || like.first_name || '',
+  age: like.age ?? null,
+  photos: (like.photoUrl || like.photo_url) ? [like.photoUrl || like.photo_url] : [],
+  location: {
+    city: like.location?.city || like.location_city || ''
   }
 });
 
@@ -50,7 +61,12 @@ const Matches = ({
   useEffect(() => {
     loadMatches();
     loadLikesReceived();
-  }, []);
+    if (isMessagesPage) {
+      loadWhoLikedMe();
+      loadMessageRequests();
+      datingProfileService.trackFunnelEvent('dating_action_inbox_viewed').catch(() => {});
+    }
+  }, [isMessagesPage]);
 
   useEffect(() => {
     if (!location.state?.focusMessages) {
@@ -245,6 +261,16 @@ const Matches = ({
     () => getActionableMatches(matches).slice(0, 3),
     [matches]
   );
+  const actionInboxItems = useMemo(
+    () => buildActionInboxItems({
+      likesReceived,
+      whoLikedMe,
+      messageRequests,
+      actionableMatches
+    }),
+    [actionableMatches, likesReceived, messageRequests, whoLikedMe]
+  );
+  const headerCount = isMessagesPage ? actionInboxItems.length : displayMatches.length;
 
   const handleOpenSuggestedMessage = (match, prefillMessage) => {
     onSelectMatch?.(match, location.pathname, { prefillMessage });
@@ -276,6 +302,53 @@ const Matches = ({
     handleOpenSuggestedMessage(match, suggestion.secondaryPrefillMessage);
   };
 
+  const handleActionInboxPrimary = (item) => {
+    if (!item) {
+      return;
+    }
+
+    if (item.kind === 'request') {
+      handleAcceptRequest(item.payload.id);
+      return;
+    }
+
+    if (item.kind === 'like') {
+      handleLikeBack({
+        from_user_id: item.payload.userId,
+        first_name: item.payload.firstName
+      });
+      return;
+    }
+
+    if (item.kind === 'rescue') {
+      handlePrimarySuggestion(item.payload.match, item.payload.suggestion);
+    }
+  };
+
+  const handleActionInboxSecondary = (item) => {
+    if (!item) {
+      return;
+    }
+
+    if (item.kind === 'request') {
+      handleDeclineRequest(item.payload.id);
+      return;
+    }
+
+    if (item.kind === 'like') {
+      if (!item.payload.isRevealed) {
+        return;
+      }
+
+      onViewProfile?.(buildInboxLikeProfileContext(item.payload));
+      return;
+    }
+
+    if (item.kind === 'rescue') {
+      handleSecondarySuggestion(item.payload.match, item.payload.suggestion);
+    }
+  };
+
   if (loading) {
     return (
       <div className="matches-container loading">
@@ -297,15 +370,15 @@ const Matches = ({
   return (
     <div className="matches-container">
       <div className="matches-header">
-        <h2>{isMessagesPage ? 'Messages' : 'My Matches'} ({displayMatches.length})</h2>
-        <div className="filter-tabs">
-          <button
-            className={`filter-btn ${activeTab === 'matches' ? 'active' : ''}`}
-            onClick={() => setActiveTab('matches')}
-          >
-            {isMessagesPage ? 'Conversations' : 'Matches'}
-          </button>
-          {!isMessagesPage && (
+        <h2>{isMessagesPage ? 'Inbox' : 'My Matches'} ({headerCount})</h2>
+        {!isMessagesPage ? (
+          <div className="filter-tabs">
+            <button
+              className={`filter-btn ${activeTab === 'matches' ? 'active' : ''}`}
+              onClick={() => setActiveTab('matches')}
+            >
+              Matches
+            </button>
             <button
               className={`filter-btn ${activeTab === 'likes' ? 'active' : ''}`}
               onClick={() => {
@@ -315,17 +388,21 @@ const Matches = ({
             >
               Who Liked You
             </button>
-          )}
-          <button
-            className={`filter-btn ${activeTab === 'requests' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('requests');
-              loadMessageRequests();
-            }}
-          >
-            Requests {messageRequests.length > 0 ? `(${messageRequests.length})` : ''}
-          </button>
-        </div>
+            <button
+              className={`filter-btn ${activeTab === 'requests' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('requests');
+                loadMessageRequests();
+              }}
+            >
+              Requests {messageRequests.length > 0 ? `(${messageRequests.length})` : ''}
+            </button>
+          </div>
+        ) : (
+          <p className="matches-header-copy">
+            Real matches, safe dates, better conversations. Start with the items that need action first.
+          </p>
+        )}
       </div>
 
       {activeTab === 'likes' ? (
@@ -445,7 +522,90 @@ const Matches = ({
         </div>
       ) : (
         <>
-          {!isMessagesPage && (
+          {isMessagesPage ? (
+            <section className="action-inbox-panel">
+              <div className="action-inbox-header">
+                <div>
+                  <h3>Action Inbox</h3>
+                  <p>One place for likes, requests, reveals, and rescue nudges that can move a match forward.</p>
+                </div>
+                <button
+                  type="button"
+                  className="likes-refresh-btn"
+                  onClick={() => {
+                    loadLikesReceived();
+                    loadWhoLikedMe();
+                    loadMessageRequests();
+                  }}
+                >
+                  Refresh
+                </button>
+              </div>
+
+              {actionError ? (
+                <div className="likes-you-feedback" role="status">
+                  {actionError}
+                </div>
+              ) : null}
+
+              {navigationNotice ? (
+                <div className="matches-navigation-notice" role="status">
+                  {navigationNotice}
+                </div>
+              ) : null}
+
+              {actionInboxItems.length > 0 ? (
+                <div className="action-inbox-list">
+                  {actionInboxItems.map((item) => (
+                    <article key={item.id} className={`action-inbox-card ${item.kind}`}>
+                      <div className="action-inbox-copy">
+                        <span className={`action-inbox-kind ${item.kind}`}>{item.meta}</span>
+                        <h4>{item.title}</h4>
+                        <p>{item.subtitle}</p>
+                        {item.preview ? (
+                          <div className="action-inbox-preview">
+                            <strong>Suggested next step</strong>
+                            <span>{item.preview}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="action-inbox-actions">
+                        <button
+                          type="button"
+                          className="match-rescue-primary"
+                          onClick={() => handleActionInboxPrimary(item)}
+                          disabled={
+                            (item.kind === 'request' && requestActionLoading === item.payload.id) ||
+                            (item.kind === 'like' && likingBackUserId === item.payload.userId)
+                          }
+                        >
+                          {item.kind === 'request' && requestActionLoading === item.payload.id
+                            ? 'Processing...'
+                            : item.kind === 'like' && likingBackUserId === item.payload.userId
+                              ? 'Matching...'
+                              : item.primaryLabel}
+                        </button>
+                        {item.secondaryLabel ? (
+                          <button
+                            type="button"
+                            className="match-rescue-secondary"
+                            onClick={() => handleActionInboxSecondary(item)}
+                            disabled={item.kind === 'like' && !item.payload.isRevealed}
+                          >
+                            {item.secondaryLabel}
+                          </button>
+                        ) : null}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="likes-you-empty">
+                  <p>No urgent actions right now. New likes, requests, and momentum nudges will show up here.</p>
+                </div>
+              )}
+            </section>
+          ) : (
             <div className="likes-you-section">
               <div className="likes-you-header">
                 <div>
@@ -524,7 +684,7 @@ const Matches = ({
             </div>
           )}
 
-          {activeTab === 'matches' && actionableMatches.length > 0 ? (
+          {!isMessagesPage && activeTab === 'matches' && actionableMatches.length > 0 ? (
             <section className="match-rescue-panel">
               <div className="match-rescue-header">
                 <div>

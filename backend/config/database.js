@@ -587,6 +587,19 @@ const init = async () => {
       ALTER COLUMN video_intro_url TYPE TEXT;
     `);
 
+      await client.query(`
+      ALTER TABLE dating_profiles
+      ADD COLUMN IF NOT EXISTS languages TEXT[] DEFAULT '{}',
+      ADD COLUMN IF NOT EXISTS community_preference VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS conversation_style VARCHAR(50);
+    `);
+
+      await client.query(`
+      UPDATE dating_profiles
+      SET languages = COALESCE(languages, '{}'::text[])
+      WHERE languages IS NULL;
+    `);
+
     // Migration: Add storefront_data column for cart, favorites, saved addresses
     await client.query(`
       ALTER TABLE users
@@ -871,6 +884,28 @@ const init = async () => {
         action VARCHAR(100),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS dating_funnel_events (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        event_name VARCHAR(100) NOT NULL,
+        match_id INTEGER REFERENCES matches(id) ON DELETE SET NULL,
+        context JSONB DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_dating_funnel_events_user_id
+      ON dating_funnel_events(user_id);
+      CREATE INDEX IF NOT EXISTS idx_dating_funnel_events_event_name
+      ON dating_funnel_events(event_name);
+      CREATE INDEX IF NOT EXISTS idx_dating_funnel_events_match_id
+      ON dating_funnel_events(match_id);
+      CREATE INDEX IF NOT EXISTS idx_dating_funnel_events_created_at
+      ON dating_funnel_events(created_at DESC);
     `);
 
     // Create spam_flags table for spam detection

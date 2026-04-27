@@ -39,10 +39,10 @@ const DatingNavigation = ({ currentPage, onPageChange, unreadCount = 0, matchCou
       <button
         className={`nav-btn ${currentPage === 'messages' ? 'active' : ''}`}
         onClick={() => onPageChange('messages')}
-        title="Messages"
+        title="Inbox"
       >
         <span className="nav-icon">C</span>
-        <span className="nav-label">Messages</span>
+        <span className="nav-label">Inbox</span>
         {unreadCount > 0 && <span className="badge">{unreadCount}</span>}
       </button>
 
