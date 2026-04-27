@@ -239,6 +239,11 @@ const buildCacheKey = (prefix, ...parts) => {
   return `${prefix}:${normalizedParts.join(':')}`;
 };
 
+const invalidateDiscoveryCache = async (userId) => {
+  const pattern = `discovery:${userId}:*`;
+  await cacheDeletePattern(pattern);
+};
+
 module.exports = {
   redis,
   storeOTP,
@@ -253,6 +258,7 @@ module.exports = {
   cacheGetPaginated,
   cacheSetPaginated,
   buildCacheKey,
+  invalidateDiscoveryCache,
   OTP_EXPIRY,
   MAX_OTP_ATTEMPTS
 };

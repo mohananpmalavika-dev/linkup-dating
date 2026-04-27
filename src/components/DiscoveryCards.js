@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import '../styles/DiscoveryCards.css';
 import datingProfileService from '../services/datingProfileService';
 
@@ -41,8 +41,10 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [discoveryMode, setDiscoveryMode] = useState('regular');
   const [subscription, setSubscription] = useState(null);
   const [boosting, setBoosting] = useState(false);
-  const [queuePage, setQueuePage] = useState(1);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
+  const loadMoreTriggered = useRef(false);
 
   const activeFilterCount = useMemo(() => Object.values(appliedFilters).filter(v => String(v).trim() !== '').length, [appliedFilters]);
 
@@ -51,13 +53,25 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     datingProfileService.getFavorites().then(d => setFavoriteUserIds(new Set((d.favorites||[]).map(f=>String(f.userId))))).catch(()=>{});
   }, []);
 
-  const loadProfiles = async (nextFilters = appliedFilters) => {
-    setLoading(true); setError('');
+  const loadProfiles = async (nextFilters = appliedFilters, cursor = null) => {
+    if (cursor) setLoadingMore(true);
+    else { setLoading(true); setProfiles([]); setCurrentIndex(0); }
+    setError('');
     try {
-      const data = await datingProfileService.getDiscoveryProfiles(buildDiscoveryFilters(nextFilters));
-      setProfiles(data.profiles||[]); setCurrentIndex(0); setNoMoreProfiles((data.profiles||[]).length===0); setDiscoveryMode('regular');
+      const params = { ...buildDiscoveryFilters(nextFilters), cursor, limit: 20 };
+      const data = await datingProfileService.getDiscoveryProfiles(params);
+      const newProfiles = data.profiles || [];
+      if (cursor) {
+        setProfiles(prev => [...prev, ...newProfiles]);
+      } else {
+        setProfiles(newProfiles);
+        setCurrentIndex(0);
+      }
+      setNoMoreProfiles(!data.hasMore && newProfiles.length === 0);
+      setNextCursor(data.nextCursor || null);
+      setDiscoveryMode('regular');
     } catch (err) { setError('Failed to load profiles. Please try again.'); console.error(err); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setLoadingMore(false); }
   };
 
   const loadDailyLimits = async () => {
@@ -80,32 +94,71 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     finally { setBoosting(false); }
   };
 
-  const loadTopPicks = async () => {
-    setLoading(true); setError('');
-    try { const d = await datingProfileService.getTopPicks(10); setProfiles(d.profiles||[]); setCurrentIndex(0); setNoMoreProfiles((d.profiles||[]).length===0); setDiscoveryMode('topPicks'); }
+  const loadTopPicks = async (cursor = null) => {
+    if (cursor) setLoadingMore(true);
+    else { setLoading(true); setProfiles([]); setCurrentIndex(0); }
+    setError('');
+    try {
+      const data = await datingProfileService.getTopPicks(20);
+      if (cursor) setProfiles(prev => [...prev, ...(data.profiles||[])]);
+      else { setProfiles(data.profiles||[]); setCurrentIndex(0); }
+      setNoMoreProfiles((data.profiles||[]).length===0);
+      setDiscoveryMode('topPicks');
+      setNextCursor(null);
+    }
     catch (err) { setError('Failed to load top picks.'); console.error(err); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setLoadingMore(false); }
   };
 
-  const loadSmartQueue = async (page=1) => {
-    setLoading(true); setError('');
-    try { const d = await datingProfileService.getDiscoveryQueue(page,10); setProfiles(d.profiles||[]); setCurrentIndex(0); setNoMoreProfiles((d.profiles||[]).length===0); setQueuePage(page); setDiscoveryMode('smartQueue'); }
+  const loadSmartQueue = async (cursor = null) => {
+    if (cursor) setLoadingMore(true);
+    else { setLoading(true); setError(''); setProfiles([]); setCurrentIndex(0); }
+    try {
+      const params = cursor ? { cursor, limit: 20 } : { limit: 20 };
+      const d = await datingProfileService.getDiscoveryQueue(params);
+      const newProfiles = d.profiles || [];
+      if (cursor) setProfiles(prev => [...prev, ...newProfiles]);
+      else { setProfiles(newProfiles); setCurrentIndex(0); }
+      setNoMoreProfiles(!d.hasMore && newProfiles.length === 0);
+      setNextCursor(d.nextCursor || null);
+      setDiscoveryMode('smartQueue');
+    }
     catch (err) { setError('Failed to load smart queue.'); console.error(err); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setLoadingMore(false); }
   };
 
-  const loadTrending = async () => {
-    setLoading(true); setError('');
-    try { const d = await datingProfileService.getTrendingProfiles(10); setProfiles(d.profiles||[]); setCurrentIndex(0); setNoMoreProfiles((d.profiles||[]).length===0); setDiscoveryMode('trending'); }
+  const loadTrending = async (cursor = null) => {
+    if (cursor) setLoadingMore(true);
+    else { setLoading(true); setError(''); setProfiles([]); setCurrentIndex(0); }
+    try {
+      const params = cursor ? { cursor, limit: 20 } : { limit: 20 };
+      const d = await datingProfileService.getTrendingProfiles(params);
+      const newProfiles = d.profiles || [];
+      if (cursor) setProfiles(prev => [...prev, ...newProfiles]);
+      else { setProfiles(newProfiles); setCurrentIndex(0); }
+      setNoMoreProfiles(!d.hasMore && newProfiles.length === 0);
+      setNextCursor(d.nextCursor || null);
+      setDiscoveryMode('trending');
+    }
     catch (err) { setError('Failed to load trending.'); console.error(err); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setLoadingMore(false); }
   };
 
-  const loadNewProfiles = async () => {
-    setLoading(true); setError('');
-    try { const d = await datingProfileService.getNewProfiles(10); setProfiles(d.profiles||[]); setCurrentIndex(0); setNoMoreProfiles((d.profiles||[]).length===0); setDiscoveryMode('newProfiles'); }
+  const loadNewProfiles = async (cursor = null) => {
+    if (cursor) setLoadingMore(true);
+    else { setLoading(true); setError(''); setProfiles([]); setCurrentIndex(0); }
+    try {
+      const params = cursor ? { cursor, limit: 20 } : { limit: 20 };
+      const d = await datingProfileService.getNewProfiles(params);
+      const newProfiles = d.profiles || [];
+      if (cursor) setProfiles(prev => [...prev, ...newProfiles]);
+      else { setProfiles(newProfiles); setCurrentIndex(0); }
+      setNoMoreProfiles(!d.hasMore && newProfiles.length === 0);
+      setNextCursor(d.nextCursor || null);
+      setDiscoveryMode('newProfiles');
+    }
     catch (err) { setError('Failed to load new profiles.'); console.error(err); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setLoadingMore(false); }
   };
 
   const handleRewind = async () => {
@@ -118,7 +171,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     if (mode === discoveryMode) return;
     if (mode === 'regular') loadProfiles(appliedFilters);
     else if (mode === 'topPicks') loadTopPicks();
-    else if (mode === 'smartQueue') loadSmartQueue(1);
+    else if (mode === 'smartQueue') loadSmartQueue();
     else if (mode === 'trending') loadTrending();
     else if (mode === 'newProfiles') loadNewProfiles();
   };
@@ -152,14 +205,24 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     catch (e) { setError('Failed to update favorites'); console.error(e); }
   };
 
-  const moveToNextCard = () => {
-    if (currentIndex < profiles.length - 1) setCurrentIndex(i=>i+1);
-    else setNoMoreProfiles(true);
-  };
+  const moveToNextCard = useCallback(() => {
+    if (currentIndex < profiles.length - 1) {
+      setCurrentIndex(i=>i+1);
+    } else {
+      setNoMoreProfiles(true);
+      if (nextCursor && !loadMoreTriggered.current) {
+        loadMoreTriggered.current = true;
+        if (discoveryMode === 'smartQueue') loadSmartQueue(nextCursor);
+        else if (discoveryMode === 'trending') loadTrending(nextCursor);
+        else if (discoveryMode === 'newProfiles') loadNewProfiles(nextCursor);
+        else if (discoveryMode === 'regular') loadProfiles(appliedFilters, nextCursor);
+      }
+    }
+  }, [currentIndex, profiles.length, nextCursor, discoveryMode, appliedFilters]);
 
   const reloadProfiles = () => {
-    setCurrentIndex(0); setNoMoreProfiles(false);
-    if (discoveryMode==='smartQueue') loadSmartQueue(queuePage+1);
+    setCurrentIndex(0); setNoMoreProfiles(false); loadMoreTriggered.current = false;
+    if (discoveryMode==='smartQueue') loadSmartQueue();
     else if (discoveryMode==='trending') loadTrending();
     else if (discoveryMode==='newProfiles') loadNewProfiles();
     else if (discoveryMode==='topPicks') loadTopPicks();
@@ -187,15 +250,15 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const handleApplyFilters = async (e) => {
     e.preventDefault();
     const next = { ageMin:filters.ageMin, ageMax:filters.ageMax, distance:filters.distance, gender:filters.gender, relationshipGoals:filters.relationshipGoals, interests:filters.interests, heightRangeMin:filters.heightRangeMin, heightRangeMax:filters.heightRangeMax, bodyTypes:filters.bodyTypes };
-    setAppliedFilters(next); setShowFilters(false); await loadProfiles(next);
+    setAppliedFilters(next); setShowFilters(false); setNextCursor(null); loadMoreTriggered.current = false; await loadProfiles(next);
   };
 
-  const handleResetFilters = async () => { setFilters(DEFAULT_FILTERS); setAppliedFilters(DEFAULT_FILTERS); setShowFilters(false); await loadProfiles(DEFAULT_FILTERS); };
+  const handleResetFilters = async () => { setFilters(DEFAULT_FILTERS); setAppliedFilters(DEFAULT_FILTERS); setShowFilters(false); setNextCursor(null); loadMoreTriggered.current = false; await loadProfiles(DEFAULT_FILTERS); };
 
   const currentProfile = getCurrentProfile();
 
   if (loading) return <div className="discovery-container loading"><div className="spinner"></div><p>Finding profiles for you...</p></div>;
-  if (error) return <div className="discovery-container error"><p className="error-message">{error}</p><button onClick={()=>loadProfiles(appliedFilters)} className="btn-retry">Retry</button></div>;
+  if (error && profiles.length === 0) return <div className="discovery-container error"><p className="error-message">{error}</p><button onClick={()=>loadProfiles(appliedFilters)} className="btn-retry">Retry</button></div>;
 
   if (noMoreProfiles || !currentProfile) {
     return (
@@ -217,7 +280,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
             <div className="filter-actions"><button type="button" className="btn-filter-secondary" onClick={handleResetFilters}>Reset</button><button type="submit" className="btn-filter-primary">Apply</button></div>
           </form>
         )}
-        <div className="empty-state"><h2>No More Profiles</h2><p>{activeFilterCount>0?'No profiles match your current preferences.':"You've reviewed all available profiles!"}</p><button onClick={reloadProfiles} className="btn-primary">Reload Profiles</button></div>
+        <div className="empty-state"><h2>No More Profiles</h2><p>{activeFilterCount>0?'No profiles match your current preferences.':"You've reviewed all available profiles!"}</p>{loadingMore?<div className="spinner small"></div>:<button onClick={reloadProfiles} className="btn-primary">Reload Profiles</button>}</div>
       </div>
     );
   }
@@ -279,7 +342,14 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           <div className="photo-container">
             {currentProfile.photos && currentProfile.photos.length > 0 ? (
               <>
-                <img src={currentProfile.photos[0]} alt={currentProfile.firstName} className="profile-photo" onError={e=>{e.target.src='https://via.placeholder.com/400x600?text=No+Photo';}}/>
+                <img 
+                  src={currentProfile.photos[0]} 
+                  alt={currentProfile.firstName} 
+                  className="profile-photo" 
+                  loading="lazy"
+                  decoding="async"
+                  onError={e=>{e.target.src='https://via.placeholder.com/400x600?text=No+Photo';}}
+                />
                 {currentProfile.photos.length > 1 && <div className="photo-indicators">{currentProfile.photos.map((_,idx)=>(<div key={idx} className={`indicator ${idx===0?'active':''}`}></div>))}</div>}
               </>
             ) : <div className="no-photo">No Photos</div>}
@@ -333,7 +403,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
         <button onClick={handleLike} className="btn-action btn-like" title="Like this profile" aria-label="Like" disabled={remainingLikes<=0}>♥</button>
       </div>
 
-      <div className="card-counter">{currentIndex + 1} of {profiles.length}</div>
+      <div className="card-counter">{currentIndex + 1} of {profiles.length}{nextCursor ? ' +' : ''}</div>
+      {loadingMore && <div className="loading-more"><div className="spinner small"></div><span>Loading more...</span></div>}
     </div>
   );
 };

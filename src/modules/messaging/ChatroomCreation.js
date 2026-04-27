@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useApp } from '../../contexts/AppContext';
+import { getEntityId, isSameEntity } from './utils';
 
 const DEFAULT_MAX_MEMBERS = '-1';
 
@@ -7,7 +8,7 @@ const ChatroomCreation = ({
   onChatroomCreated,
   onCancel,
 }) => {
-  const { apiCall } = useApp();
+  const { apiCall, currentUser } = useApp();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -18,6 +19,10 @@ const ChatroomCreation = ({
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
+  const [selectedMembers, setSelectedMembers] = useState([]);
 
   const resetFormFields = () => {
     setName('');
@@ -27,6 +32,58 @@ const ChatroomCreation = ({
     setMaxMembers(DEFAULT_MAX_MEMBERS);
     setAllowFileSharing(true);
     setAllowMemberInvites(false);
+    setSelectedMembers([]);
+    setSearchQuery('');
+    setAvailableUsers([]);
+  };
+
+  const searchUsers = useCallback(
+    async (query) => {
+      if (!query.trim()) {
+        setAvailableUsers([]);
+        return;
+      }
+      try {
+        setSearchingUsers(true);
+        const response = await apiCall(
+          `/socialmedia/search/users?q=${encodeURIComponent(query)}`,
+          'GET'
+        );
+        if (response?.users) {
+          const selectedIds = new Set(selectedMembers.map((m) => getEntityId(m)));
+          const filtered = response.users.filter(
+            (u) =>
+              !isSameEntity(u, currentUser) &&
+              !selectedIds.has(getEntityId(u))
+          );
+          setAvailableUsers(filtered);
+        }
+      } catch (error) {
+        console.error('Error searching users:', error);
+        setAvailableUsers([]);
+      } finally {
+        setSearchingUsers(false);
+      }
+    },
+    [apiCall, currentUser, selectedMembers]
+  );
+
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    searchUsers(query);
+  };
+
+  const handleAddMember = (user) => {
+    setSelectedMembers((prev) => [...prev, user]);
+    setAvailableUsers((prev) => prev.filter((u) => getEntityId(u) !== getEntityId(user)));
+    setSearchQuery('');
+  };
+
+  const handleRemoveMember = (userId) => {
+    setSelectedMembers((prev) => prev.filter((u) => getEntityId(u) !== userId));
+    setSearchQuery('');
+    setAvailableUsers([]);
   };
 
   const handleCreateChatroom = async () => {
@@ -51,24 +108,25 @@ const ChatroomCreation = ({
       const response = await apiCall('/messaging/chatrooms', 'POST', {
         name: name.trim(),
         description: description.trim(),
-        isPrivate,
+        isPublic: !isPrivate,
         tags: tagArray,
         maxMembers: Number.isNaN(parsedMaxMembers) ? -1 : parsedMaxMembers,
+        initialMembers: selectedMembers.map(m => getEntityId(m)),
         settings: {
           allowFileSharing,
           allowMemberInvites,
         },
       });
 
-      if (!response?.chatroom) {
+      if (!response?.id) {
         throw new Error('Failed to create chatroom');
       }
 
-      setSuccessMessage(`Chatroom "${response.chatroom.name}" created successfully.`);
+      setSuccessMessage(`Chatroom "${response.name}" created successfully.`);
       resetFormFields();
 
       if (typeof onChatroomCreated === 'function') {
-        onChatroomCreated(response.chatroom);
+        onChatroomCreated(response);
       }
     } catch (createError) {
       console.error('Error creating chatroom:', createError);
@@ -190,6 +248,71 @@ const ChatroomCreation = ({
               <p>
                 Public chatrooms are visible in browsing and can be joined immediately.
               </p>
+            </div>
+          )}
+        </div>
+
+        <div className="form-section">
+          <h4>Initial Members (Optional)</h4>
+
+          <div className="form-group">
+            <label htmlFor="member-search">Add Members</label>
+            <input
+              id="member-search"
+              type="text"
+              placeholder="Search for people to add..."
+              value={searchQuery}
+              onChange={handleSearchChange}
+              className="form-input"
+              disabled={isCreating}
+            />
+          </div>
+
+          {searchQuery.trim() && (
+            <div className="member-search-results">
+              {searchingUsers ? (
+                <p className="loading">Searching...</p>
+              ) : availableUsers.length > 0 ? (
+                <div className="member-list">
+                  {availableUsers.map((user) => (
+                    <div key={getEntityId(user)} className="member-item">
+                      <span className="member-name">{user.name || user.firstName || user.username}</span>
+                      <button
+                        type="button"
+                        className="btn-add-member"
+                        onClick={() => handleAddMember(user)}
+                        disabled={isCreating}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="no-results">No users found</p>
+              )}
+            </div>
+          )}
+
+          {selectedMembers.length > 0 && (
+            <div className="selected-members">
+              <h5>Selected Members ({selectedMembers.length})</h5>
+              <div className="member-chips">
+                {selectedMembers.map((member) => (
+                  <div key={getEntityId(member)} className="member-chip">
+                    <span>{member.name || member.firstName || member.username}</span>
+                    <button
+                      type="button"
+                      className="btn-remove-member"
+                      onClick={() => handleRemoveMember(getEntityId(member))}
+                      disabled={isCreating}
+                      aria-label={`Remove ${member.name || member.firstName || member.username}`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

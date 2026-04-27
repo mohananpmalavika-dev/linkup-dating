@@ -177,31 +177,50 @@ router.post('/:chatroomId/join', async (req, res) => {
   }
 });
 
-// LEAVE CHATROOM
+// LEAVE CHATROOM - WITH TIMESTAMP TRACKING
 router.post('/:chatroomId/leave', async (req, res) => {
   try {
     const userId = req.user?.id;
     const { chatroomId } = req.params;
+    const { reason } = req.body;
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    await db.query(
-      `DELETE FROM chatroom_members 
-       WHERE chatroom_id = $1 AND user_id = $2`,
+    // Update member status to 'left' with timestamp (soft delete)
+    const result = await db.query(
+      `UPDATE chatroom_members 
+       SET status = 'left', left_at = CURRENT_TIMESTAMP
+       WHERE chatroom_id = $1 AND user_id = $2
+       RETURNING *`,
       [chatroomId, userId]
     );
 
-    // Update member count
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    // Create system message
     await db.query(
-      `UPDATE chatrooms 
-       SET member_count = member_count - 1
-       WHERE id = $1 AND member_count > 0`,
-      [chatroomId]
+      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type)
+       VALUES ($1, $2, $3, 'system')`,
+      [chatroomId, userId, `User left the group${reason ? `: ${reason}` : ''}`]
     );
 
-    res.json({ message: 'Left chatroom' });
+    // Emit socket event
+    if (req.io) {
+      req.io.to(`chatroom_${chatroomId}`).emit('member_left', {
+        chatroomId,
+        userId,
+        leftAt: new Date().toISOString()
+      });
+    }
+
+    res.json({ 
+      success: true, 
+      leftAt: new Date().toISOString() 
+    });
   } catch (err) {
     console.error('Leave chatroom error:', err);
     res.status(500).json({ error: 'Failed to leave chatroom' });
@@ -316,6 +335,304 @@ router.post('/:chatroomId/messages', async (req, res) => {
   } catch (err) {
     console.error('Send message error:', err);
     res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+// EDIT MESSAGE
+router.put('/:chatroomId/messages/:messageId', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { chatroomId, messageId } = req.params;
+    const { message } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message content required' });
+    }
+
+    // Verify user is the message sender
+    const messageCheck = await db.query(
+      `SELECT * FROM chatroom_messages 
+       WHERE id = $1 AND chatroom_id = $2 AND from_user_id = $3`,
+      [messageId, chatroomId, userId]
+    );
+
+    if (messageCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Cannot edit this message' });
+    }
+
+    // Update message
+    const result = await db.query(
+      `UPDATE chatroom_messages 
+       SET message = $1, is_edited = true, edited_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+       RETURNING *`,
+      [message.trim(), messageId]
+    );
+
+    // Emit socket event
+    if (req.io) {
+      req.io.to(`chatroom_${chatroomId}`).emit('message_edited', result.rows[0]);
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Edit message error:', err);
+    res.status(500).json({ error: 'Failed to edit message' });
+  }
+});
+
+// DELETE MESSAGE
+router.delete('/:chatroomId/messages/:messageId', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { chatroomId, messageId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Check if user is sender or admin
+    const messageCheck = await db.query(
+      `SELECT * FROM chatroom_messages 
+       WHERE id = $1 AND chatroom_id = $2 AND from_user_id = $3`,
+      [messageId, chatroomId, userId]
+    );
+
+    if (messageCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Cannot delete this message' });
+    }
+
+    // Delete message
+    await db.query(
+      `DELETE FROM chatroom_messages WHERE id = $1`,
+      [messageId]
+    );
+
+    // Emit socket event
+    if (req.io) {
+      req.io.to(`chatroom_${chatroomId}`).emit('message_deleted', { messageId });
+    }
+
+    res.status(204).send();
+  } catch (err) {
+    console.error('Delete message error:', err);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// ADD EMOJI REACTION
+router.post('/:chatroomId/messages/:messageId/reactions', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { chatroomId, messageId } = req.params;
+    const { emoji } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    if (!emoji) {
+      return res.status(400).json({ error: 'Emoji required' });
+    }
+
+    // Verify user is member
+    const memberCheck = await db.query(
+      'SELECT * FROM chatroom_members WHERE chatroom_id = $1 AND user_id = $2',
+      [chatroomId, userId]
+    );
+
+    if (memberCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Not a member' });
+    }
+
+    // Get current reactions
+    const messageCheck = await db.query(
+      'SELECT reactions FROM chatroom_messages WHERE id = $1 AND chatroom_id = $2',
+      [messageId, chatroomId]
+    );
+
+    if (messageCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    let reactions = messageCheck.rows[0].reactions || [];
+    if (typeof reactions === 'string') {
+      reactions = JSON.parse(reactions);
+    }
+
+    // Find or create emoji reaction
+    let emojiReaction = reactions.find(r => r.emoji === emoji);
+    
+    if (emojiReaction) {
+      // Toggle: if user already reacted, remove; otherwise add
+      const userIndex = emojiReaction.users ? emojiReaction.users.indexOf(userId) : -1;
+      if (userIndex >= 0) {
+        emojiReaction.users.splice(userIndex, 1);
+        emojiReaction.count = emojiReaction.users.length;
+      } else {
+        if (!emojiReaction.users) emojiReaction.users = [];
+        emojiReaction.users.push(userId);
+        emojiReaction.count = emojiReaction.users.length;
+      }
+    } else {
+      emojiReaction = {
+        emoji,
+        count: 1,
+        users: [userId]
+      };
+      reactions.push(emojiReaction);
+    }
+
+    // Remove empty reactions
+    reactions = reactions.filter(r => r.count > 0);
+
+    // Update message
+    const result = await db.query(
+      `UPDATE chatroom_messages 
+       SET reactions = $1
+       WHERE id = $2
+       RETURNING *`,
+      [JSON.stringify(reactions), messageId]
+    );
+
+    // Emit socket event
+    if (req.io) {
+      req.io.to(`chatroom_${chatroomId}`).emit('reaction_updated', {
+        messageId,
+        reactions
+      });
+    }
+
+    res.json({ messageId, reactions });
+  } catch (err) {
+    console.error('Add reaction error:', err);
+    res.status(500).json({ error: 'Failed to add reaction' });
+  }
+});
+
+// UPDATE MEMBER ROLE
+router.put('/:chatroomId/members/:memberId', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { chatroomId, memberId } = req.params;
+    const { role, status } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Check if requester is admin
+    const adminCheck = await db.query(
+      `SELECT * FROM chatroom_members 
+       WHERE chatroom_id = $1 AND user_id = $2 AND role = 'admin'`,
+      [chatroomId, userId]
+    );
+
+    if (adminCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Only admins can manage members' });
+    }
+
+    // Update member
+    const updates = [];
+    const values = [chatroomId, memberId];
+    let paramIndex = 3;
+
+    if (role && ['admin', 'moderator', 'member'].includes(role)) {
+      updates.push(`role = $${paramIndex}`);
+      values.push(role);
+      paramIndex++;
+    }
+
+    if (status && ['active', 'muted', 'left'].includes(status)) {
+      updates.push(`status = $${paramIndex}`);
+      values.push(status);
+      paramIndex++;
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    const result = await db.query(
+      `UPDATE chatroom_members 
+       SET ${updates.join(', ')}
+       WHERE chatroom_id = $1 AND user_id = $2
+       RETURNING *`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    // Emit socket event
+    if (req.io) {
+      req.io.to(`chatroom_${chatroomId}`).emit('member_updated', result.rows[0]);
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Update member error:', err);
+    res.status(500).json({ error: 'Failed to update member' });
+  }
+});
+
+// REMOVE MEMBER
+router.delete('/:chatroomId/members/:memberId', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { chatroomId, memberId } = req.params;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Check if requester is admin or moderator
+    const authorityCheck = await db.query(
+      `SELECT role FROM chatroom_members 
+       WHERE chatroom_id = $1 AND user_id = $2 AND role IN ('admin', 'moderator')`,
+      [chatroomId, userId]
+    );
+
+    if (authorityCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    // Delete member
+    const result = await db.query(
+      `DELETE FROM chatroom_members 
+       WHERE chatroom_id = $1 AND user_id = $2
+       RETURNING user_id`,
+      [chatroomId, memberId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+
+    // Create system message
+    await db.query(
+      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type)
+       VALUES ($1, $2, $3, 'system')`,
+      [chatroomId, userId, 'User was removed from the group']
+    );
+
+    // Emit socket event
+    if (req.io) {
+      req.io.to(`chatroom_${chatroomId}`).emit('member_removed', {
+        chatroomId,
+        userId: memberId
+      });
+    }
+
+    res.status(204).send();
+  } catch (err) {
+    console.error('Remove member error:', err);
+    res.status(500).json({ error: 'Failed to remove member' });
   }
 });
 

@@ -440,11 +440,12 @@ export const datingProfileService = {
   },
 
   /**
-   * Get top picks (most compatible profiles)
+   * Get top picks (most compatible profiles) with optional cursor pagination
    */
-  getTopPicks: async (limit = 10) => {
+  getTopPicks: async (options = {}) => {
     try {
-      const response = await axios.get(`${API_URL}/top-picks`, { params: { limit } });
+      const params = typeof options === 'object' ? options : { limit: options || 10 };
+      const response = await axios.get(`${API_URL}/top-picks`, { params });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to fetch top picks';
@@ -452,11 +453,12 @@ export const datingProfileService = {
   },
 
   /**
-   * Get smart discovery queue (personalized multi-factor ranking)
+   * Get smart discovery queue (personalized multi-factor ranking) with cursor pagination
    */
-  getDiscoveryQueue: async (page = 1, limit = 10) => {
+  getDiscoveryQueue: async (options = {}) => {
     try {
-      const response = await axios.get(`${API_URL}/discovery-queue`, { params: { page, limit } });
+      const params = typeof options === 'object' ? options : { page: options || 1, limit: 10 };
+      const response = await axios.get(`${API_URL}/discovery-queue`, { params });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to fetch discovery queue';
@@ -464,11 +466,12 @@ export const datingProfileService = {
   },
 
   /**
-   * Get trending profiles
+   * Get trending profiles with optional cursor pagination
    */
-  getTrendingProfiles: async (limit = 10) => {
+  getTrendingProfiles: async (options = {}) => {
     try {
-      const response = await axios.get(`${API_URL}/trending`, { params: { limit } });
+      const params = typeof options === 'object' ? options : { limit: options || 10 };
+      const response = await axios.get(`${API_URL}/trending`, { params });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to fetch trending profiles';
@@ -476,11 +479,12 @@ export const datingProfileService = {
   },
 
   /**
-   * Get new profiles
+   * Get new profiles with optional cursor pagination
    */
-  getNewProfiles: async (limit = 10) => {
+  getNewProfiles: async (options = {}) => {
     try {
-      const response = await axios.get(`${API_URL}/new-profiles`, { params: { limit } });
+      const params = typeof options === 'object' ? options : { limit: options || 10 };
+      const response = await axios.get(`${API_URL}/new-profiles`, { params });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to fetch new profiles';
