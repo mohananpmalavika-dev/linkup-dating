@@ -3315,14 +3315,14 @@ router.post('/interactions/like', async (req, res) => {
 
     const today = new Date().toISOString().split('T')[0];
     const analyticsResult = await db.query(
-      `SELECT likes_used FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
+      `SELECT likes_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
       [fromUserId, today]
     );
 
-    const likesUsed = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_used || 0) : 0;
+    const likesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_sent || 0) : 0;
     const likeLimit = 50;
-    if (likesUsed >= likeLimit) {
-      return res.status(429).json({ error: 'Daily like limit reached', limit: likeLimit, used: likesUsed, remaining: 0 });
+    if (likesSent >= likeLimit) {
+      return res.status(429).json({ error: 'Daily like limit reached', limit: likeLimit, used: likesSent, remaining: 0 });
     }
 
     const likeInsertResult = await db.query(
@@ -3341,10 +3341,10 @@ router.post('/interactions/like', async (req, res) => {
     }
 
     await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, likes_used)
+      `INSERT INTO user_analytics (user_id, activity_date, likes_sent)
        VALUES ($1, $2, 1)
        ON CONFLICT (user_id, activity_date) DO UPDATE
-       SET likes_used = user_analytics.likes_used + 1`,
+       SET likes_sent = user_analytics.likes_sent + 1`,
       [fromUserId, today]
     );
 
