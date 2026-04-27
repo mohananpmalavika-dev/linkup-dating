@@ -33,65 +33,42 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id'
       }
     },
-    met: {
-      type: DataTypes.BOOLEAN,
+    rating: {
+      type: DataTypes.INTEGER,
       allowNull: false,
-      field: 'met',
-      comment: 'Did the date actually happen?'
-    },
-    wasOnTime: {
-      type: DataTypes.BOOLEAN,
-      allowNull: true,
-      field: 'was_on_time'
-    },
-    wouldSeeAgain: {
-      type: DataTypes.BOOLEAN,
-      allowNull: true,
-      field: 'would_see_again'
-    },
-    conversationQuality: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      field: 'conversation_quality',
-      validate: {
-        min: 1,
-        max: 5
-      },
-      comment: '1-5 stars'
-    },
-    physicalAttraction: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      field: 'physical_attraction',
+      field: 'rating',
       validate: {
         min: 1,
         max: 5
       }
     },
-    overallRating: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      field: 'overall_rating',
-      validate: {
-        min: 1,
-        max: 5
-      }
-    },
-    notes: {
+    feedbackText: {
       type: DataTypes.TEXT,
       allowNull: true,
-      field: 'notes'
+      field: 'feedback_text'
     },
-    compatibility: {
-      type: DataTypes.ENUM('not_compatible', 'maybe', 'compatible', 'very_compatible'),
-      allowNull: true,
-      field: 'compatibility'
-    },
-    wouldIntroduce: {
+    wouldDateAgain: {
       type: DataTypes.BOOLEAN,
-      defaultValue: false,
-      field: 'would_introduce',
-      comment: 'Would recommend this person to a friend?'
+      allowNull: true,
+      field: 'would_date_again'
+    },
+    matchQualityRating: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'match_quality_rating',
+      validate: {
+        min: 1,
+        max: 5
+      }
+    },
+    locationRating: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'location_rating',
+      validate: {
+        min: 1,
+        max: 5
+      }
     },
     createdAt: {
       type: DataTypes.DATE,
@@ -107,7 +84,12 @@ module.exports = (sequelize, DataTypes) => {
     }
   }, {
     tableName: 'date_completion_feedback',
-    timestamps: true
+    timestamps: true,
+    indexes: [
+      {
+        fields: ['date_proposal_id', 'rater_user_id']
+      }
+    ]
   });
 
   DateCompletionFeedback.associate = (models) => {

@@ -1861,6 +1861,35 @@ const inferDateTypeValue = (activityLabel = '') => {
   return matchedEntry?.value || 'coffee';
 };
 
+const normalizeProposalStatus = (status = '') => {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+
+  if (normalizedStatus === 'proposed') {
+    return 'pending';
+  }
+
+  return normalizedStatus || 'pending';
+};
+
+const isOpenProposalStatus = (status = '') =>
+  ['pending', 'proposed'].includes(String(status || '').trim().toLowerCase());
+
+const normalizeOptionalBoolean = (value) => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (value === 'true') {
+    return true;
+  }
+
+  if (value === 'false') {
+    return false;
+  }
+
+  return null;
+};
+
 const buildProposalDateTime = (proposal = {}) => {
   if (!proposal?.proposedDate) {
     return null;
@@ -1975,7 +2004,7 @@ const normalizeJourneyProposal = (proposalRow, currentUserId, feedbackByProposal
     suggestedActivity: proposalRow.suggested_activity,
     suggestedActivityType: inferDateTypeValue(proposalRow.suggested_activity),
     locationId: proposalRow.location_id || null,
-    status: proposalRow.status,
+    status: normalizeProposalStatus(proposalRow.status),
     notes: proposalRow.notes || null,
     responseDeadlineAt: proposalRow.response_deadline_at || null,
     createdAt: proposalRow.created_at || null,
@@ -2264,8 +2293,9 @@ const enrichMatchesWithJourney = async (currentUserId, matches = []) => {
         `SELECT date_proposal_id, MAX(updated_at) as updated_at
          FROM date_completion_feedback
          WHERE date_proposal_id = ANY($1::int[])
+           AND rater_user_id = $2
          GROUP BY date_proposal_id`,
-        [proposalIds],
+        [proposalIds, currentUserId],
         []
       );
 
@@ -4427,6 +4457,9 @@ router.get('/daily-limits', async (req, res) => {
     const limits = await getDailyLimitSnapshot(userId);
 
     res.json({
+      plan: limits.subscriptionAccess.plan,
+      isPremium: limits.subscriptionAccess.isPremium,
+      isGold: limits.subscriptionAccess.isGold,
       likeLimit: limits.likeLimit,
       superlikeLimit: limits.superlikeLimit,
       rewindLimit: limits.rewindLimit,
@@ -4621,6 +4654,8 @@ router.get('/top-picks', async (req, res) => {
 
     res.json({
       profiles: scoredProfiles,
+      topPicks: scoredProfiles,
+      message: `${scoredProfiles.length} top picks selected for you based on compatibility`,
       generatedAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
     });
@@ -8726,7 +8761,7 @@ router.get('/date-proposals', async (req, res) => {
         proposedTime: p.proposed_time,
         suggestedActivity: p.suggested_activity,
         locationId: p.location_id,
-        status: p.status,
+        status: normalizeProposalStatus(p.status),
         notes: p.notes,
         responseDeadlineAt: p.response_deadline_at,
         createdAt: p.created_at,
@@ -8749,7 +8784,12 @@ router.patch('/date-proposals/:proposalId/accept', async (req, res) => {
 
     // Verify user is the recipient
     const proposalResult = await db.query(
-      `SELECT * FROM date_proposals WHERE id = $1 AND recipient_id = $2 LIMIT 1`,
+      `SELECT *
+       FROM date_proposals
+       WHERE id = $1
+         AND recipient_id = $2
+         AND status IN ('pending', 'proposed')
+       LIMIT 1`,
       [proposalId, userId]
     );
 
@@ -8804,7 +8844,12 @@ router.patch('/date-proposals/:proposalId/decline', async (req, res) => {
     const { reason } = req.body;
 
     const proposalResult = await db.query(
-      `SELECT * FROM date_proposals WHERE id = $1 AND recipient_id = $2 LIMIT 1`,
+      `SELECT *
+       FROM date_proposals
+       WHERE id = $1
+         AND recipient_id = $2
+         AND status IN ('pending', 'proposed')
+       LIMIT 1`,
       [proposalId, userId]
     );
 
@@ -8849,7 +8894,7 @@ router.patch('/date-proposals/:proposalId/reschedule', async (req, res) => {
        FROM date_proposals
        WHERE id = $1
          AND (proposer_id = $2 OR recipient_id = $2)
-         AND status IN ('pending', 'accepted')
+         AND status IN ('pending', 'proposed', 'accepted')
        LIMIT 1`,
       [proposalId, userId]
     );
@@ -8926,7 +8971,12 @@ router.delete('/date-proposals/:proposalId', async (req, res) => {
     const { proposalId } = req.params;
 
     const proposalResult = await db.query(
-      `SELECT * FROM date_proposals WHERE id = $1 AND proposer_id = $2 AND status IN ('pending', 'accepted') LIMIT 1`,
+      `SELECT *
+       FROM date_proposals
+       WHERE id = $1
+         AND proposer_id = $2
+         AND status IN ('pending', 'proposed', 'accepted')
+       LIMIT 1`,
       [proposalId, userId]
     );
 
@@ -9159,6 +9209,30 @@ router.post('/date-completion-feedback/:proposalId', async (req, res) => {
     const userId = req.user.id;
     const { proposalId } = req.params;
     const { rating, feedbackText, wouldDateAgain, matchQualityRating, locationRating } = req.body;
+    const normalizedRating = normalizeInteger(rating);
+    const normalizedMatchQualityRating = normalizeInteger(matchQualityRating);
+    const normalizedLocationRating = normalizeInteger(locationRating);
+    const normalizedWouldDateAgain = normalizeOptionalBoolean(wouldDateAgain);
+
+    if (!normalizedRating || normalizedRating < 1 || normalizedRating > 5) {
+      return res.status(400).json({ error: 'rating must be between 1 and 5' });
+    }
+
+    if (
+      normalizedMatchQualityRating !== null &&
+      normalizedMatchQualityRating !== undefined &&
+      (normalizedMatchQualityRating < 1 || normalizedMatchQualityRating > 5)
+    ) {
+      return res.status(400).json({ error: 'matchQualityRating must be between 1 and 5' });
+    }
+
+    if (
+      normalizedLocationRating !== null &&
+      normalizedLocationRating !== undefined &&
+      (normalizedLocationRating < 1 || normalizedLocationRating > 5)
+    ) {
+      return res.status(400).json({ error: 'locationRating must be between 1 and 5' });
+    }
 
     // Verify proposal exists and user was involved
     const proposalResult = await db.query(
@@ -9173,22 +9247,67 @@ router.post('/date-completion-feedback/:proposalId', async (req, res) => {
 
     const proposal = proposalResult.rows[0];
     const otherUserId = proposal.proposer_id === userId ? proposal.recipient_id : proposal.proposer_id;
+    const proposalDateTime = buildProposalDateTime({
+      proposedDate: proposal.proposed_date,
+      proposedTime: proposal.proposed_time
+    });
 
-    const result = await db.query(
-      `INSERT INTO date_completion_feedback (
-        date_proposal_id, rating, feedback_text, would_date_again, 
-        match_quality_rating, location_rating
-       ) VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (date_proposal_id) DO UPDATE
-       SET rating = EXCLUDED.rating,
-           feedback_text = EXCLUDED.feedback_text,
-           would_date_again = EXCLUDED.would_date_again,
-           match_quality_rating = EXCLUDED.match_quality_rating,
-           location_rating = EXCLUDED.location_rating,
-           updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [proposalId, rating, feedbackText || null, wouldDateAgain || null, matchQualityRating || null, locationRating || null]
+    if (proposalDateTime && proposalDateTime.getTime() > Date.now()) {
+      return res.status(400).json({ error: 'Date feedback is available after the scheduled time' });
+    }
+
+    const existingFeedbackResult = await optionalQuery(
+      `SELECT id
+       FROM date_completion_feedback
+       WHERE date_proposal_id = $1 AND rater_user_id = $2
+       LIMIT 1`,
+      [proposalId, userId],
+      []
     );
+
+    let result;
+
+    if (existingFeedbackResult.rows.length > 0) {
+      result = await db.query(
+        `UPDATE date_completion_feedback
+         SET counterparty_user_id = $1,
+             rating = $2,
+             feedback_text = $3,
+             would_date_again = $4,
+             match_quality_rating = $5,
+             location_rating = $6,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $7
+         RETURNING *`,
+        [
+          otherUserId,
+          normalizedRating,
+          feedbackText || null,
+          normalizedWouldDateAgain,
+          normalizedMatchQualityRating ?? null,
+          normalizedLocationRating ?? null,
+          existingFeedbackResult.rows[0].id
+        ]
+      );
+    } else {
+      result = await db.query(
+        `INSERT INTO date_completion_feedback (
+          date_proposal_id, rater_user_id, counterparty_user_id, rating, feedback_text,
+          would_date_again, match_quality_rating, location_rating
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [
+          proposalId,
+          userId,
+          otherUserId,
+          normalizedRating,
+          feedbackText || null,
+          normalizedWouldDateAgain,
+          normalizedMatchQualityRating ?? null,
+          normalizedLocationRating ?? null
+        ]
+      );
+    }
 
     // Send notification to the other person
     const userProfile = await db.query(
@@ -9230,7 +9349,9 @@ router.get('/date-history', async (req, res) => {
               p.first_name as partner_name, p.location_city as partner_city,
               dl.address as location_address, dl.city as location_city
        FROM date_proposals dp
-       LEFT JOIN date_completion_feedback dcf ON dcf.date_proposal_id = dp.id
+       LEFT JOIN date_completion_feedback dcf
+         ON dcf.date_proposal_id = dp.id
+        AND dcf.rater_user_id = $1
        LEFT JOIN dating_profiles p ON p.user_id = (CASE WHEN dp.proposer_id = $1 THEN dp.recipient_id ELSE dp.proposer_id END)
        LEFT JOIN date_locations dl ON dl.id = dp.location_id
        WHERE (dp.proposer_id = $1 OR dp.recipient_id = $1) AND dp.status = 'accepted'
@@ -9576,12 +9697,15 @@ router.get('/analytics/conversation-insights', async (req, res) => {
         AVG(message_count) as avg_messages_per_match,
         MAX(message_count) as longest_conversation,
         COUNT(CASE WHEN has_met = true THEN 1 END) as meetings_arranged,
-        ROUND(AVG(quality_score)::numeric, 2) as avg_quality_score
+        ROUND(AVG(quality_rating)::numeric, 2) as avg_quality_score
        FROM (
          SELECT 
           m.id,
           (SELECT COUNT(*) FROM messages WHERE match_id = m.id) as message_count,
-          (SELECT MAX(quality_score) FROM date_completion_feedback WHERE match_id = m.id) as quality_score,
+          (SELECT AVG(dcf.rating)
+           FROM date_completion_feedback dcf
+           INNER JOIN date_proposals dp ON dp.id = dcf.date_proposal_id
+           WHERE dp.match_id = m.id AND dcf.rater_user_id = $1) as quality_rating,
           (SELECT COUNT(*) FROM date_proposals WHERE match_id = m.id AND status = 'accepted') > 0 as has_met
          FROM matches m
          WHERE m.user_id_1 = $1 OR m.user_id_2 = $1

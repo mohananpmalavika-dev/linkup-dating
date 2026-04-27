@@ -15,19 +15,19 @@ module.exports = (sequelize, DataTypes) => {
         key: 'id'
       }
     },
-    initiatorUserId: {
+    proposerId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      field: 'initiator_user_id',
+      field: 'proposer_id',
       references: {
         model: 'users',
         key: 'id'
       }
     },
-    recipientUserId: {
+    recipientId: {
       type: DataTypes.INTEGER,
       allowNull: false,
-      field: 'recipient_user_id',
+      field: 'recipient_id',
       references: {
         model: 'users',
         key: 'id'
@@ -43,70 +43,35 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       field: 'proposed_time'
     },
-    activityType: {
-      type: DataTypes.ENUM('coffee', 'dinner', 'lunch', 'walk', 'drinks', 'activity', 'virtual_date', 'other'),
-      defaultValue: 'coffee',
-      field: 'activity_type'
+    suggestedActivity: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      field: 'suggested_activity'
     },
-    proposedLocationName: {
-      type: DataTypes.STRING(255),
-      allowNull: true,
-      field: 'proposed_location_name'
-    },
-    proposedLocationLat: {
-      type: DataTypes.DECIMAL(10, 8),
-      allowNull: true,
-      field: 'proposed_location_lat'
-    },
-    proposedLocationLng: {
-      type: DataTypes.DECIMAL(11, 8),
-      allowNull: true,
-      field: 'proposed_location_lng'
-    },
-    proposedLocationVenueId: {
+    locationId: {
       type: DataTypes.INTEGER,
       allowNull: true,
-      field: 'proposed_location_venue_id'
+      field: 'location_id'
     },
-    durationHours: {
-      type: DataTypes.INTEGER,
-      defaultValue: 1,
-      field: 'duration_hours'
-    },
-    initiatorNotes: {
+    notes: {
       type: DataTypes.TEXT,
       allowNull: true,
-      field: 'initiator_notes'
+      field: 'notes'
     },
     status: {
-      type: DataTypes.ENUM('proposed', 'accepted', 'declined', 'completed', 'no_show', 'rescheduled', 'cancelled'),
-      defaultValue: 'proposed',
+      type: DataTypes.ENUM('pending', 'accepted', 'declined', 'cancelled'),
+      defaultValue: 'pending',
       field: 'status'
+    },
+    responseDeadlineAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'response_deadline_at'
     },
     respondedAt: {
       type: DataTypes.DATE,
       allowNull: true,
       field: 'responded_at'
-    },
-    declineReason: {
-      type: DataTypes.ENUM('busy_that_week', 'not_interested', 'location_issue', 'time_issue', 'other'),
-      allowNull: true,
-      field: 'decline_reason'
-    },
-    declineNotes: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      field: 'decline_notes'
-    },
-    actualMeetTime: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      field: 'actual_meet_time'
-    },
-    durationMinutesActual: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      field: 'duration_minutes_actual'
     },
     createdAt: {
       type: DataTypes.DATE,
@@ -130,11 +95,11 @@ module.exports = (sequelize, DataTypes) => {
       foreignKey: 'matchId'
     });
     DateProposal.belongsTo(models.User, {
-      foreignKey: 'initiatorUserId',
-      as: 'initiator'
+      foreignKey: 'proposerId',
+      as: 'proposer'
     });
     DateProposal.belongsTo(models.User, {
-      foreignKey: 'recipientUserId',
+      foreignKey: 'recipientId',
       as: 'recipient'
     });
   };

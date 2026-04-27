@@ -352,23 +352,16 @@ const init = async () => {
       CREATE TABLE IF NOT EXISTS date_proposals (
         id SERIAL PRIMARY KEY,
         match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
-        initiator_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        recipient_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        proposed_date TIMESTAMP NOT NULL,
+        proposer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        proposed_date DATE NOT NULL,
         proposed_time TIME NOT NULL,
-        activity_type VARCHAR(50) DEFAULT 'coffee',
-        proposed_location_name VARCHAR(255),
-        proposed_location_lat DECIMAL(10, 8),
-        proposed_location_lng DECIMAL(11, 8),
-        proposed_location_venue_id INTEGER,
-        duration_hours INTEGER DEFAULT 1,
-        initiator_notes TEXT,
-        status VARCHAR(30) DEFAULT 'proposed',
+        suggested_activity VARCHAR(100) NOT NULL DEFAULT 'Coffee',
+        location_id INTEGER,
+        status VARCHAR(30) NOT NULL DEFAULT 'pending',
+        notes TEXT,
+        response_deadline_at TIMESTAMP,
         responded_at TIMESTAMP,
-        decline_reason VARCHAR(50),
-        decline_notes TEXT,
-        actual_meet_time TIMESTAMP,
-        duration_minutes_actual INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -380,18 +373,108 @@ const init = async () => {
         date_proposal_id INTEGER NOT NULL REFERENCES date_proposals(id) ON DELETE CASCADE,
         rater_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         counterparty_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        met BOOLEAN NOT NULL,
-        was_on_time BOOLEAN,
-        would_see_again BOOLEAN,
-        conversation_quality INTEGER,
-        physical_attraction INTEGER,
-        overall_rating INTEGER,
-        notes TEXT,
-        compatibility VARCHAR(30),
-        would_introduce BOOLEAN DEFAULT FALSE,
+        rating INTEGER NOT NULL,
+        feedback_text TEXT,
+        would_date_again BOOLEAN,
+        match_quality_rating INTEGER,
+        location_rating INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+      await client.query(`
+      ALTER TABLE date_proposals
+      ADD COLUMN IF NOT EXISTS proposer_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS recipient_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS suggested_activity VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS location_id INTEGER,
+      ADD COLUMN IF NOT EXISTS notes TEXT,
+      ADD COLUMN IF NOT EXISTS response_deadline_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS responded_at TIMESTAMP;
+    `);
+
+      await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'date_proposals'
+            AND column_name = 'initiator_user_id'
+        ) THEN
+          UPDATE date_proposals
+          SET proposer_id = COALESCE(proposer_id, initiator_user_id),
+              recipient_id = COALESCE(recipient_id, recipient_user_id),
+              suggested_activity = COALESCE(
+                suggested_activity,
+                NULLIF(INITCAP(REPLACE(activity_type, '_', ' ')), ''),
+                'Coffee'
+              ),
+              notes = COALESCE(notes, initiator_notes),
+              response_deadline_at = COALESCE(response_deadline_at, responded_at),
+              status = CASE
+                WHEN status = 'proposed' THEN 'pending'
+                ELSE COALESCE(status, 'pending')
+              END
+          WHERE proposer_id IS NULL
+             OR recipient_id IS NULL
+             OR suggested_activity IS NULL
+             OR notes IS NULL
+             OR response_deadline_at IS NULL
+             OR status IS NULL
+             OR status = 'proposed';
+        ELSE
+          UPDATE date_proposals
+          SET suggested_activity = COALESCE(suggested_activity, 'Coffee'),
+              status = CASE
+                WHEN status = 'proposed' THEN 'pending'
+                ELSE COALESCE(status, 'pending')
+              END
+          WHERE suggested_activity IS NULL
+             OR status IS NULL
+             OR status = 'proposed';
+        END IF;
+      END $$;
+    `);
+
+      await client.query(`
+      ALTER TABLE date_completion_feedback
+      ADD COLUMN IF NOT EXISTS rater_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS counterparty_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS rating INTEGER,
+      ADD COLUMN IF NOT EXISTS feedback_text TEXT,
+      ADD COLUMN IF NOT EXISTS would_date_again BOOLEAN,
+      ADD COLUMN IF NOT EXISTS match_quality_rating INTEGER,
+      ADD COLUMN IF NOT EXISTS location_rating INTEGER;
+    `);
+
+      await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_name = 'date_completion_feedback'
+            AND column_name = 'overall_rating'
+        ) THEN
+          UPDATE date_completion_feedback
+          SET rating = COALESCE(rating, overall_rating, conversation_quality, 4),
+              feedback_text = COALESCE(feedback_text, notes),
+              would_date_again = COALESCE(would_date_again, would_see_again),
+              match_quality_rating = COALESCE(match_quality_rating, conversation_quality, overall_rating),
+              location_rating = COALESCE(location_rating, overall_rating)
+          WHERE rating IS NULL
+             OR feedback_text IS NULL
+             OR would_date_again IS NULL
+             OR match_quality_rating IS NULL
+             OR location_rating IS NULL;
+        ELSE
+          UPDATE date_completion_feedback
+          SET rating = COALESCE(rating, 4)
+          WHERE rating IS NULL;
+        END IF;
+      END $$;
     `);
 
       // Create verification_tokens table
@@ -559,9 +642,11 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_profile_boosts_user_id ON profile_boosts(user_id);
       CREATE INDEX IF NOT EXISTS idx_profile_boosts_expires_at ON profile_boosts(boost_expires_at);
       CREATE INDEX IF NOT EXISTS idx_date_proposals_match_id ON date_proposals(match_id);
-      CREATE INDEX IF NOT EXISTS idx_date_proposals_recipient_id ON date_proposals(recipient_user_id);
+      CREATE INDEX IF NOT EXISTS idx_date_proposals_proposer_id ON date_proposals(proposer_id);
+      CREATE INDEX IF NOT EXISTS idx_date_proposals_recipient_id ON date_proposals(recipient_id);
       CREATE INDEX IF NOT EXISTS idx_date_proposals_status ON date_proposals(status);
       CREATE INDEX IF NOT EXISTS idx_date_completion_feedback_proposal_id ON date_completion_feedback(date_proposal_id);
+      CREATE INDEX IF NOT EXISTS idx_date_completion_feedback_rater_id ON date_completion_feedback(rater_user_id);
     `);
     // Create chatrooms table for group chats
     await client.query(`
