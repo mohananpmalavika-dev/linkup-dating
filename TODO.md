@@ -1,6 +1,6 @@
 # Dating App Module - Functional Improvements TODO
 
-## Status: Phase 1 Complete ✅ | Phase 2 Complete ✅ | Phase 3 Complete ✅
+## Status: Phase 1 Complete ✅ | Phase 2 Complete ✅ | Phase 3 Complete ✅ | Phase 4 Complete ✅
 
 ---
 
@@ -106,16 +106,46 @@
 
 ---
 
-## Phase 4: Performance (Pending)
+## Phase 4: Advanced Profile Analytics & Insights ✅ COMPLETE
 
-### 17. Redis Caching
+### 17. Profile Analytics Dashboard ✅
+- [x] Backend: `GET /profiles/me/analytics` - Profile strength, views, interactions
+- [x] Backend: `POST /profiles/:userId/view` - Record profile views with notification
+- [x] Backend: `GET /profiles/me/profile-views` - Who viewed my profile (premium-gated)
+- [x] Backend: `GET /profiles/:userId/compatibility` - Compatibility score + mutual interests
+- [x] Backend: `POST /profiles/me/heartbeat` - Update last active timestamp
+- [x] Backend: `ProfileView` model for tracking profile views
+- [x] Frontend: Profile strength meter with color-coded score
+- [x] Frontend: Specific recommendations for profile improvement
+- [x] Frontend: Profile views stats (total, 7-day, 30-day, unique viewers)
+- [x] Frontend: 7-day view trend chart
+- [x] Frontend: Interactions summary (likes sent/received, matches, passes)
+- [x] Frontend: Activity status display (last active)
+
+### 18. Compatibility Score Display ✅
+- [x] Frontend: Compatibility percentage ring in profile view
+- [x] Frontend: Mutual interests match percentage
+- [x] Frontend: Shared interests tags
+- [x] Frontend: Compatibility reasons list
+- [x] Frontend: Icebreaker suggestions based on compatibility
+
+### 19. "Who Viewed My Profile" (Premium) ✅
+- [x] Frontend: Profile views list with blurred photos for free users
+- [x] Frontend: Premium upsell for non-subscribers
+- [x] Frontend: Revealed viewer details for Premium/Gold users
+
+---
+
+## Phase 5: Performance (Pending)
+
+### 20. Redis Caching
 - Cache profiles (5min TTL)
 - Cache matches (2min TTL)
 
-### 18. Optimistic Updates
+### 21. Optimistic Updates
 - Instant like/pass feedback
 
-### 19. Offline Support
+### 22. Offline Support
 - Service worker caching
 
 ---
@@ -143,13 +173,20 @@
 | Phase 3 | `src/components/DiscoveryCards.js` | Added boost button, subscription-aware limits |
 | Phase 3 | `src/components/Matches.js` | Added "Who Liked You" and "Message Requests" tabs |
 | Phase 3 | `src/components/DatingProfileView.js` | Added send message request button (Gold users) |
+| Phase 4 | `backend/models/ProfileView.js` | New model for tracking profile views |
+| Phase 4 | `backend/routes/dating.js` | Added analytics, profile-views, compatibility, heartbeat endpoints |
+| Phase 4 | `src/services/datingProfileService.js` | Added analytics, profile-views, compatibility, heartbeat methods |
+| Phase 4 | `src/components/DatingProfile.js` | Added analytics dashboard, profile strength, views stats |
+| Phase 4 | `src/components/DatingProfileView.js` | Added compatibility score, mutual interests, icebreakers |
+| Phase 4 | `src/App.js` | Added heartbeat interval for last active tracking |
 
 ---
 
 ## Next Steps
 
-1. **Run database migrations** - Create `subscriptions` and `message_requests` tables
-2. **Test all new Phase 3 endpoints** - Verify backend functionality for verification, subscriptions, boosts
+1. **Run database migrations** - Create `subscriptions`, `message_requests`, and `profile_views` tables
+2. **Test all new endpoints** - Verify backend functionality for Phases 3-4
 3. **Run frontend build** - Check for compilation errors in new components
-4. **Begin Phase 4** - Performance optimizations (Redis caching, optimistic updates, offline support)
+4. **Add CSS styles** - Create styles for analytics panels, compatibility rings, profile views
+5. **Begin Phase 5** - Performance optimizations (Redis caching, optimistic updates, offline support)
 

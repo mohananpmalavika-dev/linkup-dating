@@ -21,6 +21,8 @@ const DatingProfileView = ({
   const [requestMessage, setRequestMessage] = useState('');
   const [sendingRequest, setSendingRequest] = useState(false);
   const [subscription, setSubscription] = useState(null);
+  const [compatibility, setCompatibility] = useState(null);
+  const [loadingCompatibility, setLoadingCompatibility] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,6 +42,8 @@ const DatingProfileView = ({
           datingProfileService.getProfileById(resolvedProfileId),
           datingProfileService.getMySubscription().catch(() => ({ plan: 'free', isGold: false }))
         ]);
+
+        // Record profile view and load compatibility
         if (!cancelled) {
           setProfile((currentProfile) => ({
             ...(currentProfile || {}),
@@ -47,6 +51,24 @@ const DatingProfileView = ({
             matchId: currentProfile?.matchId || initialProfile?.matchId || latestProfile.matchId || null
           }));
           setSubscription(subData);
+
+          // Load compatibility score
+          setLoadingCompatibility(true);
+          try {
+            const compatData = await datingProfileService.getCompatibility(resolvedProfileId);
+            if (!cancelled) {
+              setCompatibility(compatData);
+            }
+          } catch (compatErr) {
+            console.error('Failed to load compatibility:', compatErr);
+          } finally {
+            if (!cancelled) {
+              setLoadingCompatibility(false);
+            }
+          }
+
+          // Record profile view (fire and forget)
+          datingProfileService.recordProfileView(resolvedProfileId).catch(() => {});
         }
       } catch (loadError) {
         if (!cancelled) {
@@ -190,6 +212,83 @@ const DatingProfileView = ({
             ) : null}
           </div>
         </div>
+
+        {/* Compatibility Score Section */}
+        {compatibility && !compatibility.isExcluded ? (
+          <div className="profile-section compatibility-section">
+            <h3>💫 Compatibility</h3>
+            <div className="compatibility-score-ring">
+              <div
+                className="compatibility-score"
+                style={{
+                  color: compatibility.compatibilityScore >= 80 ? '#4caf50' :
+                         compatibility.compatibilityScore >= 60 ? '#8bc34a' :
+                         compatibility.compatibilityScore >= 40 ? '#ffc107' : '#ff9800'
+                }}
+              >
+                {compatibility.compatibilityScore}%
+              </div>
+              <span className="compatibility-label">Match Score</span>
+            </div>
+
+            {/* Mutual Interests */}
+            {compatibility.mutualInterests?.count > 0 ? (
+              <div className="mutual-interests">
+                <p className="mutual-interests-header">
+                  <strong>🤝 {compatibility.mutualInterests.percentage}% Interests Match</strong>
+                  <span>({compatibility.mutualInterests.count} shared)</span>
+                </p>
+                <div className="mutual-interests-tags">
+                  {compatibility.mutualInterests.interests.map((interest) => (
+                    <span key={interest} className="mutual-interest-tag">{interest}</span>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="no-mutual-interests">No shared interests yet</p>
+            )}
+
+            {/* Compatibility Reasons */}
+            {compatibility.compatibilityReasons?.length > 0 ? (
+              <div className="compatibility-reasons">
+                <p><strong>Why you match:</strong></p>
+                <ul>
+                  {compatibility.compatibilityReasons.map((reason, idx) => (
+                    <li key={idx}>{reason}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {/* Icebreakers */}
+            {compatibility.icebreakers?.length > 0 && !compatibility.isMatched ? (
+              <div className="icebreakers">
+                <p><strong>💬 Conversation Starters:</strong></p>
+                <div className="icebreaker-list">
+                  {compatibility.icebreakers.map((icebreaker, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      className="icebreaker-btn"
+                      onClick={() => {
+                        if (canMessage && onMessage) {
+                          onMessage(profile, icebreaker);
+                        }
+                      }}
+                      disabled={!canMessage}
+                    >
+                      {icebreaker}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : loadingCompatibility ? (
+          <div className="profile-section">
+            <p>Loading compatibility...</p>
+          </div>
+        ) : null}
 
         {profile.interests?.length ? (
           <div className="profile-section">

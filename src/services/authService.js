@@ -119,5 +119,17 @@ export const authService = {
     } catch (error) {
       throw error.response?.data?.error || 'Failed to reset password';
     }
+  },
+
+  /**
+   * Submit a moderation appeal
+   */
+  submitAppeal: async (payload) => {
+    try {
+      const response = await axios.post(`${API_URL}/appeals`, payload);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to submit appeal';
+    }
   }
 };

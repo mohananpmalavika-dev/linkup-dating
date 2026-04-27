@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/database');
 const spamFraudService = require('../services/spamFraudService');
 const userNotificationService = require('../services/userNotificationService');
+const { createModerationFlag } = require('../utils/moderation');
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MULTIPART_FORM_DATA_PATTERN = /^multipart\/form-data/i;
@@ -22,6 +23,46 @@ const getRequestMetadata = (req) => ({
 });
 
 const countRowValue = (value) => Number.parseInt(value, 10) || 0;
+const REPORT_REASON_CONFIG = {
+  inappropriate_photos: {
+    category: 'content',
+    severity: 'high',
+    title: 'Reported inappropriate photos'
+  },
+  fake_profile: {
+    category: 'fraud',
+    severity: 'high',
+    title: 'Reported fake profile'
+  },
+  suspicious_behavior: {
+    category: 'safety',
+    severity: 'high',
+    title: 'Reported suspicious behavior'
+  },
+  harassment: {
+    category: 'safety',
+    severity: 'critical',
+    title: 'Reported harassment'
+  },
+  spam: {
+    category: 'spam',
+    severity: 'high',
+    title: 'Reported spam or scam'
+  },
+  offensive_content: {
+    category: 'content',
+    severity: 'medium',
+    title: 'Reported offensive content'
+  },
+  other: {
+    category: 'behavior',
+    severity: 'medium',
+    title: 'User report'
+  }
+};
+
+const getReportModerationConfig = (reason) =>
+  REPORT_REASON_CONFIG[reason] || REPORT_REASON_CONFIG.other;
 
 const hasMeaningfulFilters = (filters = {}) =>
   Object.values(filters).some((value) => {
@@ -1390,11 +1431,24 @@ router.post('/profiles/me/photos', async (req, res) => {
       return res.status(400).json({ error: 'Photos array required' });
     }
 
+    await db.query(
+      `UPDATE photo_moderation_queue
+       SET status = 'superseded',
+           review_action = 'superseded',
+           review_notes = 'Replaced by a newer profile photo upload.',
+           reviewed_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1
+         AND source_type = 'profile_photo'
+         AND status IN ('pending', 'approved')`,
+      [userId]
+    );
+
     // Delete existing photos
     await db.query('DELETE FROM profile_photos WHERE user_id = $1', [userId]);
 
     // Insert new photos
     const photoUrls = [];
+    const moderationQueue = [];
     for (let i = 0; i < photos.length; i++) {
       const position = photos[i].position !== undefined ? photos[i].position : i;
       const result = await db.query(
@@ -1404,6 +1458,16 @@ router.post('/profiles/me/photos', async (req, res) => {
         [userId, photos[i].url, position, i === 0]
       );
       photoUrls.push(result.rows[0]);
+
+      const queueItem = await spamFraudService.queuePhotoForModeration({
+        userId,
+        photoUrl: photos[i].url,
+        profilePhotoId: result.rows[0].id,
+        sourceType: 'profile_photo'
+      });
+      if (queueItem) {
+        moderationQueue.push(queueItem);
+      }
     }
 
     // Update profile completion
@@ -1416,10 +1480,17 @@ router.post('/profiles/me/photos', async (req, res) => {
       [userId]
     );
 
+    await spamFraudService.refreshSystemMetrics();
+
     res.json({
-      message: 'Photos uploaded',
+      message: 'Photos uploaded and sent through moderation review',
       photos: normalizePhotoDetails(photoUrls).map((photo) => photo.url),
-      photoDetails: normalizePhotoDetails(photoUrls)
+      photoDetails: normalizePhotoDetails(photoUrls),
+      moderation: {
+        totalQueued: moderationQueue.length,
+        pendingReview: moderationQueue.filter((item) => item.status === 'pending').length,
+        autoApproved: moderationQueue.filter((item) => item.status === 'approved').length
+      }
     });
   } catch (err) {
     console.error('Photo upload error:', err);
@@ -1501,18 +1572,126 @@ router.post('/search', async (req, res) => {
   }
 });
 
-// 7. GET DISCOVERY PROFILES (For swipe interface)
+// Helper: build discovery SQL with DB-level filters
+const buildDiscoveryQuery = ({
+  userId,
+  currentLat,
+  currentLng,
+  radiusKm,
+  ageMin,
+  ageMax,
+  genderPreferences,
+  relationshipGoals,
+  interests,
+  heightRangeMin,
+  heightRangeMax,
+  bodyTypes,
+  excludeShown,
+  limit = 100,
+  offset = 0
+}) => {
+  const params = [userId];
+  let paramIndex = 2;
+  const conditions = [
+    'dp.user_id != $1',
+    'dp.is_active = true',
+    'COALESCE(up.show_my_profile, true) = true'
+  ];
+
+  // Exclude already interacted users
+  conditions.push(`dp.user_id NOT IN (
+    SELECT CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END
+    FROM interactions WHERE from_user_id = $1 OR to_user_id = $1
+  )`);
+
+  // Exclude blocked users (both directions)
+  conditions.push(`dp.user_id NOT IN (
+    SELECT blocked_user_id FROM user_blocks WHERE blocking_user_id = $1
+    UNION
+    SELECT blocking_user_id FROM user_blocks WHERE blocked_user_id = $1
+  )`);
+
+  if (excludeShown) {
+    conditions.push(`dp.user_id NOT IN (SELECT shown_user_id FROM discovery_queue_shown WHERE viewer_user_id = $1)`);
+  }
+
+  if (Number.isFinite(ageMin)) {
+    conditions.push(`dp.age >= $${paramIndex++}`);
+    params.push(ageMin);
+  }
+  if (Number.isFinite(ageMax)) {
+    conditions.push(`dp.age <= $${paramIndex++}`);
+    params.push(ageMax);
+  }
+
+  if (Array.isArray(genderPreferences) && genderPreferences.length > 0) {
+    conditions.push(`dp.gender = ANY($${paramIndex++})`);
+    params.push(genderPreferences);
+  }
+
+  if (Array.isArray(relationshipGoals) && relationshipGoals.length > 0) {
+    conditions.push(`dp.relationship_goals = ANY($${paramIndex++})`);
+    params.push(relationshipGoals);
+  }
+
+  if (Array.isArray(interests) && interests.length > 0) {
+    conditions.push(`COALESCE(dp.interests, ARRAY[]::text[]) && $${paramIndex++}::text[]`);
+    params.push(interests);
+  }
+
+  if (Number.isFinite(heightRangeMin)) {
+    conditions.push(`dp.height >= $${paramIndex++}`);
+    params.push(heightRangeMin);
+  }
+  if (Number.isFinite(heightRangeMax)) {
+    conditions.push(`dp.height <= $${paramIndex++}`);
+    params.push(heightRangeMax);
+  }
+
+  if (Array.isArray(bodyTypes) && bodyTypes.length > 0) {
+    conditions.push(`dp.body_type = ANY($${paramIndex++})`);
+    params.push(bodyTypes);
+  }
+
+  // Haversine distance filter
+  if (Number.isFinite(currentLat) && Number.isFinite(currentLng) && Number.isFinite(radiusKm) && radiusKm > 0) {
+    conditions.push(`(
+      6371 * acos(
+        LEAST(1, GREATEST(-1,
+          cos(radians($${paramIndex})) * cos(radians(dp.location_lat)) *
+          cos(radians(dp.location_lng) - radians($${paramIndex + 1})) +
+          sin(radians($${paramIndex})) * sin(radians(dp.location_lat))
+        ))
+      )
+    ) <= $${paramIndex + 2}`);
+    params.push(currentLat, currentLng, radiusKm);
+    paramIndex += 3;
+  }
+
+  const whereClause = conditions.join(' AND ');
+
+  return {
+    text: `
+      SELECT dp.*,
+             row_to_json(up) as preferences,
+             (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+              FROM profile_photos WHERE user_id = dp.user_id) as photos
+      FROM dating_profiles dp
+      LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+      WHERE ${whereClause}
+      ORDER BY dp.updated_at DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+    `,
+    params: [...params, limit, offset]
+  };
+};
+
+// 7. GET DISCOVERY PROFILES (For swipe interface) — with DB-level filtering
 router.get('/discovery', async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = parseInt(req.query.limit, 10) || 10;
-    const discoveryFilters = {
-      ageMin: normalizeInteger(req.query.ageMin),
-      ageMax: normalizeInteger(req.query.ageMax),
-      relationshipGoals: normalizeOptionalText(req.query.relationshipGoals),
-      interests: normalizeOptionalText(req.query.interests),
-      distance: normalizeInteger(req.query.distance)
-    };
+    const offset = parseInt(req.query.offset, 10) || 0;
 
     if (!userId) {
       return res.status(401).json({ error: 'User ID not found in token' });
@@ -1522,8 +1701,7 @@ router.get('/discovery', async (req, res) => {
       `SELECT dp.*,
               row_to_json(up) as preferences,
               (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
-               FROM profile_photos
-               WHERE user_id = dp.user_id) as photos
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
        FROM dating_profiles dp
        LEFT JOIN user_preferences up ON up.user_id = dp.user_id
        WHERE dp.user_id = $1
@@ -1533,26 +1711,37 @@ router.get('/discovery', async (req, res) => {
     const currentProfile = normalizeProfileRow(currentProfileResult.rows[0] || null);
     const currentPreferences = normalizePreferenceRow(currentProfileResult.rows[0]?.preferences);
 
-    const result = await db.query(
-      `SELECT dp.*,
-              row_to_json(up) as preferences,
-              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
-               FROM profile_photos WHERE user_id = dp.user_id) as photos
-       FROM dating_profiles dp
-       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
-       WHERE dp.user_id != $1
-         AND dp.is_active = true
-         AND dp.user_id NOT IN (
-           SELECT CASE
-             WHEN from_user_id = $1 THEN to_user_id
-             ELSE from_user_id
-           END as excluded_user
-           FROM interactions WHERE (from_user_id = $1 OR to_user_id = $1)
-         )
-       ORDER BY dp.updated_at DESC
-       LIMIT 100`,
-      [userId]
-    );
+    const discoveryFilters = {
+      ageMin: normalizeInteger(req.query.ageMin) ?? currentPreferences.ageRangeMin,
+      ageMax: normalizeInteger(req.query.ageMax) ?? currentPreferences.ageRangeMax,
+      distance: normalizeInteger(req.query.distance) ?? currentPreferences.locationRadius,
+      gender: req.query.gender ? [req.query.gender] : currentPreferences.genderPreferences,
+      relationshipGoals: req.query.relationshipGoals ? [req.query.relationshipGoals] : currentPreferences.relationshipGoals,
+      interests: req.query.interests ? req.query.interests.split(',').map(s => s.trim()).filter(Boolean) : currentPreferences.interests,
+      heightRangeMin: normalizeInteger(req.query.heightRangeMin) ?? currentPreferences.heightRangeMin,
+      heightRangeMax: normalizeInteger(req.query.heightRangeMax) ?? currentPreferences.heightRangeMax,
+      bodyTypes: req.query.bodyTypes ? req.query.bodyTypes.split(',').map(s => s.trim()).filter(Boolean) : currentPreferences.bodyTypes
+    };
+
+    const query = buildDiscoveryQuery({
+      userId,
+      currentLat: toFiniteNumber(currentProfile?.location?.lat),
+      currentLng: toFiniteNumber(currentProfile?.location?.lng),
+      radiusKm: discoveryFilters.distance,
+      ageMin: discoveryFilters.ageMin,
+      ageMax: discoveryFilters.ageMax,
+      genderPreferences: discoveryFilters.gender,
+      relationshipGoals: discoveryFilters.relationshipGoals,
+      interests: discoveryFilters.interests,
+      heightRangeMin: discoveryFilters.heightRangeMin,
+      heightRangeMax: discoveryFilters.heightRangeMax,
+      bodyTypes: discoveryFilters.bodyTypes,
+      excludeShown: false,
+      limit: 100,
+      offset
+    });
+
+    const result = await db.query(query.text, query.params);
 
     const profiles = result.rows
       .map((profileRow) => {
@@ -1594,10 +1783,318 @@ router.get('/discovery', async (req, res) => {
       resultCount: profiles.length
     });
 
-    res.json({ profiles });
+    res.json({ profiles, offset: offset + profiles.length });
   } catch (err) {
     console.error('Discovery error:', err);
     res.status(500).json({ error: 'Failed to get discovery profiles', details: err.message });
+  }
+});
+
+// 7b. GET SMART DISCOVERY QUEUE (Personalized multi-factor ranking)
+router.get('/discovery-queue', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
+    const page = parseInt(req.query.page, 10) || 1;
+    const offset = (page - 1) * 100;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User ID not found in token' });
+    }
+
+    const currentProfileResult = await db.query(
+      `SELECT dp.*,
+              row_to_json(up) as preferences,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       WHERE dp.user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+    const currentProfile = normalizeProfileRow(currentProfileResult.rows[0] || null);
+    const currentPreferences = normalizePreferenceRow(currentProfileResult.rows[0]?.preferences);
+
+    if (!currentProfile) {
+      return res.status(404).json({ error: 'Profile not found. Complete your profile first.' });
+    }
+
+    const query = buildDiscoveryQuery({
+      userId,
+      currentLat: toFiniteNumber(currentProfile?.location?.lat),
+      currentLng: toFiniteNumber(currentProfile?.location?.lng),
+      radiusKm: currentPreferences.locationRadius,
+      ageMin: currentPreferences.ageRangeMin,
+      ageMax: currentPreferences.ageRangeMax,
+      genderPreferences: currentPreferences.genderPreferences,
+      relationshipGoals: currentPreferences.relationshipGoals,
+      interests: currentPreferences.interests,
+      heightRangeMin: currentPreferences.heightRangeMin,
+      heightRangeMax: currentPreferences.heightRangeMax,
+      bodyTypes: currentPreferences.bodyTypes,
+      excludeShown: true,
+      limit: 100,
+      offset
+    });
+
+    const result = await db.query(query.text, query.params);
+
+    const learningProfile = normalizeLearningProfile(currentPreferences.learningProfile);
+    const totalLearningSignals = learningProfile.totalPositiveActions + learningProfile.totalNegativeActions;
+    const hasLearningData = currentPreferences.preferenceFlexibility?.learnFromActivity && totalLearningSignals >= 2;
+
+    const scoredProfiles = result.rows
+      .map((profileRow) => {
+        const normalizedProfile = normalizeProfileRow(profileRow);
+        const compatibility = buildCompatibilitySuggestion({
+          currentProfile,
+          currentPreferences,
+          candidateProfile: normalizedProfile,
+          candidatePreferences: profileRow.preferences
+        });
+
+        if (compatibility.isExcluded) {
+          return null;
+        }
+
+        // Multi-factor scoring (0-100)
+        let compatibilityFactor = compatibility.compatibilityScore * 0.40;
+
+        // Behavioral alignment factor (25%)
+        let behavioralFactor = 0;
+        if (hasLearningData) {
+          let behavioralRaw = 0;
+          const candidateInterests = normalizeInterestList(normalizedProfile.interests);
+          candidateInterests.slice(0, 4).forEach((interest) => {
+            const key = interest.toLowerCase();
+            behavioralRaw += Number(learningProfile.positiveSignals.interests[key] || 0);
+            behavioralRaw -= Number(learningProfile.negativeSignals.interests[key] || 0);
+          });
+          if (normalizedProfile.relationshipGoals) {
+            const key = normalizedProfile.relationshipGoals.toLowerCase();
+            behavioralRaw += Number(learningProfile.positiveSignals.relationshipGoals[key] || 0) * 1.3;
+            behavioralRaw -= Number(learningProfile.negativeSignals.relationshipGoals[key] || 0) * 1.1;
+          }
+          if (normalizedProfile.bodyType) {
+            const key = normalizedProfile.bodyType.toLowerCase();
+            behavioralRaw += Number(learningProfile.positiveSignals.bodyTypes[key] || 0);
+            behavioralRaw -= Number(learningProfile.negativeSignals.bodyTypes[key] || 0);
+          }
+          const ageBand = buildAgeBand(normalizedProfile.age);
+          if (ageBand) {
+            const key = ageBand.toLowerCase();
+            behavioralRaw += Number(learningProfile.positiveSignals.ageBands[key] || 0) * 1.2;
+            behavioralRaw -= Number(learningProfile.negativeSignals.ageBands[key] || 0);
+          }
+          behavioralFactor = Math.max(0, Math.min(25, 12.5 + behavioralRaw * 1.5));
+        } else {
+          behavioralFactor = 12.5; // neutral baseline
+        }
+
+        // Recency / freshness factor (15%)
+        let recencyFactor = 7.5; // baseline
+        const profileCreated = normalizedProfile.createdAt ? new Date(normalizedProfile.createdAt) : null;
+        const daysSinceCreated = profileCreated ? (Date.now() - profileCreated.getTime()) / (1000 * 60 * 60 * 24) : Infinity;
+        if (daysSinceCreated <= 3) {
+          recencyFactor = 15;
+        } else if (daysSinceCreated <= 7) {
+          recencyFactor = 12;
+        } else if (daysSinceCreated <= 14) {
+          recencyFactor = 10;
+        } else if (daysSinceCreated <= 30) {
+          recencyFactor = 9;
+        }
+
+        const lastActive = normalizedProfile.lastActive ? new Date(normalizedProfile.lastActive) : null;
+        const hoursSinceActive = lastActive ? (Date.now() - lastActive.getTime()) / (1000 * 60 * 60) : Infinity;
+        if (hoursSinceActive <= 24) {
+          recencyFactor += 2;
+        } else if (hoursSinceActive <= 72) {
+          recencyFactor += 1;
+        }
+        recencyFactor = Math.min(15, recencyFactor);
+
+        // Trending / social proof factor (10%)
+        let trendingFactor = 5; // baseline
+        // Boost verified profiles slightly within trending
+        if (normalizedProfile.profileVerified) {
+          trendingFactor += 1.5;
+        }
+        // Boost completed profiles
+        if ((normalizedProfile.profileCompletionPercent || 0) >= 80) {
+          trendingFactor += 1.5;
+        }
+        if ((normalizedProfile.profileCompletionPercent || 0) >= 60) {
+          trendingFactor += 1;
+        }
+        trendingFactor = Math.min(10, trendingFactor);
+
+        // Diversity injection factor (10%) — slightly boost profiles that differ in one dimension
+        let diversityFactor = 5;
+        const currentGoals = currentProfile.relationshipGoals;
+        const candidateGoals = normalizedProfile.relationshipGoals;
+        if (currentGoals && candidateGoals && currentGoals !== candidateGoals) {
+          diversityFactor += 2;
+        }
+        const currentInterests = normalizeInterestList(currentProfile.interests);
+        const candidateInterests = normalizeInterestList(normalizedProfile.interests);
+        const shared = candidateInterests.filter(i => currentInterests.map(ci => ci.toLowerCase()).includes(i.toLowerCase()));
+        if (shared.length === 0 && candidateInterests.length > 0 && currentInterests.length > 0) {
+          diversityFactor += 2;
+        }
+        diversityFactor = Math.min(10, diversityFactor);
+
+        const totalScore = Math.round(compatibilityFactor + behavioralFactor + recencyFactor + trendingFactor + diversityFactor);
+
+        return {
+          ...normalizedProfile,
+          ...compatibility,
+          queueScore: totalScore,
+          scoreBreakdown: {
+            compatibility: Math.round(compatibilityFactor),
+            behavioral: Math.round(behavioralFactor),
+            recency: Math.round(recencyFactor),
+            trending: Math.round(trendingFactor),
+            diversity: Math.round(diversityFactor)
+          }
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.queueScore - a.queueScore)
+      .slice(0, limit);
+
+    // Record shown profiles for deduplication
+    if (scoredProfiles.length > 0) {
+      const values = scoredProfiles.map((p, i) => `($1, $${i + 2})`).join(', ');
+      const shownIds = scoredProfiles.map(p => p.userId);
+      await db.query(
+        `INSERT INTO discovery_queue_shown (viewer_user_id, shown_user_id)
+         VALUES ${values}
+         ON CONFLICT (viewer_user_id, shown_user_id) DO UPDATE
+         SET shown_at = CURRENT_TIMESTAMP`,
+        [userId, ...shownIds]
+      );
+    }
+
+    const requestMetadata = getRequestMetadata(req);
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'discovery_queue_view',
+      analyticsUpdates: {},
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
+
+    res.json({
+      profiles: scoredProfiles,
+      page,
+      hasMore: scoredProfiles.length === limit
+    });
+  } catch (err) {
+    console.error('Discovery queue error:', err);
+    res.status(500).json({ error: 'Failed to get discovery queue', details: err.message });
+  }
+});
+
+// 7c. GET TRENDING PROFILES
+router.get('/trending', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const result = await db.query(
+      `SELECT dp.*,
+              row_to_json(up) as preferences,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos,
+              COALESCE(engagement.like_count, 0) as like_count,
+              COALESCE(engagement.view_count, 0) as view_count
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       LEFT JOIN LATERAL (
+         SELECT
+           COUNT(CASE WHEN i.interaction_type IN ('like', 'superlike') THEN 1 END) as like_count,
+           COUNT(CASE WHEN i.interaction_type = 'profile_view' THEN 1 END) as view_count
+         FROM interactions i
+         WHERE i.to_user_id = dp.user_id AND i.created_at >= $2
+       ) engagement ON true
+       WHERE dp.user_id != $1
+         AND dp.is_active = true
+         AND dp.user_id NOT IN (
+           SELECT CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END
+           FROM interactions WHERE from_user_id = $1 OR to_user_id = $1
+         )
+         AND dp.user_id NOT IN (
+           SELECT blocked_user_id FROM user_blocks WHERE blocking_user_id = $1
+           UNION
+           SELECT blocking_user_id FROM user_blocks WHERE blocked_user_id = $1
+         )
+       ORDER BY (COALESCE(engagement.like_count, 0) * 2 + COALESCE(engagement.view_count, 0)) DESC,
+                dp.profile_verified DESC,
+                dp.profile_completion_percent DESC
+       LIMIT $3`,
+      [userId, sevenDaysAgo, limit]
+    );
+
+    const profiles = result.rows.map((row) => {
+      const normalizedProfile = normalizeProfileRow(row);
+      return {
+        ...normalizedProfile,
+        trendingScore: Number(row.like_count) * 2 + Number(row.view_count),
+        likeCount: Number(row.like_count),
+        viewCount: Number(row.view_count)
+      };
+    });
+
+    res.json({ profiles, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('Trending error:', err);
+    res.status(500).json({ error: 'Failed to get trending profiles', details: err.message });
+  }
+});
+
+// 7d. GET NEW PROFILES
+router.get('/new-profiles', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
+    const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+    const result = await db.query(
+      `SELECT dp.*,
+              row_to_json(up) as preferences,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       WHERE dp.user_id != $1
+         AND dp.is_active = true
+         AND dp.created_at >= $2
+         AND dp.user_id NOT IN (
+           SELECT CASE WHEN from_user_id = $1 THEN to_user_id ELSE from_user_id END
+           FROM interactions WHERE from_user_id = $1 OR to_user_id = $1
+         )
+         AND dp.user_id NOT IN (
+           SELECT blocked_user_id FROM user_blocks WHERE blocking_user_id = $1
+           UNION
+           SELECT blocking_user_id FROM user_blocks WHERE blocked_user_id = $1
+         )
+       ORDER BY dp.created_at DESC, dp.last_active DESC NULLS LAST
+       LIMIT $3`,
+      [userId, fourteenDaysAgo, limit]
+    );
+
+    const profiles = result.rows.map((row) => normalizeProfileRow(row));
+
+    res.json({ profiles, generatedAt: new Date().toISOString() });
+  } catch (err) {
+    console.error('New profiles error:', err);
+    res.status(500).json({ error: 'Failed to get new profiles', details: err.message });
   }
 });
 
@@ -2424,6 +2921,21 @@ router.post('/reports', async (req, res) => {
       [userId, reportedUserId, reason, description || null]
     );
 
+    const moderationConfig = getReportModerationConfig(reason);
+    await createModerationFlag({
+      userId: reportedUserId,
+      sourceType: 'user_report',
+      flagCategory: moderationConfig.category,
+      severity: moderationConfig.severity,
+      title: moderationConfig.title,
+      reason: description || `Report reason: ${reason}`,
+      metadata: {
+        reportId: result.rows[0].id,
+        reportedReason: reason,
+        reportingUserId: userId
+      }
+    });
+
     spamFraudService.trackUserActivity({
       userId,
       action: 'report_submitted',
@@ -2813,13 +3325,12 @@ router.post('/interactions/like', async (req, res) => {
   }
 });
 
-// 32. GET TOP PICKS (Most Compatible Profiles)
+// 32. GET TOP PICKS (Most Compatible Profiles) — using smart discovery query
 router.get('/top-picks', async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
 
-    // Get current user's profile and preferences
     const currentProfileResult = await db.query(
       `SELECT dp.*,
               row_to_json(up) as preferences,
@@ -2838,29 +3349,26 @@ router.get('/top-picks', async (req, res) => {
       return res.status(404).json({ error: 'Profile not found. Complete your profile first.' });
     }
 
-    // Get candidates excluding already interacted users
-    const result = await db.query(
-      `SELECT dp.*,
-              row_to_json(up) as preferences,
-              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
-               FROM profile_photos WHERE user_id = dp.user_id) as photos
-       FROM dating_profiles dp
-       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
-       WHERE dp.user_id != $1
-         AND dp.is_active = true
-         AND dp.user_id NOT IN (
-           SELECT CASE
-             WHEN from_user_id = $1 THEN to_user_id
-             ELSE from_user_id
-           END as excluded_user
-           FROM interactions WHERE (from_user_id = $1 OR to_user_id = $1)
-         )
-       ORDER BY dp.updated_at DESC
-       LIMIT 100`,
-      [userId]
-    );
+    const query = buildDiscoveryQuery({
+      userId,
+      currentLat: toFiniteNumber(currentProfile?.location?.lat),
+      currentLng: toFiniteNumber(currentProfile?.location?.lng),
+      radiusKm: currentPreferences.locationRadius,
+      ageMin: currentPreferences.ageRangeMin,
+      ageMax: currentPreferences.ageRangeMax,
+      genderPreferences: currentPreferences.genderPreferences,
+      relationshipGoals: currentPreferences.relationshipGoals,
+      interests: currentPreferences.interests,
+      heightRangeMin: currentPreferences.heightRangeMin,
+      heightRangeMax: currentPreferences.heightRangeMax,
+      bodyTypes: currentPreferences.bodyTypes,
+      excludeShown: false,
+      limit: 100,
+      offset: 0
+    });
 
-    // Score and rank profiles
+    const result = await db.query(query.text, query.params);
+
     const scoredProfiles = result.rows
       .map((profileRow) => {
         const normalizedProfile = normalizeProfileRow(profileRow);
@@ -2885,7 +3393,6 @@ router.get('/top-picks', async (req, res) => {
       .sort((leftProfile, rightProfile) => rightProfile.topPickScore - leftProfile.topPickScore)
       .slice(0, limit);
 
-    // Record analytics
     const requestMetadata = getRequestMetadata(req);
     spamFraudService.trackUserActivity({
       userId,
@@ -3357,29 +3864,14 @@ router.post('/profiles/me/verify-photo', async (req, res) => {
       return res.status(400).json({ error: 'Profile is already verified' });
     }
 
-    // In production, this would call an AI/ML service to verify the pose matches
-    // For now, we simulate verification with a random 90% pass rate
-    const verificationPassed = Math.random() < 0.9;
-
-    if (!verificationPassed) {
-      await db.query(
-        `UPDATE dating_profiles
-         SET verification_status = 'rejected',
-             verification_pose = NULL,
-             updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $1`,
-        [userId]
-      );
-      return res.status(422).json({ error: 'Photo verification failed. Please try again with better lighting and a clearer view of your face.' });
-    }
-
-    // Store verification photo and mark as pending admin review or auto-approve
+    // Verification photos now flow through a moderation queue instead of
+    // being auto-approved so admins can review edge cases and appeals.
     await db.query(
       `UPDATE dating_profiles
        SET verification_photo_url = $1,
-           verification_status = 'approved',
-           profile_verified = true,
-           verified_at = CURRENT_TIMESTAMP,
+           verification_status = 'pending',
+           profile_verified = false,
+           verified_at = NULL,
            verification_pose = NULL,
            updated_at = CURRENT_TIMESTAMP
        WHERE user_id = $2
@@ -3387,25 +3879,33 @@ router.post('/profiles/me/verify-photo', async (req, res) => {
       [photoBase64, userId]
     );
 
+    await spamFraudService.queuePhotoForModeration({
+      userId,
+      photoUrl: photoBase64,
+      sourceType: 'verification_photo'
+    });
+
     spamFraudService.trackUserActivity({
       userId,
-      action: 'photo_verified',
+      action: 'photo_verification_submitted',
       analyticsUpdates: { verifications_completed: 1 },
       ipAddress: requestMetadata.ipAddress,
       userAgent: requestMetadata.userAgent
     });
 
     await userNotificationService.createNotification(userId, {
-      type: 'verification_complete',
-      title: 'Photo Verified!',
-      body: 'Your profile photo has been verified. You now have a verified badge.',
-      metadata: { verificationType: 'photo', status: 'approved' }
+      type: 'verification_pending',
+      title: 'Verification Submitted',
+      body: 'Your verification selfie is now pending moderator review.',
+      metadata: { verificationType: 'photo', status: 'pending' }
     });
 
+    await spamFraudService.refreshSystemMetrics();
+
     res.json({
-      message: 'Photo verification successful',
-      verified: true,
-      verificationStatus: 'approved'
+      message: 'Verification photo submitted for review',
+      verified: false,
+      verificationStatus: 'pending'
     });
   } catch (err) {
     console.error('Photo verification error:', err);
@@ -4028,6 +4528,414 @@ router.post('/message-requests/:requestId/decline', async (req, res) => {
   } catch (err) {
     console.error('Decline message request error:', err);
     res.status(500).json({ error: 'Failed to decline message request' });
+  }
+});
+
+// ========== PHASE 4: ADVANCED PROFILE ANALYTICS & INSIGHTS ==========
+
+// 53. RECORD PROFILE VIEW
+router.post('/profiles/:userId/view', async (req, res) => {
+  try {
+    const viewerUserId = req.user.id;
+    const { userId: viewedUserId } = req.params;
+    const requestMetadata = getRequestMetadata(req);
+
+    if (Number(viewerUserId) === Number(viewedUserId)) {
+      return res.status(400).json({ error: 'Cannot view your own profile' });
+    }
+
+    // Update viewer's last active
+    await db.query(
+      `UPDATE dating_profiles SET last_active = CURRENT_TIMESTAMP WHERE user_id = $1`,
+      [viewerUserId]
+    );
+
+    // Record the profile view (upsert to keep latest)
+    await db.query(
+      `INSERT INTO profile_views (viewer_user_id, viewed_user_id, viewed_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (viewer_user_id, viewed_user_id) DO UPDATE
+       SET viewed_at = CURRENT_TIMESTAMP`,
+      [viewerUserId, viewedUserId]
+    );
+
+    // Update analytics
+    spamFraudService.trackUserActivity({
+      userId: viewerUserId,
+      action: 'profile_view',
+      analyticsUpdates: { profiles_viewed: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
+
+    // Send notification to viewed user if they have it enabled
+    const notifPrefs = await db.query(
+      `SELECT profile_viewed FROM notification_preferences WHERE user_id = $1`,
+      [viewedUserId]
+    );
+
+    if (notifPrefs.rows[0]?.profile_viewed !== false) {
+      const viewerProfile = await db.query(
+        `SELECT first_name FROM dating_profiles WHERE user_id = $1`,
+        [viewerUserId]
+      );
+      const viewerName = viewerProfile.rows[0]?.first_name || 'Someone';
+
+      await userNotificationService.createNotification(viewedUserId, {
+        type: 'profile_viewed',
+        title: `${viewerName} viewed your profile`,
+        body: 'Someone is interested in your profile.',
+        metadata: { viewerUserId }
+      });
+    }
+
+    res.json({ message: 'Profile view recorded' });
+  } catch (err) {
+    console.error('Record profile view error:', err);
+    res.status(500).json({ error: 'Failed to record profile view' });
+  }
+});
+
+// 54. GET PROFILE ANALYTICS (for own profile)
+router.get('/profiles/me/analytics', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const today = new Date().toISOString().split('T')[0];
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    // Get profile completion details
+    const profileResult = await db.query(
+      `SELECT first_name, age, gender, location_city, bio, interests, occupation,
+              education, relationship_goals, height, body_type, profile_verified,
+              profile_completion_percent, last_active,
+              (SELECT COUNT(*) FROM profile_photos WHERE user_id = $1) as photo_count
+       FROM dating_profiles WHERE user_id = $1`,
+      [userId]
+    );
+    const profile = profileResult.rows[0];
+
+    // Get view counts
+    const viewsResult = await db.query(
+      `SELECT
+         COUNT(*) as total_views,
+         COUNT(CASE WHEN viewed_at >= $2 THEN 1 END) as views_last_7_days,
+         COUNT(CASE WHEN viewed_at >= $3 THEN 1 END) as views_last_30_days,
+         COUNT(DISTINCT viewer_user_id) as unique_viewers
+       FROM profile_views WHERE viewed_user_id = $1`,
+      [userId, sevenDaysAgo, thirtyDaysAgo]
+    );
+
+    // Get daily view trend (last 7 days)
+    const dailyViewsResult = await db.query(
+      `SELECT DATE(viewed_at) as date, COUNT(*) as count
+       FROM profile_views
+       WHERE viewed_user_id = $1 AND viewed_at >= $2
+       GROUP BY DATE(viewed_at)
+       ORDER BY date DESC`,
+      [userId, sevenDaysAgo]
+    );
+
+    // Get interaction stats
+    const interactionsResult = await db.query(
+      `SELECT
+         (SELECT COUNT(*) FROM interactions WHERE from_user_id = $1 AND interaction_type = 'like') as likes_sent,
+         (SELECT COUNT(*) FROM interactions WHERE to_user_id = $1 AND interaction_type = 'like') as likes_received,
+         (SELECT COUNT(*) FROM interactions WHERE from_user_id = $1 AND interaction_type = 'superlike') as superlikes_sent,
+         (SELECT COUNT(*) FROM interactions WHERE to_user_id = $1 AND interaction_type = 'superlike') as superlikes_received,
+         (SELECT COUNT(*) FROM matches WHERE (user_id_1 = $1 OR user_id_2 = $1) AND status = 'active') as total_matches,
+         (SELECT COUNT(*) FROM interactions WHERE from_user_id = $1 AND interaction_type = 'pass') as passes_sent`,
+      [userId]
+    );
+
+    // Calculate profile strength
+    const profileStrength = calculateProfileStrength(profile);
+
+    res.json({
+      profileStrength: {
+        score: profileStrength.score,
+        maxScore: 100,
+        level: profileStrength.level,
+        recommendations: profileStrength.recommendations
+      },
+      views: {
+        total: Number.parseInt(viewsResult.rows[0]?.total_views || 0),
+        last7Days: Number.parseInt(viewsResult.rows[0]?.views_last_7_days || 0),
+        last30Days: Number.parseInt(viewsResult.rows[0]?.views_last_30_days || 0),
+        uniqueViewers: Number.parseInt(viewsResult.rows[0]?.unique_viewers || 0),
+        dailyTrend: dailyViewsResult.rows.map(row => ({
+          date: row.date,
+          count: Number.parseInt(row.count, 10)
+        }))
+      },
+      interactions: {
+        likesSent: Number.parseInt(interactionsResult.rows[0]?.likes_sent || 0),
+        likesReceived: Number.parseInt(interactionsResult.rows[0]?.likes_received || 0),
+        superlikesSent: Number.parseInt(interactionsResult.rows[0]?.superlikes_sent || 0),
+        superlikesReceived: Number.parseInt(interactionsResult.rows[0]?.superlikes_received || 0),
+        totalMatches: Number.parseInt(interactionsResult.rows[0]?.total_matches || 0),
+        passesSent: Number.parseInt(interactionsResult.rows[0]?.passes_sent || 0)
+      },
+      lastActive: profile?.last_active,
+      profileCompletionPercent: profile?.profile_completion_percent || 0
+    });
+  } catch (err) {
+    console.error('Get analytics error:', err);
+    res.status(500).json({ error: 'Failed to get analytics' });
+  }
+});
+
+// Profile strength calculator helper
+const calculateProfileStrength = (profile) => {
+  const recommendations = [];
+  let score = 0;
+
+  // Photos (25 points)
+  const photoCount = Number.parseInt(profile?.photo_count || 0);
+  if (photoCount >= 6) {
+    score += 25;
+  } else if (photoCount >= 3) {
+    score += 15;
+    recommendations.push('Add more photos to increase engagement (aim for 6+)');
+  } else {
+    score += photoCount * 3;
+    recommendations.push('Add at least 3 photos to your profile');
+  }
+
+  // Bio (20 points)
+  const bioLength = (profile?.bio || '').length;
+  if (bioLength >= 150) {
+    score += 20;
+  } else if (bioLength >= 50) {
+    score += 10;
+    recommendations.push('Write a longer bio (150+ characters) to express your personality');
+  } else if (bioLength > 0) {
+    score += 5;
+    recommendations.push('Expand your bio to help others know you better');
+  } else {
+    recommendations.push('Add a bio - profiles with bios get 4x more matches');
+  }
+
+  // Basic info (20 points)
+  if (profile?.occupation) score += 7;
+  else recommendations.push('Add your occupation');
+
+  if (profile?.education) score += 7;
+  else recommendations.push('Add your education');
+
+  if (profile?.height) score += 6;
+  else recommendations.push('Add your height');
+
+  // Interests (15 points)
+  const interests = Array.isArray(profile?.interests) ? profile.interests : [];
+  if (interests.length >= 5) {
+    score += 15;
+  } else if (interests.length >= 3) {
+    score += 8;
+    recommendations.push('Add more interests to find better matches');
+  } else {
+    score += interests.length * 2;
+    recommendations.push('Add at least 3 interests');
+  }
+
+  // Verification (10 points)
+  if (profile?.profile_verified) {
+    score += 10;
+  } else {
+    recommendations.push('Get photo verified to build trust');
+  }
+
+  // Relationship goals (10 points)
+  if (profile?.relationship_goals) {
+    score += 10;
+  } else {
+    recommendations.push('Specify what you are looking for');
+  }
+
+  // Determine level
+  let level = 'beginner';
+  if (score >= 90) level = 'excellent';
+  else if (score >= 75) level = 'strong';
+  else if (score >= 50) level = 'good';
+  else if (score >= 25) level = 'fair';
+
+  return {
+    score: Math.min(100, score),
+    level,
+    recommendations: recommendations.slice(0, 5)
+  };
+};
+
+// 55. GET WHO VIEWED MY PROFILE (Premium)
+router.get('/profiles/me/profile-views', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+    const page = parseInt(req.query.page, 10) || 1;
+    const offset = (page - 1) * limit;
+
+    // Check premium subscription
+    const subResult = await db.query(
+      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
+      [userId]
+    );
+    const sub = subResult.rows[0];
+    const isPremium = sub && ['premium', 'gold'].includes(sub.plan) && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+
+    // Get total count
+    const countResult = await db.query(
+      `SELECT COUNT(*) FROM profile_views WHERE viewed_user_id = $1`,
+      [userId]
+    );
+    const totalCount = Number.parseInt(countResult.rows[0].count, 10);
+
+    // Get viewers
+    const result = await db.query(
+      `SELECT pv.viewer_user_id, pv.viewed_at,
+              dp.first_name, dp.age, dp.location_city,
+              (SELECT photo_url FROM profile_photos WHERE user_id = pv.viewer_user_id LIMIT 1) as photo_url
+       FROM profile_views pv
+       JOIN dating_profiles dp ON dp.user_id = pv.viewer_user_id
+       WHERE pv.viewed_user_id = $1
+       ORDER BY pv.viewed_at DESC
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+
+    const viewers = result.rows.map(row => ({
+      userId: row.viewer_user_id,
+      firstName: row.first_name,
+      age: row.age,
+      location: { city: row.location_city },
+      photoUrl: row.photo_url,
+      viewedAt: row.viewed_at,
+      isRevealed: isPremium
+    }));
+
+    res.json({
+      viewers,
+      isPremium,
+      totalCount,
+      blurredCount: isPremium ? 0 : viewers.length,
+      pagination: {
+        page,
+        limit,
+        totalPages: Math.ceil(totalCount / limit),
+        hasMore: offset + viewers.length < totalCount
+      }
+    });
+  } catch (err) {
+    console.error('Get profile views error:', err);
+    res.status(500).json({ error: 'Failed to get profile views' });
+  }
+});
+
+// 56. GET COMPATIBILITY WITH PROFILE
+router.get('/profiles/:userId/compatibility', async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { userId: targetUserId } = req.params;
+
+    // Get both profiles with preferences
+    const [currentResult, targetResult] = await Promise.all([
+      db.query(
+        `SELECT dp.*, row_to_json(up) as preferences,
+                (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+                 FROM profile_photos WHERE user_id = dp.user_id) as photos
+         FROM dating_profiles dp
+         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+         WHERE dp.user_id = $1`,
+        [currentUserId]
+      ),
+      db.query(
+        `SELECT dp.*, row_to_json(up) as preferences,
+                (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+                 FROM profile_photos WHERE user_id = dp.user_id) as photos
+         FROM dating_profiles dp
+         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+         WHERE dp.user_id = $1`,
+        [targetUserId]
+      )
+    ]);
+
+    const currentProfile = normalizeProfileRow(currentResult.rows[0] || null);
+    const currentPreferences = normalizePreferenceRow(currentResult.rows[0]?.preferences);
+    const targetProfile = normalizeProfileRow(targetResult.rows[0] || null);
+    const targetPreferences = normalizePreferenceRow(targetResult.rows[0]?.preferences);
+
+    if (!currentProfile || !targetProfile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const compatibility = buildCompatibilitySuggestion({
+      currentProfile,
+      currentPreferences,
+      candidateProfile: targetProfile,
+      candidatePreferences: targetPreferences
+    });
+
+    // Calculate mutual interests percentage
+    const currentInterests = normalizeInterestList(currentProfile.interests);
+    const targetInterests = normalizeInterestList(targetProfile.interests);
+    const currentInterestSet = new Set(currentInterests.map(i => i.toLowerCase()));
+    const targetInterestSet = new Set(targetInterests.map(i => i.toLowerCase()));
+
+    const mutualInterests = currentInterests.filter(interest =>
+      targetInterestSet.has(interest.toLowerCase())
+    );
+
+    const totalUniqueInterests = new Set([...currentInterests.map(i => i.toLowerCase()), ...targetInterests.map(i => i.toLowerCase())]).size;
+    const mutualInterestPercentage = totalUniqueInterests > 0
+      ? Math.round((mutualInterests.length / totalUniqueInterests) * 100)
+      : 0;
+
+    // Check if already matched
+    const matchResult = await db.query(
+      `SELECT * FROM matches
+       WHERE ((user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1))
+       AND status = 'active'
+       LIMIT 1`,
+      [currentUserId, targetUserId]
+    );
+
+    res.json({
+      compatibilityScore: compatibility.compatibilityScore,
+      compatibilityReasons: compatibility.compatibilityReasons,
+      isExcluded: compatibility.isExcluded,
+      mutualInterests: {
+        count: mutualInterests.length,
+        totalUnique: totalUniqueInterests,
+        percentage: mutualInterestPercentage,
+        interests: mutualInterests.slice(0, 10)
+      },
+      isMatched: matchResult.rows.length > 0,
+      matchId: matchResult.rows[0]?.id || null,
+      icebreakers: compatibility.icebreakers
+    });
+  } catch (err) {
+    console.error('Get compatibility error:', err);
+    res.status(500).json({ error: 'Failed to get compatibility' });
+  }
+});
+
+// 57. UPDATE LAST ACTIVE (heartbeat endpoint)
+router.post('/profiles/me/heartbeat', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    await db.query(
+      `UPDATE dating_profiles
+       SET last_active = CURRENT_TIMESTAMP
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    res.json({ lastActive: new Date().toISOString() });
+  } catch (err) {
+    console.error('Heartbeat error:', err);
+    res.status(500).json({ error: 'Failed to update activity' });
   }
 });
 

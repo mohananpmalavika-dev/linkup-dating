@@ -20,6 +20,7 @@ const appDataRoutes = require('./routes/app-data');
 const astrologyRoutes = require('./routes/astrology');
 const flashsalesRoutes = require('./routes/flashsales');
 const videoCallRoutes = require('./routes/video-calls');
+const socialRoutes = require('./routes/social');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
@@ -270,6 +271,62 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Social Features Socket Events
+  socket.on('friend:request', (data = {}) => {
+    const { targetUserId, requesterName } = data;
+    if (!targetUserId) return;
+    
+    emitToUser(targetUserId, 'friend:request', {
+      fromUserId: socket.data.userId,
+      fromUserName: requesterName,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  socket.on('friend:accepted', (data = {}) => {
+    const { targetUserId } = data;
+    if (!targetUserId) return;
+    
+    emitToUser(targetUserId, 'friend:accepted', {
+      fromUserId: socket.data.userId,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  socket.on('group:message', (data = {}) => {
+    const { groupId, message, senderName } = data;
+    if (!groupId) return;
+    
+    io.to(`group_${groupId}`).emit('group:message', {
+      groupId,
+      fromUserId: socket.data.userId,
+      fromUserName: senderName,
+      message,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  socket.on('join_group', (groupId) => {
+    if (!groupId) return;
+    socket.join(`group_${groupId}`);
+  });
+
+  socket.on('leave_group', (groupId) => {
+    if (!groupId) return;
+    socket.leave(`group_${groupId}`);
+  });
+
+  socket.on('group:typing', (data = {}) => {
+    const { groupId, isTyping } = data;
+    if (!groupId) return;
+    
+    io.to(`group_${groupId}`).emit('group:typing', {
+      groupId,
+      userId: socket.data.userId,
+      isTyping
+    });
+  });
+
   socket.on('call:settings', (data = {}) => {
     const {
       callId,
@@ -352,6 +409,7 @@ app.use('/api/messaging', authenticateToken, messagingRoutes);
 app.use('/api/chatrooms', authenticateToken, chatroomsRoutes);
 app.use('/api/lobby', authenticateToken, lobbyRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
+app.use('/api/social', authenticateToken, socialRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

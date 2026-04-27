@@ -63,6 +63,15 @@ module.exports = (sequelize, DataTypes) => {
     User.hasOne(models.Subscription, { foreignKey: 'user_id', as: 'subscription', onDelete: 'CASCADE' });
     User.hasMany(models.MessageRequest, { foreignKey: 'from_user_id', as: 'sentMessageRequests', onDelete: 'CASCADE' });
     User.hasMany(models.MessageRequest, { foreignKey: 'to_user_id', as: 'receivedMessageRequests', onDelete: 'CASCADE' });
+    
+    // Social Features
+    User.hasMany(models.Referral, { foreignKey: 'referrer_user_id', as: 'referrals', onDelete: 'CASCADE' });
+    User.hasMany(models.FriendRelationship, { foreignKey: 'user_id_1', as: 'friendRequestsSent', onDelete: 'CASCADE' });
+    User.hasMany(models.FriendRelationship, { foreignKey: 'user_id_2', as: 'friendRequestsReceived', onDelete: 'CASCADE' });
+    User.hasMany(models.SocialIntegration, { foreignKey: 'user_id', as: 'socialIntegrations', onDelete: 'CASCADE' });
+    User.hasMany(models.GroupChat, { foreignKey: 'created_by_user_id', as: 'groupChatsCreated', onDelete: 'CASCADE' });
+    User.hasMany(models.GroupChatMember, { foreignKey: 'user_id', as: 'groupChatMemberships', onDelete: 'CASCADE' });
+    User.hasMany(models.GroupChatMessage, { foreignKey: 'from_user_id', as: 'groupChatMessages', onDelete: 'CASCADE' });
   };
 
   return User;

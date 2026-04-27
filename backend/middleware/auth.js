@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const { isConfiguredAdminEmail, syncConfiguredAdminForEmail } = require('../utils/adminAccess');
+const { getActiveBanForUser } = require('../utils/moderation');
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
@@ -37,6 +38,15 @@ const authenticateToken = (req, res, next) => {
       if (!userRecord.is_admin && isConfiguredAdminEmail(userRecord.email)) {
         await syncConfiguredAdminForEmail(db, userRecord.email);
         userRecord.is_admin = true;
+      }
+
+      const activeBan = await getActiveBanForUser(userRecord.id);
+      if (activeBan) {
+        return res.status(403).json({
+          error: 'Your account is currently restricted by moderation.',
+          code: 'ACCOUNT_RESTRICTED',
+          ban: activeBan
+        });
       }
 
       req.user = {

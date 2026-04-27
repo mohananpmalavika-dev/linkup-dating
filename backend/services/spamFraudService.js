@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { createModerationFlag } = require('../utils/moderation');
 
 /**
  * Spam and Fraud Detection Service
@@ -19,6 +20,8 @@ const SUSPICIOUS_MESSAGE_KEYWORDS = [
 ];
 const MESSAGE_URL_PATTERN = /(https?:\/\/|www\.)/gi;
 const REPEATED_CHARACTER_PATTERN = /(.)\1{7,}/;
+const IMAGE_DATA_URL_PATTERN = /^data:image\/([a-zA-Z0-9.+-]+);base64,/;
+const PHOTO_REVIEW_THRESHOLD = 45;
 const toCount = (value) => Number.parseInt(value, 10) || 0;
 const getMetricDate = () => new Date().toISOString().split('T')[0];
 const getClientIpAddress = (value = '') =>
@@ -322,6 +325,135 @@ const spamFraudService = {
   },
 
   /**
+   * Run lightweight heuristics and queue a photo for moderation review.
+   * This does not attempt computer vision; it creates a review workflow with
+   * an automated risk score so admins can prioritize high-risk items.
+   */
+  queuePhotoForModeration: async ({
+    userId,
+    photoUrl,
+    profilePhotoId = null,
+    sourceType = 'profile_photo'
+  }) => {
+    try {
+      const normalizedPhotoUrl = String(photoUrl || '').trim();
+
+      if (!userId || !normalizedPhotoUrl) {
+        return null;
+      }
+
+      const automatedLabels = {};
+      const automatedReasons = [];
+      let automatedRiskScore = 10;
+
+      const dataUrlMatch = normalizedPhotoUrl.match(IMAGE_DATA_URL_PATTERN);
+      if (dataUrlMatch) {
+        automatedLabels.mimeType = dataUrlMatch[1].toLowerCase();
+        automatedLabels.transport = 'inline';
+
+        const base64Payload = normalizedPhotoUrl.split(',')[1] || '';
+        const approximateBytes = Math.ceil((base64Payload.length * 3) / 4);
+        automatedLabels.approximateBytes = approximateBytes;
+
+        if (approximateBytes > 6 * 1024 * 1024) {
+          automatedRiskScore += 20;
+          automatedReasons.push('very_large_inline_image');
+        }
+
+        if (automatedLabels.mimeType === 'gif') {
+          automatedRiskScore += 10;
+          automatedReasons.push('animated_image_requires_review');
+        }
+      } else if (!/^https?:\/\//i.test(normalizedPhotoUrl)) {
+        automatedRiskScore += 20;
+        automatedReasons.push('non_standard_image_source');
+      }
+
+      if (sourceType === 'verification_photo') {
+        automatedRiskScore += 45;
+        automatedLabels.reviewType = 'identity_verification';
+        automatedReasons.push('verification_photo_requires_manual_review');
+      }
+
+      if (profilePhotoId) {
+        const duplicatePhotoCount = await db.query(
+          `SELECT COUNT(*) as count
+           FROM profile_photos
+           WHERE user_id = $1
+             AND photo_url = $2`,
+          [userId, normalizedPhotoUrl]
+        );
+
+        if (toCount(duplicatePhotoCount.rows[0]?.count) > 1) {
+          automatedRiskScore += 15;
+          automatedReasons.push('duplicate_photo_submission');
+        }
+      }
+
+      const queueStatus =
+        sourceType === 'verification_photo' || automatedRiskScore >= PHOTO_REVIEW_THRESHOLD
+          ? 'pending'
+          : 'approved';
+
+      const result = await db.query(
+        `INSERT INTO photo_moderation_queue (
+           user_id,
+           profile_photo_id,
+           photo_url,
+           source_type,
+           status,
+           automated_labels,
+           automated_risk_score,
+           automated_reasons
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [
+          userId,
+          profilePhotoId,
+          normalizedPhotoUrl,
+          sourceType,
+          queueStatus,
+          JSON.stringify(automatedLabels),
+          automatedRiskScore,
+          automatedReasons
+        ]
+      );
+
+      const queueItem = result.rows[0] || null;
+
+      if (queueItem && queueStatus === 'pending') {
+        await createModerationFlag({
+          userId,
+          sourceType: 'photo_moderation',
+          flagCategory: 'content',
+          severity:
+            automatedRiskScore >= 70 ? 'critical' : automatedRiskScore >= 55 ? 'high' : 'medium',
+          title: sourceType === 'verification_photo' ? 'Verification photo review' : 'Profile photo review',
+          reason:
+            automatedReasons.join(', ') ||
+            (sourceType === 'verification_photo'
+              ? 'Verification photo awaiting moderation review'
+              : 'Profile photo triggered moderation review'),
+          metadata: {
+            moderationQueueId: queueItem.id,
+            profilePhotoId,
+            sourceType,
+            automatedRiskScore,
+            automatedLabels,
+            automatedReasons
+          }
+        });
+      }
+
+      return queueItem;
+    } catch (err) {
+      console.error('Queue photo moderation error:', err);
+      return null;
+    }
+  },
+
+  /**
    * Flag user as spam
    */
   flagAsSpam: async (userId, reason, description, severity = 'low') => {
@@ -491,7 +623,10 @@ const spamFraudService = {
         newUsersResult,
         reportsResult,
         spamFlagsResult,
-        fraudFlagsResult
+        fraudFlagsResult,
+        pendingPhotoReviewsResult,
+        pendingAppealsResult,
+        activeBansResult
       ] = await Promise.all([
         db.query(
           `SELECT COUNT(DISTINCT user_id) as count
@@ -540,6 +675,25 @@ const spamFraudService = {
            FROM fraud_flags
            WHERE created_at::date = $1`,
           [metricDate]
+        ),
+        db.query(
+          `SELECT COUNT(*) as count
+           FROM photo_moderation_queue
+           WHERE status = 'pending'`,
+          []
+        ),
+        db.query(
+          `SELECT COUNT(*) as count
+           FROM moderation_appeals
+           WHERE status = 'pending'`,
+          []
+        ),
+        db.query(
+          `SELECT COUNT(*) as count
+           FROM user_bans
+           WHERE status = 'active'
+             AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`,
+          []
         )
       ]);
 
@@ -553,9 +707,12 @@ const spamFraudService = {
            new_users,
            reported_users,
            spam_flagged_users,
-           fraud_flagged_users
+           fraud_flagged_users,
+           pending_photo_reviews,
+           pending_appeals,
+           active_bans
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          ON CONFLICT (metric_date)
          DO UPDATE SET
            daily_active_users = EXCLUDED.daily_active_users,
@@ -565,7 +722,10 @@ const spamFraudService = {
            new_users = EXCLUDED.new_users,
            reported_users = EXCLUDED.reported_users,
            spam_flagged_users = EXCLUDED.spam_flagged_users,
-           fraud_flagged_users = EXCLUDED.fraud_flagged_users`,
+           fraud_flagged_users = EXCLUDED.fraud_flagged_users,
+           pending_photo_reviews = EXCLUDED.pending_photo_reviews,
+           pending_appeals = EXCLUDED.pending_appeals,
+           active_bans = EXCLUDED.active_bans`,
         [
           metricDate,
           toCount(dailyActiveUsersResult.rows[0]?.count),
@@ -575,7 +735,10 @@ const spamFraudService = {
           toCount(newUsersResult.rows[0]?.count),
           toCount(reportsResult.rows[0]?.count),
           toCount(spamFlagsResult.rows[0]?.count),
-          toCount(fraudFlagsResult.rows[0]?.count)
+          toCount(fraudFlagsResult.rows[0]?.count),
+          toCount(pendingPhotoReviewsResult.rows[0]?.count),
+          toCount(pendingAppealsResult.rows[0]?.count),
+          toCount(activeBansResult.rows[0]?.count)
         ]
       );
     } catch (err) {

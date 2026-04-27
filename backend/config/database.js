@@ -291,6 +291,14 @@ const init = async () => {
       ADD COLUMN IF NOT EXISTS username VARCHAR(100) UNIQUE;
     `);
 
+      await client.query(`
+      ALTER TABLE dating_profiles
+      ADD COLUMN IF NOT EXISTS verification_photo_url TEXT,
+      ADD COLUMN IF NOT EXISTS verification_status VARCHAR(20) DEFAULT 'none',
+      ADD COLUMN IF NOT EXISTS verification_pose VARCHAR(50),
+      ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP;
+    `);
+
     // Migration: Add storefront_data column for cart, favorites, saved addresses
     await client.query(`
       ALTER TABLE users
@@ -525,6 +533,87 @@ const init = async () => {
       );
     `);
 
+    // Create manual moderation flags for agent/admin review workflows
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS moderation_flags (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        flagged_by_admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        source_type VARCHAR(50) DEFAULT 'admin_manual',
+        flag_category VARCHAR(50) DEFAULT 'behavior',
+        severity VARCHAR(20) DEFAULT 'medium',
+        title VARCHAR(255),
+        reason TEXT NOT NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        metadata JSONB DEFAULT '{}',
+        reviewed_by_admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        review_notes TEXT,
+        reviewed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create photo moderation queue for profile and verification photos
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS photo_moderation_queue (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        profile_photo_id INTEGER REFERENCES profile_photos(id) ON DELETE SET NULL,
+        photo_url TEXT NOT NULL,
+        source_type VARCHAR(50) DEFAULT 'profile_photo',
+        status VARCHAR(50) DEFAULT 'pending',
+        automated_labels JSONB DEFAULT '{}',
+        automated_risk_score INTEGER DEFAULT 0,
+        automated_reasons TEXT[] DEFAULT '{}',
+        submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        reviewed_by_admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        review_notes TEXT,
+        review_action VARCHAR(100),
+        reviewed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create user bans / suspensions table for moderation enforcement
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_bans (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ban_type VARCHAR(50) DEFAULT 'suspension',
+        status VARCHAR(50) DEFAULT 'active',
+        reason TEXT NOT NULL,
+        notes TEXT,
+        origin VARCHAR(50) DEFAULT 'manual',
+        details JSONB DEFAULT '{}',
+        issued_by_admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP,
+        revoked_by_admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        revoked_at TIMESTAMP,
+        revoke_reason TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create moderation appeals table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS moderation_appeals (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        ban_id INTEGER REFERENCES user_bans(id) ON DELETE SET NULL,
+        subject VARCHAR(255),
+        message TEXT NOT NULL,
+        contact_email VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'pending',
+        review_notes TEXT,
+        resolution_action VARCHAR(100),
+        reviewed_by_admin_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     // Create system_metrics table for overall platform analytics
     await client.query(`
       CREATE TABLE IF NOT EXISTS system_metrics (
@@ -538,9 +627,19 @@ const init = async () => {
         reported_users INTEGER DEFAULT 0,
         spam_flagged_users INTEGER DEFAULT 0,
         fraud_flagged_users INTEGER DEFAULT 0,
+        pending_photo_reviews INTEGER DEFAULT 0,
+        pending_appeals INTEGER DEFAULT 0,
+        active_bans INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(metric_date)
       );
+    `);
+
+    await client.query(`
+      ALTER TABLE system_metrics
+      ADD COLUMN IF NOT EXISTS pending_photo_reviews INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS pending_appeals INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS active_bans INTEGER DEFAULT 0;
     `);
 
     // Create favorite_profiles table for saved dating profiles
@@ -586,6 +685,10 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_admin_actions_admin_user_id ON admin_actions(admin_user_id);
       CREATE INDEX IF NOT EXISTS idx_admin_actions_target_user_id ON admin_actions(target_user_id);
       CREATE INDEX IF NOT EXISTS idx_admin_actions_created_at ON admin_actions(created_at);
+      CREATE INDEX IF NOT EXISTS idx_moderation_flags_user_id ON moderation_flags(user_id);
+      CREATE INDEX IF NOT EXISTS idx_moderation_flags_status ON moderation_flags(status);
+      CREATE INDEX IF NOT EXISTS idx_moderation_flags_source_type ON moderation_flags(source_type);
+      CREATE INDEX IF NOT EXISTS idx_moderation_flags_created_at ON moderation_flags(created_at);
       CREATE INDEX IF NOT EXISTS idx_user_analytics_user_id ON user_analytics(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_analytics_activity_date ON user_analytics(activity_date);
       CREATE INDEX IF NOT EXISTS idx_user_session_logs_user_id ON user_session_logs(user_id);
@@ -594,6 +697,15 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_spam_flags_created_at ON spam_flags(created_at);
       CREATE INDEX IF NOT EXISTS idx_fraud_flags_user_id ON fraud_flags(user_id);
       CREATE INDEX IF NOT EXISTS idx_fraud_flags_created_at ON fraud_flags(created_at);
+      CREATE INDEX IF NOT EXISTS idx_photo_moderation_queue_user_id ON photo_moderation_queue(user_id);
+      CREATE INDEX IF NOT EXISTS idx_photo_moderation_queue_status ON photo_moderation_queue(status);
+      CREATE INDEX IF NOT EXISTS idx_photo_moderation_queue_source_type ON photo_moderation_queue(source_type);
+      CREATE INDEX IF NOT EXISTS idx_user_bans_user_id ON user_bans(user_id);
+      CREATE INDEX IF NOT EXISTS idx_user_bans_status ON user_bans(status);
+      CREATE INDEX IF NOT EXISTS idx_user_bans_expires_at ON user_bans(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_moderation_appeals_user_id ON moderation_appeals(user_id);
+      CREATE INDEX IF NOT EXISTS idx_moderation_appeals_status ON moderation_appeals(status);
+      CREATE INDEX IF NOT EXISTS idx_moderation_appeals_created_at ON moderation_appeals(created_at);
       CREATE INDEX IF NOT EXISTS idx_system_metrics_metric_date ON system_metrics(metric_date);
       CREATE INDEX IF NOT EXISTS idx_favorite_profiles_user_id ON favorite_profiles(user_id);
       CREATE INDEX IF NOT EXISTS idx_favorite_profiles_favorite_user_id ON favorite_profiles(favorite_user_id);
@@ -602,6 +714,28 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_user_notifications_user_id ON user_notifications(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_notifications_is_read ON user_notifications(is_read);
       CREATE INDEX IF NOT EXISTS idx_user_notifications_created_at ON user_notifications(created_at);
+
+      -- Discovery queue deduplication table
+      CREATE TABLE IF NOT EXISTS discovery_queue_shown (
+        id SERIAL PRIMARY KEY,
+        viewer_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        shown_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        shown_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(viewer_user_id, shown_user_id)
+      );
+
+      -- Indexes for discovery performance
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_age ON dating_profiles(age);
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_location_lat ON dating_profiles(location_lat);
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_location_lng ON dating_profiles(location_lng);
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_created_at ON dating_profiles(created_at);
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_is_active ON dating_profiles(is_active) WHERE is_active = true;
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_gender ON dating_profiles(gender);
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_relationship_goals ON dating_profiles(relationship_goals);
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_body_type ON dating_profiles(body_type);
+      CREATE INDEX IF NOT EXISTS idx_dating_profiles_height ON dating_profiles(height);
+      CREATE INDEX IF NOT EXISTS idx_discovery_queue_shown_viewer ON discovery_queue_shown(viewer_user_id, shown_at);
+      CREATE INDEX IF NOT EXISTS idx_discovery_queue_shown_pair ON discovery_queue_shown(viewer_user_id, shown_user_id);
     `);
 
       console.log('✓ Database schema initialized');
@@ -630,3 +764,4 @@ module.exports = {
   init,
   isAvailable
 };
+

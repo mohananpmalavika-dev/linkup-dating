@@ -91,6 +91,12 @@ const DatingProfile = ({ onLogout }) => {
   const [showSubscription, setShowSubscription] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
 
+  // Phase 4: Analytics
+  const [analytics, setAnalytics] = useState(null);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [profileViews, setProfileViews] = useState({ viewers: [], isPremium: false, totalCount: 0 });
+  const [showProfileViews, setShowProfileViews] = useState(false);
+
   const completionChecklist = [
     {
       key: 'bio',
@@ -203,6 +209,12 @@ const DatingProfile = ({ onLogout }) => {
         matches: matchesData.matches?.length || 0,
         completion: completionData.profileCompletionPercent || profileData.profileCompletionPercent || 0
       });
+
+      // Phase 4: Load analytics
+      const analyticsData = await datingProfileService.getProfileAnalytics().catch(() => null);
+      if (analyticsData) {
+        setAnalytics(analyticsData);
+      }
     } catch (loadError) {
       setError('Failed to load profile');
       console.error(loadError);
@@ -434,6 +446,51 @@ const DatingProfile = ({ onLogout }) => {
     } finally {
       setSubscribing(false);
     }
+  };
+
+  // Phase 4: Analytics handlers
+  const handleLoadAnalytics = async () => {
+    try {
+      const analyticsData = await datingProfileService.getProfileAnalytics();
+      setAnalytics(analyticsData);
+      setShowAnalytics(true);
+    } catch (err) {
+      setError(err || 'Failed to load analytics');
+    }
+  };
+
+  const handleLoadProfileViews = async () => {
+    try {
+      const viewsData = await datingProfileService.getProfileViews();
+      setProfileViews(viewsData);
+      setShowProfileViews(true);
+    } catch (err) {
+      setError(err || 'Failed to load profile views');
+    }
+  };
+
+  const getLastActiveLabel = (lastActive) => {
+    if (!lastActive) return 'Not recently active';
+    const diff = Date.now() - new Date(lastActive).getTime();
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+    if (minutes === 0) return 'Active now';
+    if (minutes === 1) return 'Active 1 minute ago';
+    if (minutes > 1 && minutes >= 60) return `Active ${minutes} minutes ago`;
+    if (hours === 1) return 'Active 1 hour ago';
+    if (hours > 1 && hours >= 24) return `Active ${hours} hours ago`;
+    if (days === 1) return 'Active yesterday';
+    return `Active ${days} days ago`;
+  };
+
+  const getProfileStrengthColor = (score) => {
+    if (score >= 90) return '#4caf50';
+    if (score >= 75) return '#8bc34a';
+    if (score >= 50) return '#ffc107';
+    if (score >= 25) return '#ff9800';
+    return '#f44336';
   };
 
   if (showAccountSettings) {
@@ -1217,6 +1274,214 @@ const DatingProfile = ({ onLogout }) => {
               </div>
             ) : null}
           </div>
+
+          {/* Phase 4: Analytics & Insights Section */}
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>📊 Profile Analytics</h3>
+                <p>Insights about your profile performance and engagement.</p>
+              </div>
+              <button
+                type="button"
+                className="section-link-btn"
+                onClick={() => {
+                  if (!showAnalytics) {
+                    handleLoadAnalytics();
+                  } else {
+                    setShowAnalytics(false);
+                  }
+                }}
+              >
+                {showAnalytics ? 'Hide' : 'View'}
+              </button>
+            </div>
+
+            {showAnalytics && analytics ? (
+              <div className="analytics-panel">
+                {/* Profile Strength */}
+                <div className="analytics-card">
+                  <h4>Profile Strength</h4>
+                  <div className="strength-meter">
+                    <div
+                      className="strength-bar"
+                      style={{
+                        width: `${analytics.profileStrength?.score || 0}%`,
+                        backgroundColor: getProfileStrengthColor(analytics.profileStrength?.score || 0)
+                      }}
+                    />
+                    <span className="strength-score">{analytics.profileStrength?.score || 0}/100</span>
+                  </div>
+                  <p className="strength-level">
+                    Level: <strong>{analytics.profileStrength?.level || 'beginner'}</strong>
+                  </p>
+                  {analytics.profileStrength?.recommendations?.length > 0 ? (
+                    <div className="recommendations-list">
+                      <p><strong>💡 Recommendations:</strong></p>
+                      <ul>
+                        {analytics.profileStrength.recommendations.map((rec, idx) => (
+                          <li key={idx}>{rec}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <p className="strength-excellent">🎉 Your profile is excellent!</p>
+                  )}
+                </div>
+
+                {/* Last Active */}
+                <div className="analytics-card">
+                  <h4>Activity Status</h4>
+                  <p className="last-active-label">
+                    {getLastActiveLabel(analytics.lastActive)}
+                  </p>
+                </div>
+
+                {/* Views Stats */}
+                <div className="analytics-card">
+                  <h4>Profile Views</h4>
+                  <div className="views-stats-grid">
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.views?.total || 0}</span>
+                      <span className="view-stat-label">Total Views</span>
+                    </div>
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.views?.last7Days || 0}</span>
+                      <span className="view-stat-label">Last 7 Days</span>
+                    </div>
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.views?.last30Days || 0}</span>
+                      <span className="view-stat-label">Last 30 Days</span>
+                    </div>
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.views?.uniqueViewers || 0}</span>
+                      <span className="view-stat-label">Unique Viewers</span>
+                    </div>
+                  </div>
+
+                  {/* Daily Trend */}
+                  {analytics.views?.dailyTrend?.length > 0 ? (
+                    <div className="daily-trend">
+                      <p><strong>7-Day Trend:</strong></p>
+                      <div className="trend-bars">
+                        {analytics.views.dailyTrend.map((day, idx) => (
+                          <div key={idx} className="trend-bar-item">
+                            <div
+                              className="trend-bar"
+                              style={{
+                                height: `${Math.max(4, (day.count / Math.max(...analytics.views.dailyTrend.map(d => d.count))) * 40)}px`
+                              }}
+                            />
+                            <span className="trend-date">{new Date(day.date).toLocaleDateString('en', { weekday: 'short' })}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    className="btn-edit"
+                    onClick={handleLoadProfileViews}
+                    style={{ marginTop: '12px' }}
+                  >
+                    👁️ See Who Viewed Your Profile
+                  </button>
+                </div>
+
+                {/* Interactions Stats */}
+                <div className="analytics-card">
+                  <h4>Interactions</h4>
+                  <div className="interactions-stats-grid">
+                    <div className="interaction-stat">
+                      <span className="interaction-stat-value">{analytics.interactions?.likesSent || 0}</span>
+                      <span className="interaction-stat-label">Likes Sent</span>
+                    </div>
+                    <div className="interaction-stat">
+                      <span className="interaction-stat-value">{analytics.interactions?.likesReceived || 0}</span>
+                      <span className="interaction-stat-label">Likes Received</span>
+                    </div>
+                    <div className="interaction-stat">
+                      <span className="interaction-stat-value">{analytics.interactions?.superlikesSent || 0}</span>
+                      <span className="interaction-stat-label">Superlikes Sent</span>
+                    </div>
+                    <div className="interaction-stat">
+                      <span className="interaction-stat-value">{analytics.interactions?.superlikesReceived || 0}</span>
+                      <span className="interaction-stat-label">Superlikes Received</span>
+                    </div>
+                    <div className="interaction-stat">
+                      <span className="interaction-stat-value">{analytics.interactions?.totalMatches || 0}</span>
+                      <span className="interaction-stat-label">Total Matches</span>
+                    </div>
+                    <div className="interaction-stat">
+                      <span className="interaction-stat-value">{analytics.interactions?.passesSent || 0}</span>
+                      <span className="interaction-stat-label">Passes</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : showAnalytics && !analytics ? (
+              <p>Loading analytics...</p>
+            ) : null}
+          </div>
+
+          {/* Phase 4: Profile Views Modal */}
+          {showProfileViews && (
+            <div className="profile-views-modal">
+              <div className="profile-views-content">
+                <div className="section-header-row">
+                  <h3>👁️ Who Viewed Your Profile</h3>
+                  <button
+                    type="button"
+                    className="section-link-btn"
+                    onClick={() => setShowProfileViews(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {!profileViews.isPremium && profileViews.viewers?.length > 0 ? (
+                  <div className="premium-upsell">
+                    <p>🔒 Upgrade to Premium to see who viewed your profile</p>
+                    <p>{profileViews.totalCount} people have viewed your profile</p>
+                  </div>
+                ) : null}
+
+                {profileViews.viewers?.length > 0 ? (
+                  <div className="viewers-list">
+                    {profileViews.viewers.map((viewer) => (
+                      <div key={viewer.userId} className={`viewer-card ${!viewer.isRevealed ? 'blurred' : ''}`}>
+                        <div
+                          className="viewer-photo"
+                          style={{
+                            backgroundImage: viewer.photoUrl && viewer.isRevealed
+                              ? `url(${viewer.photoUrl})`
+                              : 'linear-gradient(135deg, #667eea, #764ba2)'
+                          }}
+                        />
+                        <div className="viewer-info">
+                          {viewer.isRevealed ? (
+                            <>
+                              <strong>{viewer.firstName}, {viewer.age}</strong>
+                              <span>{viewer.location?.city}</span>
+                            </>
+                          ) : (
+                            <>
+                              <strong>Someone</strong>
+                              <span>Upgrade to see</span>
+                            </>
+                          )}
+                          <span className="viewed-at">{new Date(viewer.viewedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p>No profile views yet. Complete your profile to get more visibility!</p>
+                )}
+              </div>
+            </div>
+          )}
 
           {error ? (
             <div className="profile-section">

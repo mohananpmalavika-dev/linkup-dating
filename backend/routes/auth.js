@@ -12,6 +12,7 @@ const {
   isConfiguredAdminEmail,
   syncConfiguredAdminForEmail
 } = require('../utils/adminAccess');
+const { getActiveBanForUser } = require('../utils/moderation');
 const { storeOTP, getOTP, incrementOTPAttempts, deleteOTP, findOTPByRecipient, MAX_OTP_ATTEMPTS } = require('../utils/redis');
 
 // Email transporter configuration - recreated on each request to ensure env vars are loaded
@@ -309,6 +310,22 @@ const generateToken = (userRecordOrId) => {
   );
 };
 
+const respondWithActiveBan = async (res, userId) => {
+  const activeBan = await getActiveBanForUser(userId);
+
+  if (!activeBan) {
+    return false;
+  }
+
+  res.status(403).json({
+    error: 'Your account is currently restricted by moderation.',
+    code: 'ACCOUNT_RESTRICTED',
+    ban: activeBan
+  });
+
+  return true;
+};
+
 // SIGNUP
 router.post('/signup', async (req, res) => {
   try {
@@ -411,6 +428,10 @@ router.post('/login', async (req, res) => {
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    if (await respondWithActiveBan(res, user.id)) {
+      return;
     }
 
     const token = generateToken(user);
@@ -531,6 +552,10 @@ router.get('/verify', async (req, res) => {
         userRecord.is_admin = true;
       }
 
+      if (await respondWithActiveBan(res, userRecord.id)) {
+        return;
+      }
+
       res.json({
         valid: true,
         user: {
@@ -546,6 +571,87 @@ router.get('/verify', async (req, res) => {
       res.status(500).json({ valid: false, error: 'Failed to verify token' });
     }
   });
+});
+
+// SUBMIT A MODERATION APPEAL
+router.post('/appeals', async (req, res) => {
+  try {
+    const normalizedEmail = normalizeRecipient(req.body?.email);
+    const message = String(req.body?.message || '').trim();
+    const subject = String(req.body?.subject || 'Account moderation appeal').trim();
+    const contactEmail = normalizeRecipient(req.body?.contactEmail) || normalizedEmail;
+
+    if (!normalizedEmail || !message) {
+      return res.status(400).json({ error: 'Email and appeal message are required' });
+    }
+
+    const userResult = await db.query(
+      `SELECT u.id, u.email,
+              latest_ban.id as ban_id,
+              latest_ban.status as ban_status
+       FROM users u
+       LEFT JOIN LATERAL (
+         SELECT id, status
+         FROM user_bans
+         WHERE user_id = u.id
+         ORDER BY issued_at DESC, id DESC
+         LIMIT 1
+       ) latest_ban ON TRUE
+       WHERE LOWER(u.email) = LOWER($1)
+       LIMIT 1`,
+      [normalizedEmail]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No account found for that email address' });
+    }
+
+    const userRecord = userResult.rows[0];
+
+    if (!userRecord.ban_id) {
+      return res.status(400).json({ error: 'There is no moderation action available to appeal for this account' });
+    }
+
+    const existingAppeal = await db.query(
+      `SELECT id
+       FROM moderation_appeals
+       WHERE user_id = $1
+         AND COALESCE(ban_id, 0) = COALESCE($2, 0)
+         AND status = 'pending'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userRecord.id, userRecord.ban_id]
+    );
+
+    if (existingAppeal.rows.length > 0) {
+      return res.status(409).json({ error: 'There is already a pending appeal for this moderation action' });
+    }
+
+    const appealResult = await db.query(
+      `INSERT INTO moderation_appeals (
+         user_id,
+         ban_id,
+         subject,
+         message,
+         contact_email
+       )
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, created_at`,
+      [userRecord.id, userRecord.ban_id, subject, message, contactEmail]
+    );
+
+    await spamFraudService.refreshSystemMetrics();
+
+    res.status(201).json({
+      success: true,
+      message: 'Appeal submitted successfully',
+      appealId: appealResult.rows[0].id,
+      createdAt: appealResult.rows[0].created_at
+    });
+  } catch (err) {
+    console.error('Submit appeal error:', err);
+    res.status(500).json({ error: 'Failed to submit appeal' });
+  }
 });
 
 // GET CURRENT USER
@@ -938,6 +1044,11 @@ router.post('/verify-otp', async (req, res) => {
         username: profileRecord?.username || userRecord.username,
         first_name: profileRecord?.first_name || userRecord.first_name
       });
+
+      if (await respondWithActiveBan(res, userRecord.id)) {
+        return;
+      }
+
       token = generateToken(userRecord);
       needsUsernameSetup = !(profileRecord?.username || userRecord.username);
 

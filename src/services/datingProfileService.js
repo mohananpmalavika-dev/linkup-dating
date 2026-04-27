@@ -452,6 +452,42 @@ export const datingProfileService = {
   },
 
   /**
+   * Get smart discovery queue (personalized multi-factor ranking)
+   */
+  getDiscoveryQueue: async (page = 1, limit = 10) => {
+    try {
+      const response = await axios.get(`${API_URL}/discovery-queue`, { params: { page, limit } });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch discovery queue';
+    }
+  },
+
+  /**
+   * Get trending profiles
+   */
+  getTrendingProfiles: async (limit = 10) => {
+    try {
+      const response = await axios.get(`${API_URL}/trending`, { params: { limit } });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch trending profiles';
+    }
+  },
+
+  /**
+   * Get new profiles
+   */
+  getNewProfiles: async (limit = 10) => {
+    try {
+      const response = await axios.get(`${API_URL}/new-profiles`, { params: { limit } });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch new profiles';
+    }
+  },
+
+  /**
    * Rewind last pass (undo swipe left)
    */
   rewindPass: async () => {
@@ -690,6 +726,70 @@ export const datingProfileService = {
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to decline request';
+    }
+  },
+
+  // ========== PHASE 4: ADVANCED PROFILE ANALYTICS & INSIGHTS ==========
+
+  /**
+   * Record a profile view
+   */
+  recordProfileView: async (userId) => {
+    try {
+      const response = await axios.post(`${API_URL}/profiles/${userId}/view`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to record profile view';
+    }
+  },
+
+  /**
+   * Get profile analytics (strength, views, interactions)
+   */
+  getProfileAnalytics: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/profiles/me/analytics`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get analytics';
+    }
+  },
+
+  /**
+   * Get who viewed my profile (requires premium)
+   */
+  getProfileViews: async (limit = 20, page = 1) => {
+    try {
+      const response = await axios.get(`${API_URL}/profiles/me/profile-views`, {
+        params: { limit, page }
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get profile views';
+    }
+  },
+
+  /**
+   * Get compatibility score with a profile
+   */
+  getCompatibility: async (userId) => {
+    try {
+      const response = await axios.get(`${API_URL}/profiles/${userId}/compatibility`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get compatibility';
+    }
+  },
+
+  /**
+   * Send heartbeat to update last active
+   */
+  sendHeartbeat: async () => {
+    try {
+      const response = await axios.post(`${API_URL}/profiles/me/heartbeat`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to update activity';
     }
   },
 };

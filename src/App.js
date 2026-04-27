@@ -416,6 +416,24 @@ const AppContent = () => {
     };
   }, [currentUser, isAdminSession, isAuthenticated, refreshDatingCounts]);
 
+  useEffect(() => {
+    if (!isAuthenticated || isAdminSession) {
+      return undefined;
+    }
+
+    // Send heartbeat every 5 minutes to update last active
+    const heartbeatInterval = window.setInterval(() => {
+      datingProfileService.sendHeartbeat().catch(() => {});
+    }, 5 * 60 * 1000);
+
+    // Send initial heartbeat
+    datingProfileService.sendHeartbeat().catch(() => {});
+
+    return () => {
+      window.clearInterval(heartbeatInterval);
+    };
+  }, [isAuthenticated, isAdminSession]);
+
   const handleLoginSuccess = (userData, token) => {
     if (!token) {
       return;
