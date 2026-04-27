@@ -31,6 +31,30 @@ module.exports = (sequelize, DataTypes) => {
         len: [10, 500]
       }
     },
+    requestType: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'intent',
+      field: 'request_type',
+      validate: {
+        isIn: [['intent', 'message_request']]
+      }
+    },
+    isPriority: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_priority'
+    },
+    deliveryBand: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'standard',
+      field: 'delivery_band',
+      validate: {
+        isIn: [['limited', 'standard', 'priority']]
+      }
+    },
     status: {
       type: DataTypes.STRING(20),
       allowNull: false,

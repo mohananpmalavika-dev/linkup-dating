@@ -24,6 +24,15 @@ const DISCOVERY_HUB_TABS = [
   { key: 'presets', label: 'Presets' }
 ];
 const PRESET_NAME_SUGGESTIONS = ['Nearby', 'Serious', 'Creative', 'Weekend vibe'];
+const SCORE_BREAKDOWN_META = {
+  compatibility: { label: 'Compatibility', fillClass: '' },
+  behavioral: { label: 'Behavioral', fillClass: 'behavioral' },
+  recency: { label: 'Recency', fillClass: 'recency' },
+  outcomes: { label: 'Outcomes', fillClass: 'outcomes' },
+  trust: { label: 'Trust', fillClass: 'trust' },
+  trending: { label: 'Trending', fillClass: 'trending' },
+  diversity: { label: 'Diversity', fillClass: 'diversity' }
+};
 
 const buildDiscoveryFilters = (filters) => {
   const params = {};
@@ -108,6 +117,10 @@ const buildRecommendationReasons = (profile) => {
 
   const reasons = [];
   const activityHint = getActivityHint(profile.lastActive);
+
+  if (Array.isArray(profile.rankingHighlights)) {
+    reasons.push(...profile.rankingHighlights);
+  }
 
   if (Array.isArray(profile.compatibilityReasons)) {
     reasons.push(...profile.compatibilityReasons);
@@ -786,6 +799,14 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const scoreBreakdown = currentProfile?.scoreBreakdown;
   const activityHint = getActivityHint(currentProfile?.lastActive);
   const recommendationReasons = buildRecommendationReasons(currentProfile);
+  const scoreBreakdownRows = Object.entries(scoreBreakdown || {})
+    .filter(([, value]) => Number.isFinite(Number(value)))
+    .map(([key, value]) => ({
+      key,
+      value: Math.max(0, Math.min(100, Math.round(Number(value)))),
+      label: SCORE_BREAKDOWN_META[key]?.label || key,
+      fillClass: SCORE_BREAKDOWN_META[key]?.fillClass || ''
+    }));
   const isFavorite = currentProfile?.userId ? favoriteUserIds.has(String(currentProfile.userId)) : false;
 
   const renderFilterPanel = () => (
@@ -1128,11 +1149,18 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
                   {showScoreBreakdown && scoreBreakdown ? (
                     <div className="score-breakdown">
-                      <div className="score-row"><span>Compatibility</span><div className="score-bar"><div className="score-fill" style={{ width: `${scoreBreakdown.compatibility}%` }}></div></div><b>{scoreBreakdown.compatibility}%</b></div>
-                      <div className="score-row"><span>Behavioral</span><div className="score-bar"><div className="score-fill behavioral" style={{ width: `${scoreBreakdown.behavioral}%` }}></div></div><b>{scoreBreakdown.behavioral}%</b></div>
-                      <div className="score-row"><span>Recency</span><div className="score-bar"><div className="score-fill recency" style={{ width: `${scoreBreakdown.recency}%` }}></div></div><b>{scoreBreakdown.recency}%</b></div>
-                      <div className="score-row"><span>Trending</span><div className="score-bar"><div className="score-fill trending" style={{ width: `${scoreBreakdown.trending}%` }}></div></div><b>{scoreBreakdown.trending}%</b></div>
-                      <div className="score-row"><span>Diversity</span><div className="score-bar"><div className="score-fill diversity" style={{ width: `${scoreBreakdown.diversity}%` }}></div></div><b>{scoreBreakdown.diversity}%</b></div>
+                      {scoreBreakdownRows.map((row) => (
+                        <div key={row.key} className="score-row">
+                          <span>{row.label}</span>
+                          <div className="score-bar">
+                            <div
+                              className={`score-fill ${row.fillClass}`.trim()}
+                              style={{ width: `${row.value}%` }}
+                            ></div>
+                          </div>
+                          <b>{row.value}%</b>
+                        </div>
+                      ))}
                     </div>
                   ) : null}
                 </div>

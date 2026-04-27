@@ -48,6 +48,16 @@ module.exports = (sequelize) => {
         type: DataTypes.DATE,
         comment: 'When decision was undone'
       },
+      pass_reason: {
+        type: DataTypes.ENUM('age', 'distance', 'interests', 'goals', 'body_type', 'height', 'other'),
+        allowNull: true,
+        comment: 'Why the profile was passed (only for pass decisions)'
+      },
+      pass_reasons_json: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        comment: 'Additional pass reasons in JSON format for future analysis'
+      },
       created_at: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW
@@ -60,7 +70,8 @@ module.exports = (sequelize) => {
         { fields: ['user_id'] },
         { fields: ['user_id', 'decision_timestamp'] },
         { fields: ['user_id', 'decision_type'] },
-        { fields: ['user_id', 'profile_user_id'] }
+        { fields: ['user_id', 'profile_user_id'] },
+        { fields: ['user_id', 'pass_reason'] }
       ]
     }
   );

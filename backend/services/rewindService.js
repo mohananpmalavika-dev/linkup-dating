@@ -234,6 +234,96 @@ const getPassReasonMessage = (reason) => {
   return messages[reason.primary] || messages.other;
 };
 
+/**
+ * Calculate rewind availability based on subscription
+ */
+const getRewindAvailability = (isPremium, rewindsUsedToday) => {
+  const dailyLimit = isPremium ? 999 : 3; // Premium: effectively unlimited
+  const remaining = Math.max(0, dailyLimit - rewindsUsedToday);
+  
+  return {
+    isPremium,
+    dailyLimit,
+    usedToday: rewindsUsedToday,
+    remainingToday: remaining,
+    canRewind: remaining > 0,
+    message: isPremium ? 'Unlimited rewinds' : `${remaining} rewinds remaining today`
+  };
+};
+
+/**
+ * Get passed profiles history (past 7 days)
+ * Returns array with profile info and pass reason
+ */
+const getPassedProfilesHistory = (decisions) => {
+  // Filter for pass decisions only in past 7 days
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  
+  return decisions
+    .filter(d => d.decision_type === 'pass' && new Date(d.decision_timestamp) > sevenDaysAgo)
+    .sort((a, b) => new Date(b.decision_timestamp) - new Date(a.decision_timestamp))
+    .map(d => ({
+      profileId: d.profile_user_id,
+      passedAt: d.decision_timestamp,
+      reason: d.pass_reason,
+      reasonJson: d.pass_reasons_json,
+      profile: d.profile // Expects profile to be joined
+    }));
+};
+
+/**
+ * Group passed profiles by reason with counts
+ */
+const groupPassedByReason = (passedProfiles) => {
+  const reasonGroups = {
+    age: [],
+    distance: [],
+    interests: [],
+    goals: [],
+    body_type: [],
+    height: [],
+    other: []
+  };
+
+  passedProfiles.forEach(item => {
+    const reason = item.reason || 'other';
+    if (reasonGroups[reason]) {
+      reasonGroups[reason].push(item);
+    } else {
+      reasonGroups[reason].push(item);
+    }
+  });
+
+  // Transform to response format with totals
+  return Object.entries(reasonGroups)
+    .filter(([_, profiles]) => profiles.length > 0)
+    .map(([reason, profiles]) => ({
+      reason,
+      label: getReasonLabel(reason),
+      icon: getReasonIcon(reason),
+      count: profiles.length,
+      profiles: profiles.map(p => ({
+        profileId: p.profileId,
+        passedAt: p.passedAt,
+        profile: p.profile
+      }))
+    }))
+    .sort((a, b) => b.count - a.count);
+};
+
+/**
+ * Record rewind usage for quota tracking
+ */
+const recordRewindUsage = (rewindDetail) => {
+  return {
+    profile_id: rewindDetail.profileId,
+    timestamp: new Date(),
+    reason: rewindDetail.reason,
+    restored_at: new Date()
+  };
+};
+
 module.exports = {
   categorizePassReason,
   formatUndoHistoryItem,
@@ -241,5 +331,9 @@ module.exports = {
   canUserRewind,
   getPassReasonMessage,
   getReasonLabel,
-  getReasonIcon
+  getReasonIcon,
+  getRewindAvailability,
+  getPassedProfilesHistory,
+  groupPassedByReason,
+  recordRewindUsage
 };

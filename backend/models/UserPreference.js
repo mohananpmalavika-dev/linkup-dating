@@ -118,6 +118,14 @@ module.exports = (sequelize, DataTypes) => {
         lastInteractionAt: null
       },
       field: 'learning_profile'
+    },
+    matchManagement: {
+      type: DataTypes.JSONB,
+      defaultValue: {
+        archivedMatches: {},
+        snoozedMatches: {}
+      },
+      field: 'match_management'
     }
   }, {
     tableName: 'user_preferences',

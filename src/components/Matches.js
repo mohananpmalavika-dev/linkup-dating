@@ -4,6 +4,7 @@ import '../styles/Matches.css';
 import datingProfileService from '../services/datingProfileService';
 import { getActionableMatches } from '../utils/datingRescue';
 import { buildActionInboxItems } from '../utils/actionInbox';
+import { calculateConversationHealth } from '../utils/datingPhaseTwo';
 
 /**
  * Matches Component
@@ -48,7 +49,7 @@ const Matches = ({
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
   const [navigationNotice, setNavigationNotice] = useState('');
-  const [filter] = useState('all');
+  const [matchStateFilter, setMatchStateFilter] = useState('active');
   const [activeTab, setActiveTab] = useState('matches'); // 'matches' | 'likes' | 'requests'
   const [whoLikedMe, setWhoLikedMe] = useState([]);
   const [loadingWhoLiked, setLoadingWhoLiked] = useState(false);
@@ -56,6 +57,7 @@ const Matches = ({
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [requestActionLoading, setRequestActionLoading] = useState(null);
+  const [matchStateLoadingId, setMatchStateLoadingId] = useState(null);
   const isMessagesPage = pageLabel === 'Messages';
 
   useEffect(() => {
@@ -181,6 +183,32 @@ const Matches = ({
     }
   };
 
+  const handleUpdateMatchState = async (matchId, state) => {
+    setMatchStateLoadingId(matchId);
+
+    try {
+      const response = await datingProfileService.updateMatchState(matchId, {
+        state,
+        snoozedUntil:
+          state === 'snoozed'
+            ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+            : null
+      });
+
+      setMatches((currentMatches) =>
+        currentMatches.map((match) => (
+          String(match.id) === String(matchId)
+            ? { ...match, management: response.management }
+            : match
+        ))
+      );
+    } catch (stateError) {
+      setActionError(typeof stateError === 'string' ? stateError : 'Failed to update match state');
+    } finally {
+      setMatchStateLoadingId(null);
+    }
+  };
+
   const handleLikeBack = async (like) => {
     if (!like?.from_user_id) {
       return;
@@ -227,26 +255,25 @@ const Matches = ({
 
   const filteredMatches = matches
     .filter((match) => {
-      if (filter === 'unread') {
-        return (match.unreadCount || 0) > 0;
+      const managementState = match.management?.state || 'active';
+
+      if (matchStateFilter !== 'all' && managementState !== matchStateFilter) {
+        return false;
       }
 
       return true;
     })
     .sort((leftMatch, rightMatch) => {
-      if (filter === 'recent') {
-        const leftDate = leftMatch.lastMessageAt || leftMatch.matchedAt || leftMatch.createdAt || '';
-        const rightDate = rightMatch.lastMessageAt || rightMatch.matchedAt || rightMatch.createdAt || '';
-        return new Date(rightDate).getTime() - new Date(leftDate).getTime();
-      }
-
-      return 0;
+      const leftDate = leftMatch.lastMessageAt || leftMatch.matchedAt || leftMatch.createdAt || '';
+      const rightDate = rightMatch.lastMessageAt || rightMatch.matchedAt || rightMatch.createdAt || '';
+      return new Date(rightDate).getTime() - new Date(leftDate).getTime();
     });
 
   const messageMatches = matches
     .filter((match) => {
-      if (filter === 'unread') {
-        return (match.unreadCount || 0) > 0;
+      const managementState = match.management?.state || 'active';
+      if (matchStateFilter !== 'all' && managementState !== matchStateFilter) {
+        return false;
       }
       return Boolean(match.lastMessage || match.messageCount > 0);
     })
@@ -258,7 +285,9 @@ const Matches = ({
 
   const displayMatches = isMessagesPage ? messageMatches : filteredMatches;
   const actionableMatches = useMemo(
-    () => getActionableMatches(matches).slice(0, 3),
+    () => getActionableMatches(
+      matches.filter((match) => !match.management?.isArchived && !match.management?.isSnoozed)
+    ).slice(0, 3),
     [matches]
   );
   const actionInboxItems = useMemo(
@@ -372,32 +401,48 @@ const Matches = ({
       <div className="matches-header">
         <h2>{isMessagesPage ? 'Inbox' : 'My Matches'} ({headerCount})</h2>
         {!isMessagesPage ? (
-          <div className="filter-tabs">
-            <button
-              className={`filter-btn ${activeTab === 'matches' ? 'active' : ''}`}
-              onClick={() => setActiveTab('matches')}
-            >
-              Matches
-            </button>
-            <button
-              className={`filter-btn ${activeTab === 'likes' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('likes');
-                loadWhoLikedMe();
-              }}
-            >
-              Who Liked You
-            </button>
-            <button
-              className={`filter-btn ${activeTab === 'requests' ? 'active' : ''}`}
-              onClick={() => {
-                setActiveTab('requests');
-                loadMessageRequests();
-              }}
-            >
-              Requests {messageRequests.length > 0 ? `(${messageRequests.length})` : ''}
-            </button>
-          </div>
+          <>
+            <div className="filter-tabs">
+              <button
+                className={`filter-btn ${activeTab === 'matches' ? 'active' : ''}`}
+                onClick={() => setActiveTab('matches')}
+              >
+                Matches
+              </button>
+              <button
+                className={`filter-btn ${activeTab === 'likes' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTab('likes');
+                  loadWhoLikedMe();
+                }}
+              >
+                Who Liked You
+              </button>
+              <button
+                className={`filter-btn ${activeTab === 'requests' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveTab('requests');
+                  loadMessageRequests();
+                }}
+              >
+                Requests {messageRequests.length > 0 ? `(${messageRequests.length})` : ''}
+              </button>
+            </div>
+
+            {activeTab === 'matches' ? (
+              <div className="filter-tabs match-state-tabs">
+                {['active', 'archived', 'snoozed', 'all'].map((state) => (
+                  <button
+                    key={state}
+                    className={`filter-btn ${matchStateFilter === state ? 'active' : ''}`}
+                    onClick={() => setMatchStateFilter(state)}
+                  >
+                    {state.charAt(0).toUpperCase() + state.slice(1)}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </>
         ) : (
           <p className="matches-header-copy">
             Real matches, safe dates, better conversations. Start with the items that need action first.
@@ -740,7 +785,10 @@ const Matches = ({
 
           {displayMatches.length > 0 ? (
             <div className="matches-list">
-              {displayMatches.map((match) => (
+              {displayMatches.map((match) => {
+                const conversationHealth = calculateConversationHealth({ match });
+
+                return (
                 <div key={match.id} className="match-item">
                   <div
                     className="match-photo"
@@ -769,6 +817,19 @@ const Matches = ({
                         ? `${match.lastMessage.text.substring(0, 50)}${match.lastMessage.text.length > 50 ? '...' : ''}`
                         : 'Start the conversation'}
                     </p>
+                    <div className="match-health-row">
+                      <span className={`match-health-pill ${conversationHealth.score >= 65 ? 'warm' : conversationHealth.score >= 45 ? 'steady' : 'cool'}`}>
+                        {conversationHealth.label} · {conversationHealth.score}
+                      </span>
+                      <span className="match-health-copy">{conversationHealth.nextBestMove}</span>
+                    </div>
+                    {match.management?.state && match.management.state !== 'active' ? (
+                      <p className="match-management-copy">
+                        {match.management.state === 'archived'
+                          ? 'Archived by you'
+                          : `Snoozed until ${new Date(match.management.snoozedUntil).toLocaleDateString()}`}
+                      </p>
+                    ) : null}
                     {match.journey ? (
                       <div className="match-journey">
                         <div className="match-journey-top">
@@ -840,13 +901,37 @@ const Matches = ({
                       <button onClick={() => onScheduleVideoCall?.(match, location.pathname)}>
                         Schedule Video Call
                       </button>
+                      {match.management?.state === 'active' ? (
+                        <button
+                          onClick={() => handleUpdateMatchState(match.id, 'archived')}
+                          disabled={matchStateLoadingId === match.id}
+                        >
+                          {matchStateLoadingId === match.id ? 'Saving...' : 'Archive'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleUpdateMatchState(match.id, 'active')}
+                          disabled={matchStateLoadingId === match.id}
+                        >
+                          {matchStateLoadingId === match.id ? 'Saving...' : 'Move To Active'}
+                        </button>
+                      )}
+                      {match.management?.state !== 'snoozed' ? (
+                        <button
+                          onClick={() => handleUpdateMatchState(match.id, 'snoozed')}
+                          disabled={matchStateLoadingId === match.id}
+                        >
+                          {matchStateLoadingId === match.id ? 'Saving...' : 'Snooze 3 Days'}
+                        </button>
+                      ) : null}
                       <button onClick={() => handleUnmatch(match.id)}>
                         Unmatch
                       </button>
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="no-matches">

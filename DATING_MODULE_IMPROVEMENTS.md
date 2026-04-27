@@ -417,6 +417,14 @@
 - [ ] Analytics Dashboard (#12) - 3-4 weeks
 - [ ] Profile Strength Analyzer (#13) - 2-3 weeks
 
+### **Phase 3 (3-6 months)** - Quality Growth Without Becoming a General Social App
+- [ ] Selective FRND-style engagement loops with lightweight audio prompts, themed interest rooms, and pre-match warm-up spaces
+- [ ] Keep all warm-up spaces gated and explicitly tied to dating intent
+- [ ] Recommendation engine v2 using reply rate, conversation length, date acceptance, and feedback outcomes in ranking
+- [ ] Referral rewards that optimize for activated, high-quality daters instead of raw installs
+- [ ] Women-safety and trust-first controls: quiet mode, stricter message gating, easy visibility controls, and stronger moderation escalation
+- [ ] Target +25% date completion rate, +15% 30-day retention, and +10% referral-to-activated-user quality
+
 ---
 
 ## 💰 Revenue Impact Estimate
@@ -451,6 +459,12 @@
 3. **Prototype**: Create mockups for top feature
 4. **Implement**: Start with Tier 1 quick wins
 5. **Measure**: Track engagement, response rates, conversion
+
+### Phase 3 Notes
+- Build on existing trust features rather than adding open-ended community surfaces.
+- Reuse current signals like `ConversationQualityMetric`, `DateCompletionFeedback`, and `FriendReferral` as inputs to the next ranking layer.
+- Treat referrals and warm-up spaces as quality filters first, acquisition levers second.
+- Safety controls should be especially easy to discover for women and other users who want tighter inbound control.
 
 ---
 

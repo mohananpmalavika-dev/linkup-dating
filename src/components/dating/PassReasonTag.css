@@ -1,0 +1,181 @@
+/* Pass Reason Tag Component Styles */
+
+.pass-reason-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+/* Sizes */
+.pass-reason-tag.size-small {
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.pass-reason-tag.size-large {
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+/* Icon */
+.pass-reason-tag .icon {
+  font-size: 14px;
+}
+
+.pass-reason-tag.size-small .icon {
+  font-size: 12px;
+}
+
+.pass-reason-tag.size-large .icon {
+  font-size: 16px;
+}
+
+/* Variants */
+
+/* Default variant */
+.pass-reason-tag.variant-default.color-age {
+  background: #ffeaa7;
+  color: #fdcb6e;
+}
+
+.pass-reason-tag.variant-default.color-distance {
+  background: #fabcff;
+  color: #c44fc7;
+}
+
+.pass-reason-tag.variant-default.color-interests {
+  background: #ffb3ba;
+  color: #e03e52;
+}
+
+.pass-reason-tag.variant-default.color-goals {
+  background: #ffb3d9;
+  color: #e85878;
+}
+
+.pass-reason-tag.variant-default.color-body_type {
+  background: #bae1ff;
+  color: #0066cc;
+}
+
+.pass-reason-tag.variant-default.color-height {
+  background: #c9e4ff;
+  color: #3399ff;
+}
+
+.pass-reason-tag.variant-default.color-other {
+  background: #ecf0f1;
+  color: #95a5a6;
+}
+
+/* Solid variant */
+.pass-reason-tag.variant-solid.color-age {
+  background: #fdcb6e;
+  color: white;
+}
+
+.pass-reason-tag.variant-solid.color-distance {
+  background: #c44fc7;
+  color: white;
+}
+
+.pass-reason-tag.variant-solid.color-interests {
+  background: #e03e52;
+  color: white;
+}
+
+.pass-reason-tag.variant-solid.color-goals {
+  background: #e85878;
+  color: white;
+}
+
+.pass-reason-tag.variant-solid.color-body_type {
+  background: #0066cc;
+  color: white;
+}
+
+.pass-reason-tag.variant-solid.color-height {
+  background: #3399ff;
+  color: white;
+}
+
+.pass-reason-tag.variant-solid.color-other {
+  background: #95a5a6;
+  color: white;
+}
+
+/* Outline variant */
+.pass-reason-tag.variant-outline.color-age {
+  background: transparent;
+  color: #fdcb6e;
+  border: 1px solid #fdcb6e;
+}
+
+.pass-reason-tag.variant-outline.color-distance {
+  background: transparent;
+  color: #c44fc7;
+  border: 1px solid #c44fc7;
+}
+
+.pass-reason-tag.variant-outline.color-interests {
+  background: transparent;
+  color: #e03e52;
+  border: 1px solid #e03e52;
+}
+
+.pass-reason-tag.variant-outline.color-goals {
+  background: transparent;
+  color: #e85878;
+  border: 1px solid #e85878;
+}
+
+.pass-reason-tag.variant-outline.color-body_type {
+  background: transparent;
+  color: #0066cc;
+  border: 1px solid #0066cc;
+}
+
+.pass-reason-tag.variant-outline.color-height {
+  background: transparent;
+  color: #3399ff;
+  border: 1px solid #3399ff;
+}
+
+.pass-reason-tag.variant-outline.color-other {
+  background: transparent;
+  color: #95a5a6;
+  border: 1px solid #95a5a6;
+}
+
+/* Hover effects */
+.pass-reason-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .pass-reason-tag {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+
+  .pass-reason-tag .icon {
+    font-size: 12px;
+  }
+
+  .pass-reason-tag.size-small {
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+
+  .pass-reason-tag.size-small .icon {
+    font-size: 11px;
+  }
+}

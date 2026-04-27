@@ -10,6 +10,11 @@ import notificationService from '../services/notificationService';
 import { getStoredUserData } from '../utils/auth';
 import { BACKEND_BASE_URL } from '../utils/api';
 import { getConversationRescuePlan } from '../utils/datingRescue';
+import {
+  buildLocalIdentityPack,
+  buildSmartRevivePrompts,
+  calculateConversationHealth
+} from '../utils/datingPhaseTwo';
 import '../styles/DatingMessaging.css';
 
 const REACTION_OPTIONS = ['❤️', '👍', '😂', '🔥', '👏'];
@@ -196,6 +201,7 @@ const DatingMessaging = ({
   const [securitySetupReady, setSecuritySetupReady] = useState(false);
   const [countdownNow, setCountdownNow] = useState(Date.now());
   const [showDatePlanner, setShowDatePlanner] = useState(Boolean(location.state?.focusPlanner));
+  const [matchStatePending, setMatchStatePending] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
@@ -212,10 +218,67 @@ const DatingMessaging = ({
   const sharedActionSuggestions = Array.isArray(journey?.sharedActions) ? journey.sharedActions : [];
   const notificationsAvailable = notificationService.getPermissionStatus().available;
   const icebreakers = useMemo(() => buildIcebreakers(activeMatch), [activeMatch]);
+  const identityPack = useMemo(() => buildLocalIdentityPack(activeMatch || {}, currentUser || {}), [activeMatch, currentUser]);
   const conversationRescuePlan = useMemo(
     () => getConversationRescuePlan(activeMatch, messages),
     [activeMatch, messages]
   );
+  const conversationHealth = useMemo(
+    () => calculateConversationHealth({
+      match: activeMatch || {},
+      messages,
+      currentUserId
+    }),
+    [activeMatch, currentUserId, messages]
+  );
+  const revivePrompts = useMemo(
+    () => buildSmartRevivePrompts({
+      match: activeMatch || {},
+      health: conversationHealth,
+      identityPack
+    }),
+    [activeMatch, conversationHealth, identityPack]
+  );
+  const phaseTwoRescueActions = useMemo(() => {
+    const baseActions = Array.isArray(conversationRescuePlan?.actions)
+      ? [...conversationRescuePlan.actions]
+      : [];
+
+    if (conversationHealth.readyForCall) {
+      baseActions.unshift({
+        id: 'ready-for-call',
+        type: 'message',
+        label: 'Ready for a call?',
+        message: 'This has felt easy so far. Want to do a quick 15-minute video vibe check this week?'
+      });
+    }
+
+    revivePrompts.slice(0, 2).forEach((prompt, index) => {
+      if (!baseActions.some((action) => action.message === prompt)) {
+        baseActions.push({
+          id: `phase-two-revive-${index}`,
+          type: 'message',
+          label: index === 0 ? 'Revive gently' : 'Try a better opener',
+          message: prompt
+        });
+      }
+    });
+
+    if (activeMatchId) {
+      baseActions.push({
+        id: 'match-archive',
+        type: 'archive',
+        label: 'Archive for now'
+      });
+      baseActions.push({
+        id: 'match-snooze',
+        type: 'snooze',
+        label: 'Snooze 3 days'
+      });
+    }
+
+    return baseActions;
+  }, [activeMatchId, conversationHealth.readyForCall, conversationRescuePlan, revivePrompts]);
   const showComposerStarters = messages.length < 3 && icebreakers.length > 0;
 
   const showStatus = useCallback((message, tone = 'info') => {
@@ -605,6 +668,46 @@ const DatingMessaging = ({
     inputRef.current?.focus();
   };
 
+  const handleMatchStateUpdate = async (state) => {
+    if (!activeMatchId) {
+      return;
+    }
+
+    setMatchStatePending(state);
+    setError('');
+
+    try {
+      const response = await datingProfileService.updateMatchState(activeMatchId, {
+        state,
+        snoozedUntil:
+          state === 'snoozed'
+            ? new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
+            : null
+      });
+
+      setConversationMatch((currentMatch) => (
+        currentMatch
+          ? {
+              ...currentMatch,
+              management: response.management
+            }
+          : currentMatch
+      ));
+      showStatus(
+        state === 'archived'
+          ? 'Conversation archived. You can bring it back from your matches list.'
+          : state === 'snoozed'
+            ? 'Conversation snoozed for 3 days.'
+            : 'Conversation moved back to active.',
+        'success'
+      );
+    } catch (stateError) {
+      setError(typeof stateError === 'string' ? stateError : 'Failed to update conversation state');
+    } finally {
+      setMatchStatePending('');
+    }
+  };
+
   const handleConversationRescueAction = (action) => {
     if (!action) {
       return;
@@ -612,6 +715,16 @@ const DatingMessaging = ({
 
     if (action.type === 'plan') {
       setShowDatePlanner(true);
+      return;
+    }
+
+    if (action.type === 'archive') {
+      void handleMatchStateUpdate('archived');
+      return;
+    }
+
+    if (action.type === 'snooze') {
+      void handleMatchStateUpdate('snoozed');
       return;
     }
 

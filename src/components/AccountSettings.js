@@ -36,6 +36,40 @@ const PREFERENCE_MODE_OPTIONS = [
     description: 'Use dealbreakers only and stay flexible with the rest.'
   }
 ];
+const MESSAGE_GATING_OPTIONS = [
+  {
+    value: 'balanced',
+    label: 'Balanced',
+    description: 'Allow normal intros while still filtering hidden or quiet profiles.'
+  },
+  {
+    value: 'strict',
+    label: 'Strict',
+    description: 'Only let well-completed, trusted profiles send a first intro.'
+  },
+  {
+    value: 'trusted_only',
+    label: 'Trusted Only',
+    description: 'Reserve first-message access for the strongest trust signals.'
+  }
+];
+const PROFILE_VISIBILITY_OPTIONS = [
+  {
+    value: 'discoverable',
+    label: 'Discoverable',
+    description: 'Show up normally in dating discovery.'
+  },
+  {
+    value: 'limited',
+    label: 'Limited',
+    description: 'Only show to verified or high-trust members.'
+  },
+  {
+    value: 'hidden',
+    label: 'Hidden',
+    description: 'Pause new discovery while keeping your account intact.'
+  }
+];
 const DEAL_BREAKER_QUESTIONS = [
   {
     id: 'enforceAgeRange',
@@ -176,7 +210,19 @@ const createDefaultPreferences = () => ({
   },
   preferenceFlexibility: {
     mode: 'balanced',
-    learnFromActivity: true
+    learnFromActivity: true,
+    engagementLoops: {
+      audioPromptsEnabled: true,
+      warmUpSpacesEnabled: true,
+      datingIntentOnly: true
+    },
+    safetyControls: {
+      quietMode: false,
+      messageGating: 'balanced',
+      profileVisibility: 'discoverable',
+      hideActivityStatus: false,
+      autoEscalateModeration: true
+    }
   },
   compatibilityAnswers: COMPATIBILITY_QUESTIONS.reduce((answers, question) => ({
     ...answers,
@@ -268,7 +314,15 @@ const AccountSettings = ({ onBack, onLogout }) => {
         },
         preferenceFlexibility: {
           ...defaults.preferenceFlexibility,
-          ...(data.preferenceFlexibility || {})
+          ...(data.preferenceFlexibility || {}),
+          engagementLoops: {
+            ...defaults.preferenceFlexibility.engagementLoops,
+            ...(data.preferenceFlexibility?.engagementLoops || {})
+          },
+          safetyControls: {
+            ...defaults.preferenceFlexibility.safetyControls,
+            ...(data.preferenceFlexibility?.safetyControls || {})
+          }
         },
         compatibilityAnswers: {
           ...defaults.compatibilityAnswers,
@@ -326,6 +380,19 @@ const AccountSettings = ({ onBack, onLogout }) => {
       dealBreakers: {
         ...prev.dealBreakers,
         [field]: !prev.dealBreakers[field]
+      }
+    }));
+  };
+
+  const updatePreferenceFlexibilitySetting = (section, field, value) => {
+    setPreferences((prev) => ({
+      ...prev,
+      preferenceFlexibility: {
+        ...prev.preferenceFlexibility,
+        [section]: {
+          ...(prev.preferenceFlexibility?.[section] || {}),
+          [field]: value
+        }
       }
     }));
   };
@@ -602,6 +669,163 @@ const AccountSettings = ({ onBack, onLogout }) => {
                 className="toggle-switch"
               />
             </label>
+          </div>
+
+          <div className="preferences-group">
+            <h3>Warm-Up Spaces</h3>
+            <p className="preferences-helper">
+              Keep pre-match engagement lightweight and dating-first. These spaces stay gated and
+              never turn into a general social feed.
+            </p>
+            <div className="toggle-list">
+              <label className="toggle-item">
+                <div className="toggle-info">
+                  <strong>Warm-Up Spaces</strong>
+                  <span>Join small themed rooms before matching when you want a softer start.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={preferences.preferenceFlexibility.engagementLoops.warmUpSpacesEnabled}
+                  onChange={(event) =>
+                    updatePreferenceFlexibilitySetting(
+                      'engagementLoops',
+                      'warmUpSpacesEnabled',
+                      event.target.checked
+                    )
+                  }
+                  className="toggle-switch"
+                />
+              </label>
+              <label className="toggle-item">
+                <div className="toggle-info">
+                  <strong>Audio Prompts</strong>
+                  <span>Allow optional short audio warm-ups when a room supports voice-first intros.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={preferences.preferenceFlexibility.engagementLoops.audioPromptsEnabled}
+                  onChange={(event) =>
+                    updatePreferenceFlexibilitySetting(
+                      'engagementLoops',
+                      'audioPromptsEnabled',
+                      event.target.checked
+                    )
+                  }
+                  className="toggle-switch"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div className="preferences-group">
+            <h3>Trust-First Controls</h3>
+            <p className="preferences-helper">
+              Shape how visible and reachable you are before a match, with stronger defaults for
+              privacy and safety.
+            </p>
+
+            <div className="toggle-list">
+              <label className="toggle-item">
+                <div className="toggle-info">
+                  <strong>Quiet Mode</strong>
+                  <span>Temporarily stop new intros while keeping your existing matches intact.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={preferences.preferenceFlexibility.safetyControls.quietMode}
+                  onChange={(event) =>
+                    updatePreferenceFlexibilitySetting(
+                      'safetyControls',
+                      'quietMode',
+                      event.target.checked
+                    )
+                  }
+                  className="toggle-switch"
+                />
+              </label>
+              <label className="toggle-item">
+                <div className="toggle-info">
+                  <strong>Hide Activity Status</strong>
+                  <span>Remove “online” and recent activity hints from discovery cards.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={preferences.preferenceFlexibility.safetyControls.hideActivityStatus}
+                  onChange={(event) =>
+                    updatePreferenceFlexibilitySetting(
+                      'safetyControls',
+                      'hideActivityStatus',
+                      event.target.checked
+                    )
+                  }
+                  className="toggle-switch"
+                />
+              </label>
+              <label className="toggle-item">
+                <div className="toggle-info">
+                  <strong>Auto-Escalate Harassment Reports</strong>
+                  <span>Push serious or repeated reports into stronger moderation review faster.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={preferences.preferenceFlexibility.safetyControls.autoEscalateModeration}
+                  onChange={(event) =>
+                    updatePreferenceFlexibilitySetting(
+                      'safetyControls',
+                      'autoEscalateModeration',
+                      event.target.checked
+                    )
+                  }
+                  className="toggle-switch"
+                />
+              </label>
+            </div>
+
+            <div className="preferences-group">
+              <h3>Message Gating</h3>
+              <div className="segmented-control">
+                {MESSAGE_GATING_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`segmented-option ${
+                      preferences.preferenceFlexibility.safetyControls.messageGating === option.value
+                        ? 'active'
+                        : ''
+                    }`}
+                    onClick={() =>
+                      updatePreferenceFlexibilitySetting('safetyControls', 'messageGating', option.value)
+                    }
+                  >
+                    <strong>{option.label}</strong>
+                    <span>{option.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="preferences-group">
+              <h3>Profile Visibility</h3>
+              <div className="segmented-control">
+                {PROFILE_VISIBILITY_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`segmented-option ${
+                      preferences.preferenceFlexibility.safetyControls.profileVisibility === option.value
+                        ? 'active'
+                        : ''
+                    }`}
+                    onClick={() =>
+                      updatePreferenceFlexibilitySetting('safetyControls', 'profileVisibility', option.value)
+                    }
+                  >
+                    <strong>{option.label}</strong>
+                    <span>{option.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="preferences-group">

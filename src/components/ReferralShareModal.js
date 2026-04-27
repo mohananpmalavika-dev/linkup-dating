@@ -30,7 +30,9 @@ const ReferralShareModal = ({ onClose }) => {
     }
   };
 
-  const rewardOffer = referralInfo?.rewardOffer || stats?.reward_offer || {};
+  const starterReward = referralInfo?.starterReward || referralInfo?.rewardOffer || stats?.reward_offer || {};
+  const qualityBonus = referralInfo?.qualityBonus || stats?.quality_bonus || {};
+  const qualitySummary = referralInfo?.qualityMetrics || stats?.quality_summary || {};
 
   const withCopyFeedback = async (value, feedbackLabel) => {
     try {
@@ -46,7 +48,8 @@ const ReferralShareModal = ({ onClose }) => {
     const message = [
       'Join me on LinkUp Dating.',
       `Use my code ${referralInfo?.code}.`,
-      `You get ${rewardOffer.premiumTrialDays || 0} premium days, ${rewardOffer.superlikeCredits || 0} extra superlikes, and ${rewardOffer.boostCredits || 0} boost credit.`
+      `You get ${starterReward.premiumTrialDays || 0} premium days, ${starterReward.superlikeCredits || 0} extra superlikes, and ${starterReward.boostCredits || 0} boost credit once you finish signup.`,
+      `I unlock an extra quality bonus after you complete your profile and start dating intentionally.`
     ].join(' ');
     const url = referralInfo?.link || '';
 
@@ -84,7 +87,7 @@ const ReferralShareModal = ({ onClose }) => {
         <button className="close-btn" onClick={onClose}>x</button>
 
         <h2>Invite Friends</h2>
-        <p className="subtitle">Referral rewards are shared on both sides once someone joins successfully.</p>
+        <p className="subtitle">Starter rewards help someone join well. Quality bonuses reward activated daters, not just installs.</p>
 
         {error ? <div className="error-banner">{error}</div> : null}
         {copyFeedback ? <div className="success-message">{copyFeedback}</div> : null}
@@ -117,19 +120,38 @@ const ReferralShareModal = ({ onClose }) => {
             <span className="stat-value">{stats?.pending || 0}</span>
             <span className="stat-label">Pending</span>
           </div>
+          <div className="stat-item">
+            <span className="stat-value">{qualitySummary?.referralToActivatedUserQuality || 0}%</span>
+            <span className="stat-label">Quality Rate</span>
+          </div>
         </div>
 
         <div className="share-section">
-          <h3>Reward Bundle</h3>
+          <h3>Starter Reward</h3>
           <div className="share-options">
             <button className="share-btn copy" type="button" disabled>
-              {rewardOffer.boostCredits || 0} boost credit
+              {starterReward.boostCredits || 0} boost credit
             </button>
             <button className="share-btn copy" type="button" disabled>
-              {rewardOffer.superlikeCredits || 0} extra superlikes
+              {starterReward.superlikeCredits || 0} extra superlikes
             </button>
             <button className="share-btn copy" type="button" disabled>
-              {rewardOffer.premiumTrialDays || 0} premium days
+              {starterReward.premiumTrialDays || 0} premium days
+            </button>
+          </div>
+        </div>
+
+        <div className="share-section">
+          <h3>Quality Bonus</h3>
+          <div className="share-options">
+            <button className="share-btn copy" type="button" disabled>
+              {qualityBonus.boostCredits || 0} extra boost
+            </button>
+            <button className="share-btn copy" type="button" disabled>
+              {qualityBonus.superlikeCredits || 0} extra superlikes
+            </button>
+            <button className="share-btn copy" type="button" disabled>
+              {qualityBonus.premiumTrialDays || 0} extra premium days
             </button>
           </div>
         </div>
@@ -192,8 +214,9 @@ const ReferralShareModal = ({ onClose }) => {
           <ul>
             <li>Share your code or invite link with someone new to LinkUp.</li>
             <li>They sign up and complete profile creation with your code applied.</li>
-            <li>You both receive boost credits, extra superlikes, and premium trial time.</li>
-            <li>Your earned balances show up in the social hub and dating profile limits.</li>
+            <li>They get the starter reward right away to help them begin well.</li>
+            <li>You unlock the quality bonus after they complete their profile and become an activated dater.</li>
+            <li>Your earned balances and activation quality rate show up in the social hub.</li>
           </ul>
         </div>
       </div>

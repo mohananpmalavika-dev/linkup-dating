@@ -37,6 +37,7 @@ const userNotificationService = require('../services/userNotificationService');
 const { createModerationFlag } = require('../utils/moderation');
 const spamFraudService = require('../services/spamFraudService');
 const mlCompatibilityService = require('../services/mlCompatibilityService');
+const rewindService = require('../services/rewindService');
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const MULTIPART_FORM_DATA_PATTERN = /^multipart\/form-data/i;
@@ -1092,7 +1093,19 @@ const createDefaultDealBreakers = () => ({
 
 const createDefaultPreferenceFlexibility = () => ({
   mode: 'balanced',
-  learnFromActivity: true
+  learnFromActivity: true,
+  engagementLoops: {
+    audioPromptsEnabled: true,
+    warmUpSpacesEnabled: true,
+    datingIntentOnly: true
+  },
+  safetyControls: {
+    quietMode: false,
+    messageGating: 'balanced',
+    profileVisibility: 'discoverable',
+    hideActivityStatus: false,
+    autoEscalateModeration: true
+  }
 });
 
 const createDefaultCompatibilityAnswers = () =>
@@ -1176,13 +1189,57 @@ const normalizePreferenceFlexibility = (value) => {
   const fallback = createDefaultPreferenceFlexibility();
   const source = value && typeof value === 'object' ? value : {};
   const normalizedMode = normalizeOptionalText(source.mode)?.toLowerCase();
+  const engagementSource =
+    source.engagementLoops && typeof source.engagementLoops === 'object'
+      ? source.engagementLoops
+      : {};
+  const safetySource =
+    source.safetyControls && typeof source.safetyControls === 'object'
+      ? source.safetyControls
+      : {};
+  const normalizedMessageGating = normalizeOptionalText(safetySource.messageGating)?.toLowerCase();
+  const normalizedProfileVisibility = normalizeOptionalText(safetySource.profileVisibility)?.toLowerCase();
 
   return {
     mode: ['strict', 'balanced', 'open'].includes(normalizedMode) ? normalizedMode : fallback.mode,
     learnFromActivity:
       source.learnFromActivity === undefined
         ? fallback.learnFromActivity
-        : normalizeBoolean(source.learnFromActivity)
+        : normalizeBoolean(source.learnFromActivity),
+    engagementLoops: {
+      audioPromptsEnabled:
+        engagementSource.audioPromptsEnabled === undefined
+          ? fallback.engagementLoops.audioPromptsEnabled
+          : normalizeBoolean(engagementSource.audioPromptsEnabled),
+      warmUpSpacesEnabled:
+        engagementSource.warmUpSpacesEnabled === undefined
+          ? fallback.engagementLoops.warmUpSpacesEnabled
+          : normalizeBoolean(engagementSource.warmUpSpacesEnabled),
+      datingIntentOnly:
+        engagementSource.datingIntentOnly === undefined
+          ? fallback.engagementLoops.datingIntentOnly
+          : normalizeBoolean(engagementSource.datingIntentOnly)
+    },
+    safetyControls: {
+      quietMode:
+        safetySource.quietMode === undefined
+          ? fallback.safetyControls.quietMode
+          : normalizeBoolean(safetySource.quietMode),
+      messageGating: ['balanced', 'strict', 'trusted_only'].includes(normalizedMessageGating)
+        ? normalizedMessageGating
+        : fallback.safetyControls.messageGating,
+      profileVisibility: ['discoverable', 'limited', 'hidden'].includes(normalizedProfileVisibility)
+        ? normalizedProfileVisibility
+        : fallback.safetyControls.profileVisibility,
+      hideActivityStatus:
+        safetySource.hideActivityStatus === undefined
+          ? fallback.safetyControls.hideActivityStatus
+          : normalizeBoolean(safetySource.hideActivityStatus),
+      autoEscalateModeration:
+        safetySource.autoEscalateModeration === undefined
+          ? fallback.safetyControls.autoEscalateModeration
+          : normalizeBoolean(safetySource.autoEscalateModeration)
+    }
   };
 };
 
@@ -1206,6 +1263,42 @@ const normalizeLearningProfile = (value) => {
     totalPositiveActions: Math.max(0, normalizeInteger(source.totalPositiveActions) ?? fallback.totalPositiveActions),
     totalNegativeActions: Math.max(0, normalizeInteger(source.totalNegativeActions) ?? fallback.totalNegativeActions),
     lastInteractionAt: normalizeOptionalText(source.lastInteractionAt)
+  };
+};
+
+const createDefaultMatchManagement = () => ({
+  archivedMatches: {},
+  snoozedMatches: {}
+});
+
+const normalizeMatchStateMap = (value) => {
+  const source = value && typeof value === 'object' ? value : {};
+
+  return Object.entries(source).reduce((normalizedStateMap, [rawMatchId, rawTimestamp]) => {
+    const normalizedMatchId = String(normalizeInteger(rawMatchId) || '').trim();
+    const parsedDate = rawTimestamp ? new Date(rawTimestamp) : null;
+
+    if (!normalizedMatchId || !parsedDate || Number.isNaN(parsedDate.getTime())) {
+      return normalizedStateMap;
+    }
+
+    normalizedStateMap[normalizedMatchId] = parsedDate.toISOString();
+    return normalizedStateMap;
+  }, {});
+};
+
+const normalizeMatchManagement = (value) => {
+  const fallback = createDefaultMatchManagement();
+  const source =
+    typeof value === 'string'
+      ? safeJsonParse(value, fallback)
+      : value && typeof value === 'object'
+        ? value
+        : fallback;
+
+  return {
+    archivedMatches: normalizeMatchStateMap(source.archivedMatches),
+    snoozedMatches: normalizeMatchStateMap(source.snoozedMatches)
   };
 };
 
@@ -1241,7 +1334,8 @@ const normalizePreferenceRow = (row) => {
     compatibilityAnswers: normalizeCompatibilityAnswers(
       source.compatibility_answers ?? source.compatibilityAnswers
     ),
-    learningProfile: normalizeLearningProfile(source.learning_profile ?? source.learningProfile)
+    learningProfile: normalizeLearningProfile(source.learning_profile ?? source.learningProfile),
+    matchManagement: normalizeMatchManagement(source.match_management ?? source.matchManagement)
   };
 };
 
@@ -1264,8 +1358,386 @@ const formatPreferenceResponse = (preferenceRow) => {
     dealBreakers: preferences.dealBreakers,
     preferenceFlexibility: preferences.preferenceFlexibility,
     compatibilityAnswers: preferences.compatibilityAnswers,
-    learningProfile: preferences.learningProfile
+    learningProfile: preferences.learningProfile,
+    matchManagement: preferences.matchManagement
   };
+};
+
+const getSafetyControlsFromPreferenceRow = (preferenceRow) =>
+  normalizePreferenceRow(preferenceRow).preferenceFlexibility.safetyControls;
+
+const getEngagementLoopSettingsFromPreferenceRow = (preferenceRow) =>
+  normalizePreferenceRow(preferenceRow).preferenceFlexibility.engagementLoops;
+
+const getUserTrustSummary = async (userId) => {
+  const [profileResult, trustResult] = await Promise.all([
+    optionalQuery(
+      `SELECT profile_verified, profile_completion_percent
+       FROM dating_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId],
+      [{}]
+    ),
+    optionalQuery(
+      `SELECT overall_trust_score, fraud_risk_level
+       FROM profile_verification_scores
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId],
+      [{}]
+    )
+  ]);
+
+  const profileRow = profileResult.rows[0] || {};
+  const trustRow = trustResult.rows[0] || {};
+  const completionPercent = countRowValue(profileRow.profile_completion_percent);
+  const profileVerified = Boolean(profileRow.profile_verified);
+  const trustScoreCandidate = Number(trustRow.overall_trust_score);
+  const trustScore = Number.isFinite(trustScoreCandidate)
+    ? Math.round(trustScoreCandidate)
+    : profileVerified
+      ? Math.max(65, completionPercent)
+      : Math.max(35, Math.round(completionPercent * 0.6));
+  const normalizedRiskLevel = normalizeOptionalText(trustRow.fraud_risk_level)?.toLowerCase() || 'unknown';
+
+  return {
+    completionPercent,
+    profileVerified,
+    trustScore,
+    riskLevel: normalizedRiskLevel,
+    canAccessLimitedProfiles: profileVerified || completionPercent >= 80 || trustScore >= 70,
+    isStrictMessagingEligible:
+      profileVerified &&
+      completionPercent >= 60 &&
+      trustScore >= 60 &&
+      normalizedRiskLevel !== 'high',
+    isTrustedOnlyMessagingEligible:
+      profileVerified &&
+      completionPercent >= 75 &&
+      trustScore >= 70 &&
+      normalizedRiskLevel !== 'high'
+  };
+};
+
+const buildPhaseThreeRankingHighlights = (signals) => {
+  const highlights = [];
+
+  if ((signals.replyRate || 0) >= 70) {
+    highlights.push('Replies tend to land');
+  }
+  if ((signals.conversationLengthScore || 0) >= 68) {
+    highlights.push('Conversations usually keep going');
+  }
+  if ((signals.dateAcceptanceRate || 0) >= 60) {
+    highlights.push('Date invites are often accepted');
+  }
+  if ((signals.feedbackOutcomeScore || 0) >= 70) {
+    highlights.push('Post-date feedback looks strong');
+  }
+  if ((signals.trustScore || 0) >= 75) {
+    highlights.push('Trust signals are strong');
+  }
+
+  return highlights.slice(0, 3);
+};
+
+const getCandidatePerformanceSignals = async (candidateIds = []) => {
+  const uniqueCandidateIds = [...new Set(
+    (Array.isArray(candidateIds) ? candidateIds : [])
+      .map((candidateId) => normalizeInteger(candidateId))
+      .filter(Boolean)
+  )];
+
+  if (uniqueCandidateIds.length === 0) {
+    return new Map();
+  }
+
+  const signalResult = await optionalQuery(
+    `WITH candidate_ids AS (
+       SELECT UNNEST($1::int[]) AS candidate_id
+     ),
+     incoming_intents AS (
+       SELECT
+         mr.to_user_id AS candidate_id,
+         COUNT(*) FILTER (WHERE COALESCE(mr.request_type, 'intent') = 'intent')::int AS intents_received,
+         COUNT(*) FILTER (
+           WHERE COALESCE(mr.request_type, 'intent') = 'intent'
+             AND mr.status = 'accepted'
+         )::int AS intents_accepted
+       FROM message_requests mr
+       JOIN candidate_ids cid ON cid.candidate_id = mr.to_user_id
+       GROUP BY mr.to_user_id
+     ),
+     candidate_matches AS (
+       SELECT cid.candidate_id, m.id AS match_id
+       FROM candidate_ids cid
+       JOIN matches m
+         ON (m.user_id_1 = cid.candidate_id OR m.user_id_2 = cid.candidate_id)
+       WHERE m.status = 'active'
+     ),
+     message_stats AS (
+       SELECT
+         cm.candidate_id,
+         cm.match_id,
+         COUNT(msg.id)::int AS message_count,
+         COUNT(DISTINCT msg.from_user_id)::int AS distinct_senders
+       FROM candidate_matches cm
+       LEFT JOIN messages msg
+         ON msg.match_id = cm.match_id
+        AND COALESCE(msg.is_deleted, FALSE) = FALSE
+       GROUP BY cm.candidate_id, cm.match_id
+     ),
+     conversation_stats AS (
+       SELECT
+         candidate_id,
+         COUNT(*) FILTER (WHERE message_count > 0)::int AS conversations_with_messages,
+         COUNT(*) FILTER (WHERE distinct_senders >= 2)::int AS reciprocal_conversations,
+         ROUND(AVG(NULLIF(message_count, 0))::numeric, 2) AS avg_message_count
+       FROM message_stats
+       GROUP BY candidate_id
+     ),
+     date_stats AS (
+       SELECT
+         cid.candidate_id,
+         COUNT(*) FILTER (WHERE dp.recipient_id = cid.candidate_id)::int AS date_requests_received,
+         COUNT(*) FILTER (
+           WHERE dp.recipient_id = cid.candidate_id
+             AND LOWER(COALESCE(dp.status, '')) = 'accepted'
+         )::int AS date_requests_accepted
+       FROM candidate_ids cid
+       LEFT JOIN date_proposals dp
+         ON dp.recipient_id = cid.candidate_id
+         OR dp.proposer_id = cid.candidate_id
+       GROUP BY cid.candidate_id
+     ),
+     feedback_stats AS (
+       SELECT
+         cid.candidate_id,
+         ROUND(AVG(dcf.rating)::numeric, 2) AS avg_rating,
+         ROUND(
+           AVG(
+             CASE
+               WHEN dcf.would_date_again IS TRUE THEN 1
+               WHEN dcf.would_date_again IS FALSE THEN 0
+               ELSE NULL
+             END
+           )::numeric,
+           2
+         ) AS would_date_again_rate,
+         ROUND(AVG(COALESCE(dcf.match_quality_rating, dcf.rating))::numeric, 2) AS avg_match_quality
+       FROM candidate_ids cid
+       LEFT JOIN date_completion_feedback dcf
+         ON dcf.counterparty_user_id = cid.candidate_id
+       GROUP BY cid.candidate_id
+     ),
+     trust_stats AS (
+       SELECT
+         cid.candidate_id,
+         COALESCE(
+           pvs.overall_trust_score,
+           CASE
+             WHEN dp.profile_verified THEN GREATEST(COALESCE(dp.profile_completion_percent, 0), 72)
+             ELSE COALESCE(dp.profile_completion_percent, 0) * 0.6
+           END
+         ) AS trust_score
+       FROM candidate_ids cid
+       LEFT JOIN dating_profiles dp ON dp.user_id = cid.candidate_id
+       LEFT JOIN profile_verification_scores pvs ON pvs.user_id = cid.candidate_id
+     )
+     SELECT
+       cid.candidate_id,
+       COALESCE(ii.intents_received, 0) AS intents_received,
+       COALESCE(ii.intents_accepted, 0) AS intents_accepted,
+       COALESCE(cs.conversations_with_messages, 0) AS conversations_with_messages,
+       COALESCE(cs.reciprocal_conversations, 0) AS reciprocal_conversations,
+       COALESCE(cs.avg_message_count, 0) AS avg_message_count,
+       COALESCE(ds.date_requests_received, 0) AS date_requests_received,
+       COALESCE(ds.date_requests_accepted, 0) AS date_requests_accepted,
+       COALESCE(fs.avg_rating, 0) AS avg_rating,
+       COALESCE(fs.would_date_again_rate, 0) AS would_date_again_rate,
+       COALESCE(fs.avg_match_quality, 0) AS avg_match_quality,
+       COALESCE(ts.trust_score, 0) AS trust_score
+     FROM candidate_ids cid
+     LEFT JOIN incoming_intents ii ON ii.candidate_id = cid.candidate_id
+     LEFT JOIN conversation_stats cs ON cs.candidate_id = cid.candidate_id
+     LEFT JOIN date_stats ds ON ds.candidate_id = cid.candidate_id
+     LEFT JOIN feedback_stats fs ON fs.candidate_id = cid.candidate_id
+     LEFT JOIN trust_stats ts ON ts.candidate_id = cid.candidate_id`,
+    [uniqueCandidateIds],
+    []
+  );
+
+  return signalResult.rows.reduce((signalMap, row) => {
+    const candidateId = normalizeInteger(row.candidate_id);
+    const intentsReceived = countRowValue(row.intents_received);
+    const intentsAccepted = countRowValue(row.intents_accepted);
+    const conversationsWithMessages = countRowValue(row.conversations_with_messages);
+    const reciprocalConversations = countRowValue(row.reciprocal_conversations);
+    const avgMessageCount = roundNumber(row.avg_message_count || 0, 1);
+    const dateRequestsReceived = countRowValue(row.date_requests_received);
+    const dateRequestsAccepted = countRowValue(row.date_requests_accepted);
+    const avgRating = Number(row.avg_rating || 0);
+    const wouldDateAgainRate = Number(row.would_date_again_rate || 0);
+    const avgMatchQuality = Number(row.avg_match_quality || 0);
+    const trustScore = Math.max(0, Math.min(100, Math.round(Number(row.trust_score || 0))));
+
+    const replyRate = intentsReceived > 0
+      ? percentage(intentsAccepted, intentsReceived)
+      : conversationsWithMessages > 0
+        ? percentage(reciprocalConversations, conversationsWithMessages)
+        : 55;
+    const conversationLengthScore = avgMessageCount > 0
+      ? Math.max(35, Math.min(100, Math.round((avgMessageCount / 24) * 100)))
+      : 50;
+    const dateAcceptanceRate = dateRequestsReceived > 0
+      ? percentage(dateRequestsAccepted, dateRequestsReceived)
+      : 55;
+    const feedbackOutcomeScore =
+      avgRating > 0 || avgMatchQuality > 0 || wouldDateAgainRate > 0
+        ? Math.round(
+            ((avgRating > 0 ? (avgRating / 5) * 45 : 0) +
+              (wouldDateAgainRate > 0 ? wouldDateAgainRate * 35 : 0) +
+              (avgMatchQuality > 0 ? (avgMatchQuality / 5) * 20 : 0))
+          )
+        : 60;
+    const overallSignalScore = Math.round(
+      replyRate * 0.35 +
+      conversationLengthScore * 0.25 +
+      dateAcceptanceRate * 0.2 +
+      feedbackOutcomeScore * 0.2
+    );
+
+    signalMap.set(candidateId, {
+      replyRate,
+      conversationLengthScore,
+      dateAcceptanceRate,
+      feedbackOutcomeScore,
+      overallSignalScore,
+      trustScore,
+      rankingHighlights: buildPhaseThreeRankingHighlights({
+        replyRate,
+        conversationLengthScore,
+        dateAcceptanceRate,
+        feedbackOutcomeScore,
+        trustScore
+      })
+    });
+
+    return signalMap;
+  }, new Map());
+};
+
+const buildDefaultCandidatePerformanceSignals = (normalizedProfile = {}) => {
+  const completionPercent = Number(normalizedProfile.profileCompletionPercent || 0);
+  const trustScore = normalizedProfile.profileVerified
+    ? Math.max(68, completionPercent)
+    : Math.max(40, Math.round(completionPercent * 0.65));
+  const signals = {
+    replyRate: 55,
+    conversationLengthScore: 50,
+    dateAcceptanceRate: 55,
+    feedbackOutcomeScore: 60,
+    overallSignalScore: 55,
+    trustScore: Math.min(100, trustScore)
+  };
+
+  return {
+    ...signals,
+    rankingHighlights: buildPhaseThreeRankingHighlights(signals)
+  };
+};
+
+const applyDiscoveryPresentationControls = (normalizedProfile, preferenceRow) => {
+  if (!normalizedProfile) {
+    return normalizedProfile;
+  }
+
+  const safetyControls = getSafetyControlsFromPreferenceRow(preferenceRow);
+  const engagementLoops = getEngagementLoopSettingsFromPreferenceRow(preferenceRow);
+
+  return {
+    ...normalizedProfile,
+    lastActive: safetyControls.hideActivityStatus ? null : normalizedProfile.lastActive,
+    engagementLoops,
+    safetyVisibility: safetyControls.profileVisibility
+  };
+};
+
+const getMatchManagementState = (matchManagement, matchId, now = Date.now()) => {
+  const normalizedManagement = normalizeMatchManagement(matchManagement);
+  const matchKey = String(normalizeInteger(matchId) || '').trim();
+  const archivedAt = normalizedManagement.archivedMatches[matchKey] || null;
+  const snoozedUntilCandidate = normalizedManagement.snoozedMatches[matchKey] || null;
+  const snoozedUntilDate = snoozedUntilCandidate ? new Date(snoozedUntilCandidate) : null;
+  const snoozedUntil =
+    snoozedUntilDate && !Number.isNaN(snoozedUntilDate.getTime()) && snoozedUntilDate.getTime() > now
+      ? snoozedUntilDate.toISOString()
+      : null;
+
+  if (snoozedUntil) {
+    return {
+      state: 'snoozed',
+      archivedAt,
+      snoozedUntil,
+      isArchived: false,
+      isSnoozed: true,
+      isVisible: false
+    };
+  }
+
+  if (archivedAt) {
+    return {
+      state: 'archived',
+      archivedAt,
+      snoozedUntil: null,
+      isArchived: true,
+      isSnoozed: false,
+      isVisible: false
+    };
+  }
+
+  return {
+    state: 'active',
+    archivedAt: null,
+    snoozedUntil: null,
+    isArchived: false,
+    isSnoozed: false,
+    isVisible: true
+  };
+};
+
+const getMatchManagementForUser = async (userId) => {
+  const result = await optionalQuery(
+    `SELECT match_management
+     FROM user_preferences
+     WHERE user_id = $1
+     LIMIT 1`,
+    [userId],
+    []
+  );
+
+  return normalizeMatchManagement(result.rows[0]?.match_management);
+};
+
+const persistMatchManagementForUser = async (userId, matchManagement) => {
+  await db.query(
+    `INSERT INTO user_preferences (user_id, match_management, updated_at)
+     VALUES ($1, $2::jsonb, CURRENT_TIMESTAMP)
+     ON CONFLICT (user_id) DO UPDATE
+     SET match_management = $2::jsonb,
+         updated_at = CURRENT_TIMESTAMP`,
+    [userId, JSON.stringify(normalizeMatchManagement(matchManagement))]
+  );
+};
+
+const applyMatchManagementToMatches = async (userId, matches = []) => {
+  const matchManagement = await getMatchManagementForUser(userId);
+
+  return matches.map((match) => ({
+    ...match,
+    management: getMatchManagementState(matchManagement, match.matchId || match.id)
+  }));
 };
 
 const buildAgeBand = (age) => {
@@ -2990,7 +3462,20 @@ router.post('/profiles/me/photos', async (req, res) => {
 router.post('/search', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { ageRange, relationshipGoals, heightRange, interests, bodyTypes, distance, genderPreferences } = req.body;
+    const {
+      ageRange,
+      relationshipGoals,
+      heightRange,
+      interests,
+      bodyTypes,
+      distance,
+      genderPreferences,
+      languages,
+      conversationStyle,
+      city,
+      onlyVerifiedProfiles,
+      communityPreference
+    } = req.body;
     const normalizedInterests = Array.isArray(interests)
       ? interests.map((interest) => normalizeOptionalText(interest)).filter(Boolean)
       : [];
@@ -3000,24 +3485,43 @@ router.post('/search', async (req, res) => {
     const normalizedGenderPreferences = Array.isArray(genderPreferences)
       ? genderPreferences.map((g) => normalizeOptionalText(g)).filter(Boolean)
       : [];
+    const normalizedLanguages = normalizeLanguageList(languages);
+    const normalizedConversationStyle = normalizeOptionalText(conversationStyle);
+    const normalizedCity = normalizeOptionalText(city);
+    const normalizedCommunityPreference = normalizeOptionalText(communityPreference);
+    const verifiedOnly = normalizeBoolean(onlyVerifiedProfiles);
     const radiusKm = normalizeInteger(distance);
 
     // Get current user's location for distance filtering
     const currentProfileResult = await db.query(
-      `SELECT location_lat, location_lng FROM dating_profiles WHERE user_id = $1 LIMIT 1`,
+      `SELECT location_lat, location_lng, profile_verified, profile_completion_percent
+       FROM dating_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
       [userId]
     );
     const currentLat = toFiniteNumber(currentProfileResult.rows[0]?.location_lat);
     const currentLng = toFiniteNumber(currentProfileResult.rows[0]?.location_lng);
+    const viewerTrustEligible =
+      Boolean(currentProfileResult.rows[0]?.profile_verified) ||
+      Number(currentProfileResult.rows[0]?.profile_completion_percent || 0) >= 80;
 
     let query = `
-      SELECT dp.*, COUNT(*) OVER() as total_count,
+      SELECT dp.*, row_to_json(up) as preferences, COUNT(*) OVER() as total_count,
              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
               FROM profile_photos WHERE user_id = dp.user_id) as photos
       FROM dating_profiles dp
+      LEFT JOIN user_preferences up ON up.user_id = dp.user_id
       WHERE dp.user_id != $1
         AND dp.is_active = true
+        AND COALESCE(up.show_my_profile, true) = true
+        AND COALESCE((up.preference_flexibility->'safetyControls'->>'quietMode')::boolean, false) = false
+        AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'hidden'
     `;
+
+    if (!viewerTrustEligible) {
+      query += ` AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'limited'`;
+    }
 
     const params = [userId];
     let paramIndex = 2;
@@ -3054,6 +3558,29 @@ router.post('/search', async (req, res) => {
       query += ` AND COALESCE(dp.interests, ARRAY[]::text[]) && $${paramIndex++}::text[]`;
       params.push(normalizedInterests);
     }
+    if (normalizedLanguages.length > 0) {
+      query += ` AND COALESCE(dp.languages, ARRAY[]::text[]) && $${paramIndex++}::text[]`;
+      params.push(normalizedLanguages);
+    }
+    if (normalizedConversationStyle) {
+      query += ` AND dp.conversation_style = $${paramIndex++}`;
+      params.push(normalizedConversationStyle);
+    }
+    if (normalizedCity) {
+      query += ` AND LOWER(COALESCE(dp.location_city, '')) = LOWER($${paramIndex++})`;
+      params.push(normalizedCity);
+    }
+    if (normalizedCommunityPreference) {
+      query += ` AND (
+        LOWER(COALESCE(dp.community_preference, '')) = LOWER($${paramIndex})
+        OR LOWER(COALESCE(dp.religion, '')) = LOWER($${paramIndex})
+      )`;
+      params.push(normalizedCommunityPreference);
+      paramIndex += 1;
+    }
+    if (verifiedOnly) {
+      query += ` AND dp.profile_verified = true`;
+    }
 
     // Haversine distance filter
     if (Number.isFinite(currentLat) && Number.isFinite(currentLng) && Number.isFinite(radiusKm) && radiusKm > 0) {
@@ -3083,13 +3610,20 @@ router.post('/search', async (req, res) => {
         interests: normalizedInterests,
         bodyTypes: normalizedBodyTypes,
         distance: radiusKm,
-        genderPreferences: normalizedGenderPreferences
+        genderPreferences: normalizedGenderPreferences,
+        languages: normalizedLanguages,
+        conversationStyle: normalizedConversationStyle,
+        city: normalizedCity,
+        onlyVerifiedProfiles: verifiedOnly,
+        communityPreference: normalizedCommunityPreference
       },
       resultCount: result.rows.length
     });
 
     res.json({
-      profiles: result.rows.map(normalizeProfileRow),
+      profiles: result.rows.map((row) =>
+        applyDiscoveryPresentationControls(normalizeProfileRow(row), row.preferences)
+      ),
       totalCount: result.rows.length > 0
         ? Number.parseInt(result.rows[0].total_count, 10) || result.rows.length
         : 0
@@ -3115,6 +3649,7 @@ const buildDiscoveryQuery = ({
   heightRangeMax,
   bodyTypes,
   excludeShown,
+  viewerTrustEligible = false,
   limit = CURSOR_PAGE_SIZE,
   cursor = null
 }) => {
@@ -3123,8 +3658,16 @@ const buildDiscoveryQuery = ({
   const conditions = [
     'dp.user_id != $1',
     'dp.is_active = true',
-    'COALESCE(up.show_my_profile, true) = true'
+    'COALESCE(up.show_my_profile, true) = true',
+    `COALESCE((up.preference_flexibility->'safetyControls'->>'quietMode')::boolean, false) = false`,
+    `COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'hidden'`
   ];
+
+  if (!viewerTrustEligible) {
+    conditions.push(
+      `COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'limited'`
+    );
+  }
 
   // Exclude already interacted users using NOT EXISTS (faster than NOT IN)
   conditions.push(`NOT EXISTS (
@@ -3282,6 +3825,9 @@ router.get('/discovery', async (req, res) => {
       heightRangeMax: discoveryFilters.heightRangeMax,
       bodyTypes: discoveryFilters.bodyTypes,
       excludeShown: false,
+      viewerTrustEligible:
+        Boolean(currentProfile?.profileVerified) ||
+        Number(currentProfile?.profileCompletionPercent || 0) >= 80,
       limit,
       cursor
     });
@@ -3294,7 +3840,10 @@ router.get('/discovery', async (req, res) => {
 
     const profiles = rows
       .map((profileRow) => {
-        const normalizedProfile = normalizeProfileRow(profileRow);
+        const normalizedProfile = applyDiscoveryPresentationControls(
+          normalizeProfileRow(profileRow),
+          profileRow.preferences
+        );
         const compatibility = buildCompatibilitySuggestion({
           currentProfile,
           currentPreferences,
@@ -3399,6 +3948,9 @@ router.get('/discovery-queue', async (req, res) => {
       heightRangeMax: currentPreferences.heightRangeMax,
       bodyTypes: currentPreferences.bodyTypes,
       excludeShown: true,
+      viewerTrustEligible:
+        Boolean(currentProfile?.profileVerified) ||
+        Number(currentProfile?.profileCompletionPercent || 0) >= 80,
       limit,
       cursor
     });
@@ -3408,13 +3960,17 @@ router.get('/discovery-queue', async (req, res) => {
     const hasMore = result.rows.length > limit;
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
+    const performanceSignalsByCandidate = await getCandidatePerformanceSignals(
+      rows.map((profileRow) => profileRow.user_id)
+    );
     const learningProfile = normalizeLearningProfile(currentPreferences.learningProfile);
     const totalLearningSignals = learningProfile.totalPositiveActions + learningProfile.totalNegativeActions;
     const hasLearningData = currentPreferences.preferenceFlexibility?.learnFromActivity && totalLearningSignals >= 2;
 
     const scoredProfiles = rows
       .map((profileRow) => {
-        const normalizedProfile = normalizeProfileRow(profileRow);
+        const baseProfile = normalizeProfileRow(profileRow);
+        const normalizedProfile = applyDiscoveryPresentationControls(baseProfile, profileRow.preferences);
         const compatibility = buildCompatibilitySuggestion({
           currentProfile,
           currentPreferences,
@@ -3426,10 +3982,14 @@ router.get('/discovery-queue', async (req, res) => {
           return null;
         }
 
-        // Multi-factor scoring (0-100)
-        let compatibilityFactor = compatibility.compatibilityScore * 0.40;
+        const candidateSignals =
+          performanceSignalsByCandidate.get(normalizedProfile.userId) ||
+          buildDefaultCandidatePerformanceSignals(normalizedProfile);
 
-        // Behavioral alignment factor (25%)
+        // Multi-factor scoring (0-100)
+        let compatibilityFactor = compatibility.compatibilityScore * 0.30;
+
+        // Behavioral alignment factor (20%)
         let behavioralFactor = 0;
         if (hasLearningData) {
           let behavioralRaw = 0;
@@ -3455,9 +4015,9 @@ router.get('/discovery-queue', async (req, res) => {
             behavioralRaw += Number(learningProfile.positiveSignals.ageBands[key] || 0) * 1.2;
             behavioralRaw -= Number(learningProfile.negativeSignals.ageBands[key] || 0);
           }
-          behavioralFactor = Math.max(0, Math.min(25, 12.5 + behavioralRaw * 1.5));
+          behavioralFactor = Math.max(0, Math.min(20, 10 + behavioralRaw * 1.2));
         } else {
-          behavioralFactor = 12.5; // neutral baseline
+          behavioralFactor = 10; // neutral baseline
         }
 
         // Recency / freshness factor (15%)
@@ -3483,47 +4043,55 @@ router.get('/discovery-queue', async (req, res) => {
         }
         recencyFactor = Math.min(15, recencyFactor);
 
-        // Trending / social proof factor (10%)
-        let trendingFactor = 5; // baseline
-        // Boost verified profiles slightly within trending
-        if (normalizedProfile.profileVerified) {
-          trendingFactor += 1.5;
-        }
-        // Boost completed profiles
-        if ((normalizedProfile.profileCompletionPercent || 0) >= 80) {
-          trendingFactor += 1.5;
-        }
-        if ((normalizedProfile.profileCompletionPercent || 0) >= 60) {
-          trendingFactor += 1;
-        }
-        trendingFactor = Math.min(10, trendingFactor);
+        // Outcomes and trust signals
+        const outcomesFactor = Math.max(
+          0,
+          Math.min(25, Math.round(candidateSignals.overallSignalScore * 0.25))
+        );
+        const trustFactor = Math.max(0, Math.min(5, Math.round(candidateSignals.trustScore * 0.05)));
 
         // Diversity injection factor (10%) — slightly boost profiles that differ in one dimension
-        let diversityFactor = 5;
+        let diversityFactor = 2.5;
         const currentGoals = currentProfile.relationshipGoals;
         const candidateGoals = normalizedProfile.relationshipGoals;
         if (currentGoals && candidateGoals && currentGoals !== candidateGoals) {
-          diversityFactor += 2;
+          diversityFactor += 1;
         }
         const currentInterests = normalizeInterestList(currentProfile.interests);
         const candidateInterests = normalizeInterestList(normalizedProfile.interests);
         const shared = candidateInterests.filter(i => currentInterests.map(ci => ci.toLowerCase()).includes(i.toLowerCase()));
         if (shared.length === 0 && candidateInterests.length > 0 && currentInterests.length > 0) {
-          diversityFactor += 2;
+          diversityFactor += 1;
         }
-        diversityFactor = Math.min(10, diversityFactor);
+        diversityFactor = Math.min(5, diversityFactor);
 
-        const totalScore = Math.round(compatibilityFactor + behavioralFactor + recencyFactor + trendingFactor + diversityFactor);
+        const totalScore = Math.round(
+          compatibilityFactor +
+          behavioralFactor +
+          recencyFactor +
+          outcomesFactor +
+          trustFactor +
+          diversityFactor
+        );
 
         return {
           ...normalizedProfile,
           ...compatibility,
           queueScore: totalScore,
+          recommendationSignals: {
+            replyRate: candidateSignals.replyRate,
+            conversationLengthScore: candidateSignals.conversationLengthScore,
+            dateAcceptanceRate: candidateSignals.dateAcceptanceRate,
+            feedbackOutcomeScore: candidateSignals.feedbackOutcomeScore,
+            trustScore: candidateSignals.trustScore
+          },
+          rankingHighlights: candidateSignals.rankingHighlights,
           scoreBreakdown: {
             compatibility: Math.round(compatibilityFactor),
             behavioral: Math.round(behavioralFactor),
             recency: Math.round(recencyFactor),
-            trending: Math.round(trendingFactor),
+            outcomes: Math.round(outcomesFactor),
+            trust: Math.round(trustFactor),
             diversity: Math.round(diversityFactor)
           }
         };
@@ -3639,7 +4207,10 @@ router.get('/trending', async (req, res) => {
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
     const profiles = rows.map((row) => {
-      const normalizedProfile = normalizeProfileRow(row);
+      const normalizedProfile = applyDiscoveryPresentationControls(
+        normalizeProfileRow(row),
+        row.preferences
+      );
       return {
         ...normalizedProfile,
         trendingScore: Number(row.like_count) * 2 + Number(row.view_count),
@@ -3713,7 +4284,9 @@ router.get('/new-profiles', async (req, res) => {
     const hasMore = result.rows.length > limit;
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
-    const profiles = rows.map((row) => normalizeProfileRow(row));
+    const profiles = rows.map((row) =>
+      applyDiscoveryPresentationControls(normalizeProfileRow(row), row.preferences)
+    );
 
     const lastRow = rows[rows.length - 1];
     const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.created_at, lastRow.id) : null;
@@ -3830,8 +4403,9 @@ router.get('/matches', async (req, res) => {
 
     const normalizedMatches = result.rows.map(normalizeMatchRow);
     const matches = await enrichMatchesWithJourney(userId, normalizedMatches);
+    const matchesWithManagement = await applyMatchManagementToMatches(userId, matches);
 
-    res.json({ matches });
+    res.json({ matches: matchesWithManagement });
   } catch (err) {
     console.error('Get matches error:', err);
     res.status(500).json({ error: 'Failed to get matches' });
@@ -3905,11 +4479,71 @@ router.get('/matches/by-id/:matchId', async (req, res) => {
     }
 
     const [match] = await enrichMatchesWithJourney(userId, [normalizeMatchRow(result.rows[0])]);
+    const [matchWithManagement] = await applyMatchManagementToMatches(userId, [match]);
 
-    res.json({ match });
+    res.json({ match: matchWithManagement });
   } catch (err) {
     console.error('Get match by id error:', err);
     res.status(500).json({ error: 'Failed to fetch match' });
+  }
+});
+
+router.patch('/matches/:matchId/state', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const matchId = normalizeInteger(req.params.matchId);
+    const nextState = normalizeOptionalText(req.body?.state)?.toLowerCase();
+
+    if (!matchId || !['active', 'archived', 'snoozed'].includes(nextState)) {
+      return res.status(400).json({ error: 'A valid match state is required' });
+    }
+
+    const matchResult = await db.query(
+      `SELECT id
+       FROM matches
+       WHERE id = $1
+         AND (user_id_1 = $2 OR user_id_2 = $2)
+         AND status = 'active'
+       LIMIT 1`,
+      [matchId, userId]
+    );
+
+    if (matchResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    const matchManagement = await getMatchManagementForUser(userId);
+    const nextManagement = normalizeMatchManagement(matchManagement);
+    const matchKey = String(matchId);
+
+    delete nextManagement.archivedMatches[matchKey];
+    delete nextManagement.snoozedMatches[matchKey];
+
+    if (nextState === 'archived') {
+      nextManagement.archivedMatches[matchKey] = new Date().toISOString();
+    }
+
+    if (nextState === 'snoozed') {
+      const requestedSnoozeDate = req.body?.snoozedUntil ? new Date(req.body.snoozedUntil) : null;
+      const fallbackSnoozeDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+      const snoozeDate =
+        requestedSnoozeDate && !Number.isNaN(requestedSnoozeDate.getTime()) && requestedSnoozeDate.getTime() > Date.now()
+          ? requestedSnoozeDate
+          : fallbackSnoozeDate;
+
+      nextManagement.snoozedMatches[matchKey] = snoozeDate.toISOString();
+    }
+
+    await persistMatchManagementForUser(userId, nextManagement);
+
+    res.json({
+      success: true,
+      matchId,
+      management: getMatchManagementState(nextManagement, matchId)
+    });
+  } catch (err) {
+    console.error('Update match state error:', err);
+    res.status(500).json({ error: 'Failed to update match state' });
   }
 });
 
@@ -5048,6 +5682,9 @@ router.get('/top-picks', async (req, res) => {
       heightRangeMax: currentPreferences.heightRangeMax,
       bodyTypes: currentPreferences.bodyTypes,
       excludeShown: false,
+      viewerTrustEligible:
+        Boolean(currentProfile?.profileVerified) ||
+        Number(currentProfile?.profileCompletionPercent || 0) >= 80,
       limit: 100,
       offset: 0
     });
@@ -5056,7 +5693,10 @@ router.get('/top-picks', async (req, res) => {
 
     const scoredProfiles = result.rows
       .map((profileRow) => {
-        const normalizedProfile = normalizeProfileRow(profileRow);
+        const normalizedProfile = applyDiscoveryPresentationControls(
+          normalizeProfileRow(profileRow),
+          profileRow.preferences
+        );
         const compatibility = buildCompatibilitySuggestion({
           currentProfile,
           currentPreferences,
@@ -6063,6 +6703,12 @@ router.post('/message-requests', async (req, res) => {
     const fromUserId = req.user.id;
     const { toUserId, message } = req.body;
     const requestMetadata = getRequestMetadata(req);
+    const normalizedRequestType = ['intent', 'message_request'].includes(
+      normalizeOptionalText(req.body?.requestType)?.toLowerCase()
+    )
+      ? normalizeOptionalText(req.body?.requestType).toLowerCase()
+      : 'intent';
+    const requestedPriority = normalizeBoolean(req.body?.isPriority);
 
     if (!toUserId || !message || !message.trim()) {
       return res.status(400).json({ error: 'toUserId and message are required' });
@@ -6090,17 +6736,73 @@ router.post('/message-requests', async (req, res) => {
       return res.status(400).json({ error: 'You are already matched with this user' });
     }
 
-    // Check Gold subscription for message requests
-    const subResult = await db.query(
-      `SELECT * FROM subscriptions WHERE user_id = $1 AND status = 'active' LIMIT 1`,
-      [fromUserId]
-    );
+    const [targetPreferenceResult, senderTrustSummary] = await Promise.all([
+      db.query(
+        `SELECT up.*, dp.user_id AS profile_user_id
+         FROM dating_profiles dp
+         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+         WHERE dp.user_id = $1
+         LIMIT 1`,
+        [toUserId]
+      ),
+      getUserTrustSummary(fromUserId)
+    ]);
 
-    const sub = subResult.rows[0];
-    const isGold = sub && sub.plan === 'gold' && (!sub.expires_at || new Date(sub.expires_at) > new Date());
+    if (targetPreferenceResult.rows.length === 0) {
+      return res.status(404).json({ error: 'That profile is no longer available' });
+    }
 
-    if (!isGold) {
-      return res.status(403).json({ error: 'Message requests require a Gold subscription' });
+    const targetPreferences = normalizePreferenceRow(targetPreferenceResult.rows[0]);
+    const targetSafetyControls = getSafetyControlsFromPreferenceRow(targetPreferenceResult.rows[0]);
+
+    if (!targetPreferences.allowMessages) {
+      return res.status(403).json({ error: 'This member is not accepting new intros right now' });
+    }
+
+    if (targetSafetyControls.quietMode) {
+      return res.status(403).json({ error: 'This member is in quiet mode right now' });
+    }
+
+    if (targetSafetyControls.profileVisibility === 'hidden') {
+      return res.status(403).json({ error: 'This profile is not currently open to new requests' });
+    }
+
+    if (
+      targetSafetyControls.profileVisibility === 'limited' &&
+      !senderTrustSummary.canAccessLimitedProfiles
+    ) {
+      return res.status(403).json({
+        error: 'This profile only accepts intros from trusted, complete accounts right now'
+      });
+    }
+
+    if (
+      targetSafetyControls.messageGating === 'strict' &&
+      !senderTrustSummary.isStrictMessagingEligible
+    ) {
+      return res.status(403).json({
+        error: 'This member only accepts intros from fully trusted profiles right now'
+      });
+    }
+
+    if (
+      targetSafetyControls.messageGating === 'trusted_only' &&
+      !senderTrustSummary.isTrustedOnlyMessagingEligible
+    ) {
+      return res.status(403).json({
+        error: 'This member has trusted-only intros enabled'
+      });
+    }
+
+    const subscriptionAccess = await getSubscriptionAccessForUser(fromUserId);
+    const canUseLegacyMessageRequest = subscriptionAccess.isGold;
+    const canUsePriorityIntro = subscriptionAccess.isPremium || subscriptionAccess.isGold;
+    const isPriority = requestedPriority && canUsePriorityIntro;
+    const deliveryBand = isPriority ? 'priority' : subscriptionAccess.isPremium ? 'standard' : 'limited';
+    const dailyIntentLimit = subscriptionAccess.isGold ? 5 : subscriptionAccess.isPremium ? 3 : 1;
+
+    if (normalizedRequestType === 'message_request' && !canUseLegacyMessageRequest) {
+      return res.status(403).json({ error: 'Direct message requests require a Gold subscription' });
     }
 
     const existingResult = await db.query(
@@ -6116,26 +6818,46 @@ router.post('/message-requests', async (req, res) => {
       return res.status(409).json({ error: 'A pending message request already exists' });
     }
 
+    const dailyVolumeResult = await db.query(
+      `SELECT COUNT(*)::int AS daily_count
+       FROM message_requests
+       WHERE from_user_id = $1
+         AND created_at >= CURRENT_DATE
+         AND COALESCE(request_type, 'intent') = 'intent'`,
+      [fromUserId]
+    );
+
+    if (normalizedRequestType === 'intent' && Number(dailyVolumeResult.rows[0]?.daily_count || 0) >= dailyIntentLimit) {
+      return res.status(429).json({
+        error: `Intent message limit reached for today. Your current plan allows ${dailyIntentLimit} per day.`
+      });
+    }
+
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    expiresAt.setDate(expiresAt.getDate() + (normalizedRequestType === 'intent' ? 5 : 7));
 
     const result =
       existingResult.rows.length > 0
         ? await db.query(
             `UPDATE message_requests
              SET message = $2,
+                 request_type = $3,
+                 is_priority = $4,
+                 delivery_band = $5,
                  status = 'pending',
-                 expires_at = $3,
+                 expires_at = $6,
                  updated_at = CURRENT_TIMESTAMP
              WHERE id = $1
              RETURNING *`,
-            [existingResult.rows[0].id, trimmedMessage, expiresAt]
+            [existingResult.rows[0].id, trimmedMessage, normalizedRequestType, isPriority, deliveryBand, expiresAt]
           )
         : await db.query(
-            `INSERT INTO message_requests (from_user_id, to_user_id, message, status, expires_at)
-             VALUES ($1, $2, $3, 'pending', $4)
+            `INSERT INTO message_requests (
+               from_user_id, to_user_id, message, request_type, is_priority, delivery_band, status, expires_at
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7)
              RETURNING *`,
-            [fromUserId, toUserId, trimmedMessage, expiresAt]
+            [fromUserId, toUserId, trimmedMessage, normalizedRequestType, isPriority, deliveryBand, expiresAt]
           );
 
     const fromProfile = await db.query(
@@ -6145,19 +6867,24 @@ router.post('/message-requests', async (req, res) => {
     const fromName = fromProfile.rows[0]?.first_name || 'Someone';
 
     await userNotificationService.createNotification(toUserId, {
-      type: 'message_request',
-      title: `Message request from ${fromName}`,
+      type: normalizedRequestType === 'intent' ? 'dating_intent' : 'message_request',
+      title:
+        normalizedRequestType === 'intent'
+          ? `${isPriority ? 'Priority intro' : 'Intent'} from ${fromName}`
+          : `Message request from ${fromName}`,
       body: trimmedMessage.length > 90 ? `${trimmedMessage.slice(0, 87)}...` : trimmedMessage,
       metadata: {
         requestId: result.rows[0].id,
         fromUserId,
-        fromName
+        fromName,
+        requestType: normalizedRequestType,
+        isPriority
       }
     });
 
     spamFraudService.trackUserActivity({
       userId: fromUserId,
-      action: 'message_request_sent',
+      action: normalizedRequestType === 'intent' ? 'intent_message_sent' : 'message_request_sent',
       analyticsUpdates: { message_requests_sent: 1 },
       ipAddress: requestMetadata.ipAddress,
       userAgent: requestMetadata.userAgent,
@@ -6165,8 +6892,16 @@ router.post('/message-requests', async (req, res) => {
     });
 
     res.json({
-      message: 'Message request sent',
-      request: result.rows[0]
+      message: normalizedRequestType === 'intent' ? 'Intent message sent' : 'Message request sent',
+      request: result.rows[0],
+      limits: {
+        dailyIntentLimit,
+        remainingIntents:
+          normalizedRequestType === 'intent'
+            ? Math.max(0, dailyIntentLimit - (Number(dailyVolumeResult.rows[0]?.daily_count || 0) + 1))
+            : dailyIntentLimit,
+        canUsePriorityIntro
+      }
     });
   } catch (err) {
     console.error('Send message request error:', err);
@@ -6230,6 +6965,9 @@ router.get('/message-requests', async (req, res) => {
       location: { city: row.location_city },
       photoUrl: row.photo_url,
       message: row.message,
+      requestType: row.request_type || 'intent',
+      isPriority: Boolean(row.is_priority),
+      deliveryBand: row.delivery_band || 'standard',
       status: row.status,
       createdAt: row.created_at,
       expiresAt: row.expires_at
@@ -6243,6 +6981,9 @@ router.get('/message-requests', async (req, res) => {
       location: { city: row.location_city },
       photoUrl: row.photo_url,
       message: row.message,
+      requestType: row.request_type || 'intent',
+      isPriority: Boolean(row.is_priority),
+      deliveryBand: row.delivery_band || 'standard',
       status: row.status,
       matchId: row.match_id || null,
       createdAt: row.created_at,
@@ -6277,7 +7018,9 @@ router.get('/message-requests', async (req, res) => {
       sent: sentRequests,
       summary,
       capabilities: {
-        canSendRequests: subscriptionAccess.isGold
+        canSendRequests: true,
+        canUsePriorityIntro: subscriptionAccess.isPremium || subscriptionAccess.isGold,
+        canUseLegacyMessageRequest: subscriptionAccess.isGold
       }
     });
   } catch (err) {
@@ -6926,7 +7669,17 @@ router.get('/profiles/me/premium-dashboard', async (req, res) => {
   try {
     const userId = req.user.id;
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    const [subscription, limits, profileResult, viewsResult, likersResult, viewersResult, latestBoostRecord] =
+    const [
+      subscription,
+      limits,
+      profileResult,
+      viewsResult,
+      likersResult,
+      viewersResult,
+      latestBoostRecord,
+      boostHistoryResult,
+      intentStatsResult
+    ] =
       await Promise.all([
         getSubscriptionSnapshotForUser(userId),
         getDailyLimitSnapshot(userId),
@@ -6979,7 +7732,36 @@ router.get('/profiles/me/premium-dashboard', async (req, res) => {
            LIMIT 3`,
           [userId]
         ),
-        getLatestBoostRecordForUser(userId)
+        getLatestBoostRecordForUser(userId),
+        optionalQuery(
+          `SELECT *
+           FROM profile_boosts
+           WHERE user_id = $1
+           ORDER BY boost_expires_at DESC
+           LIMIT 5`,
+          [userId],
+          []
+        ),
+        optionalQuery(
+          `SELECT
+             COUNT(*) FILTER (WHERE COALESCE(request_type, 'intent') = 'intent')::int as intents_sent,
+             COUNT(*) FILTER (
+               WHERE COALESCE(request_type, 'intent') = 'intent'
+                 AND status = 'accepted'
+             )::int as intents_accepted,
+             COUNT(*) FILTER (
+               WHERE COALESCE(request_type, 'intent') = 'intent'
+                 AND status = 'pending'
+             )::int as intents_pending,
+             COUNT(*) FILTER (
+               WHERE COALESCE(request_type, 'intent') = 'intent'
+                 AND COALESCE(is_priority, false) = true
+             )::int as priority_intros_sent
+           FROM message_requests
+           WHERE from_user_id = $1`,
+          [userId],
+          [{}]
+        )
       ]);
 
     const profile = profileResult.rows[0] || {};
@@ -6993,8 +7775,34 @@ router.get('/profiles/me/premium-dashboard', async (req, res) => {
     const recentBoost = latestBoostRecord
       ? await summarizeBoostRecord(userId, latestBoostRecord, viewsLast7Days)
       : null;
+    const boostHistory = (
+      await Promise.all(
+        (boostHistoryResult.rows || []).map((row) =>
+          summarizeBoostRecord(userId, row, viewsLast7Days)
+        )
+      )
+    ).filter(Boolean);
     const topPhotos = await getPhotoPerformanceSummary(userId, 3);
     const topPrompts = await getPromptPerformanceSummary(userId, {}, 3);
+    const intentStats = intentStatsResult.rows[0] || {};
+    const premiumInsights = [];
+
+    if (viewsLast7Days > 0) {
+      premiumInsights.push(`Your profile drew ${viewsLast7Days} views in the last 7 days.`);
+    }
+    if (boostHistory[0]?.outcome?.totalPositiveActions > 0) {
+      premiumInsights.push(
+        `Your latest boost converted ${boostHistory[0].outcome.totalPositiveActions} viewers into positive actions.`
+      );
+    }
+    if (countRowValue(intentStats.intents_sent) > 0) {
+      premiumInsights.push(
+        `${countRowValue(intentStats.intents_sent)} thoughtful intros have been sent from your profile so far.`
+      );
+    }
+    if (!profile.profile_verified) {
+      premiumInsights.push('Completing your trust ladder can improve how premium reach converts.');
+    }
 
     const likedPreview = likersResult.rows.map((row) => ({
       userId: row.from_user_id,
@@ -7025,11 +7833,113 @@ router.get('/profiles/me/premium-dashboard', async (req, res) => {
       upgradeReasons.push(`${viewsTotal} people have viewed your profile so far.`);
     }
     if (!subscription.isGold) {
-      upgradeReasons.push('Gold lets you send first-message requests before you match.');
+      upgradeReasons.push('Gold unlocks more priority intros before you match.');
     }
     if (!profile.voice_intro_url) {
       upgradeReasons.push('A voice intro can lift conversion once premium increases your reach.');
     }
+
+    const phaseThreeRoadmap = {
+      timeline: '3-6 months',
+      focus: 'Selective engagement loops, quality-weighted ranking, and trust-first growth.',
+      guardrail: 'Warm-up rooms and audio spaces stay gated, invite-based, and explicitly tied to dating intent.',
+      initiatives: [
+        {
+          key: 'engagement-loops',
+          title: 'Selective engagement loops',
+          items: [
+            {
+              label: 'Lightweight audio prompts',
+              detail: 'Short voice warm-ups help users get a feel for tone before a match opens.'
+            },
+            {
+              label: 'Themed interest rooms',
+              detail: 'Small, moderated spaces around shared interests create context without becoming a public social feed.'
+            },
+            {
+              label: 'Warm-up spaces',
+              detail: 'Low-pressure pre-match touchpoints give people more confidence before moving into direct matching.'
+            }
+          ]
+        },
+        {
+          key: 'ranking-engine',
+          title: 'Recommendation engine v2',
+          items: [
+            {
+              label: 'Reply rate',
+              detail: 'Prioritize profiles and openings that consistently lead to mutual responses.'
+            },
+            {
+              label: 'Conversation length',
+              detail: 'Reward conversations that sustain healthy back-and-forth instead of one-message drop-offs.'
+            },
+            {
+              label: 'Date acceptance',
+              detail: 'Increase rank for matches that convert into accepted date plans.'
+            },
+            {
+              label: 'Feedback outcomes',
+              detail: 'Use post-date and post-conversation feedback to reinforce respectful, high-quality interactions.'
+            }
+          ]
+        },
+        {
+          key: 'quality-referrals',
+          title: 'Referral loops for quality daters',
+          items: [
+            {
+              label: 'Reward activation quality',
+              detail: 'Grant referral rewards only when the invite turns into an activated dater with healthy conversation milestones.'
+            },
+            {
+              label: 'Trustworthy referrers win',
+              detail: 'Measure referrers on downstream quality, not raw invite volume.'
+            },
+            {
+              label: 'Spam resistance',
+              detail: 'Down-rank low-conversion or low-trust referral behavior before it turns into noisy growth.'
+            }
+          ]
+        },
+        {
+          key: 'trust-first-controls',
+          title: 'Women-safety and trust-first controls',
+          items: [
+            {
+              label: 'Quiet mode',
+              detail: 'Let people reduce visibility and inbound attention during moments when they want more control.'
+            },
+            {
+              label: 'Stricter message gating',
+              detail: 'Add more trust checkpoints before new conversations can begin.'
+            },
+            {
+              label: 'Easy visibility controls',
+              detail: 'Make it simple to tune who can see profile details, prompts, and presence signals.'
+            },
+            {
+              label: 'Moderation escalation',
+              detail: 'Escalate harassment and repeated boundary-pushing patterns faster.'
+            }
+          ]
+        }
+      ],
+      metricTargets: [
+        {
+          label: 'Date completion rate',
+          upliftPercent: 25
+        },
+        {
+          label: '30-day retention',
+          upliftPercent: 15
+        },
+        {
+          label: 'Referral-to-activated-user quality',
+          upliftPercent: 10
+        }
+      ]
+    };
 
     res.json({
       subscription,
@@ -7049,7 +7959,8 @@ router.get('/profiles/me/premium-dashboard', async (req, res) => {
       boost: {
         active: Boolean(activeBoost),
         current: activeBoost,
-        recent: recentBoost
+        recent: recentBoost,
+        history: boostHistory
       },
       likedYou: {
         totalCount: likedPreview.length,
@@ -7064,7 +7975,34 @@ router.get('/profiles/me/premium-dashboard', async (req, res) => {
       },
       bestPerformingPhotos: topPhotos,
       bestPerformingPrompts: topPrompts,
+      priorityIntros: {
+        sent: countRowValue(intentStats.intents_sent),
+        accepted: countRowValue(intentStats.intents_accepted),
+        pending: countRowValue(intentStats.intents_pending),
+        prioritySent: countRowValue(intentStats.priority_intros_sent),
+        acceptanceRate: percentage(
+          countRowValue(intentStats.intents_accepted),
+          countRowValue(intentStats.intents_sent)
+        )
+      },
+      advancedFilters: {
+        unlocked: subscription.isPremium || subscription.isGold,
+        filters: [
+          'Verified only',
+          'Languages',
+          'Conversation style',
+          'City match',
+          'Community preference'
+        ]
+      },
+      premiumInsights,
       upgradeReasons,
+      phaseTwoTargets: {
+        conversationRetentionLiftPercent: 20,
+        premiumConversionLiftPercent: 15,
+        videoDateAdoptionLiftPercent: 10
+      },
+      phaseThreeRoadmap,
       completionSignals: {
         photoCount: countRowValue(profile.photo_count),
         hasVoiceIntro: Boolean(profile.voice_intro_url),
@@ -7491,26 +8429,93 @@ router.get('/daily-limits', async (req, res) => {
 router.post('/interactions/rewind', async (req, res) => {
   try {
     const userId = req.user.id;
+    const { profileUserId } = req.body; // Optional: specific profile to rewind
 
-    // Check daily limits for rewind
-    const usage = await checkAndEnforceDailyLimits(userId, 'rewind');
+    // Get subscription access to check premium status
+    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
+    const isPremium = subscriptionAccess.isPremium || subscriptionAccess.isGold;
 
-    // Get last interaction (within last 5 minutes to prevent abuse)
-    const lastInteractionResult = await db.query(
-      `SELECT * FROM interactions 
-       WHERE from_user_id = $1 
-         AND interaction_type IN ('like', 'superlike', 'pass')
-         AND created_at > NOW() - INTERVAL '5 minutes'
-       ORDER BY created_at DESC 
-       LIMIT 1`,
-      [userId]
+    // Check daily limits for rewind (3/day for free, unlimited for premium)
+    const today = new Date().toISOString().split('T')[0];
+    const analyticsResult = await db.query(
+      `SELECT rewinds_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
+      [userId, today]
     );
 
-    if (lastInteractionResult.rows.length === 0) {
-      return res.status(400).json({ error: 'No recent interactions to rewind' });
+    const rewindsSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_sent || 0) : 0;
+    const rewindLimit = isPremium ? Infinity : 3; // Premium: unlimited, Free: 3/day
+
+    if (rewindsSent >= rewindLimit) {
+      return res.status(429).json({
+        error: 'Daily rewind limit reached',
+        limit: rewindLimit,
+        used: rewindsSent,
+        remaining: 0,
+        isPremium: false,
+        upsellMessage: 'Upgrade to Premium for unlimited rewinds!'
+      });
     }
 
-    const lastInteraction = lastInteractionResult.rows[0];
+    let lastInteraction;
+
+    if (profileUserId) {
+      // Rewind specific profile (from undo history)
+      const specificResult = await db.query(
+        `SELECT * FROM user_decision_history 
+         WHERE user_id = $1 
+           AND profile_user_id = $2 
+           AND decision_type = 'pass'
+         ORDER BY decision_timestamp DESC 
+         LIMIT 1`,
+        [userId, profileUserId]
+      );
+
+      if (specificResult.rows.length === 0) {
+        return res.status(404).json({ error: 'No pass found for this profile' });
+      }
+
+      lastInteraction = {
+        to_user_id: profileUserId,
+        interaction_type: 'pass'
+      };
+
+      // Mark as undone in decision history
+      await db.query(
+        `UPDATE user_decision_history 
+         SET undo_action = true, undone_at = CURRENT_TIMESTAMP
+         WHERE user_id = $1 AND profile_user_id = $2 AND decision_type = 'pass'
+         ORDER BY decision_timestamp DESC 
+         LIMIT 1`,
+        [userId, profileUserId]
+      );
+    } else {
+      // Rewind most recent interaction (within last 5 minutes to prevent abuse)
+      const recentResult = await db.query(
+        `SELECT * FROM interactions 
+         WHERE from_user_id = $1 
+           AND interaction_type IN ('like', 'superlike', 'pass')
+           AND created_at > NOW() - INTERVAL '5 minutes'
+         ORDER BY created_at DESC 
+         LIMIT 1`,
+        [userId]
+      );
+
+      if (recentResult.rows.length === 0) {
+        return res.status(400).json({ error: 'No recent interactions to rewind' });
+      }
+
+      lastInteraction = recentResult.rows[0];
+
+      // Update decision history
+      await db.query(
+        `UPDATE user_decision_history 
+         SET undo_action = true, undone_at = CURRENT_TIMESTAMP
+         WHERE user_id = $1 AND profile_user_id = $2 AND decision_type = $3
+         ORDER BY decision_timestamp DESC 
+         LIMIT 1`,
+        [userId, lastInteraction.to_user_id, lastInteraction.interaction_type]
+      );
+    }
 
     // Delete the last interaction
     await db.query(
@@ -7519,15 +8524,6 @@ router.post('/interactions/rewind', async (req, res) => {
          AND to_user_id = $2 
          AND interaction_type = $3`,
       [userId, lastInteraction.to_user_id, lastInteraction.interaction_type]
-    );
-
-    // Record rewind action
-    const today = new Date().toISOString().split('T')[0];
-    await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
-       VALUES ($1, $2, 'rewind')
-       ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING`,
-      [userId, lastInteraction.to_user_id]
     );
 
     // Update analytics
@@ -7545,7 +8541,9 @@ router.post('/interactions/rewind', async (req, res) => {
     res.json({
       message: 'Interaction rewound',
       rewindedProfile: { userId: lastInteraction.to_user_id, interactionType: lastInteraction.interaction_type },
-      remaining: usage.rewind.remaining - 1
+      rewindsUsed: rewindsSent + 1,
+      rewindsRemaining: isPremium ? 'Unlimited' : Math.max(0, rewindLimit - rewindsSent - 1),
+      isPremium
     });
   } catch (err) {
     console.error('Rewind error:', err);
@@ -8734,6 +9732,339 @@ router.post('/profiles/me/voice-intro', async (req, res) => {
   } catch (err) {
     console.error('Voice intro upload error:', err);
     res.status(500).json({ error: 'Failed to upload voice intro' });
+  }
+});
+
+// ============ VIDEO INTRO ROUTES (Premium Feature) ============
+
+const VideoFraudDetectionService = require('../services/videoFraudDetectionService');
+
+// 29b. VIDEO INTRO UPLOAD (Premium Feature - Can't Skip)
+router.post('/profiles/me/video-intro', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Check if premium subscription is required
+    const subResult = await db.query(
+      `SELECT plan, status, expires_at FROM subscriptions
+       WHERE user_id = $1 AND status = 'active'
+       ORDER BY expires_at DESC LIMIT 1`,
+      [userId]
+    );
+    
+    const subscription = subResult.rows[0];
+    const isPremium = subscription?.plan === 'premium' || subscription?.plan === 'gold';
+    
+    // For now, video intro is optional but better for premium users
+    // In future: make it required for premium users to skip
+    
+    const photos = await collectPhotosFromRequest(req);
+    const multipartFields = req.parsedMultipartFields || {};
+
+    if (!photos.length) {
+      return res.status(400).json({ error: 'Video file required' });
+    }
+
+    const videoFile = photos[0];
+    const videoUrl = videoFile.url;
+    const contentType = String(videoFile.contentType || '').toLowerCase();
+    const filename = String(videoFile.filename || '').toLowerCase();
+    const durationSeconds = normalizeInteger(
+      req.body?.durationSeconds ?? multipartFields.durationSeconds
+    );
+    
+    const isSupportedVideo =
+      contentType.startsWith('video/')
+      || ['.mp4', '.webm', '.mov', '.avi', '.mkv'].some((extension) =>
+        filename.endsWith(extension)
+      );
+
+    if (!isSupportedVideo && !videoUrl.includes('data:video/')) {
+      return res.status(400).json({ 
+        error: 'Invalid video format. Please use MP4, WebM, MOV, AVI, or MKV.' 
+      });
+    }
+
+    if (!durationSeconds || durationSeconds < 15 || durationSeconds > 60) {
+      return res.status(400).json({ 
+        error: 'Video intro must be between 15 and 60 seconds long.' 
+      });
+    }
+
+    if ((videoFile.size || 0) > 50 * 1024 * 1024) {
+      return res.status(400).json({ 
+        error: 'Video file is too large. Please keep it under 50MB.' 
+      });
+    }
+
+    // Get profile photos for fraud detection
+    const profileResult = await db.query(
+      `SELECT photos FROM dating_profiles WHERE user_id = $1`,
+      [userId]
+    );
+    
+    const profilePhotos = profileResult.rows[0]?.photos || [];
+
+    // Start fraud detection (async)
+    let videoAuthResult = null;
+    let analysisResults = null;
+    let fraudFlagData = null;
+
+    try {
+      // Perform fraud detection
+      analysisResults = await VideoFraudDetectionService.analyzeVideoAuthenticity(
+        videoUrl,
+        profilePhotos,
+        profileResult.rows[0]
+      );
+
+      // Store authentication result
+      const authResultQuery = await db.query(
+        `INSERT INTO video_authentication_results (
+          user_id, video_intro_url, video_url, analysis_type,
+          overall_authenticity_score, facial_match_score, frame_consistency_score,
+          liveness_detection_score, background_analysis_score, risk_flags,
+          status, analysis_metadata, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        RETURNING id, overall_authenticity_score, status`,
+        [
+          userId, videoUrl, videoUrl, 'facial_match',
+          analysisResults.overallAuthenticityScore,
+          analysisResults.facialMatchScore,
+          analysisResults.frameConsistencyScore,
+          analysisResults.livenessDetectionScore,
+          analysisResults.backgroundAnalysisScore,
+          JSON.stringify(analysisResults.riskFlags),
+          analysisResults.status,
+          JSON.stringify(analysisResults.analysisMetadata)
+        ]
+      );
+
+      videoAuthResult = authResultQuery.rows[0];
+
+      // Check if fraud flag should be created
+      fraudFlagData = VideoFraudDetectionService.generateFraudFlag(userId, analysisResults);
+      
+      if (fraudFlagData) {
+        const fraudResult = await db.query(
+          `INSERT INTO fraud_flags (user_id, flag_type, description, confidence_score)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id`,
+          [fraudFlagData.userId, fraudFlagData.flagType, fraudFlagData.description, fraudFlagData.confidenceScore]
+        );
+
+        // Link fraud flag to auth result
+        await db.query(
+          `UPDATE video_authentication_results SET fraud_flag_id = $1 WHERE id = $2`,
+          [fraudResult.rows[0].id, videoAuthResult.id]
+        );
+      }
+    } catch (fraudError) {
+      console.error('Fraud detection error:', fraudError);
+      // Don't block upload if fraud detection fails
+      analysisResults = {
+        status: 'failed',
+        overallAuthenticityScore: 0.5,
+        analysisError: fraudError.message
+      };
+    }
+
+    // Update profile with video intro
+    const authStatus = analysisResults?.overallAuthenticityScore < 0.4 ? 'flagged' 
+      : analysisResults?.overallAuthenticityScore < 0.65 ? 'reviewing'
+      : 'authenticated';
+
+    await db.query(
+      `UPDATE dating_profiles
+       SET video_intro_url = $1,
+           video_intro_duration_seconds = $2,
+           video_intro_uploaded_at = CURRENT_TIMESTAMP,
+           video_authentication_status = $3,
+           video_authentication_score = $4,
+           profile_completion_percent = GREATEST(COALESCE(profile_completion_percent, 0), 90),
+           last_active = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $5`,
+      [videoUrl, durationSeconds, authStatus, analysisResults?.overallAuthenticityScore || 0.5, userId]
+    );
+
+    // Create moderation flag
+    await createModerationFlag({
+      userId,
+      sourceType: 'video_intro_upload',
+      flagCategory: 'content',
+      severity: analysisResults?.overallAuthenticityScore < 0.4 ? 'high' : 'low',
+      title: 'Video intro uploaded',
+      reason: `Video intro uploaded. Auth score: ${(analysisResults?.overallAuthenticityScore || 0.5).toFixed(2)}`,
+      metadata: {
+        durationSeconds,
+        contentType: contentType || null,
+        filename: filename || null,
+        authenticationScore: analysisResults?.overallAuthenticityScore,
+        riskFlags: analysisResults?.riskFlags
+      }
+    });
+
+    // Return response
+    res.json({
+      message: 'Video intro uploaded successfully',
+      videoIntroUrl: videoUrl,
+      durationSeconds,
+      authentication: VideoFraudDetectionService.formatAnalysisResponse(analysisResults, videoAuthResult),
+      authResultId: videoAuthResult?.id,
+      completionBoost: '+5%',
+      isPremium
+    });
+  } catch (err) {
+    console.error('Video intro upload error:', err);
+    res.status(500).json({ error: 'Failed to upload video intro' });
+  }
+});
+
+// 29c. GET VIDEO INTRO DETAILS
+router.get('/profiles/me/video-intro', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const profileResult = await db.query(
+      `SELECT video_intro_url, video_intro_duration_seconds, video_authentication_status, 
+              video_authentication_score, video_intro_uploaded_at
+       FROM dating_profiles
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (!profileResult.rows[0]?.video_intro_url) {
+      return res.json({ hasVideoIntro: false });
+    }
+
+    const profile = profileResult.rows[0];
+
+    // Get latest authentication result
+    const authResult = await db.query(
+      `SELECT overall_authenticity_score, facial_match_score, frame_consistency_score,
+              liveness_detection_score, background_analysis_score, risk_flags, status
+       FROM video_authentication_results
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId]
+    );
+
+    res.json({
+      hasVideoIntro: true,
+      videoUrl: profile.video_intro_url,
+      durationSeconds: profile.video_intro_duration_seconds,
+      uploadedAt: profile.video_intro_uploaded_at,
+      authenticationStatus: profile.video_authentication_status,
+      authenticationScore: profile.video_authentication_score,
+      latestAnalysis: authResult.rows[0] ? {
+        score: authResult.rows[0].overall_authenticity_score,
+        status: authResult.rows[0].status,
+        scores: {
+          facial: authResult.rows[0].facial_match_score,
+          liveness: authResult.rows[0].liveness_detection_score,
+          frameConsistency: authResult.rows[0].frame_consistency_score,
+          background: authResult.rows[0].background_analysis_score
+        },
+        riskFlags: authResult.rows[0].risk_flags
+      } : null
+    });
+  } catch (err) {
+    console.error('Get video intro error:', err);
+    res.status(500).json({ error: 'Failed to fetch video intro details' });
+  }
+});
+
+// 29d. DELETE VIDEO INTRO
+router.delete('/profiles/me/video-intro', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    await db.query(
+      `UPDATE dating_profiles
+       SET video_intro_url = NULL,
+           video_intro_duration_seconds = NULL,
+           video_intro_uploaded_at = NULL,
+           video_authentication_status = NULL,
+           video_authentication_score = NULL,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    res.json({ message: 'Video intro deleted' });
+  } catch (err) {
+    console.error('Delete video intro error:', err);
+    res.status(500).json({ error: 'Failed to delete video intro' });
+  }
+});
+
+// 29e. RE-RUN FRAUD DETECTION
+router.post('/profiles/me/video-intro/recheck-fraud', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const profileResult = await db.query(
+      `SELECT video_intro_url, photos FROM dating_profiles WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (!profileResult.rows[0]?.video_intro_url) {
+      return res.status(404).json({ error: 'No video intro found' });
+    }
+
+    const { videoUrl, photos } = profileResult.rows[0];
+
+    // Run fraud detection again
+    const analysisResults = await VideoFraudDetectionService.analyzeVideoAuthenticity(
+      videoUrl,
+      photos
+    );
+
+    // Store new result
+    const authResultQuery = await db.query(
+      `INSERT INTO video_authentication_results (
+        user_id, video_intro_url, video_url, analysis_type,
+        overall_authenticity_score, facial_match_score, frame_consistency_score,
+        liveness_detection_score, background_analysis_score, risk_flags,
+        status, analysis_metadata, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      RETURNING id, overall_authenticity_score, status`,
+      [
+        userId, videoUrl, videoUrl, 'facial_match',
+        analysisResults.overallAuthenticityScore,
+        analysisResults.facialMatchScore,
+        analysisResults.frameConsistencyScore,
+        analysisResults.livenessDetectionScore,
+        analysisResults.backgroundAnalysisScore,
+        JSON.stringify(analysisResults.riskFlags),
+        analysisResults.status,
+        JSON.stringify(analysisResults.analysisMetadata)
+      ]
+    );
+
+    // Update profile authentication status
+    const authStatus = analysisResults.overallAuthenticityScore < 0.4 ? 'flagged'
+      : analysisResults.overallAuthenticityScore < 0.65 ? 'reviewing'
+      : 'authenticated';
+
+    await db.query(
+      `UPDATE dating_profiles
+       SET video_authentication_status = $1,
+           video_authentication_score = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $3`,
+      [authStatus, analysisResults.overallAuthenticityScore, userId]
+    );
+
+    res.json({
+      message: 'Fraud detection completed',
+      authentication: VideoFraudDetectionService.formatAnalysisResponse(analysisResults, authResultQuery.rows[0])
+    });
+  } catch (err) {
+    console.error('Re-check fraud error:', err);
+    res.status(500).json({ error: 'Failed to re-check fraud detection' });
   }
 });
 
@@ -10791,6 +12122,33 @@ router.post('/conversations/report-harassment/:matchId', async (req, res) => {
     const match = matchResult.rows[0];
     const reportedUserId = userId === match.user_id_1 ? match.user_id_2 : match.user_id_1;
 
+    const [reporterPreferenceResult, priorFlagResult] = await Promise.all([
+      optionalQuery(
+        `SELECT preference_flexibility
+         FROM user_preferences
+         WHERE user_id = $1
+         LIMIT 1`,
+        [userId],
+        [{}]
+      ),
+      optionalQuery(
+        `SELECT
+           COUNT(*)::int AS total_reports,
+           COUNT(*) FILTER (WHERE severity IN ('high', 'critical'))::int AS severe_reports,
+           COUNT(*) FILTER (WHERE status IN ('reported', 'investigating', 'action_taken'))::int AS open_reports
+         FROM conversation_safety_flags
+         WHERE reported_user_id = $1`,
+        [reportedUserId],
+        [{ total_reports: 0, severe_reports: 0, open_reports: 0 }]
+      )
+    ]);
+
+    const reporterSafetyControls = getSafetyControlsFromPreferenceRow(reporterPreferenceResult.rows[0]);
+    const priorFlags = priorFlagResult.rows[0] || {};
+    const totalReports = countRowValue(priorFlags.total_reports);
+    const severeReports = countRowValue(priorFlags.severe_reports);
+    const openReports = countRowValue(priorFlags.open_reports);
+
     // Determine severity
     let severity = 'medium';
     if (['sexual_harassment', 'threatening_behavior', 'hate_speech'].includes(reason)) {
@@ -10799,17 +12157,59 @@ router.post('/conversations/report-harassment/:matchId', async (req, res) => {
       severity = 'medium';
     }
 
+    const autoEscalated =
+      reporterSafetyControls.autoEscalateModeration &&
+      (severity === 'high' || totalReports >= 2 || severeReports >= 1 || openReports >= 2);
+
+    if (autoEscalated && (severity === 'high' || severeReports >= 1 || totalReports >= 3)) {
+      severity = 'critical';
+    }
+
+    const shouldAutoBlock = severity === 'high' || severity === 'critical';
+
     // Create safety flag
     const result = await db.query(
       `INSERT INTO conversation_safety_flags (
-        match_id, reporter_id, reported_user_id, reason, description, message_ids, severity, status
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'reported')
+        match_id, reporter_id, reported_user_id, reason, description, message_ids, severity, status,
+        is_blocking_recommended, reporter_action_taken
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
-      [matchId, userId, reportedUserId, reason, description, JSON.stringify(messageIds || []), severity]
+      [
+        matchId,
+        userId,
+        reportedUserId,
+        reason,
+        description,
+        JSON.stringify(messageIds || []),
+        severity,
+        autoEscalated ? 'investigating' : 'reported',
+        shouldAutoBlock,
+        shouldAutoBlock ? 'blocked' : 'reported'
+      ]
     );
 
+    if (autoEscalated) {
+      await createModerationFlag({
+        userId: reportedUserId,
+        sourceType: 'dating_safety_report',
+        flagCategory: 'safety',
+        severity,
+        title: 'Dating harassment report requires review',
+        reason,
+        metadata: {
+          matchId,
+          reporterUserId: userId,
+          reportId: result.rows[0]?.id || null,
+          description: description || '',
+          messageIds: Array.isArray(messageIds) ? messageIds : [],
+          priorReportCount: totalReports,
+          severeReportCount: severeReports
+        }
+      });
+    }
+
     // Auto-block if high severity
-    if (severity === 'high') {
+    if (shouldAutoBlock) {
       await db.query(
         `INSERT INTO blocks (blocker_id, blocked_id, reason) VALUES ($1, $2, $3)
          ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
@@ -10820,9 +12220,10 @@ router.post('/conversations/report-harassment/:matchId', async (req, res) => {
     res.json({
       message: 'Report submitted successfully',
       reportId: result.rows[0].id,
-      status: 'reported',
+      status: autoEscalated ? 'investigating' : 'reported',
       severity: severity,
-      autoBlocked: severity === 'high'
+      autoBlocked: shouldAutoBlock,
+      escalatedToModeration: autoEscalated
     });
   } catch (err) {
     console.error('Report harassment error:', err);
@@ -13057,6 +14458,9 @@ router.get('/smart-suggestions', async (req, res) => {
       heightRangeMax: currentPreferences.heightRangeMax,
       bodyTypes: currentPreferences.bodyTypes,
       excludeShown: false,
+      viewerTrustEligible:
+        Boolean(currentProfile?.profileVerified) ||
+        Number(currentProfile?.profileCompletionPercent || 0) >= 80,
       limit,
       cursor
     });
@@ -13064,11 +14468,18 @@ router.get('/smart-suggestions', async (req, res) => {
     const result = await db.query(query.text, query.params);
     const hasMore = result.rows.length > limit;
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+    const performanceSignalsByCandidate = await getCandidatePerformanceSignals(
+      rows.map((profileRow) => profileRow.user_id)
+    );
 
     // Apply ML compatibility scoring
     const smartSuggestions = rows
       .map((profileRow) => {
-        const normalizedProfile = normalizeProfileRow(profileRow);
+        const baseProfile = normalizeProfileRow(profileRow);
+        const normalizedProfile = applyDiscoveryPresentationControls(baseProfile, profileRow.preferences);
+        const candidateSignals =
+          performanceSignalsByCandidate.get(normalizedProfile.userId) ||
+          buildDefaultCandidatePerformanceSignals(normalizedProfile);
 
         // Use ML service to calculate compatibility with learned patterns
         const compatibilityScore = mlCompatibilityService.calculateCompatibilityScore(
@@ -13101,6 +14512,11 @@ router.get('/smart-suggestions', async (req, res) => {
           currentProfile,
           normalizedProfile
         );
+        const recommendationScore = Math.round(
+          compatibilityScore * 0.65 +
+          candidateSignals.overallSignalScore * 0.25 +
+          candidateSignals.trustScore * 0.1
+        );
 
         return {
           ...normalizedProfile,
@@ -13109,11 +14525,25 @@ router.get('/smart-suggestions', async (req, res) => {
           compatibilityFactors: detailedFactors.factors,
           icebreakers,
           aiSuggestion: true,
+          recommendationScore,
+          recommendationSignals: {
+            replyRate: candidateSignals.replyRate,
+            conversationLengthScore: candidateSignals.conversationLengthScore,
+            dateAcceptanceRate: candidateSignals.dateAcceptanceRate,
+            feedbackOutcomeScore: candidateSignals.feedbackOutcomeScore,
+            trustScore: candidateSignals.trustScore
+          },
+          rankingHighlights: candidateSignals.rankingHighlights,
+          scoreBreakdown: {
+            compatibility: Math.round(compatibilityScore * 0.65),
+            outcomes: Math.round(candidateSignals.overallSignalScore * 0.25),
+            trust: Math.round(candidateSignals.trustScore * 0.1)
+          },
           scoreExplanation: `${compatibilityScore}% match based on profile preferences, interests, and your interaction patterns.`
         };
       })
       .filter(profile => profile.compatibilityScore >= 70) // Only show 70%+ matches as requested
-      .sort((a, b) => b.compatibilityScore - a.compatibilityScore)
+      .sort((a, b) => b.recommendationScore - a.recommendationScore)
       .slice(0, limit);
 
     // Cache compatibility scores in the CompatibilityScore model
@@ -13125,7 +14555,9 @@ router.get('/smart-suggestions', async (req, res) => {
       recommendations_json: {
         icebreakers: profile.icebreakers,
         suggestions: profile.compatibilityReasons,
-        factors: profile.compatibilityFactors
+        factors: profile.compatibilityFactors,
+        rankingHighlights: profile.rankingHighlights,
+        recommendationSignals: profile.recommendationSignals
       }
     }));
 
@@ -13518,6 +14950,1867 @@ router.get('/compatibility-factors/:userId', async (req, res) => {
   } catch (err) {
     console.error('Get compatibility factors error:', err);
     res.status(500).json({ error: 'Failed to get compatibility factors', details: err.message });
+  }
+});
+
+// ========== TIER 4: TRENDING & DISCOVERY PRESETS ==========
+
+// T4.1. GET TRENDING TODAY - Real-time leaderboard with premium access control
+router.get('/trending-today', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
+
+    // Check subscription for real-time access
+    const subResult = await db.query(
+      `SELECT plan, status, expires_at FROM subscriptions 
+       WHERE user_id = $1 AND status = 'active'
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId]
+    );
+
+    const isPremium = subResult.rows.length > 0 && subResult.rows[0].plan !== 'free' &&
+      (!subResult.rows[0].expires_at || new Date(subResult.rows[0].expires_at) > new Date());
+
+    // Premium users see real-time trending, free users see 30-min delayed data
+    const snapshotDate = new Date().toISOString().split('T')[0];
+    const delayMinutes = isPremium ? 0 : 30;
+    const snapshotTime = new Date(Date.now() - delayMinutes * 60 * 1000);
+    const snapshotHour = snapshotTime.toISOString().split(':')[0] + ':00:00';
+
+    const cacheKey = buildCacheKey('trending', userId, 'today', isPremium ? 'premium' : 'free');
+    const cached = await cacheGetPaginated(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    // Get trending profiles from last 24 hours
+    const result = await db.query(
+      `SELECT dp.*,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos,
+              SUM(tp.likes_received) as total_likes,
+              SUM(tp.superlikes_received) as total_superlikes,
+              SUM(tp.profile_views) as total_views,
+              SUM(tp.matches_created) as total_matches,
+              MAX(tp.daily_rank) as best_rank,
+              ROW_NUMBER() OVER (ORDER BY SUM(tp.engagement_score) DESC) as current_rank
+       FROM dating_profiles dp
+       LEFT JOIN trending_profiles tp ON dp.user_id = tp.profile_user_id
+       WHERE dp.is_active = true
+         AND NOT EXISTS (
+           SELECT 1 FROM user_blocks ub
+           WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id)
+              OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id)
+         )
+         AND (tp.snapshot_date = $2 OR tp.id IS NULL)
+       GROUP BY dp.id, dp.user_id
+       ORDER BY SUM(tp.engagement_score) DESC NULLS LAST
+       LIMIT $3`,
+      [userId, snapshotDate, limit]
+    );
+
+    const profiles = result.rows.map((row) => {
+      const normalizedProfile = normalizeProfileRow(row);
+      return {
+        ...normalizedProfile,
+        trendingStats: {
+          rank: row.current_rank,
+          bestRankToday: row.best_rank,
+          likes: Number(row.total_likes || 0),
+          superlikes: Number(row.total_superlikes || 0),
+          views: Number(row.total_views || 0),
+          matches: Number(row.total_matches || 0),
+          engagementScore: (Number(row.total_likes || 0) * 2) + 
+                          (Number(row.total_superlikes || 0) * 3) + 
+                          (Number(row.total_views || 0) * 0.5)
+        },
+        isPremiumData: isPremium
+      };
+    });
+
+    const response = {
+      profiles,
+      leaderboard: profiles.map((p, i) => ({
+        rank: i + 1,
+        firstName: p.firstName,
+        age: p.age,
+        engagementScore: p.trendingStats.engagementScore
+      })),
+      isPremiumAccess: isPremium,
+      dataDelay: isPremium ? 'real-time' : '30 minutes',
+      generatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + (isPremium ? 5 : 30) * 60 * 1000).toISOString()
+    };
+
+    await cacheSetPaginated(cacheKey, response, isPremium ? 300 : 1800); // 5min for premium, 30min for free
+
+    const requestMetadata = getRequestMetadata(req);
+    spamFraudService.trackUserActivity({
+      userId,
+      action: 'trending_today_view',
+      analyticsUpdates: { trending_views: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: true
+    });
+
+    res.json(response);
+  } catch (err) {
+    console.error('Trending today error:', err);
+    res.status(500).json({ error: 'Failed to get trending profiles', details: err.message });
+  }
+});
+
+// T4.2. GET TRENDING HOT LIST - Last hour real-time rankings (premium only)
+router.get('/trending-hot-list', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit, 10) || 15, 30);
+
+    // Premium access only
+    const subResult = await db.query(
+      `SELECT plan FROM subscriptions 
+       WHERE user_id = $1 AND status = 'active' AND plan != 'free'
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId]
+    );
+
+    if (subResult.rows.length === 0) {
+      return res.status(403).json({ 
+        error: 'Premium feature',
+        message: 'Hot list is exclusive to premium members for real-time engagement tracking',
+        requiresPremium: true
+      });
+    }
+
+    const cacheKey = buildCacheKey('trending', userId, 'hot-list');
+    const cached = await cacheGetPaginated(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    // Get last hour snapshot
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+
+    const result = await db.query(
+      `SELECT dp.*,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos,
+              tp.likes_received,
+              tp.superlikes_received,
+              tp.profile_views,
+              tp.matches_created,
+              tp.engagement_score,
+              tp.hourly_rank,
+              ROW_NUMBER() OVER (ORDER BY tp.engagement_score DESC) as real_rank
+       FROM trending_profiles tp
+       INNER JOIN dating_profiles dp ON dp.user_id = tp.profile_user_id
+       WHERE tp.snapshot_hour >= $1
+         AND dp.is_active = true
+       ORDER BY tp.engagement_score DESC
+       LIMIT $2`,
+      [oneHourAgo, limit]
+    );
+
+    const hotProfiles = result.rows.map((row) => {
+      const normalizedProfile = normalizeProfileRow(row);
+      return {
+        ...normalizedProfile,
+        hotListStats: {
+          rank: row.real_rank,
+          engagementScore: Math.round(Number(row.engagement_score || 0)),
+          likes: Number(row.likes_received || 0),
+          superlikes: Number(row.superlikes_received || 0),
+          views: Number(row.profile_views || 0),
+          newMatches: Number(row.matches_created || 0),
+          momentum: 'rising' // Can be calculated from comparison to previous hour
+        }
+      };
+    });
+
+    const response = {
+      hotList: hotProfiles,
+      totalActive: hotProfiles.length,
+      generatedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      premiumFeature: true
+    };
+
+    await cacheSetPaginated(cacheKey, response, 300); // 5 min cache
+
+    res.json(response);
+  } catch (err) {
+    console.error('Hot list error:', err);
+    res.status(500).json({ error: 'Failed to get hot list', details: err.message });
+  }
+});
+
+// T4.3. SAVE DISCOVERY PRESET - Enhanced with performance tracking
+router.post('/discovery-presets', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { presetName, presetDescription, filters, icon, colorTag, isDefault } = req.body;
+
+    if (!presetName) {
+      return res.status(400).json({ error: 'Preset name required' });
+    }
+
+    if (!filters || typeof filters !== 'object') {
+      return res.status(400).json({ error: 'Filters object required' });
+    }
+
+    // If setting as default, unset others
+    if (isDefault) {
+      await db.query(
+        `UPDATE discovery_presets SET is_default = false WHERE user_id = $1`,
+        [userId]
+      );
+    }
+
+    const result = await db.query(
+      `INSERT INTO discovery_presets (
+         user_id, preset_name, preset_description, filters_json, 
+         is_default, icon, color_tag
+       )
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
+       RETURNING id, preset_name, preset_description, filters_json, is_default, 
+                 icon, color_tag, usage_count, matches_from_preset, avg_profile_rating, created_at`,
+      [userId, presetName, presetDescription || null, JSON.stringify(filters), 
+       isDefault || false, icon || '🔍', colorTag || 'blue']
+    );
+
+    const preset = result.rows[0];
+    res.json({
+      message: 'Discovery preset saved',
+      preset: {
+        id: preset.id,
+        name: preset.preset_name,
+        description: preset.preset_description,
+        filters: preset.filters_json,
+        isDefault: preset.is_default,
+        icon: preset.icon,
+        colorTag: preset.color_tag,
+        stats: {
+          usageCount: preset.usage_count,
+          matchesCreated: preset.matches_from_preset,
+          avgRating: preset.avg_profile_rating
+        },
+        createdAt: preset.created_at
+      }
+    });
+  } catch (err) {
+    console.error('Save discovery preset error:', err);
+    res.status(500).json({ error: 'Failed to save discovery preset' });
+  }
+});
+
+// T4.4. GET DISCOVERY PRESETS - Enhanced with performance data
+router.get('/discovery-presets', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const includeStats = req.query.stats === 'true';
+
+    const result = await db.query(
+      `SELECT id, preset_name, preset_description, filters_json, is_default,
+              icon, color_tag, usage_count, matches_from_preset, avg_profile_rating,
+              last_used_at, results_count, created_at
+       FROM discovery_presets
+       WHERE user_id = $1
+       ORDER BY ${includeStats ? 'matches_from_preset DESC' : 'last_used_at DESC NULLS LAST'},
+                created_at DESC`,
+      [userId]
+    );
+
+    const presets = result.rows.map(row => ({
+      id: row.id,
+      name: row.preset_name,
+      description: row.preset_description,
+      filters: row.filters_json,
+      isDefault: row.is_default,
+      icon: row.icon,
+      colorTag: row.color_tag,
+      lastUsedAt: row.last_used_at,
+      stats: includeStats ? {
+        usageCount: row.usage_count,
+        resultsCount: row.results_count,
+        matchesCreated: row.matches_from_preset,
+        avgRating: Number(row.avg_profile_rating || 0).toFixed(1),
+        performanceRank: row.matches_from_preset > 5 ? 'excellent' : 
+                        row.matches_from_preset > 2 ? 'good' : 
+                        row.usage_count > 5 ? 'fair' : 'new'
+      } : null,
+      createdAt: row.created_at
+    }));
+
+    // Recommend smart defaults based on user's best performing presets
+    const recommendedPresets = presets
+      .filter(p => p.stats && p.stats.performanceRank === 'excellent')
+      .slice(0, 3);
+
+    res.json({
+      presets,
+      recommendedPresets: recommendedPresets.length > 0 ? recommendedPresets : presets.slice(0, 3),
+      totalPresets: presets.length
+    });
+  } catch (err) {
+    console.error('Get discovery presets error:', err);
+    res.status(500).json({ error: 'Failed to fetch discovery presets' });
+  }
+});
+
+// T4.5. APPLY DISCOVERY PRESET - One-tap search with results
+router.post('/discovery-presets/:presetId/apply', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { presetId } = req.params;
+    const presetIdNum = normalizeInteger(presetId);
+
+    if (!presetIdNum) {
+      return res.status(400).json({ error: 'Invalid preset ID' });
+    }
+
+    // Get the preset
+    const presetResult = await db.query(
+      `SELECT * FROM discovery_presets 
+       WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [presetIdNum, userId]
+    );
+
+    if (presetResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Preset not found' });
+    }
+
+    const preset = presetResult.rows[0];
+    const filters = preset.filters_json;
+
+    // Get user's profile for location data
+    const userProfileResult = await db.query(
+      `SELECT location_lat, location_lng, profile_verified, profile_completion_percent
+       FROM dating_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+
+    const currentLat = toFiniteNumber(userProfileResult.rows[0]?.location_lat);
+    const currentLng = toFiniteNumber(userProfileResult.rows[0]?.location_lng);
+
+    // Build query with saved filters
+    const query = buildDiscoveryQuery({
+      userId,
+      currentLat,
+      currentLng,
+      radiusKm: filters.distance || 50,
+      ageMin: filters.ageMin,
+      ageMax: filters.ageMax,
+      genderPreferences: filters.genderPreferences,
+      relationshipGoals: filters.relationshipGoals,
+      interests: filters.interests,
+      heightRangeMin: filters.heightRangeMin,
+      heightRangeMax: filters.heightRangeMax,
+      bodyTypes: filters.bodyTypes,
+      excludeShown: false,
+      viewerTrustEligible:
+        Boolean(userProfileResult.rows[0]?.profile_verified) ||
+        Number(userProfileResult.rows[0]?.profile_completion_percent || 0) >= 80,
+      limit: 20
+    });
+
+    const result = await db.query(query.text, query.params);
+
+    // Update preset usage
+    await db.query(
+      `UPDATE discovery_presets 
+       SET usage_count = usage_count + 1,
+           last_used_at = CURRENT_TIMESTAMP,
+           results_count = $1
+       WHERE id = $2`,
+      [result.rows.length, presetIdNum]
+    );
+
+    // Get current profile and preferences for compatibility scoring
+    const currentProfileResult = await db.query(
+      `SELECT dp.*,
+              row_to_json(up) as preferences,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       WHERE dp.user_id = $1 LIMIT 1`,
+      [userId]
+    );
+
+    const currentProfile = normalizeProfileRow(currentProfileResult.rows[0]);
+    const currentPreferences = normalizePreferenceRow(currentProfileResult.rows[0]?.preferences);
+
+    // Score profiles using compatibility
+    const profiles = result.rows
+      .map((profileRow) => {
+        const normalizedProfile = normalizeProfileRow(profileRow);
+        const compatibility = buildCompatibilitySuggestion({
+          currentProfile,
+          currentPreferences,
+          candidateProfile: normalizedProfile,
+          candidatePreferences: profileRow.preferences
+        });
+
+        if (compatibility.isExcluded) {
+          return null;
+        }
+
+        return {
+          ...normalizedProfile,
+          ...compatibility
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.compatibilityScore - a.compatibilityScore);
+
+    res.json({
+      message: 'Preset applied successfully',
+      preset: {
+        id: preset.id,
+        name: preset.preset_name,
+        icon: preset.icon,
+        colorTag: preset.color_tag
+      },
+      profiles,
+      resultCount: profiles.length,
+      filters: filters
+    });
+  } catch (err) {
+    console.error('Apply discovery preset error:', err);
+    res.status(500).json({ error: 'Failed to apply preset', details: err.message });
+  }
+});
+
+// T4.6. DELETE DISCOVERY PRESET
+router.delete('/discovery-presets/:presetId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { presetId } = req.params;
+    const presetIdNum = normalizeInteger(presetId);
+
+    if (!presetIdNum) {
+      return res.status(400).json({ error: 'Invalid preset ID' });
+    }
+
+    const result = await db.query(
+      `DELETE FROM discovery_presets 
+       WHERE id = $1 AND user_id = $2
+       RETURNING id`,
+      [presetIdNum, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Preset not found' });
+    }
+
+    res.json({ message: 'Preset deleted successfully' });
+  } catch (err) {
+    console.error('Delete discovery preset error:', err);
+    res.status(500).json({ error: 'Failed to delete preset' });
+  }
+});
+
+// T4.7. RATE PRESET PERFORMANCE - Track match quality from preset results
+router.post('/discovery-presets/:presetId/rate', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { presetId } = req.params;
+    const { profileRating } = req.body; // 1-5 rating
+    const presetIdNum = normalizeInteger(presetId);
+    const rating = normalizeInteger(profileRating);
+
+    if (!presetIdNum || !rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: 'Invalid preset ID or rating (1-5)' });
+    }
+
+    // Get current average and count
+    const presetResult = await db.query(
+      `SELECT avg_profile_rating, matches_from_preset 
+       FROM discovery_presets 
+       WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [presetIdNum, userId]
+    );
+
+    if (presetResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Preset not found' });
+    }
+
+    const preset = presetResult.rows[0];
+    const currentAvg = Number(preset.avg_profile_rating || 0);
+    const currentMatches = preset.matches_from_preset || 0;
+    const newAvg = ((currentAvg * currentMatches) + rating) / (currentMatches + 1);
+
+    await db.query(
+      `UPDATE discovery_presets 
+       SET avg_profile_rating = $1
+       WHERE id = $2`,
+      [newAvg.toFixed(2), presetIdNum]
+    );
+
+    res.json({
+      message: 'Rating recorded',
+      presetId: presetIdNum,
+      rating,
+      newAvgRating: Number(newAvg.toFixed(2))
+    });
+  } catch (err) {
+    console.error('Rate preset error:', err);
+    res.status(500).json({ error: 'Failed to rate preset' });
+  }
+});
+
+// T4.8. GET PRESET RECOMMENDATIONS - ML-based smart defaults for user segment
+router.get('/discovery-presets/recommendations', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Get user's profile and existing presets
+    const [userResult, presetsResult] = await Promise.all([
+      db.query(
+        `SELECT gender, age, location_state, relationship_goals 
+         FROM dating_profiles WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      ),
+      db.query(
+        `SELECT id, preset_name, matches_from_preset, avg_profile_rating, usage_count
+         FROM discovery_presets 
+         WHERE user_id = $1
+         ORDER BY matches_from_preset DESC, avg_profile_rating DESC
+         LIMIT 5`,
+        [userId]
+      )
+    ]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const userProfile = userResult.rows[0];
+    const userPresets = presetsResult.rows;
+
+    // Build smart default presets based on user segment
+    const smartDefaults = [
+      {
+        name: 'Serious Connection',
+        description: 'Looking for long-term relationships',
+        icon: '💕',
+        colorTag: 'red',
+        filters: {
+          relationshipGoals: ['serious relationship', 'marriage'],
+          distance: 50,
+          ageMin: Math.max(18, userProfile.age - 5),
+          ageMax: userProfile.age + 10
+        }
+      },
+      {
+        name: 'Weekend Vibes',
+        description: 'Casual dating and new experiences',
+        icon: '🎉',
+        colorTag: 'purple',
+        filters: {
+          relationshipGoals: ['casual dating', 'see where it goes'],
+          distance: 25,
+          ageMin: userProfile.age - 3,
+          ageMax: userProfile.age + 5
+        }
+      },
+      {
+        name: 'Local Love',
+        description: 'Meet someone nearby',
+        icon: '📍',
+        colorTag: 'green',
+        filters: {
+          distance: 10,
+          ageMin: userProfile.age - 7,
+          ageMax: userProfile.age + 7
+        }
+      },
+      {
+        name: 'My Best Matches',
+        description: 'Profiles matching your saved searches',
+        icon: '⭐',
+        colorTag: 'gold',
+        filters: {
+          distance: 50,
+          ageMin: userProfile.age - 5,
+          ageMax: userProfile.age + 5,
+          genderPreferences: [userProfile.gender === 'M' ? 'F' : 'M']
+        }
+      }
+    ];
+
+    res.json({
+      smartDefaults,
+      userSegment: {
+        age: userProfile.age,
+        gender: userProfile.gender,
+        location: userProfile.location_state,
+        relationshipGoals: userProfile.relationship_goals
+      },
+      savedPresets: userPresets.map(p => ({
+        id: p.id,
+        name: p.preset_name,
+        performance: {
+          matches: p.matches_from_preset,
+          rating: Number(p.avg_profile_rating || 0).toFixed(1),
+          uses: p.usage_count
+        }
+      }))
+    });
+  } catch (err) {
+    console.error('Get preset recommendations error:', err);
+    res.status(500).json({ error: 'Failed to get recommendations', details: err.message });
+  }
+});
+
+// ============================================
+// SMART REWIND FEATURE ENDPOINTS
+// ============================================
+
+/**
+ * Get rewind quota status (daily limit, used, remaining)
+ * GET /api/dating/rewind/quota
+ */
+router.get('/rewind/quota', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Get subscription status
+    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
+    const isPremium = subscriptionAccess.isPremium || subscriptionAccess.isGold;
+    
+    // Get today's rewind usage
+    const today = new Date().toISOString().split('T')[0];
+    const quotaTracker = await dbModels.RewindQuotaTracker.findOne({
+      where: { user_id: userId, quota_date: today }
+    });
+    
+    const rewindsUsed = quotaTracker?.rewinds_used || 0;
+    const availability = rewindService.getRewindAvailability(isPremium, rewindsUsed);
+    
+    res.json({
+      success: true,
+      quota: availability,
+      resetTime: getNextResetTime(),
+      premiumUpgradeUrl: isPremium ? null : '/premium-plans'
+    });
+  } catch (err) {
+    console.error('Rewind quota error:', err);
+    res.status(500).json({ error: 'Failed to get rewind quota' });
+  }
+});
+
+/**
+ * Get passed profiles history (past 7 days)
+ * GET /api/dating/rewind/history?limit=50&offset=0
+ */
+router.get('/rewind/history', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const offset = parseInt(req.query.offset) || 0;
+    
+    // Get passed decisions in past 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const passedDecisions = await dbModels.UserDecisionHistory.findAll({
+      where: {
+        user_id: userId,
+        decision_type: 'pass',
+        decision_timestamp: {
+          [db.Sequelize.Op.gte]: sevenDaysAgo
+        }
+      },
+      include: [
+        {
+          model: dbModels.User,
+          as: 'profile_user',
+          attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
+          include: [
+            {
+              model: dbModels.DatingProfile,
+              as: 'datingProfile',
+              attributes: ['user_id', 'relationshipGoals', 'interests', 'location']
+            },
+            {
+              model: dbModels.ProfilePhoto,
+              as: 'profilePhotos',
+              attributes: ['id', 'photo_url', 'position'],
+              limit: 1,
+              order: [['position', 'ASC']]
+            }
+          ]
+        }
+      ],
+      order: [['decision_timestamp', 'DESC']],
+      limit,
+      offset
+    });
+    
+    // Format response
+    const formattedHistory = passedDecisions.map(decision => ({
+      decisionId: decision.id,
+      profileId: decision.profile_user_id,
+      passedAt: decision.decision_timestamp,
+      passReason: decision.pass_reason,
+      passReasonLabel: rewindService.getReasonLabel(decision.pass_reason),
+      passReasonIcon: rewindService.getReasonIcon(decision.pass_reason),
+      profile: decision.profile_user ? {
+        id: decision.profile_user.id,
+        firstName: decision.profile_user.firstName,
+        age: decision.profile_user.age,
+        bio: decision.profile_user.bio,
+        verified: decision.profile_user.profileVerified,
+        interests: decision.profile_user.datingProfile?.interests || [],
+        goals: decision.profile_user.datingProfile?.relationshipGoals,
+        location: decision.profile_user.datingProfile?.location,
+        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
+      } : null
+    }));
+    
+    const total = await dbModels.UserDecisionHistory.count({
+      where: {
+        user_id: userId,
+        decision_type: 'pass',
+        decision_timestamp: {
+          [db.Sequelize.Op.gte]: sevenDaysAgo
+        }
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: formattedHistory,
+      pagination: {
+        offset,
+        limit,
+        total,
+        hasMore: offset + limit < total
+      }
+    });
+  } catch (err) {
+    console.error('Rewind history error:', err);
+    res.status(500).json({ error: 'Failed to fetch rewind history' });
+  }
+});
+
+/**
+ * Get passed profiles grouped by reason
+ * GET /api/dating/rewind/history/by-reason
+ */
+router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    
+    // Get passed decisions in past 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const passedDecisions = await dbModels.UserDecisionHistory.findAll({
+      where: {
+        user_id: userId,
+        decision_type: 'pass',
+        decision_timestamp: {
+          [db.Sequelize.Op.gte]: sevenDaysAgo
+        }
+      },
+      include: [
+        {
+          model: dbModels.User,
+          as: 'profile_user',
+          attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
+          include: [
+            {
+              model: dbModels.DatingProfile,
+              as: 'datingProfile',
+              attributes: ['user_id', 'relationshipGoals', 'interests', 'location']
+            },
+            {
+              model: dbModels.ProfilePhoto,
+              as: 'profilePhotos',
+              attributes: ['id', 'photo_url', 'position'],
+              limit: 1,
+              order: [['position', 'ASC']]
+            }
+          ]
+        }
+      ],
+      order: [['decision_timestamp', 'DESC']]
+    });
+    
+    // Format data for grouping
+    const formattedData = passedDecisions.map(decision => ({
+      decisionId: decision.id,
+      profileId: decision.profile_user_id,
+      passedAt: decision.decision_timestamp,
+      reason: decision.pass_reason || 'other',
+      profile: decision.profile_user ? {
+        id: decision.profile_user.id,
+        firstName: decision.profile_user.firstName,
+        age: decision.profile_user.age,
+        bio: decision.profile_user.bio,
+        verified: decision.profile_user.profileVerified,
+        interests: decision.profile_user.datingProfile?.interests || [],
+        goals: decision.profile_user.datingProfile?.relationshipGoals,
+        location: decision.profile_user.datingProfile?.location,
+        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
+      } : null
+    }));
+    
+    // Group by reason
+    const groupedData = formattedData.reduce((acc, item) => {
+      const reason = item.reason;
+      if (!acc[reason]) {
+        acc[reason] = {
+          reason,
+          label: rewindService.getReasonLabel(reason),
+          icon: rewindService.getReasonIcon(reason),
+          profiles: []
+        };
+      }
+      acc[reason].profiles.push(item);
+      return acc;
+    }, {});
+    
+    const result = Object.values(groupedData)
+      .map(group => ({
+        ...group,
+        count: group.profiles.length
+      }))
+      .sort((a, b) => b.count - a.count);
+    
+    res.json({
+      success: true,
+      data: result,
+      totalPassed: formattedData.length
+    });
+  } catch (err) {
+    console.error('Rewind history by reason error:', err);
+    res.status(500).json({ error: 'Failed to fetch rewind history by reason' });
+  }
+});
+
+/**
+ * Restore a specific passed profile (rewind)
+ * POST /api/dating/rewind/restore/:profileId
+ */
+router.post('/rewind/restore/:profileId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const profileId = parseInt(req.params.profileId);
+    
+    // Check subscription for quota
+    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
+    const isPremium = subscriptionAccess.isPremium || subscriptionAccess.isGold;
+    
+    // Get today's rewind usage
+    const today = new Date().toISOString().split('T')[0];
+    let quotaTracker = await dbModels.RewindQuotaTracker.findOne({
+      where: { user_id: userId, quota_date: today }
+    });
+    
+    const rewindsUsed = quotaTracker?.rewinds_used || 0;
+    const dailyLimit = isPremium ? 999 : 3;
+    
+    if (rewindsUsed >= dailyLimit) {
+      return res.status(429).json({
+        error: 'Daily rewind limit reached',
+        limit: dailyLimit,
+        used: rewindsUsed,
+        message: isPremium ? 'Unexpected error' : 'Free users limited to 3 rewinds per day'
+      });
+    }
+    
+    // Find the pass decision
+    const passDecision = await dbModels.UserDecisionHistory.findOne({
+      where: {
+        user_id: userId,
+        profile_user_id: profileId,
+        decision_type: 'pass'
+      },
+      order: [['decision_timestamp', 'DESC']]
+    });
+    
+    if (!passDecision) {
+      return res.status(404).json({ error: 'No pass found for this profile' });
+    }
+    
+    // Create a rewind record
+    const rewindRecord = await dbModels.UserDecisionHistory.create({
+      user_id: userId,
+      profile_user_id: profileId,
+      decision_type: 'rewind',
+      context: passDecision.context,
+      pass_reason: passDecision.pass_reason // Track original pass reason
+    });
+    
+    // Update quota
+    if (!quotaTracker) {
+      quotaTracker = await dbModels.RewindQuotaTracker.create({
+        user_id: userId,
+        quota_date: today,
+        rewinds_used: 1,
+        is_premium_on_date: isPremium,
+        quota_limit: dailyLimit,
+        rewind_details_json: [
+          {
+            profileId,
+            timestamp: new Date(),
+            reason: passDecision.pass_reason
+          }
+        ]
+      });
+    } else {
+      const existing = quotaTracker.rewind_details_json || [];
+      await quotaTracker.update({
+        rewinds_used: quotaTracker.rewinds_used + 1,
+        rewind_details_json: [
+          ...existing,
+          {
+            profileId,
+            timestamp: new Date(),
+            reason: passDecision.pass_reason
+          }
+        ]
+      });
+    }
+    
+    // Get restored profile
+    const restoredProfile = await dbModels.User.findByPk(profileId, {
+      attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
+      include: [
+        {
+          model: dbModels.DatingProfile,
+          as: 'datingProfile',
+          attributes: ['user_id', 'relationshipGoals', 'interests', 'location']
+        },
+        {
+          model: dbModels.ProfilePhoto,
+          as: 'profilePhotos',
+          attributes: ['id', 'photo_url', 'position'],
+          order: [['position', 'ASC']]
+        }
+      ]
+    });
+    
+    // Track analytics
+    try {
+      await db.query(
+        `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent)
+         VALUES ($1, $2, 1)
+         ON CONFLICT (user_id, activity_date) DO UPDATE
+         SET rewinds_sent = user_analytics.rewinds_sent + 1`,
+        [userId, today]
+      );
+    } catch (err) {
+      console.error('Analytics update failed (non-critical):', err);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Profile rewound successfully',
+      restoredProfile: {
+        id: restoredProfile.id,
+        firstName: restoredProfile.firstName,
+        age: restoredProfile.age,
+        bio: restoredProfile.bio,
+        verified: restoredProfile.profileVerified,
+        interests: restoredProfile.datingProfile?.interests || [],
+        goals: restoredProfile.datingProfile?.relationshipGoals,
+        location: restoredProfile.datingProfile?.location,
+        photos: restoredProfile.profilePhotos?.map(p => ({
+          id: p.id,
+          url: p.photo_url,
+          position: p.position
+        })) || []
+      },
+      quota: rewindService.getRewindAvailability(isPremium, rewindsUsed + 1)
+    });
+  } catch (err) {
+    console.error('Rewind restore error:', err);
+    res.status(500).json({ error: 'Failed to restore profile', details: err.message });
+  }
+});
+
+/**
+ * Record a pass decision with categorized reason
+ * POST /api/dating/rewind/record-pass
+ * Body: { profileId, reason: 'age|distance|interests|goals|body_type|height|other' }
+ */
+router.post('/rewind/record-pass', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { profileId, reason = 'other', context = 'discovery' } = req.body;
+    
+    if (!profileId) {
+      return res.status(400).json({ error: 'profileId required' });
+    }
+    
+    // Validate reason
+    const validReasons = ['age', 'distance', 'interests', 'goals', 'body_type', 'height', 'other'];
+    const passReason = validReasons.includes(reason) ? reason : 'other';
+    
+    // Create decision history record
+    await dbModels.UserDecisionHistory.create({
+      user_id: userId,
+      profile_user_id: profileId,
+      decision_type: 'pass',
+      pass_reason: passReason,
+      context,
+      pass_reasons_json: { primary: passReason }
+    });
+    
+    // Update analytics
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await db.query(
+        `INSERT INTO user_analytics (user_id, activity_date, profiles_viewed)
+         VALUES ($1, $2, 1)
+         ON CONFLICT (user_id, activity_date) DO UPDATE
+         SET profiles_viewed = user_analytics.profiles_viewed + 1`,
+        [userId, today]
+      );
+    } catch (err) {
+      console.error('Analytics update failed (non-critical):', err);
+    }
+    
+    res.json({
+      success: true,
+      message: 'Pass recorded',
+      reason: passReason,
+      reasonLabel: rewindService.getReasonLabel(passReason)
+    });
+  } catch (err) {
+    console.error('Record pass error:', err);
+    res.status(500).json({ error: 'Failed to record pass', details: err.message });
+  }
+});
+
+/**
+ * Helper: Get next reset time for daily quota
+ */
+const getNextResetTime = () => {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  return tomorrow.toISOString();
+};
+
+// ==========================================
+// OPENING MESSAGE TEMPLATES WITH CONTEXT
+// ==========================================
+
+const icereakerSuggestionService = require('../services/icereakerSuggestionService');
+
+/**
+ * 91. GET /opening-templates/:profileId/suggestions
+ * Generate AI-powered icebreaker suggestions based on mutual interests
+ * Replaces generic "Hi" messages with context-aware suggestions
+ */
+router.get('/opening-templates/:profileId/suggestions', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const profileId = parseInt(req.params.profileId);
+
+    if (!profileId) {
+      return res.status(400).json({ error: 'Invalid profile ID' });
+    }
+
+    // Fetch sender's profile
+    const senderProfile = await dbModels.DatingProfile.findOne({
+      where: { userId }
+    });
+
+    if (!senderProfile) {
+      return res.status(404).json({ error: 'Your profile not found' });
+    }
+
+    // Fetch recipient's profile
+    const recipientUser = await dbModels.User.findByPk(profileId);
+    const recipientProfile = await dbModels.DatingProfile.findOne({
+      where: { userId: profileId }
+    });
+
+    if (!recipientProfile) {
+      return res.status(404).json({ error: 'Recipient profile not found' });
+    }
+
+    // Check if already matched or blocked
+    const existingMatch = await dbModels.Match.findOne({
+      where: {
+        [db.Sequelize.Op.or]: [
+          { user_id_1: userId, user_id_2: profileId },
+          { user_id_1: profileId, user_id_2: userId }
+        ]
+      }
+    });
+
+    if (existingMatch && existingMatch.status !== 'active') {
+      return res.status(403).json({ error: 'Cannot message this user' });
+    }
+
+    // Generate suggestions
+    const suggestions = await icereakerSuggestionService.generateIcebreakerSuggestions(
+      senderProfile,
+      recipientProfile,
+      userId
+    );
+
+    res.json({
+      profileId,
+      recipientName: recipientProfile.firstName,
+      recipientCity: recipientProfile.locationCity,
+      suggestions: suggestions.map(s => ({
+        content: s.content,
+        category: s.category,
+        emoji: s.emoji,
+        interestTrigger: s.interestTrigger,
+        isContextual: s.isContextual,
+        templateSource: s.templateSource,
+        isPinned: s.isPinned,
+        responseRate: s.responseRate
+      }))
+    });
+  } catch (err) {
+    console.error('Get icebreaker suggestions error:', err);
+    res.status(500).json({ error: 'Failed to generate suggestions', details: err.message });
+  }
+});
+
+/**
+ * 92. POST /opening-templates/use
+ * Track when a template suggestion is used to send a message
+ * Updates usage count and engagement metrics
+ */
+router.post('/opening-templates/use', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { toUserId, message, templateId, interestTrigger } = req.body;
+
+    if (!toUserId || !message) {
+      return res.status(400).json({ error: 'toUserId and message are required' });
+    }
+
+    // Find or create match
+    let match = await dbModels.Match.findOne({
+      where: {
+        [db.Sequelize.Op.or]: [
+          { user_id_1: userId, user_id_2: toUserId },
+          { user_id_1: toUserId, user_id_2: userId }
+        ]
+      }
+    });
+
+    if (!match) {
+      match = await dbModels.Match.create({
+        user_id_1: userId,
+        user_id_2: toUserId,
+        status: 'active'
+      });
+    }
+
+    // Create the message
+    const messageRecord = await dbModels.Message.create({
+      matchId: match.id,
+      fromUserId: userId,
+      toUserId: toUserId,
+      message: message,
+      isRead: false
+    });
+
+    // Track template usage if templateId provided
+    if (templateId) {
+      await icereakerSuggestionService.trackTemplateUsage(templateId, match.id, userId, toUserId);
+    } else if (interestTrigger) {
+      // Save this message as a new template for future use
+      try {
+        await icereakerSuggestionService.saveMessageAsTemplate(userId, message, match.id, interestTrigger);
+      } catch (err) {
+        console.warn('Failed to save message as template:', err);
+      }
+    }
+
+    // Emit socket event for real-time notification
+    try {
+      const io = require('../services/realTimeService').getIO();
+      io.to(`user_${toUserId}`).emit('new_message', {
+        matchId: match.id,
+        fromUserId: userId,
+        message: message,
+        timestamp: messageRecord.createdAt
+      });
+    } catch (err) {
+      console.warn('Failed to emit real-time event:', err);
+    }
+
+    res.json({
+      success: true,
+      message: 'Message sent with template tracking',
+      matchId: match.id,
+      messageId: messageRecord.id,
+      templateTracked: !!templateId
+    });
+  } catch (err) {
+    console.error('Use template error:', err);
+    res.status(500).json({ error: 'Failed to send message', details: err.message });
+  }
+});
+
+/**
+ * 93. GET /opening-templates/top-performers
+ * Get user's highest-performing message templates by response rate
+ * Shows which templates get the most positive responses
+ */
+router.get('/opening-templates/top-performers', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+
+    const templates = await icereakerSuggestionService.getTopPerformingTemplates(userId, limit);
+
+    res.json({
+      templates: templates.map(t => ({
+        id: t.id,
+        content: t.content,
+        category: t.category,
+        emoji: t.emoji,
+        interestTrigger: t.interestTrigger,
+        usageCount: t.usageCount,
+        responseCount: t.responseCount,
+        responseRate: parseFloat(t.responseRatePercent).toFixed(1),
+        engagementScore: parseFloat(t.engagementScore).toFixed(1),
+        lastUsedAt: t.lastUsedAt,
+        lastResponseAt: t.lastResponseAt
+      })),
+      count: templates.length,
+      avgResponseRate: templates.length > 0 
+        ? (templates.reduce((sum, t) => sum + parseFloat(t.responseRatePercent), 0) / templates.length).toFixed(1)
+        : 0
+    });
+  } catch (err) {
+    console.error('Get top templates error:', err);
+    res.status(500).json({ error: 'Failed to fetch templates', details: err.message });
+  }
+});
+
+/**
+ * 94. GET /opening-templates/recommended
+ * Get recommended templates based on past performance
+ * Returns high-performing templates that haven't been used recently
+ */
+router.get('/opening-templates/recommended', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit) || 5, 20);
+
+    const recommendations = await icereakerSuggestionService.getRecommendedTemplates(userId, limit);
+
+    res.json({
+      recommendations: recommendations.map(t => ({
+        id: t.id,
+        content: t.content,
+        category: t.category,
+        emoji: t.emoji,
+        interestTrigger: t.interestTrigger,
+        responseRate: parseFloat(t.responseRatePercent).toFixed(1),
+        engagementScore: parseFloat(t.engagementScore).toFixed(1),
+        reason: 'High performer - try again!'
+      })),
+      count: recommendations.length
+    });
+  } catch (err) {
+    console.error('Get recommendations error:', err);
+    res.status(500).json({ error: 'Failed to fetch recommendations', details: err.message });
+  }
+});
+
+/**
+ * 95. GET /opening-templates/my-templates
+ * Get all custom and saved message templates
+ * Includes performance metrics and category filtering
+ */
+router.get('/opening-templates/my-templates', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const category = req.query.category || null;
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const offset = Math.max(parseInt(req.query.offset) || 0, 0);
+
+    const where = { userId };
+    if (category) {
+      where.category = category;
+    }
+
+    const { rows, count } = await dbModels.MessageTemplate.findAndCountAll({
+      where,
+      order: [
+        ['isPinned', 'DESC'],
+        ['responseRatePercent', 'DESC']
+      ],
+      limit,
+      offset
+    });
+
+    res.json({
+      templates: rows.map(t => ({
+        id: t.id,
+        content: t.content,
+        title: t.title,
+        category: t.category,
+        emoji: t.emoji,
+        interestTrigger: t.interestTrigger,
+        templateSource: t.templateSource,
+        isPinned: t.isPinned,
+        usageCount: t.usageCount,
+        responseCount: t.responseCount,
+        responseRate: parseFloat(t.responseRatePercent).toFixed(1),
+        engagementScore: parseFloat(t.engagementScore).toFixed(1),
+        lastUsedAt: t.lastUsedAt
+      })),
+      count,
+      limit,
+      offset,
+      hasMore: offset + limit < count
+    });
+  } catch (err) {
+    console.error('Get my templates error:', err);
+    res.status(500).json({ error: 'Failed to fetch templates', details: err.message });
+  }
+});
+
+/**
+ * 96. POST /opening-templates/create
+ * Create a custom message template
+ * User can save frequently-used messages for reuse
+ */
+router.post('/opening-templates/create', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { content, title, category, emoji, interestTrigger } = req.body;
+
+    if (!content || !title) {
+      return res.status(400).json({ error: 'content and title are required' });
+    }
+
+    if (content.length > 500) {
+      return res.status(400).json({ error: 'Message content too long (max 500 characters)' });
+    }
+
+    const template = await dbModels.MessageTemplate.create({
+      userId,
+      content,
+      title: title.substring(0, 100),
+      category: category || 'general',
+      emoji: emoji || null,
+      interestTrigger: interestTrigger || null,
+      templateSource: 'user_custom',
+      usageCount: 0,
+      responseCount: 0,
+      responseRatePercent: 0
+    });
+
+    res.status(201).json({
+      id: template.id,
+      content: template.content,
+      title: template.title,
+      category: template.category,
+      emoji: template.emoji,
+      message: 'Template created successfully'
+    });
+  } catch (err) {
+    console.error('Create template error:', err);
+    res.status(500).json({ error: 'Failed to create template', details: err.message });
+  }
+});
+
+/**
+ * 97. PUT /opening-templates/:templateId
+ * Update an existing template
+ */
+router.put('/opening-templates/:templateId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const templateId = parseInt(req.params.templateId);
+    const { content, title, isPinned, category, emoji } = req.body;
+
+    const template = await dbModels.MessageTemplate.findByPk(templateId);
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    if (template.userId !== userId) {
+      return res.status(403).json({ error: 'Cannot modify other users templates' });
+    }
+
+    await template.update({
+      content: content || template.content,
+      title: title ? title.substring(0, 100) : template.title,
+      isPinned: isPinned !== undefined ? isPinned : template.isPinned,
+      category: category || template.category,
+      emoji: emoji || template.emoji
+    });
+
+    res.json({
+      id: template.id,
+      content: template.content,
+      title: template.title,
+      isPinned: template.isPinned,
+      message: 'Template updated successfully'
+    });
+  } catch (err) {
+    console.error('Update template error:', err);
+    res.status(500).json({ error: 'Failed to update template', details: err.message });
+  }
+});
+
+/**
+ * 98. DELETE /opening-templates/:templateId
+ * Delete a custom template
+ */
+router.delete('/opening-templates/:templateId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const templateId = parseInt(req.params.templateId);
+
+    const template = await dbModels.MessageTemplate.findByPk(templateId);
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    if (template.userId !== userId) {
+      return res.status(403).json({ error: 'Cannot delete other users templates' });
+    }
+
+    await template.destroy();
+
+    res.json({
+      message: 'Template deleted successfully'
+    });
+  } catch (err) {
+    console.error('Delete template error:', err);
+    res.status(500).json({ error: 'Failed to delete template', details: err.message });
+  }
+});
+
+/**
+ * 99. POST /opening-templates/track-response
+ * Track when a recipient responds to a message sent with a template
+ * Updates performance metrics for engagement scoring
+ */
+router.post('/opening-templates/track-response', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { templateId, hasResponse } = req.body;
+
+    if (!templateId) {
+      return res.status(400).json({ error: 'templateId is required' });
+    }
+
+    const template = await dbModels.MessageTemplate.findByPk(templateId);
+    if (!template) {
+      return res.status(404).json({ error: 'Template not found' });
+    }
+
+    if (template.userId !== userId) {
+      return res.status(403).json({ error: 'Cannot track responses for other users templates' });
+    }
+
+    await icereakerSuggestionService.trackTemplateResponse(templateId, hasResponse !== false);
+
+    const updated = await dbModels.MessageTemplate.findByPk(templateId);
+
+    res.json({
+      id: updated.id,
+      responseRate: parseFloat(updated.responseRatePercent).toFixed(1),
+      engagementScore: parseFloat(updated.engagementScore).toFixed(1),
+      message: 'Response tracked successfully'
+    });
+  } catch (err) {
+    console.error('Track response error:', err);
+    res.status(500).json({ error: 'Failed to track response', details: err.message });
+  }
+});
+
+// ============================================================================
+// STATUS PREFERENCES ROUTES - Live Activity Status Enhancements
+// ============================================================================
+
+/**
+ * GET /dating/status-preferences
+ * Get all status preferences for authenticated user
+ */
+router.get('/status-preferences', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT msp.*, m.user_id_1, m.user_id_2, u.display_name, u.photos
+       FROM match_status_preferences msp
+       JOIN matches m ON msp.match_id = m.id
+       LEFT JOIN users u ON (CASE 
+         WHEN m.user_id_1 = $1 THEN m.user_id_2 
+         ELSE m.user_id_1 
+       END) = u.id
+       WHERE msp.user_id = $1
+       ORDER BY msp.updated_at DESC`,
+      [userId]
+    );
+
+    res.json({
+      success: true,
+      preferences: result.rows,
+      count: result.rows.length
+    });
+  } catch (error) {
+    console.error('Error fetching status preferences:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /dating/status-preferences/:matchId
+ * Get status preference for specific match
+ */
+router.get('/status-preferences/:matchId', authenticateToken, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `SELECT * FROM match_status_preferences
+       WHERE user_id = $1 AND match_id = $2`,
+      [userId, matchId]
+    );
+
+    if (result.rows.length === 0) {
+      // Return defaults
+      return res.json({
+        success: true,
+        preference: {
+          userId,
+          matchId,
+          showOnlineStatus: true,
+          showLastActive: true,
+          showTypingIndicator: true,
+          showActivityStatus: true,
+          showReadReceipts: true,
+          shareDetailedStatus: true,
+          privacyLevel: 'full'
+        }
+      });
+    }
+
+    res.json({ success: true, preference: result.rows[0] });
+  } catch (error) {
+    console.error('Error fetching status preference:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /dating/status-preferences
+ * Create or update status preference for a match
+ */
+router.post('/status-preferences', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const {
+      matchId,
+      showOnlineStatus = true,
+      showLastActive = true,
+      showTypingIndicator = true,
+      showActivityStatus = true,
+      showReadReceipts = true,
+      shareDetailedStatus = true,
+      privacyLevel = 'full'
+    } = req.body;
+
+    if (!matchId) {
+      return res.status(400).json({ success: false, error: 'matchId is required' });
+    }
+
+    // Verify user is part of this match
+    const matchVerify = await db.query(
+      `SELECT id FROM matches WHERE id = $1 AND (user_id_1 = $2 OR user_id_2 = $2)`,
+      [matchId, userId]
+    );
+
+    if (matchVerify.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Not authorized for this match' });
+    }
+
+    // Upsert preference
+    const result = await db.query(
+      `INSERT INTO match_status_preferences (
+        user_id, match_id, show_online_status, show_last_active,
+        show_typing_indicator, show_activity_status, show_read_receipts,
+        share_detailed_status, privacy_level, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      ON CONFLICT (user_id, match_id) DO UPDATE SET
+        show_online_status = $3,
+        show_last_active = $4,
+        show_typing_indicator = $5,
+        show_activity_status = $6,
+        show_read_receipts = $7,
+        share_detailed_status = $8,
+        privacy_level = $9,
+        updated_at = NOW()
+      RETURNING *`,
+      [userId, matchId, showOnlineStatus, showLastActive, showTypingIndicator,
+       showActivityStatus, showReadReceipts, shareDetailedStatus, privacyLevel]
+    );
+
+    res.json({
+      success: true,
+      preference: result.rows[0],
+      message: 'Status preference updated'
+    });
+  } catch (error) {
+    console.error('Error saving status preference:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * PUT /dating/status-preferences/:matchId
+ * Update status preference for specific match
+ */
+router.put('/status-preferences/:matchId', authenticateToken, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const userId = req.user.id;
+    const updates = req.body;
+
+    // Verify user is part of this match
+    const matchVerify = await db.query(
+      `SELECT id FROM matches WHERE id = $1 AND (user_id_1 = $2 OR user_id_2 = $2)`,
+      [matchId, userId]
+    );
+
+    if (matchVerify.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Not authorized for this match' });
+    }
+
+    // Build update query dynamically
+    const allowedFields = [
+      'showOnlineStatus', 'showLastActive', 'showTypingIndicator',
+      'showActivityStatus', 'showReadReceipts', 'shareDetailedStatus', 'privacyLevel'
+    ];
+
+    const setClause = [];
+    const values = [];
+    let paramCount = 1;
+
+    Object.entries(updates).forEach(([key, value]) => {
+      if (allowedFields.includes(key)) {
+        const dbField = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+        setClause.push(`${dbField} = $${paramCount}`);
+        values.push(value);
+        paramCount++;
+      }
+    });
+
+    if (setClause.length === 0) {
+      return res.status(400).json({ success: false, error: 'No valid fields to update' });
+    }
+
+    values.push(new Date());
+    values.push(userId);
+    values.push(matchId);
+
+    const result = await db.query(
+      `UPDATE match_status_preferences
+       SET ${setClause.join(', ')}, updated_at = $${paramCount}
+       WHERE user_id = $${paramCount + 1} AND match_id = $${paramCount + 2}
+       RETURNING *`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Preference not found' });
+    }
+
+    res.json({
+      success: true,
+      preference: result.rows[0],
+      message: 'Status preference updated'
+    });
+  } catch (error) {
+    console.error('Error updating status preference:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /dating/status-preferences/:matchId/quick-set
+ * Quickly set privacy level preset (full, basic, minimal, hidden)
+ */
+router.post('/status-preferences/:matchId/quick-set', authenticateToken, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const { privacyLevel } = req.body;
+    const userId = req.user.id;
+
+    const validLevels = ['full', 'basic', 'minimal', 'hidden'];
+    if (!validLevels.includes(privacyLevel)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid privacy level. Must be: ' + validLevels.join(', ')
+      });
+    }
+
+    // Verify user is part of this match
+    const matchVerify = await db.query(
+      `SELECT id FROM matches WHERE id = $1 AND (user_id_1 = $2 OR user_id_2 = $2)`,
+      [matchId, userId]
+    );
+
+    if (matchVerify.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Not authorized for this match' });
+    }
+
+    // Apply preset
+    const presets = {
+      full: {
+        show_online_status: true,
+        show_last_active: true,
+        show_typing_indicator: true,
+        show_activity_status: true,
+        show_read_receipts: true,
+        share_detailed_status: true
+      },
+      basic: {
+        show_online_status: true,
+        show_last_active: false,
+        show_typing_indicator: false,
+        show_activity_status: false,
+        show_read_receipts: false,
+        share_detailed_status: false
+      },
+      minimal: {
+        show_online_status: false,
+        show_last_active: true,
+        show_typing_indicator: false,
+        show_activity_status: false,
+        show_read_receipts: false,
+        share_detailed_status: false
+      },
+      hidden: {
+        show_online_status: false,
+        show_last_active: false,
+        show_typing_indicator: false,
+        show_activity_status: false,
+        show_read_receipts: false,
+        share_detailed_status: false
+      }
+    };
+
+    const preset = presets[privacyLevel];
+
+    const result = await db.query(
+      `INSERT INTO match_status_preferences (
+        user_id, match_id, show_online_status, show_last_active,
+        show_typing_indicator, show_activity_status, show_read_receipts,
+        share_detailed_status, privacy_level, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      ON CONFLICT (user_id, match_id) DO UPDATE SET
+        show_online_status = $3,
+        show_last_active = $4,
+        show_typing_indicator = $5,
+        show_activity_status = $6,
+        show_read_receipts = $7,
+        share_detailed_status = $8,
+        privacy_level = $9,
+        updated_at = NOW()
+      RETURNING *`,
+      [userId, matchId, preset.show_online_status, preset.show_last_active,
+       preset.show_typing_indicator, preset.show_activity_status,
+       preset.show_read_receipts, preset.share_detailed_status, privacyLevel]
+    );
+
+    res.json({
+      success: true,
+      preference: result.rows[0],
+      privacyLevel,
+      message: `Privacy level set to ${privacyLevel}`
+    });
+  } catch (error) {
+    console.error('Error setting privacy level:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /dating/activity-status/:matchId/:userId
+ * Get formatted activity status for a user in a match (respects privacy)
+ */
+router.get('/activity-status/:matchId/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { matchId, userId } = req.params;
+    const requesterId = req.user.id;
+
+    // Get match to verify requester is part of it
+    const match = await db.query(
+      `SELECT id FROM matches WHERE id = $1 AND (user_id_1 = $2 OR user_id_2 = $2)`,
+      [matchId, requesterId]
+    );
+
+    if (match.rows.length === 0) {
+      return res.status(403).json({ success: false, error: 'Not authorized for this match' });
+    }
+
+    const ActivityStatusFormatterService = require('../services/activityStatusFormatterService');
+
+    // Get status with privacy filtering
+    const status = await ActivityStatusFormatterService.buildStatusForMatch(userId, matchId, true);
+    const formatted = ActivityStatusFormatterService.formatStatusForDisplay(status);
+
+    res.json({
+      success: true,
+      status,
+      formatted,
+      privacy: status.privacy
+    });
+  } catch (error) {
+    console.error('Error getting activity status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /dating/status-preferences/:matchId
+ * Delete status preference for a match (revert to defaults)
+ */
+router.delete('/status-preferences/:matchId', authenticateToken, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const userId = req.user.id;
+
+    const result = await db.query(
+      `DELETE FROM match_status_preferences
+       WHERE user_id = $1 AND match_id = $2
+       RETURNING id`,
+      [userId, matchId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Preference not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Status preference deleted, reverted to defaults'
+    });
+  } catch (error) {
+    console.error('Error deleting status preference:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

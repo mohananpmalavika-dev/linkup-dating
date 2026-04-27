@@ -27,7 +27,6 @@ const buildReferralProfileContext = (referral) => ({
 const SocialHub = ({
   onMatchCreated,
   onOpenChatroom,
-  onOpenLobby,
   onOpenProfile
 }) => {
   const [hub, setHub] = useState(null);
@@ -156,10 +155,10 @@ const SocialHub = ({
       <div className="social-hub-shell">
         <section className="social-hero-card">
           <div>
-            <p className="social-eyebrow">Phase 4 social layer</p>
-            <h1>Connections that support the dating loop</h1>
+            <p className="social-eyebrow">Phase 3 warm-up layer</p>
+            <h1>Dating-first spaces that support matching</h1>
             <p className="social-hero-copy">
-              Keep friend energy, profile links, invite rewards, and community rooms close by without distracting from matching.
+              Keep referrals, profile links, friend energy, and gated warm-up spaces close by without turning LinkUp into a general social app.
             </p>
           </div>
           <div className="social-hero-stats">
@@ -342,7 +341,7 @@ const SocialHub = ({
             <div className="social-card-header">
               <div>
                 <h2>Referral rewards</h2>
-                <p>Invite friends and unlock boosts, extra superlikes, and premium time for both sides.</p>
+                <p>Starter rewards help someone join well. Your bigger upside comes when they become a quality activated dater.</p>
               </div>
               <button type="button" className="social-link-button" onClick={() => setShowReferralModal(true)}>
                 Share tools
@@ -360,9 +359,9 @@ const SocialHub = ({
             </div>
 
             <div className="reward-chip-row">
-              <span className="reward-chip">+{hub?.referral?.rewardOffer?.boostCredits || 0} boost credit</span>
-              <span className="reward-chip">+{hub?.referral?.rewardOffer?.superlikeCredits || 0} superlikes</span>
-              <span className="reward-chip">+{hub?.referral?.rewardOffer?.premiumTrialDays || 0} premium days</span>
+              <span className="reward-chip">Starter: +{hub?.referral?.starterReward?.boostCredits || hub?.referral?.rewardOffer?.boostCredits || 0} boost</span>
+              <span className="reward-chip">Starter: +{hub?.referral?.starterReward?.superlikeCredits || hub?.referral?.rewardOffer?.superlikeCredits || 0} superlikes</span>
+              <span className="reward-chip">Quality bonus: +{hub?.referral?.qualityBonus?.premiumTrialDays || 0} premium days</span>
             </div>
 
             <div className="wallet-grid">
@@ -388,6 +387,14 @@ const SocialHub = ({
               <div className="social-summary-pill">
                 <strong>{hub?.referral?.stats?.pending || 0}</strong>
                 <span>Open invites</span>
+              </div>
+              <div className="social-summary-pill">
+                <strong>{hub?.referral?.qualityMetrics?.referralToActivatedUserQuality || 0}%</strong>
+                <span>Activated-user quality</span>
+              </div>
+              <div className="social-summary-pill">
+                <strong>{hub?.referral?.qualityMetrics?.qualityActivated || 0}</strong>
+                <span>Quality activations</span>
               </div>
             </div>
           </article>
@@ -429,12 +436,9 @@ const SocialHub = ({
           <article className="social-card">
             <div className="social-card-header">
               <div>
-                <h2>Interest-based rooms</h2>
-                <p>Community spaces that increase repeat opens without hijacking the core matching flow.</p>
+                <h2>Warm-up spaces</h2>
+                <p>Small, gated rooms built to warm people into dating intent before a match begins.</p>
               </div>
-              <button type="button" className="social-link-button" onClick={onOpenLobby}>
-                Open lounge
-              </button>
             </div>
 
             {hub?.communityRooms?.length ? (
@@ -448,7 +452,15 @@ const SocialHub = ({
                       <div>
                         <strong>{room.name}</strong>
                         <p>{room.description}</p>
+                        {room.warmUpPrompt ? <p>{room.warmUpPrompt}</p> : null}
+                        {room.audioPrompt ? <p>{room.audioPrompt}</p> : null}
                         <span className="room-meta">{room.memberCount || room.member_count || 0} members</span>
+                        {room.eligibility?.blockers?.length ? (
+                          <span className="room-meta">{room.eligibility.blockers[0]}</span>
+                        ) : null}
+                        {room.datingIntentOnly ? (
+                          <span className="visibility-pill private">Dating intent only</span>
+                        ) : null}
                       </div>
                       <button
                         type="button"
@@ -461,9 +473,9 @@ const SocialHub = ({
 
                           handleJoinRoom(room.slug);
                         }}
-                        disabled={isBusy}
+                        disabled={isBusy || room.eligibility?.canJoin === false}
                       >
-                        {isBusy ? 'Opening...' : isMember ? 'Open room' : 'Join room'}
+                        {isBusy ? 'Opening...' : isMember ? 'Open room' : room.eligibility?.canJoin === false ? 'Finish profile' : 'Join room'}
                       </button>
                     </div>
                   );
@@ -475,12 +487,9 @@ const SocialHub = ({
 
             <div className="lobby-card">
               <div>
-                <strong>Global lounge</strong>
-                <p>Drop into the public lobby when you want lighter ambient social energy.</p>
+                <strong>Why these stay gated</strong>
+                <p>Warm-up spaces are intentionally small, private, and tied to dating goals so they support matching instead of replacing it.</p>
               </div>
-              <button type="button" className="social-btn social-btn-muted" onClick={onOpenLobby}>
-                Open lobby
-              </button>
             </div>
           </article>
         </section>

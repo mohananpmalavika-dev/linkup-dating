@@ -94,6 +94,83 @@ export const datingProfileService = {
   },
 
   /**
+   * Upload a video intro (15-60 seconds) with fraud detection
+   */
+  uploadVideoIntro: async (file, durationSeconds) => {
+    try {
+      const formData = new FormData();
+      formData.append('photos', file);
+      formData.append('durationSeconds', String(durationSeconds));
+
+      const response = await axios.post(`${API_URL}/profiles/me/video-intro`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to upload video intro';
+    }
+  },
+
+  /**
+   * Get video intro details including authentication status
+   */
+  getVideoIntroDetails: async () => {
+    try {
+      const response = await axios.get(`${API_URL}/profiles/me/video-intro`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to fetch video intro details';
+    }
+  },
+
+  /**
+   * Delete video intro
+   */
+  deleteVideoIntro: async () => {
+    try {
+      const response = await axios.delete(`${API_URL}/profiles/me/video-intro`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to delete video intro';
+    }
+  },
+
+  /**
+   * Re-run fraud detection on existing video intro
+   */
+  recheckVideoFraud: async () => {
+    try {
+      const response = await axios.post(`${API_URL}/profiles/me/video-intro/recheck-fraud`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to re-check video fraud detection';
+    }
+  },
+
+  /**
+   * Get video duration from file (client-side helper)
+   */
+  getVideoDurationSeconds: (file) =>
+    new Promise((resolve, reject) => {
+      const video = document.createElement('video');
+      const objectUrl = URL.createObjectURL(file);
+
+      video.preload = 'metadata';
+      video.src = objectUrl;
+
+      video.onloadedmetadata = () => {
+        const duration = Math.round(video.duration || 0);
+        URL.revokeObjectURL(objectUrl);
+        resolve(duration);
+      };
+
+      video.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Unable to read video metadata'));
+      };
+    }),
+
+  /**
    * Get profiles for discovery (with optional filters and cursor pagination)
    */
   getDiscoveryProfiles: async (filters = {}) => {
@@ -808,9 +885,14 @@ export const datingProfileService = {
   /**
    * Send message request to non-match
    */
-  sendMessageRequest: async (toUserId, message) => {
+  sendMessageRequest: async (toUserId, message, options = {}) => {
     try {
-      const response = await axios.post(`${API_URL}/message-requests`, { toUserId, message });
+      const response = await axios.post(`${API_URL}/message-requests`, {
+        toUserId,
+        message,
+        requestType: options.requestType || 'intent',
+        isPriority: Boolean(options.isPriority)
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to send message request';
@@ -1006,6 +1088,42 @@ export const datingProfileService = {
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to get compatibility';
+    }
+  },
+
+  /**
+   * Get trust and verification summary for a profile
+   */
+  getProfileTrustScore: async (userId) => {
+    try {
+      const response = await axios.get(`${API_URL}/profile-trust-score/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get trust score';
+    }
+  },
+
+  /**
+   * Update archive or snooze state for a match
+   */
+  updateMatchState: async (matchId, payload = {}) => {
+    try {
+      const response = await axios.patch(`${API_URL}/matches/${matchId}/state`, payload);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to update match state';
+    }
+  },
+
+  /**
+   * Load conversation quality metrics for a match
+   */
+  getConversationHealth: async (matchId) => {
+    try {
+      const response = await axios.get(`${API_URL}/conversation-quality/${matchId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get conversation health';
     }
   },
 

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import '../styles/BrowseProfiles.css';
 import datingProfileService from '../services/datingProfileService';
+import { buildLocalIdentityPack, buildTrustSummary } from '../utils/datingPhaseTwo';
 
 const defaultFilters = {
   ageRange: { min: 18, max: 65 },
@@ -9,7 +10,12 @@ const defaultFilters = {
   heightRange: { min: 150, max: 210 },
   bodyTypes: [],
   distance: 100,
-  genderPreferences: []
+  genderPreferences: [],
+  languages: [],
+  conversationStyle: '',
+  city: '',
+  onlyVerifiedProfiles: false,
+  communityPreference: ''
 };
 
 const relationshipGoalOptions = [
@@ -36,6 +42,8 @@ const interestOptions = [
 
 const bodyTypeOptions = ['Slim', 'Average', 'Athletic', 'Curvy', 'Muscular', 'Heavyset'];
 const genderOptions = ['male', 'female', 'non-binary', 'other'];
+const languageOptions = ['English', 'Hindi', 'Malayalam', 'Tamil', 'Telugu', 'Kannada', 'Bengali', 'Marathi'];
+const conversationStyleOptions = ['direct', 'steady', 'deep'];
 
 const parseIntegerOrFallback = (value, fallbackValue) => {
   const parsedValue = Number.parseInt(value, 10);
@@ -155,7 +163,12 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       interests: filters.interests,
       bodyTypes: filters.bodyTypes,
       distance: filters.distance,
-      genderPreferences: filters.genderPreferences
+      genderPreferences: filters.genderPreferences,
+      languages: filters.languages,
+      conversationStyle: filters.conversationStyle,
+      city: filters.city,
+      onlyVerifiedProfiles: filters.onlyVerifiedProfiles,
+      communityPreference: filters.communityPreference
     };
     searchProfiles(apiFilters);
     setShowFilters(false);
@@ -183,7 +196,14 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       distance: entry.filters?.distance || defaultFilters.distance,
       genderPreferences: Array.isArray(entry.filters?.genderPreferences)
         ? entry.filters.genderPreferences
-        : defaultFilters.genderPreferences
+        : defaultFilters.genderPreferences,
+      languages: Array.isArray(entry.filters?.languages)
+        ? entry.filters.languages
+        : defaultFilters.languages,
+      conversationStyle: entry.filters?.conversationStyle || defaultFilters.conversationStyle,
+      city: entry.filters?.city || defaultFilters.city,
+      onlyVerifiedProfiles: Boolean(entry.filters?.onlyVerifiedProfiles),
+      communityPreference: entry.filters?.communityPreference || defaultFilters.communityPreference
     };
     setFilters(nextFilters);
     await searchProfiles(nextFilters);
@@ -361,7 +381,92 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
             </div>
           </div>
 
-          <p className="filter-hint">These filters now map directly to the backend search request.</p>
+          <div className="filter-group">
+            <label>Languages</label>
+            <div className="checkbox-group">
+              {languageOptions.map((language) => (
+                <label key={language} className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={filters.languages.includes(language)}
+                    onChange={() => toggleArrayValue('languages', language)}
+                  />
+                  {language}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="conversation-style-filter">Conversation Style</label>
+            <select
+              id="conversation-style-filter"
+              value={filters.conversationStyle}
+              onChange={(event) =>
+                setFilters((currentFilters) => ({
+                  ...currentFilters,
+                  conversationStyle: event.target.value
+                }))
+              }
+            >
+              <option value="">Any style</option>
+              {conversationStyleOptions.map((style) => (
+                <option key={style} value={style}>
+                  {style.charAt(0).toUpperCase() + style.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="city-filter">City Match</label>
+            <input
+              id="city-filter"
+              type="text"
+              value={filters.city}
+              onChange={(event) =>
+                setFilters((currentFilters) => ({
+                  ...currentFilters,
+                  city: event.target.value
+                }))
+              }
+              placeholder="Bengaluru, Kochi, Chennai..."
+            />
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="community-filter">Community Or Culture</label>
+            <input
+              id="community-filter"
+              type="text"
+              value={filters.communityPreference}
+              onChange={(event) =>
+                setFilters((currentFilters) => ({
+                  ...currentFilters,
+                  communityPreference: event.target.value
+                }))
+              }
+              placeholder="Malayali, Tamil, Christian..."
+            />
+          </div>
+
+          <label className="checkbox-label premium-filter-toggle">
+            <input
+              type="checkbox"
+              checked={filters.onlyVerifiedProfiles}
+              onChange={(event) =>
+                setFilters((currentFilters) => ({
+                  ...currentFilters,
+                  onlyVerifiedProfiles: event.target.checked
+                }))
+              }
+            />
+            Verified profiles only
+          </label>
+
+          <p className="filter-hint">
+            Premium filters now include languages, city match, conversation style, and verified-only discovery.
+          </p>
 
           <div className="filters-actions">
             <button type="button" className="btn-apply" onClick={handleApplyFilters}>
@@ -417,69 +522,102 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
 
       {!loading && !error && profiles.length > 0 && (
         <div className="profiles-grid">
-          {profiles.map((profile) => (
-            <div key={profile.userId} className="profile-card-grid">
-              <button
-                type="button"
-                className="profile-image profile-image-button"
-                onClick={() => onProfileSelect?.(profile)}
-                style={{
-                  backgroundImage: profile.photos?.[0]
-                    ? `url(${profile.photos[0]})`
-                    : 'linear-gradient(135deg, #667eea, #764ba2)'
-                }}
-              >
-                {profile.profileVerified ? (
-                  <div className="verified-badge">Verified</div>
-                ) : null}
-                {profile.compatibilityScore ? (
-                  <div className="compatibility-badge-browse">{profile.compatibilityScore}%</div>
-                ) : null}
-              </button>
+          {profiles.map((profile) => {
+            const identityPack = buildLocalIdentityPack(profile);
+            const trustSummary = buildTrustSummary({ profile });
 
-              <div className="profile-card-info">
-                <h3>{profile.firstName}, {profile.age}</h3>
-                <p className="location">
-                  {profile.location?.city || 'Location unavailable'}
-                  {profile.distanceKm ? ` · ${profile.distanceKm} km` : ''}
-                </p>
-                <p className="bio-preview">{truncateText(profile.bio)}</p>
+            return (
+              <div key={profile.userId} className="profile-card-grid">
+                <button
+                  type="button"
+                  className="profile-image profile-image-button"
+                  onClick={() => onProfileSelect?.(profile)}
+                  style={{
+                    backgroundImage: profile.photos?.[0]
+                      ? `url(${profile.photos[0]})`
+                      : 'linear-gradient(135deg, #667eea, #764ba2)'
+                  }}
+                >
+                  {profile.profileVerified ? (
+                    <div className="verified-badge">Verified</div>
+                  ) : null}
+                  {profile.compatibilityScore ? (
+                    <div className="compatibility-badge-browse">{profile.compatibilityScore}%</div>
+                  ) : null}
+                </button>
 
-                {profile.interests && profile.interests.length > 0 ? (
-                  <div className="interests-preview">
-                    {profile.interests.slice(0, 3).map((interest) => (
-                      <span key={interest} className="tag-small">{interest}</span>
+                <div className="profile-card-info">
+                  <h3>{profile.firstName}, {profile.age}</h3>
+                  <p className="location">
+                    {profile.location?.city || 'Location unavailable'}
+                    {profile.distanceKm ? ` · ${profile.distanceKm} km` : ''}
+                  </p>
+                  <p className="bio-preview">{truncateText(profile.bio)}</p>
+
+                  <div className="browse-phase-two-badges">
+                    {identityPack.cityVibe ? (
+                      <span className="browse-mini-pill city">{identityPack.cityVibe}</span>
+                    ) : null}
+                    {identityPack.culturalBadges.slice(0, 1).map((badge) => (
+                      <span key={badge.label} className={`browse-mini-pill ${badge.tone}`}>
+                        {badge.label}
+                      </span>
                     ))}
+                    <span className={`browse-mini-pill trust ${trustSummary.level}`}>
+                      {trustSummary.level === 'trusted'
+                        ? 'High trust'
+                        : trustSummary.level === 'strong'
+                          ? 'Strong trust'
+                          : trustSummary.level === 'pending'
+                            ? 'Verification pending'
+                            : trustSummary.level === 'basic'
+                              ? 'Basic trust'
+                              : 'New profile'}
+                    </span>
                   </div>
-                ) : null}
 
-                <div className="card-actions">
-                  <button
-                    type="button"
-                    className="btn-view-profile"
-                    onClick={() => onProfileSelect?.(profile)}
-                  >
-                    View Profile
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-view-profile"
-                    onClick={() => handleToggleFavorite(profile)}
-                  >
-                    {favoriteUserIds.has(String(profile.userId)) ? 'Unfavorite' : 'Favorite'}
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-like-small"
-                    onClick={() => handleLike(profile)}
-                    aria-label={`Like ${profile.firstName}`}
-                  >
-                    Like
-                  </button>
+                  {profile.interests && profile.interests.length > 0 ? (
+                    <div className="interests-preview">
+                      {profile.interests.slice(0, 3).map((interest) => (
+                        <span key={interest} className="tag-small">{interest}</span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {identityPack.localDateSuggestions?.[0] ? (
+                    <p className="bio-preview browse-local-date-hint">
+                      Local date idea: {identityPack.localDateSuggestions[0].title}
+                    </p>
+                  ) : null}
+
+                  <div className="card-actions">
+                    <button
+                      type="button"
+                      className="btn-view-profile"
+                      onClick={() => onProfileSelect?.(profile)}
+                    >
+                      View Profile
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-view-profile"
+                      onClick={() => handleToggleFavorite(profile)}
+                    >
+                      {favoriteUserIds.has(String(profile.userId)) ? 'Unfavorite' : 'Favorite'}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-like-small"
+                      onClick={() => handleLike(profile)}
+                      aria-label={`Like ${profile.firstName}`}
+                    >
+                      Like
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -494,4 +632,3 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
 };
 
 export default BrowseProfiles;
-

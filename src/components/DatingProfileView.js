@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from '../router';
 import datingProfileService from '../services/datingProfileService';
 import socialService from '../services/socialService';
 import BlockReportModal from './BlockReportModal';
 import DateJourneyPanel from './DateJourneyPanel';
 import { getStoredUserData } from '../utils/auth';
+import { buildLocalIdentityPack, buildTrustSummary } from '../utils/datingPhaseTwo';
 import '../styles/DatingProfile.css';
 
 const getProfileActivityHint = (lastActive) => {
@@ -77,6 +78,7 @@ const DatingProfileView = ({
   const [showBlockReportModal, setShowBlockReportModal] = useState(false);
   const [showMessageRequest, setShowMessageRequest] = useState(false);
   const [requestMessage, setRequestMessage] = useState('');
+  const [requestPriority, setRequestPriority] = useState(false);
   const [sendingRequest, setSendingRequest] = useState(false);
   const [subscription, setSubscription] = useState(null);
   const [compatibility, setCompatibility] = useState(null);
@@ -172,6 +174,14 @@ const DatingProfileView = ({
     };
   }, [currentUserId, initialProfile, profileId]);
 
+  const canMessage = typeof onMessage === 'function' && Boolean(profile?.matchId);
+  const canVideoCall = typeof onVideoCall === 'function' && Boolean(profile?.matchId);
+  const canScheduleVideoCall =
+    typeof onScheduleVideoCall === 'function' && Boolean(profile?.matchId);
+  const activityHint = getProfileActivityHint(profile?.lastActive);
+  const identityPack = useMemo(() => buildLocalIdentityPack(profile || {}), [profile]);
+  const trustSummary = useMemo(() => buildTrustSummary({ profile: profile || {} }), [profile]);
+
   if (loading && !profile) {
     return (
       <div className="profile-container loading">
@@ -188,12 +198,6 @@ const DatingProfileView = ({
       </div>
     );
   }
-
-  const canMessage = typeof onMessage === 'function' && Boolean(profile.matchId);
-  const canVideoCall = typeof onVideoCall === 'function' && Boolean(profile.matchId);
-  const canScheduleVideoCall =
-    typeof onScheduleVideoCall === 'function' && Boolean(profile.matchId);
-  const activityHint = getProfileActivityHint(profile.lastActive);
 
   const handleBlockUser = async (userId) => {
     try {
@@ -224,9 +228,13 @@ const DatingProfileView = ({
     try {
       setSendingRequest(true);
       setError('');
-      await datingProfileService.sendMessageRequest(profile.userId, requestMessage.trim());
+      await datingProfileService.sendMessageRequest(profile.userId, requestMessage.trim(), {
+        requestType: 'intent',
+        isPriority: requestPriority
+      });
       setShowMessageRequest(false);
       setRequestMessage('');
+      setRequestPriority(false);
       alert('Message request sent successfully!');
     } catch (err) {
       setError(err || 'Failed to send message request');
@@ -352,6 +360,139 @@ const DatingProfileView = ({
               </div>
             ) : null}
           </div>
+        </div>
+
+        <div className="profile-section">
+          <div className="section-header-row">
+            <div>
+              <h3>Local Identity Pack</h3>
+              <p>Small local and cultural cues that make starting the right conversation easier.</p>
+            </div>
+            {identityPack.cityVibe ? (
+              <span className="section-meta-pill">{identityPack.cityVibe}</span>
+            ) : null}
+          </div>
+
+          {identityPack.culturalBadges.length > 0 ? (
+            <div className="interests-list">
+              {identityPack.culturalBadges.map((badge) => (
+                <span key={badge.label} className={`interest-tag identity-tag ${badge.tone}`}>
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {identityPack.cityBasedPrompts.length > 0 ? (
+            <div className="compatibility-reasons">
+              <p><strong>City prompts</strong></p>
+              <ul>
+                {identityPack.cityBasedPrompts.map((prompt) => (
+                  <li key={prompt}>{prompt}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
+          {identityPack.languageIcebreakers.length > 0 ? (
+            <div className="icebreakers">
+              <p><strong>Language-based openers</strong></p>
+              <div className="icebreaker-list">
+                {identityPack.languageIcebreakers.map((icebreaker) => (
+                  <button
+                    key={icebreaker}
+                    type="button"
+                    className="icebreaker-btn"
+                    onClick={() => {
+                      if (canMessage && onMessage) {
+                        onMessage(profile, icebreaker);
+                      }
+                    }}
+                    disabled={!canMessage}
+                  >
+                    {icebreaker}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {identityPack.localDateSuggestions.length > 0 ? (
+            <div className="compatibility-reasons">
+              <p><strong>Local date suggestions</strong></p>
+              <ul>
+                {identityPack.localDateSuggestions.map((idea) => (
+                  <li key={`${idea.type}-${idea.title}`}>
+                    <strong>{idea.title}</strong> {idea.reason}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="profile-section">
+          <div className="section-header-row">
+            <div>
+              <h3>Trust Snapshot</h3>
+              <p>Clearer verification signals, photo readiness checks, and trust badges.</p>
+            </div>
+            <span className={`section-meta-pill trust-pill ${trustSummary.level}`}>
+              {trustSummary.level === 'trusted'
+                ? 'High trust'
+                : trustSummary.level === 'strong'
+                  ? 'Strong trust'
+                  : trustSummary.level === 'pending'
+                    ? 'Pending'
+                    : trustSummary.level === 'basic'
+                      ? 'Basic'
+                      : 'New'}
+            </span>
+          </div>
+
+          {trustSummary.badges.length > 0 ? (
+            <div className="interests-list">
+              {trustSummary.badges.map((badge) => (
+                <span key={badge.label} className={`interest-tag trust-tag ${badge.tone}`}>
+                  {badge.label}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="verification-items trust-ladder">
+            {trustSummary.ladder.map((step) => (
+              <div
+                key={step.key}
+                className={`verification-item ${step.completed ? 'verified' : 'pending'}`}
+              >
+                <span>{step.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="verification-items trust-photo-checks">
+            {trustSummary.photoChecks.map((check) => (
+              <div
+                key={check.label}
+                className={`verification-item ${check.passed ? 'verified' : 'pending'}`}
+              >
+                <strong>{check.label}</strong>
+                <span>{check.detail}</span>
+              </div>
+            ))}
+          </div>
+
+          {trustSummary.warnings.length > 0 ? (
+            <div className="compatibility-reasons">
+              <p><strong>Heads up</strong></p>
+              <ul>
+                {trustSummary.warnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
 
         {profile.voiceIntroUrl ? (
@@ -543,13 +684,13 @@ const DatingProfileView = ({
             <button type="button" className="btn-edit" onClick={() => onMessage(profile)}>
               Open Chat
             </button>
-          ) : subscription?.isGold && !profile.matchId ? (
+          ) : !profile.matchId ? (
             <button
               type="button"
               className="btn-edit"
               onClick={() => setShowMessageRequest(true)}
             >
-              💌 Send Message Request
+              Send Intent
             </button>
           ) : null}
           {profile.matchId ? (
@@ -599,15 +740,28 @@ const DatingProfileView = ({
 
         {showMessageRequest && (
           <div className="profile-section message-request-form">
-            <h3>Send Message Request</h3>
-            <p>Send a message to {profile.firstName} without matching. They can accept or decline.</p>
+            <h3>Send Intent</h3>
+            <p>
+              Send one thoughtful note to {profile.firstName} before matching. Keep it intentional,
+              specific, and easy to reply to.
+            </p>
             <textarea
               value={requestMessage}
               onChange={(e) => setRequestMessage(e.target.value)}
-              placeholder="Write a thoughtful message (10-500 characters)..."
+              placeholder="Write a thoughtful intro (10-500 characters)..."
               rows={4}
               maxLength={500}
             />
+            {subscription?.isPremium || subscription?.isGold ? (
+              <label className="date-feedback-toggle">
+                <input
+                  type="checkbox"
+                  checked={requestPriority}
+                  onChange={(event) => setRequestPriority(event.target.checked)}
+                />
+                <span>Send as a priority intro</span>
+              </label>
+            ) : null}
             <div className="request-actions">
               <span className="char-count">{requestMessage.length}/500</span>
               <button
@@ -623,7 +777,7 @@ const DatingProfileView = ({
                 onClick={handleSendMessageRequest}
                 disabled={sendingRequest || requestMessage.trim().length < 10}
               >
-                {sendingRequest ? 'Sending...' : 'Send Request'}
+                {sendingRequest ? 'Sending...' : requestPriority ? 'Send Priority Intro' : 'Send Intent'}
               </button>
             </div>
           </div>

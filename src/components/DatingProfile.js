@@ -1,6 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import AccountSettings from './AccountSettings';
+import { VideoIntroUploader } from './VideoIntroUploader';
+import { VideoAuthenticationResult } from './VideoAuthenticationResult';
 import datingProfileService from '../services/datingProfileService';
+import {
+  buildLocalIdentityPack,
+  buildTrustSummary
+} from '../utils/datingPhaseTwo';
 import '../styles/DatingProfile.css';
 
 const defaultVerificationForm = {
@@ -96,10 +102,17 @@ const DatingProfile = ({ onLogout }) => {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [profileViews, setProfileViews] = useState({ viewers: [], isPremium: false, totalCount: 0 });
   const [showProfileViews, setShowProfileViews] = useState(false);
+  const [premiumDashboard, setPremiumDashboard] = useState(null);
+  const [trustScoreData, setTrustScoreData] = useState(null);
   const [showVoiceIntroUploader, setShowVoiceIntroUploader] = useState(false);
   const [voiceIntroFile, setVoiceIntroFile] = useState(null);
   const [voiceIntroDurationSeconds, setVoiceIntroDurationSeconds] = useState(null);
   const [uploadingVoiceIntro, setUploadingVoiceIntro] = useState(false);
+
+  // Phase 4b: Video intro (Premium Feature)
+  const [showVideoIntroUploader, setShowVideoIntroUploader] = useState(false);
+  const [videoAuthResult, setVideoAuthResult] = useState(null);
+  const [videoAuthLoading, setVideoAuthLoading] = useState(false);
 
   const completionChecklist = [
     {
@@ -133,6 +146,12 @@ const DatingProfile = ({ onLogout }) => {
       hint: 'A short voice intro helps your profile feel more human and memorable.'
     },
     {
+      key: 'videoIntro',
+      label: 'Add a video intro (Premium)',
+      done: Boolean(profile?.videoIntroUrl),
+      hint: 'Video intros get 30% more matches! This premium feature unlocks authenticity verification.'
+    },
+    {
       key: 'verification',
       label: 'Complete verification',
       done: Boolean(profile?.verifications?.email && profile?.verifications?.phone && profile?.verifications?.id),
@@ -143,6 +162,18 @@ const DatingProfile = ({ onLogout }) => {
   const completedSteps = completionChecklist.filter((item) => item.done).length;
   const completionPercent = Math.round((completedSteps / completionChecklist.length) * 100);
   const missingSteps = completionChecklist.filter((item) => !item.done);
+  const identityPack = useMemo(() => buildLocalIdentityPack(profile || {}), [profile]);
+  const trustSummary = useMemo(
+    () => buildTrustSummary({
+      profile: profile || {},
+      trustScore: trustScoreData,
+      verificationStatus: {
+        verificationStatus
+      }
+    }),
+    [profile, trustScoreData, verificationStatus]
+  );
+  const phaseThreeRoadmap = premiumDashboard?.phaseThreeRoadmap || null;
 
   const loadProfile = async () => {
     try {
@@ -205,15 +236,21 @@ const DatingProfile = ({ onLogout }) => {
       setNotificationPreferences(notifPrefsData);
 
       // Phase 3: Load verification status and subscription
-      const [verificationData, subscriptionData, plansData] = await Promise.all([
+      const [verificationData, subscriptionData, plansData, premiumDashboardData, trustScorePayload] = await Promise.all([
         datingProfileService.getVerificationStatus().catch(() => ({ verificationStatus: 'none', profileVerified: false })),
         datingProfileService.getMySubscription().catch(() => ({ plan: 'free', isPremium: false, isGold: false })),
-        datingProfileService.getSubscriptionPlans().catch(() => ({ plans: [] }))
+        datingProfileService.getSubscriptionPlans().catch(() => ({ plans: [] })),
+        datingProfileService.getPremiumDashboard().catch(() => null),
+        profileData?.userId
+          ? datingProfileService.getProfileTrustScore(profileData.userId).catch(() => null)
+          : Promise.resolve(null)
       ]);
 
       setVerificationStatus(verificationData.verificationStatus || 'none');
       setSubscription(subscriptionData);
       setSubscriptionPlans(plansData.plans || []);
+      setPremiumDashboard(premiumDashboardData);
+      setTrustScoreData(trustScorePayload);
       setStats({
         likes: Array.isArray(likesData) ? likesData.length : 0,
         matches: matchesData.matches?.length || 0,
@@ -551,6 +588,49 @@ const DatingProfile = ({ onLogout }) => {
     }
   };
 
+  const handleVideoIntroUploadSuccess = async (uploadResult, videoDetails) => {
+    // Close uploader
+    setShowVideoIntroUploader(false);
+    
+    // Display authentication result if available
+    if (uploadResult?.authentication) {
+      setVideoAuthResult(uploadResult.authentication);
+    }
+    
+    // Reload profile
+    await loadProfile();
+  };
+
+  const handleVideoIntroRetryFraud = async () => {
+    try {
+      setVideoAuthLoading(true);
+      setError('');
+      const result = await datingProfileService.recheckVideoFraud();
+      if (result?.authentication) {
+        setVideoAuthResult(result.authentication);
+      }
+    } catch (err) {
+      setError(err || 'Failed to retry fraud detection');
+    } finally {
+      setVideoAuthLoading(false);
+    }
+  };
+
+  const handleVideoIntroDelete = async () => {
+    if (!window.confirm('Remove your video intro?')) {
+      return;
+    }
+
+    try {
+      setError('');
+      await datingProfileService.deleteVideoIntro();
+      setVideoAuthResult(null);
+      await loadProfile();
+    } catch (err) {
+      setError(err || 'Failed to delete video intro');
+    }
+  };
+
   const getLastActiveLabel = (lastActive) => {
     if (!lastActive) return 'Not recently active';
     const diff = Date.now() - new Date(lastActive).getTime();
@@ -852,6 +932,71 @@ const DatingProfile = ({ onLogout }) => {
             ) : null}
           </div>
 
+          {/* Video Intro Section - Premium Feature */}
+          <div className="profile-section video-intro-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Video Intro ⭐</h3>
+                <p>
+                  Upload a 15-60 second video. Get 30% more matches! Our AI verifies it's really you.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="section-link-btn"
+                onClick={() => setShowVideoIntroUploader(!showVideoIntroUploader)}
+              >
+                {showVideoIntroUploader ? 'Close' : profile.videoIntroUrl ? 'Replace' : 'Add video'}
+              </button>
+            </div>
+
+            {profile.videoIntroUrl ? (
+              <div className="video-intro-card">
+                <div className="video-intro-card-header">
+                  <strong>Live on your profile</strong>
+                  {profile.videoIntroDurationSeconds ? (
+                    <span>{profile.videoIntroDurationSeconds}s</span>
+                  ) : null}
+                </div>
+                <video controls preload="metadata" className="video-intro-player" src={profile.videoIntroUrl} />
+                <p className="video-intro-note">
+                  Status: {profile.videoAuthenticationStatus ? profile.videoAuthenticationStatus.replace(/_/g, ' ') : 'pending'}
+                </p>
+                {profile.videoAuthenticationScore && (
+                  <div className="auth-score-mini">
+                    <span>Authenticity: {(profile.videoAuthenticationScore * 100).toFixed(0)}%</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="video-intro-placeholder">
+                <div className="placeholder-icon">🎥</div>
+                <p>No video intro yet. Video intros significantly boost your profile visibility and match rate!</p>
+              </div>
+            )}
+
+            {showVideoIntroUploader ? (
+              <VideoIntroUploader
+                isPremium={subscription?.plan === 'premium' || subscription?.plan === 'gold'}
+                currentVideoUrl={profile.videoIntroUrl}
+                currentDuration={profile.videoIntroDurationSeconds}
+                onUploadSuccess={handleVideoIntroUploadSuccess}
+                onClose={() => setShowVideoIntroUploader(false)}
+              />
+            ) : null}
+
+            {videoAuthResult && (
+              <div className="video-auth-result-wrapper">
+                <VideoAuthenticationResult
+                  authentication={videoAuthResult}
+                  isPremium={subscription?.plan === 'premium' || subscription?.plan === 'gold'}
+                  onRetry={handleVideoIntroRetryFraud}
+                  onDelete={handleVideoIntroDelete}
+                />
+              </div>
+            )}
+          </div>
+
           <div className="profile-section">
             <h3>Verification</h3>
             <div className="verification-items">
@@ -932,6 +1077,116 @@ const DatingProfile = ({ onLogout }) => {
                 >
                   {verificationLoading ? 'Submitting verification...' : 'Submit Verification'}
                 </button>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Trust Ladder</h3>
+                <p>Stronger verification, clearer photo checks, and more transparent trust badges.</p>
+              </div>
+              <span className={`section-meta-pill trust-pill ${trustSummary.level}`}>
+                {trustSummary.level === 'trusted'
+                  ? 'High trust'
+                  : trustSummary.level === 'strong'
+                    ? 'Strong trust'
+                    : trustSummary.level === 'pending'
+                      ? 'Pending'
+                      : trustSummary.level === 'basic'
+                        ? 'Basic'
+                        : 'New'}
+              </span>
+            </div>
+
+            {trustSummary.badges.length > 0 ? (
+              <div className="interests-list">
+                {trustSummary.badges.map((badge) => (
+                  <span key={badge.label} className={`interest-tag trust-tag ${badge.tone}`}>
+                    {badge.label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            <div className="verification-items trust-ladder">
+              {trustSummary.ladder.map((step) => (
+                <div
+                  key={step.key}
+                  className={`verification-item ${step.completed ? 'verified' : 'pending'}`}
+                >
+                  <span>{step.label}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="verification-items trust-photo-checks">
+              {trustSummary.photoChecks.map((check) => (
+                <div
+                  key={check.label}
+                  className={`verification-item ${check.passed ? 'verified' : 'pending'}`}
+                >
+                  <strong>{check.label}</strong>
+                  <span>{check.detail}</span>
+                </div>
+              ))}
+            </div>
+
+            {trustSummary.warnings.length > 0 ? (
+              <div className="recommendations-list">
+                <p><strong>What to tighten up</strong></p>
+                <ul>
+                  {trustSummary.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Local Identity Pack</h3>
+                <p>City prompts, cultural badges, and local-date suggestions that make your profile feel grounded.</p>
+              </div>
+              {identityPack.cityVibe ? (
+                <span className="section-meta-pill">{identityPack.cityVibe}</span>
+              ) : null}
+            </div>
+
+            {identityPack.culturalBadges.length > 0 ? (
+              <div className="interests-list">
+                {identityPack.culturalBadges.map((badge) => (
+                  <span key={badge.label} className={`interest-tag identity-tag ${badge.tone}`}>
+                    {badge.label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+
+            {identityPack.cityBasedPrompts.length > 0 ? (
+              <div className="recommendations-list">
+                <p><strong>City prompts to lean on</strong></p>
+                <ul>
+                  {identityPack.cityBasedPrompts.map((prompt) => (
+                    <li key={prompt}>{prompt}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {identityPack.localDateSuggestions.length > 0 ? (
+              <div className="recommendations-list">
+                <p><strong>Local date suggestions</strong></p>
+                <ul>
+                  {identityPack.localDateSuggestions.map((suggestion) => (
+                    <li key={`${suggestion.type}-${suggestion.title}`}>
+                      <strong>{suggestion.title}</strong> {suggestion.reason}
+                    </li>
+                  ))}
+                </ul>
               </div>
             ) : null}
           </div>
@@ -1435,6 +1690,137 @@ const DatingProfile = ({ onLogout }) => {
               </div>
             ) : null}
           </div>
+
+          {premiumDashboard ? (
+            <div className="profile-section">
+              <div className="section-header-row">
+                <div>
+                  <h3>Premium Insights</h3>
+                  <p>Who viewed you, boost performance, priority intros, and the filters that convert best.</p>
+                </div>
+                <span className="section-meta-pill">
+                  {premiumDashboard.subscription?.plan || 'free'}
+                </span>
+              </div>
+
+              <div className="views-stats-grid">
+                <div className="view-stat">
+                  <span className="view-stat-value">{premiumDashboard.viewedYou?.totalCount || 0}</span>
+                  <span className="view-stat-label">Who Viewed Me</span>
+                </div>
+                <div className="view-stat">
+                  <span className="view-stat-value">{premiumDashboard.boost?.history?.length || 0}</span>
+                  <span className="view-stat-label">Boost Runs</span>
+                </div>
+                <div className="view-stat">
+                  <span className="view-stat-value">{premiumDashboard.priorityIntros?.sent || 0}</span>
+                  <span className="view-stat-label">Intros Sent</span>
+                </div>
+                <div className="view-stat">
+                  <span className="view-stat-value">{premiumDashboard.priorityIntros?.acceptanceRate || 0}%</span>
+                  <span className="view-stat-label">Intro Accept Rate</span>
+                </div>
+              </div>
+
+              {premiumDashboard.boost?.current ? (
+                <div className="voice-intro-card">
+                  <div className="voice-intro-card-header">
+                    <strong>Boost live now</strong>
+                    <span>{premiumDashboard.boost.current.minutesRemaining}m left</span>
+                  </div>
+                  <p className="voice-intro-note">
+                    {premiumDashboard.boost.current.outcome?.profileViews || 0} views,
+                    {' '}
+                    {premiumDashboard.boost.current.outcome?.totalPositiveActions || 0} positive actions during this window.
+                  </p>
+                </div>
+              ) : null}
+
+              {premiumDashboard.boost?.history?.length > 0 ? (
+                <div className="compact-profile-list">
+                  {premiumDashboard.boost.history.slice(0, 3).map((boost) => (
+                    <div key={boost.id || boost.expiresAt} className="compact-profile-card">
+                      <div className="compact-profile-copy">
+                        <strong>{boost.active ? 'Active boost' : 'Recent boost'}</strong>
+                        <span>
+                          {boost.outcome?.profileViews || 0} views · {boost.outcome?.totalPositiveActions || 0} actions
+                        </span>
+                      </div>
+                      <span className="compact-meta">
+                        {new Date(boost.startedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {premiumDashboard.premiumInsights?.length > 0 ? (
+                <div className="recommendations-list">
+                  <p><strong>Better premium insights</strong></p>
+                  <ul>
+                    {premiumDashboard.premiumInsights.map((insight) => (
+                      <li key={insight}>{insight}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="notification-summary">
+                {(premiumDashboard.advancedFilters?.filters || []).map((filter) => (
+                  <span key={filter}>{filter}</span>
+                ))}
+              </div>
+
+              <div className="recommendations-list">
+                <p><strong>Phase 2 targets</strong></p>
+                <ul>
+                  <li>+{premiumDashboard.phaseTwoTargets?.conversationRetentionLiftPercent || 20}% conversation retention</li>
+                  <li>+{premiumDashboard.phaseTwoTargets?.premiumConversionLiftPercent || 15}% premium conversion from active daters</li>
+                  <li>+{premiumDashboard.phaseTwoTargets?.videoDateAdoptionLiftPercent || 10}% video-date adoption</li>
+                </ul>
+              </div>
+
+              {phaseThreeRoadmap ? (
+                <div className="phase-roadmap-card">
+                  <div className="section-header-row">
+                    <div>
+                      <h4>Phase 3 roadmap</h4>
+                      <p>{phaseThreeRoadmap.focus}</p>
+                    </div>
+                    <span className="section-meta-pill">{phaseThreeRoadmap.timeline}</span>
+                  </div>
+
+                  <p className="roadmap-guardrail">
+                    <strong>Guardrail:</strong> {phaseThreeRoadmap.guardrail}
+                  </p>
+
+                  <div className="roadmap-section-grid">
+                    {(phaseThreeRoadmap.initiatives || []).map((initiative) => (
+                      <div key={initiative.key} className="roadmap-section">
+                        <strong>{initiative.title}</strong>
+                        <ul>
+                          {(initiative.items || []).map((item) => (
+                            <li key={`${initiative.key}-${item.label}`}>
+                              <strong>{item.label}:</strong> {item.detail}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="roadmap-target-grid">
+                    {(phaseThreeRoadmap.metricTargets || []).map((metric) => (
+                      <div key={metric.label} className="roadmap-target-card">
+                        <span className="roadmap-target-value">+{metric.upliftPercent}%</span>
+                        <span className="roadmap-target-label">{metric.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {/* Phase 4: Analytics & Insights Section */}
           <div className="profile-section">

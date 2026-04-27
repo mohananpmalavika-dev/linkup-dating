@@ -114,6 +114,7 @@ const init = async () => {
         preference_flexibility JSONB DEFAULT '{"mode":"balanced","learnFromActivity":true}',
         compatibility_answers JSONB DEFAULT '{}',
         learning_profile JSONB DEFAULT '{"positiveSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"negativeSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"totalPositiveActions":0,"totalNegativeActions":0,"lastInteractionAt":null}',
+        match_management JSONB DEFAULT '{"archivedMatches":{},"snoozedMatches":{}}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -542,7 +543,8 @@ const init = async () => {
       ADD COLUMN IF NOT EXISTS deal_breakers JSONB DEFAULT '{}',
       ADD COLUMN IF NOT EXISTS preference_flexibility JSONB DEFAULT '{"mode":"balanced","learnFromActivity":true}',
       ADD COLUMN IF NOT EXISTS compatibility_answers JSONB DEFAULT '{}',
-      ADD COLUMN IF NOT EXISTS learning_profile JSONB DEFAULT '{"positiveSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"negativeSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"totalPositiveActions":0,"totalNegativeActions":0,"lastInteractionAt":null}';
+      ADD COLUMN IF NOT EXISTS learning_profile JSONB DEFAULT '{"positiveSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"negativeSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"totalPositiveActions":0,"totalNegativeActions":0,"lastInteractionAt":null}',
+      ADD COLUMN IF NOT EXISTS match_management JSONB DEFAULT '{"archivedMatches":{},"snoozedMatches":{}}';
     `);
 
       await client.query(`
@@ -553,11 +555,16 @@ const init = async () => {
           learning_profile = COALESCE(
             learning_profile,
             '{"positiveSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"negativeSignals":{"interests":{},"relationshipGoals":{},"bodyTypes":{},"ageBands":{},"verification":{}},"totalPositiveActions":0,"totalNegativeActions":0,"lastInteractionAt":null}'::jsonb
+          ),
+          match_management = COALESCE(
+            match_management,
+            '{"archivedMatches":{},"snoozedMatches":{}}'::jsonb
           )
       WHERE deal_breakers IS NULL
          OR preference_flexibility IS NULL
          OR compatibility_answers IS NULL
-         OR learning_profile IS NULL;
+         OR learning_profile IS NULL
+         OR match_management IS NULL;
     `);
 
       // Migration: Add username column if it doesn't exist

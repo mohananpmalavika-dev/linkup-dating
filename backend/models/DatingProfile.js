@@ -209,6 +209,37 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       field: 'video_intro_url'
     },
+    videoIntroDurationSeconds: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'video_intro_duration_seconds',
+      comment: 'Duration of video intro in seconds (15-60)'
+    },
+    videoIntroUploadedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'video_intro_uploaded_at'
+    },
+    videoAuthenticationStatus: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+      field: 'video_authentication_status',
+      validate: {
+        isIn: [['pending', 'authenticated', 'flagged', 'reviewing']]
+      },
+      defaultValue: null,
+      comment: 'Fraud detection status of video intro'
+    },
+    videoAuthenticationScore: {
+      type: DataTypes.DECIMAL(3, 2),
+      allowNull: true,
+      field: 'video_authentication_score',
+      validate: {
+        min: 0,
+        max: 1
+      },
+      comment: 'Authenticity score from fraud detection (0=fake, 1=authentic)'
+    },
     // Photo verification fields
     verificationPhotoUrl: {
       type: DataTypes.STRING(500),
@@ -252,6 +283,8 @@ module.exports = (sequelize, DataTypes) => {
       { fields: ['profile_verified'] },
       { fields: ['last_active'] },
       { fields: ['profile_completion_percent'] },
+      { fields: ['video_authentication_status'] },
+      { fields: ['video_authentication_score'] },
       // Geospatial index for location-based queries
       { fields: ['location_lat', 'location_lng'] }
     ]
