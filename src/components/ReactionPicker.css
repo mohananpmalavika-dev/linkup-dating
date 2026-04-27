@@ -1,0 +1,182 @@
+/**
+ * ReactionPicker Styles
+ */
+
+.reaction-picker-container {
+  position: relative;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.reaction-picker-buttons {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.reaction-quick-btn,
+.reaction-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 4px 8px;
+  border: 1px solid #e0e0e0;
+  background: #f5f5f5;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.reaction-quick-btn:hover {
+  background: #fffacd;
+  border-color: #ffd700;
+  transform: scale(1.15);
+}
+
+.reaction-more-btn {
+  font-size: 14px;
+  color: #666;
+}
+
+.reaction-more-btn:hover {
+  background: #e8e8e8;
+  border-color: #999;
+}
+
+.more-dots {
+  letter-spacing: 2px;
+  font-weight: bold;
+}
+
+/* Reaction Picker Modal */
+.reaction-picker-modal {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 8px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  min-width: 280px;
+  max-width: 320px;
+}
+
+.reaction-picker-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+  border-radius: 12px 12px 0 0;
+}
+
+.reaction-picker-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.reaction-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  padding: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.reaction-picker-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 60px;
+}
+
+.reaction-picker-item:hover {
+  background: #fffacd;
+  border-color: #ffd700;
+  transform: scale(1.05);
+}
+
+.reaction-emoji {
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.reaction-name {
+  font-size: 10px;
+  color: #666;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.reaction-picker-footer {
+  padding: 8px 16px;
+  text-align: center;
+  border-top: 1px solid #f0f0f0;
+  background: #fafafa;
+  border-radius: 0 0 12px 12px;
+  color: #999;
+}
+
+/* Scroll styling */
+.reaction-picker-grid::-webkit-scrollbar {
+  width: 6px;
+}
+
+.reaction-picker-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.reaction-picker-grid::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.reaction-picker-grid::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Mobile responsive */
+@media (max-width: 640px) {
+  .reaction-picker-modal {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    top: auto;
+    margin-top: 0;
+    border-radius: 12px 12px 0 0;
+    max-width: 100%;
+    animation: slideUp 0.3s ease;
+  }
+
+  .reaction-picker-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+}
