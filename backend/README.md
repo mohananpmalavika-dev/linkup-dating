@@ -148,10 +148,15 @@ JWT_EXPIRE=7d
 FRONTEND_URL=http://localhost:3000
 
 # Email (Optional)
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your_email@gmail.com
-SMTP_PASSWORD=your_app_password
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=your_email@gmail.com
+EMAIL_PASS=your_app_password
+EMAIL_FROM=your_email@gmail.com
+
+# Redis (Optional)
+REDIS_URL=redis://default:password@host:port
 ```
 
 ## 🧪 Testing

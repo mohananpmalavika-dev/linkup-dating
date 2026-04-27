@@ -55,9 +55,17 @@ const getRequestMetadata = (req) => ({
 });
 
 const getRewardBalanceForUser = async (userId) => {
-  const rewardBalance = await dbModels.UserRewardBalance.findOne({
-    where: { userId }
-  });
+  let rewardBalance = null;
+
+  try {
+    rewardBalance = await dbModels.UserRewardBalance.findOne({
+      where: { userId }
+    });
+  } catch (error) {
+    if (!isOptionalAnalyticsError(error)) {
+      throw error;
+    }
+  }
 
   return {
     model: rewardBalance,
@@ -84,12 +92,13 @@ const spendRewardCredits = async (rewardBalanceModel, fieldName, amount = 1) => 
 };
 
 const getSubscriptionAccessForUser = async (userId) => {
-  const result = await db.query(
+  const result = await optionalQuery(
     `SELECT plan, status, expires_at
      FROM subscriptions
      WHERE user_id = $1
      LIMIT 1`,
-    [userId]
+    [userId],
+    []
   );
 
   const subscription = result.rows[0];
@@ -110,7 +119,11 @@ const getSubscriptionAccessForUser = async (userId) => {
 const countRowValue = (value) => Number.parseInt(value, 10) || 0;
 const OPTIONAL_ANALYTICS_ERROR_CODES = new Set(['42P01', '42703']);
 
-const isOptionalAnalyticsError = (error) => OPTIONAL_ANALYTICS_ERROR_CODES.has(error?.code);
+const getOptionalAnalyticsErrorCode = (error) =>
+  error?.code || error?.parent?.code || error?.original?.code || null;
+
+const isOptionalAnalyticsError = (error) =>
+  OPTIONAL_ANALYTICS_ERROR_CODES.has(getOptionalAnalyticsErrorCode(error));
 
 const optionalQuery = async (queryText, values = [], fallbackRows = []) => {
   try {
@@ -196,11 +209,12 @@ const getSubscriptionSnapshotForUser = async (userId) => {
 const getDailyLimitSnapshot = async (userId) => {
   const today = new Date().toISOString().split('T')[0];
   const [analyticsResult, subscriptionAccess, rewardBalance] = await Promise.all([
-    db.query(
+    optionalQuery(
       `SELECT likes_sent, superlikes_sent, rewinds_sent, boosts_used
        FROM user_analytics
        WHERE user_id = $1 AND activity_date = $2`,
-      [userId, today]
+      [userId, today],
+      []
     ),
     getSubscriptionAccessForUser(userId),
     getRewardBalanceForUser(userId)
@@ -2196,19 +2210,21 @@ const enrichMatchesWithJourney = async (currentUserId, matches = []) => {
        GROUP BY match_id`,
       [matchIds, currentUserId]
     ),
-    db.query(
+    optionalQuery(
       `SELECT *
        FROM date_proposals
        WHERE match_id = ANY($1::int[])
        ORDER BY created_at DESC, id DESC`,
-      [matchIds]
+      [matchIds],
+      []
     ),
-    db.query(
+    optionalQuery(
       `SELECT *
        FROM video_dates
        WHERE match_id = ANY($1::int[])
        ORDER BY COALESCE(scheduled_at, created_at) DESC, id DESC`,
-      [matchIds]
+      [matchIds],
+      []
     )
   ]);
 
@@ -2244,12 +2260,13 @@ const enrichMatchesWithJourney = async (currentUserId, matches = []) => {
 
   if (proposalIds.length > 0) {
     try {
-      const feedbackResult = await db.query(
+      const feedbackResult = await optionalQuery(
         `SELECT date_proposal_id, MAX(updated_at) as updated_at
          FROM date_completion_feedback
          WHERE date_proposal_id = ANY($1::int[])
          GROUP BY date_proposal_id`,
-        [proposalIds]
+        [proposalIds],
+        []
       );
 
       feedbackResult.rows.forEach((row) => {

@@ -308,6 +308,92 @@ const init = async () => {
       );
     `);
 
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        plan VARCHAR(50) DEFAULT 'free',
+        status VARCHAR(20) DEFAULT 'active',
+        started_at TIMESTAMP,
+        expires_at TIMESTAMP,
+        stripe_customer_id VARCHAR(255),
+        stripe_subscription_id VARCHAR(255),
+        payment_method VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS user_reward_balances (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        boost_credits INTEGER DEFAULT 0,
+        superlike_credits INTEGER DEFAULT 0,
+        premium_days_awarded INTEGER DEFAULT 0,
+        last_rewarded_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS profile_boosts (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        boost_expires_at TIMESTAMP NOT NULL,
+        visibility_multiplier INTEGER DEFAULT 5,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS date_proposals (
+        id SERIAL PRIMARY KEY,
+        match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+        initiator_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        recipient_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        proposed_date TIMESTAMP NOT NULL,
+        proposed_time TIME NOT NULL,
+        activity_type VARCHAR(50) DEFAULT 'coffee',
+        proposed_location_name VARCHAR(255),
+        proposed_location_lat DECIMAL(10, 8),
+        proposed_location_lng DECIMAL(11, 8),
+        proposed_location_venue_id INTEGER,
+        duration_hours INTEGER DEFAULT 1,
+        initiator_notes TEXT,
+        status VARCHAR(30) DEFAULT 'proposed',
+        responded_at TIMESTAMP,
+        decline_reason VARCHAR(50),
+        decline_notes TEXT,
+        actual_meet_time TIMESTAMP,
+        duration_minutes_actual INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS date_completion_feedback (
+        id SERIAL PRIMARY KEY,
+        date_proposal_id INTEGER NOT NULL REFERENCES date_proposals(id) ON DELETE CASCADE,
+        rater_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        counterparty_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        met BOOLEAN NOT NULL,
+        was_on_time BOOLEAN,
+        would_see_again BOOLEAN,
+        conversation_quality INTEGER,
+        physical_attraction INTEGER,
+        overall_rating INTEGER,
+        notes TEXT,
+        compatibility VARCHAR(30),
+        would_introduce BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
       // Create verification_tokens table
       await client.query(`
       CREATE TABLE IF NOT EXISTS verification_tokens (
@@ -467,6 +553,15 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_video_dates_session_type ON video_dates(session_type);
       CREATE INDEX IF NOT EXISTS idx_video_dates_user_1 ON video_dates(user_id_1);
       CREATE INDEX IF NOT EXISTS idx_video_dates_user_2 ON video_dates(user_id_2);
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
+      CREATE INDEX IF NOT EXISTS idx_user_reward_balances_user_id ON user_reward_balances(user_id);
+      CREATE INDEX IF NOT EXISTS idx_profile_boosts_user_id ON profile_boosts(user_id);
+      CREATE INDEX IF NOT EXISTS idx_profile_boosts_expires_at ON profile_boosts(boost_expires_at);
+      CREATE INDEX IF NOT EXISTS idx_date_proposals_match_id ON date_proposals(match_id);
+      CREATE INDEX IF NOT EXISTS idx_date_proposals_recipient_id ON date_proposals(recipient_user_id);
+      CREATE INDEX IF NOT EXISTS idx_date_proposals_status ON date_proposals(status);
+      CREATE INDEX IF NOT EXISTS idx_date_completion_feedback_proposal_id ON date_completion_feedback(date_proposal_id);
     `);
     // Create chatrooms table for group chats
     await client.query(`
@@ -637,6 +732,9 @@ const init = async () => {
         messages_sent INTEGER DEFAULT 0,
         profiles_viewed INTEGER DEFAULT 0,
         likes_sent INTEGER DEFAULT 0,
+        superlikes_sent INTEGER DEFAULT 0,
+        rewinds_sent INTEGER DEFAULT 0,
+        boosts_used INTEGER DEFAULT 0,
         likes_used INTEGER DEFAULT 0,
         superlikes_used INTEGER DEFAULT 0,
         rewinds_used INTEGER DEFAULT 0,
@@ -650,6 +748,10 @@ const init = async () => {
 
     await client.query(`
       ALTER TABLE user_analytics
+      ADD COLUMN IF NOT EXISTS likes_sent INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS superlikes_sent INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS rewinds_sent INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS boosts_used INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS likes_used INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS superlikes_used INTEGER DEFAULT 0,
       ADD COLUMN IF NOT EXISTS rewinds_used INTEGER DEFAULT 0;
@@ -657,10 +759,18 @@ const init = async () => {
 
     await client.query(`
       UPDATE user_analytics
-      SET likes_used = COALESCE(likes_used, 0),
+      SET likes_sent = COALESCE(likes_sent, 0),
+          superlikes_sent = COALESCE(superlikes_sent, superlikes_used, 0),
+          rewinds_sent = COALESCE(rewinds_sent, rewinds_used, 0),
+          boosts_used = COALESCE(boosts_used, 0),
+          likes_used = COALESCE(likes_used, 0),
           superlikes_used = COALESCE(superlikes_used, 0),
           rewinds_used = COALESCE(rewinds_used, 0)
-      WHERE likes_used IS NULL
+      WHERE likes_sent IS NULL
+         OR superlikes_sent IS NULL
+         OR rewinds_sent IS NULL
+         OR boosts_used IS NULL
+         OR likes_used IS NULL
          OR superlikes_used IS NULL
          OR rewinds_used IS NULL;
     `);
