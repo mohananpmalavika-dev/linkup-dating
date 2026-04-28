@@ -1190,6 +1190,15 @@ const init = async () => {
       -- Covering index for trending queries
       CREATE INDEX IF NOT EXISTS idx_interactions_to_user_type_created ON interactions(to_user_id, interaction_type, created_at);
 
+      -- Create profile_views table for analytics
+      CREATE TABLE IF NOT EXISTS profile_views (
+        id SERIAL PRIMARY KEY,
+        viewer_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        viewed_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(viewer_user_id, viewed_user_id)
+      );
+
       -- Index for profile views analytics
       CREATE INDEX IF NOT EXISTS idx_profile_views_viewed_user ON profile_views(viewed_user_id, viewed_at DESC);
     `);
