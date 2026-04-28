@@ -62,6 +62,13 @@
   line-height: 1.6;
 }
 
+.social-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+}
+
 .social-hero-stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -287,6 +294,27 @@
   color: #4338ca;
 }
 
+.social-btn-hero {
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+}
+
+.social-btn-hero-alt {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+}
+
+.chat-spaces-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chat-spaces-secondary {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
 .social-empty {
   margin: 0;
   padding: 16px;
@@ -396,7 +424,14 @@
     width: 100%;
   }
 
-  .social-btn {
+  .social-btn,
+  .social-btn-hero,
+  .social-btn-hero-alt {
     width: 100%;
+  }
+
+  .social-hero-actions,
+  .chat-spaces-actions {
+    flex-direction: column;
   }
 }

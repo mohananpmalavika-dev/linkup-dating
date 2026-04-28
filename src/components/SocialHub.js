@@ -26,6 +26,8 @@ const buildReferralProfileContext = (referral) => ({
 
 const SocialHub = ({
   onMatchCreated,
+  onBrowseChatrooms,
+  onOpenLobby,
   onOpenChatroom,
   onOpenProfile
 }) => {
@@ -160,6 +162,14 @@ const SocialHub = ({
             <p className="social-hero-copy">
               Keep referrals, profile links, friend energy, and gated warm-up spaces close by without turning LinkUp into a general social app.
             </p>
+            <div className="social-hero-actions">
+              <button type="button" className="social-btn social-btn-hero" onClick={() => onBrowseChatrooms?.()}>
+                Browse chatrooms
+              </button>
+              <button type="button" className="social-btn social-btn-muted social-btn-hero-alt" onClick={() => onOpenLobby?.()}>
+                Open lobby
+              </button>
+            </div>
           </div>
           <div className="social-hero-stats">
             <div className="hero-stat">
@@ -181,6 +191,78 @@ const SocialHub = ({
         {actionError ? <div className="social-banner social-warning">{actionError}</div> : null}
 
         <section className="social-card-grid">
+          <article className="social-card">
+            <div className="social-card-header">
+              <div>
+                <h2>Warm-up spaces</h2>
+                <p>Small, gated rooms built to warm people into dating intent before a match begins.</p>
+              </div>
+              <button type="button" className="social-link-button" onClick={() => onBrowseChatrooms?.()}>
+                View all rooms
+              </button>
+            </div>
+
+            <div className="chat-spaces-actions">
+              <button type="button" className="social-btn" onClick={() => onBrowseChatrooms?.()}>
+                Browse chatrooms
+              </button>
+              <button type="button" className="social-btn social-btn-muted chat-spaces-secondary" onClick={() => onOpenLobby?.()}>
+                Open lobby
+              </button>
+            </div>
+
+            {hub?.communityRooms?.length ? (
+              <div className="room-list">
+                {hub.communityRooms.map((room) => {
+                  const isBusy = roomActionSlug === room.slug;
+                  const isMember = room.isMember || room.is_member;
+
+                  return (
+                    <div key={room.slug} className="room-card">
+                      <div>
+                        <strong>{room.name}</strong>
+                        <p>{room.description}</p>
+                        {room.warmUpPrompt ? <p>{room.warmUpPrompt}</p> : null}
+                        {room.audioPrompt ? <p>{room.audioPrompt}</p> : null}
+                        <span className="room-meta">{room.memberCount || room.member_count || 0} members</span>
+                        {room.eligibility?.blockers?.length ? (
+                          <span className="room-meta">{room.eligibility.blockers[0]}</span>
+                        ) : null}
+                        {room.datingIntentOnly ? (
+                          <span className="visibility-pill private">Dating intent only</span>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="social-btn"
+                        onClick={() => {
+                          if (isMember && (room.chatroomId || room.chatroom_id)) {
+                            onOpenChatroom?.(room.chatroomId || room.chatroom_id);
+                            return;
+                          }
+
+                          handleJoinRoom(room.slug);
+                        }}
+                        disabled={isBusy || room.eligibility?.canJoin === false}
+                      >
+                        {isBusy ? 'Opening...' : isMember ? 'Open room' : room.eligibility?.canJoin === false ? 'Finish profile' : 'Join room'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="social-empty">Community room suggestions will show up after we learn more about your profile.</p>
+            )}
+
+            <div className="lobby-card">
+              <div>
+                <strong>Why these stay gated</strong>
+                <p>Warm-up spaces are intentionally small, private, and tied to dating goals so they support matching instead of replacing it.</p>
+              </div>
+            </div>
+          </article>
+
           <article className="social-card">
             <div className="social-card-header">
               <div>
@@ -336,6 +418,40 @@ const SocialHub = ({
               )}
             </div>
           </article>
+        </section>
+
+        <section className="social-card-grid social-card-grid-secondary">
+          <article className="social-card">
+            <div className="social-card-header">
+              <div>
+                <h2>Profile links</h2>
+                <p>Show a little more context on your profile with optional public handles.</p>
+              </div>
+              <button type="button" className="social-link-button" onClick={() => setShowSocialLinksModal(true)}>
+                Manage links
+              </button>
+            </div>
+
+            {hub?.socialIntegrations?.length ? (
+              <div className="social-link-list">
+                {hub.socialIntegrations.map((integration) => (
+                  <div key={integration.id} className="social-link-item">
+                    <div>
+                      <strong>{integration.platform}</strong>
+                      <span>@{integration.username}</span>
+                    </div>
+                    <span className={`visibility-pill ${(integration.isPublic || integration.is_public) ? 'public' : 'private'}`}>
+                      {(integration.isPublic || integration.is_public) ? 'Public on profile' : 'Private'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="social-empty">
+                No social handles linked yet. Add the ones you feel comfortable showing.
+              </p>
+            )}
+          </article>
 
           <article className="social-card">
             <div className="social-card-header">
@@ -395,100 +511,6 @@ const SocialHub = ({
               <div className="social-summary-pill">
                 <strong>{hub?.referral?.qualityMetrics?.qualityActivated || 0}</strong>
                 <span>Quality activations</span>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        <section className="social-card-grid social-card-grid-secondary">
-          <article className="social-card">
-            <div className="social-card-header">
-              <div>
-                <h2>Profile links</h2>
-                <p>Show a little more context on your profile with optional public handles.</p>
-              </div>
-              <button type="button" className="social-link-button" onClick={() => setShowSocialLinksModal(true)}>
-                Manage links
-              </button>
-            </div>
-
-            {hub?.socialIntegrations?.length ? (
-              <div className="social-link-list">
-                {hub.socialIntegrations.map((integration) => (
-                  <div key={integration.id} className="social-link-item">
-                    <div>
-                      <strong>{integration.platform}</strong>
-                      <span>@{integration.username}</span>
-                    </div>
-                    <span className={`visibility-pill ${(integration.isPublic || integration.is_public) ? 'public' : 'private'}`}>
-                      {(integration.isPublic || integration.is_public) ? 'Public on profile' : 'Private'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="social-empty">
-                No social handles linked yet. Add the ones you feel comfortable showing.
-              </p>
-            )}
-          </article>
-
-          <article className="social-card">
-            <div className="social-card-header">
-              <div>
-                <h2>Warm-up spaces</h2>
-                <p>Small, gated rooms built to warm people into dating intent before a match begins.</p>
-              </div>
-            </div>
-
-            {hub?.communityRooms?.length ? (
-              <div className="room-list">
-                {hub.communityRooms.map((room) => {
-                  const isBusy = roomActionSlug === room.slug;
-                  const isMember = room.isMember || room.is_member;
-
-                  return (
-                    <div key={room.slug} className="room-card">
-                      <div>
-                        <strong>{room.name}</strong>
-                        <p>{room.description}</p>
-                        {room.warmUpPrompt ? <p>{room.warmUpPrompt}</p> : null}
-                        {room.audioPrompt ? <p>{room.audioPrompt}</p> : null}
-                        <span className="room-meta">{room.memberCount || room.member_count || 0} members</span>
-                        {room.eligibility?.blockers?.length ? (
-                          <span className="room-meta">{room.eligibility.blockers[0]}</span>
-                        ) : null}
-                        {room.datingIntentOnly ? (
-                          <span className="visibility-pill private">Dating intent only</span>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        className="social-btn"
-                        onClick={() => {
-                          if (isMember && (room.chatroomId || room.chatroom_id)) {
-                            onOpenChatroom?.(room.chatroomId || room.chatroom_id);
-                            return;
-                          }
-
-                          handleJoinRoom(room.slug);
-                        }}
-                        disabled={isBusy || room.eligibility?.canJoin === false}
-                      >
-                        {isBusy ? 'Opening...' : isMember ? 'Open room' : room.eligibility?.canJoin === false ? 'Finish profile' : 'Join room'}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="social-empty">Community room suggestions will show up after we learn more about your profile.</p>
-            )}
-
-            <div className="lobby-card">
-              <div>
-                <strong>Why these stay gated</strong>
-                <p>Warm-up spaces are intentionally small, private, and tied to dating goals so they support matching instead of replacing it.</p>
               </div>
             </div>
           </article>

@@ -51,6 +51,7 @@ const Login = ({
   const [otp, setOtp] = useState("");
   const [otpId, setOtpId] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [otpChannel, setOtpChannel] = useState("email");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -60,6 +61,9 @@ const Login = ({
   const [setupUsernameError, setSetupUsernameError] = useState("");
   const [verifiedUser, setVerifiedUser] = useState(null);
   const [verifiedToken, setVerifiedToken] = useState(null);
+  const [loginMethod, setLoginMethod] = useState("otp");
+  const [mpin, setMpin] = useState("");
+  const [authMethods, setAuthMethods] = useState(null);
 
   const {
     recognitionSupported,
@@ -92,6 +96,13 @@ const Login = ({
     setOtp("");
     setOtpId("");
     setOtpSent(false);
+    setAuthMethods(null);
+    clearMessages();
+  };
+
+  const resetMpinFlow = () => {
+    setMpin("");
+    setAuthMethods(null);
     clearMessages();
   };
 
@@ -103,6 +114,7 @@ const Login = ({
     setVerifiedUser(null);
     setVerifiedToken(null);
     resetOtpFlow();
+    resetMpinFlow();
   };
 
   const handleVoiceFill = (fieldKey, updateValue) => {
@@ -112,6 +124,22 @@ const Login = ({
     }
 
     startListening(fieldKey, updateValue);
+  };
+
+  const fetchAuthMethods = async (value) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setAuthMethods(null);
+      return;
+    }
+    try {
+      const response = await axios.get(`${API_BASE_URL}/auth/auth-methods`, {
+        params: { identifier: trimmed }
+      });
+      setAuthMethods(response.data);
+    } catch {
+      setAuthMethods(null);
+    }
   };
 
   const renderFieldVoiceActions = (fieldKey, speakText, onVoiceResult) => (
@@ -205,6 +233,7 @@ const Login = ({
       const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
         identifier: normalizedPhone || normalizedEmail,
         purpose: "login",
+        channel: otpChannel,
       });
 
       if (!response.data?.success) {
@@ -288,6 +317,58 @@ const Login = ({
     }
   };
 
+  const handleLoginMpin = async (event) => {
+    event.preventDefault();
+    clearMessages();
+
+    if (!trimmedIdentifier) {
+      setError("Please enter your email or phone number");
+      return;
+    }
+
+    if (!mpin.trim()) {
+      setError("Please enter your MPIN");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/login-mpin`, {
+        identifier: trimmedIdentifier,
+        mpin: mpin.trim(),
+      });
+
+      if (!response.data?.token || !response.data?.user) {
+        setError(response.data?.message || response.data?.error || "Failed to login with MPIN");
+        return;
+      }
+
+      // Store preferred login method
+      try {
+        localStorage.setItem("linkup_preferred_login_method", "mpin");
+      } catch {}
+
+      completeLogin(
+        response.data.user,
+        response.data.token,
+        response.data.user?.email || trimmedIdentifier
+      );
+    } catch (loginError) {
+      if (!loginError.response) {
+        setError("Backend is not running. Please start the API server and try again.");
+      } else {
+        setError(
+          loginError.response.data?.message ||
+            loginError.response.data?.error ||
+            "Unable to login with MPIN. Please try again."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSetUsername = async (event) => {
     event.preventDefault();
     clearMessages();
@@ -354,10 +435,20 @@ const Login = ({
   };
 
   const isUsernameStep = needsUsernameSetup;
-  const formTitle = isUsernameStep ? "Create your username" : "Verify your account";
+  const formTitle = isUsernameStep
+    ? "Create your username"
+    : loginMethod === "mpin"
+      ? "Login with MPIN"
+      : otpSent
+        ? "Verify your account"
+        : "Verify your account";
   const formDescription = isUsernameStep
     ? "Set a unique username before you continue to your LinkUp account."
-    : "Enter your email address or phone number and confirm the one-time password to continue.";
+    : loginMethod === "mpin"
+      ? "Enter your email or phone number and MPIN to sign in."
+      : otpSent
+        ? "Enter the one-time password sent to your device."
+        : "Enter your email address or phone number and choose how to receive your OTP.";
 
   return (
     <div className="login-container" dir={direction}>
@@ -380,13 +471,46 @@ const Login = ({
           <p className="login-kicker">{loginCopy.welcomeBack || "Welcome back"}</p>
           <h1>LinkUp</h1>
           <p className="login-subtitle">
-            Use your email address or phone number to sign in to LinkUp.
+            Use your email address, phone number, or MPIN to sign in to LinkUp.
           </p>
         </div>
 
+        {!isUsernameStep && !otpSent ? (
+          <div className="login-method-tabs">
+            <button
+              type="button"
+              className={`method-tab ${loginMethod === "otp" ? "active" : ""}`}
+              onClick={() => {
+                setLoginMethod("otp");
+                resetMpinFlow();
+              }}
+            >
+              OTP Login
+            </button>
+            <button
+              type="button"
+              className={`method-tab ${loginMethod === "mpin" ? "active" : ""}`}
+              onClick={() => {
+                setLoginMethod("mpin");
+                resetOtpFlow();
+              }}
+            >
+              MPIN Login
+            </button>
+          </div>
+        ) : null}
+
         <form
           className="login-form"
-          onSubmit={isUsernameStep ? handleSetUsername : otpSent ? handleVerifyOtp : handleSendOtp}
+          onSubmit={
+            isUsernameStep
+              ? handleSetUsername
+              : loginMethod === "mpin"
+                ? handleLoginMpin
+                : otpSent
+                  ? handleVerifyOtp
+                  : handleSendOtp
+          }
         >
           <div className="form-intro">
             <div className="intro-heading-row">
@@ -407,6 +531,7 @@ const Login = ({
                 {renderFieldVoiceActions("identifier", trimmedIdentifier || "Email address or phone number", (value) => {
                   setIdentifier(value);
                   clearMessages();
+                  fetchAuthMethods(value);
                 })}
               </label>
               <input
@@ -417,9 +542,82 @@ const Login = ({
                 onChange={(event) => {
                   setIdentifier(event.target.value);
                   clearMessages();
+                  fetchAuthMethods(event.target.value);
                 }}
                 className="form-input"
                 autoComplete="username"
+              />
+              {authMethods?.exists ? (
+                <div className="auth-methods-hint">
+                  {authMethods.hasMpin ? (
+                    <span className="hint-item">MPIN available</span>
+                  ) : null}
+                  {authMethods.emailVerified ? (
+                    <span className="hint-item">Email verified</span>
+                  ) : null}
+                  {authMethods.phoneVerified ? (
+                    <span className="hint-item">Phone verified</span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {loginMethod === "otp" && !otpSent && !isUsernameStep ? (
+            <div className="form-group">
+              <label>
+                <span>Send OTP via</span>
+              </label>
+              <div className="channel-selector">
+                <button
+                  type="button"
+                  className={`channel-btn ${otpChannel === "email" ? "active" : ""}`}
+                  onClick={() => setOtpChannel("email")}
+                >
+                  Email
+                </button>
+                <button
+                  type="button"
+                  className={`channel-btn ${otpChannel === "phone" ? "active" : ""}`}
+                  onClick={() => setOtpChannel("phone")}
+                  disabled={
+                    authMethods?.exists &&
+                    !authMethods.phoneVerified
+                  }
+                  title={
+                    authMethods?.exists && !authMethods.phoneVerified
+                      ? "Phone not verified. Verify via email first."
+                      : "Send OTP to phone"
+                  }
+                >
+                  Phone
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {loginMethod === "mpin" && !isUsernameStep ? (
+            <div className="form-group">
+              <label htmlFor="mpin">
+                <span>MPIN</span>
+                {renderFieldVoiceActions("mpin", mpin || "M P I N", (value) => {
+                  setMpin(value.replace(/\D/g, "").slice(0, 6));
+                  clearMessages();
+                })}
+              </label>
+              <input
+                type="password"
+                inputMode="numeric"
+                id="mpin"
+                placeholder="Enter your 4-6 digit MPIN"
+                value={mpin}
+                onChange={(event) => {
+                  setMpin(event.target.value.replace(/\D/g, "").slice(0, 6));
+                  clearMessages();
+                }}
+                className="form-input"
+                maxLength="6"
+                autoComplete="current-password"
               />
             </div>
           ) : null}
@@ -505,11 +703,13 @@ const Login = ({
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {isUsernameStep
                 ? loading ? "Completing login..." : "Complete Login"
-                : otpSent
-                  ? loading ? "Verifying..." : "Verify OTP"
-                  : loading
-                    ? "Sending OTP..."
-                    : "Send Login OTP"}
+                : loginMethod === "mpin"
+                  ? loading ? "Logging in..." : "Login with MPIN"
+                  : otpSent
+                    ? loading ? "Verifying..." : "Verify OTP"
+                    : loading
+                      ? "Sending OTP..."
+                      : "Send Login OTP"}
             </button>
 
             {otpSent || isUsernameStep ? (

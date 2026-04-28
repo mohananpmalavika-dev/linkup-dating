@@ -1,4 +1,4 @@
-/* Login Page Styles */
+e/* Login Page Styles */
 .login-container {
   display: flex;
   align-items: flex-start;
@@ -502,6 +502,96 @@
 
 .security-info {
   color: #27ae60;
+}
+
+/* Login Method Tabs */
+.login-method-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0.25rem;
+  background: #f5f5f5;
+  border-radius: 10px;
+}
+
+.method-tab {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #666;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.method-tab.active {
+  background: white;
+  color: #0a1428;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.method-tab:hover:not(.active) {
+  color: #333;
+}
+
+/* Channel Selector */
+.channel-selector {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.channel-btn {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  border: 2px solid #eee;
+  border-radius: 8px;
+  background: white;
+  color: #666;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.channel-btn.active {
+  border-color: #FFD700;
+  color: #0a1428;
+  box-shadow: 0 0 0 3px rgba(255,215,0,0.1);
+}
+
+.channel-btn:hover:not(:disabled):not(.active) {
+  border-color: #ddd;
+  color: #333;
+}
+
+.channel-btn:disabled {
+  background: #f5f5f5;
+  color: #aaa;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Auth Methods Hints */
+.auth-methods-hint {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+}
+
+.hint-item {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  background: rgba(0,200,150,0.12);
+  color: #00a67a;
+  border-radius: 100px;
+  font-weight: 600;
 }
 
 @media (max-width: 480px) {

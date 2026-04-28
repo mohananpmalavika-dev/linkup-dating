@@ -173,7 +173,6 @@ const DatingProfile = ({ onLogout }) => {
     }),
     [profile, trustScoreData, verificationStatus]
   );
-  const phaseThreeRoadmap = premiumDashboard?.phaseThreeRoadmap || null;
 
   const loadProfile = async () => {
     try {
@@ -1843,54 +1842,6 @@ const DatingProfile = ({ onLogout }) => {
                 </div>
               ) : null}
 
-              <div className="recommendations-list">
-                <p><strong>Phase 2 targets</strong></p>
-                <ul>
-                  <li>+{premiumDashboard.phaseTwoTargets?.conversationRetentionLiftPercent || 20}% conversation retention</li>
-                  <li>+{premiumDashboard.phaseTwoTargets?.premiumConversionLiftPercent || 15}% premium conversion from active daters</li>
-                  <li>+{premiumDashboard.phaseTwoTargets?.videoDateAdoptionLiftPercent || 10}% video-date adoption</li>
-                </ul>
-              </div>
-
-              {phaseThreeRoadmap ? (
-                <div className="phase-roadmap-card">
-                  <div className="section-header-row">
-                    <div>
-                      <h4>Phase 3 roadmap</h4>
-                      <p>{phaseThreeRoadmap.focus}</p>
-                    </div>
-                    <span className="section-meta-pill">{phaseThreeRoadmap.timeline}</span>
-                  </div>
-
-                  <p className="roadmap-guardrail">
-                    <strong>Guardrail:</strong> {phaseThreeRoadmap.guardrail}
-                  </p>
-
-                  <div className="roadmap-section-grid">
-                    {(phaseThreeRoadmap.initiatives || []).map((initiative) => (
-                      <div key={initiative.key} className="roadmap-section">
-                        <strong>{initiative.title}</strong>
-                        <ul>
-                          {(initiative.items || []).map((item) => (
-                            <li key={`${initiative.key}-${item.label}`}>
-                              <strong>{item.label}:</strong> {item.detail}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="roadmap-target-grid">
-                    {(phaseThreeRoadmap.metricTargets || []).map((metric) => (
-                      <div key={metric.label} className="roadmap-target-card">
-                        <span className="roadmap-target-value">+{metric.upliftPercent}%</span>
-                        <span className="roadmap-target-label">{metric.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </div>
           ) : null}
 

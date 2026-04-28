@@ -19,6 +19,7 @@ const {
 } = require('../utils/adminAccess');
 const { getActiveBanForUser } = require('../utils/moderation');
 const { storeOTP, getOTP, incrementOTPAttempts, deleteOTP, findOTPByRecipient, MAX_OTP_ATTEMPTS } = require('../utils/redis');
+const { isTwilioConfigured, sendPhoneOTP } = require('../utils/twilio');
 
 // Email transporter configuration - recreated on each request to ensure env vars are loaded
 
@@ -210,7 +211,9 @@ const buildDisplayNameFromEmail = (email = '') => {
 };
 
 const USER_WITH_PROFILE_SELECT = `
-  SELECT u.id, u.email, u.phone, u.created_at, u.is_admin, dp.username, dp.first_name
+  SELECT u.id, u.email, u.phone, u.created_at, u.is_admin,
+         u.mpin_hash, u.phone_verified, u.email_verified,
+         dp.username, dp.first_name
   FROM users u
   LEFT JOIN dating_profiles dp ON dp.user_id = u.id
 `;
@@ -469,7 +472,10 @@ const buildAuthUserPayload = (userRecord) => {
     avatar: displayName.charAt(0).toUpperCase(),
     isAdmin,
     role: getAuthRole(userRecord),
-    registrationType: getRegistrationType(userRecord)
+    registrationType: getRegistrationType(userRecord),
+    emailVerified: Boolean(userRecord.email_verified || userRecord.emailVerified),
+    phoneVerified: Boolean(userRecord.phone_verified || userRecord.phoneVerified),
+    hasMpin: Boolean(userRecord.mpin_hash || userRecord.mpinHash)
   };
 };
 
@@ -841,7 +847,8 @@ router.get('/verify', async (req, res) => {
     try {
       const userId = decodedUser.userId || decodedUser.id;
       const result = await db.query(
-        `SELECT id, email, phone, is_admin
+        `SELECT id, email, phone, is_admin,
+                mpin_hash, phone_verified, email_verified
          FROM users
          WHERE id = $1
          LIMIT 1`,
@@ -871,7 +878,10 @@ router.get('/verify', async (req, res) => {
           phone: userRecord.phone || null,
           isAdmin: Boolean(userRecord.is_admin),
           role: getAuthRole(userRecord),
-          registrationType: getRegistrationType(userRecord)
+          registrationType: getRegistrationType(userRecord),
+          emailVerified: Boolean(userRecord.email_verified),
+          phoneVerified: Boolean(userRecord.phone_verified),
+          hasMpin: Boolean(userRecord.mpin_hash)
         }
       });
     } catch (lookupError) {
@@ -978,7 +988,9 @@ router.get('/me', async (req, res) => {
 
     // Get user data
     const result = await db.query(
-      'SELECT id, email, phone, created_at, is_admin FROM users WHERE id = $1',
+      `SELECT id, email, phone, created_at, is_admin,
+              mpin_hash, phone_verified, email_verified
+       FROM users WHERE id = $1`,
       [userId]
     );
 
@@ -1005,6 +1017,9 @@ router.get('/me', async (req, res) => {
         isAdmin: Boolean(user.is_admin),
         role: getAuthRole(user),
         registrationType: getRegistrationType(user),
+        emailVerified: Boolean(user.email_verified),
+        phoneVerified: Boolean(user.phone_verified),
+        hasMpin: Boolean(user.mpin_hash),
         profile: profileResult.rows[0] || null
       }
     });
@@ -1193,7 +1208,10 @@ router.post('/send-otp', async (req, res) => {
     const otpPurpose = normalizedPurpose === 'signup' ? 'signup' : 'login';
     const requestedAgeVerification = req.body?.ageVerification || null;
     const signupPhone = contact.normalizedPhone;
+    const requestedChannel = String(req.body?.channel || 'email').trim().toLowerCase();
+    const otpChannel = requestedChannel === 'phone' ? 'phone' : 'email';
     let otpRecipientEmail = contact.normalizedEmail;
+    let otpRecipientPhone = contact.normalizedPhone;
     let accountRecord = null;
 
     if (!contact.normalizedIdentifier) {
@@ -1247,20 +1265,31 @@ router.post('/send-otp', async (req, res) => {
 
       accountRecord = existingUserResult.rows[0];
       otpRecipientEmail = accountRecord.email;
+      otpRecipientPhone = accountRecord.phone || contact.normalizedPhone;
       await syncAdminPrivilegesForEmail(otpRecipientEmail);
+    }
+
+    // Determine actual delivery target based on channel
+    const deliveryTarget = otpChannel === 'phone' ? otpRecipientPhone : otpRecipientEmail;
+
+    if (otpChannel === 'phone' && !deliveryTarget) {
+      return res.status(400).json({
+        error: 'No phone number available for this account. Please verify via email first and link a phone number.',
+        code: 'PHONE_NOT_LINKED'
+      });
     }
 
     // Generate a random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpId = uuidv4();
     const developmentOtpPayload = buildDevelopmentOtpPayload(otp);
-    const maskedEmail = maskRecipient(otpRecipientEmail);
+    const maskedRecipient = maskRecipient(deliveryTarget);
 
     // Store OTP with 10-minute expiration in Redis
     await storeOTP(otpId, {
       otp,
-      recipient: otpRecipientEmail,
-      channel: 'email',
+      recipient: deliveryTarget,
+      channel: otpChannel,
       purpose: otpPurpose,
       loginIdentifier: contact.normalizedIdentifier,
       profilePhone: otpPurpose === 'signup' ? signupPhone || null : null,
@@ -1278,24 +1307,66 @@ router.post('/send-otp', async (req, res) => {
 
     console.info('OTP generated for recipient', {
       otpId,
-      recipient: maskRecipient(otpRecipientEmail),
-      channel: 'email'
+      recipient: maskedRecipient,
+      channel: otpChannel
     });
 
-    if (!process.env.EMAIL_USER) {
+    // Phone OTP via Twilio
+    if (otpChannel === 'phone') {
+      if (isTwilioConfigured()) {
+        const smsResult = await sendPhoneOTP(deliveryTarget, otp);
+
+        if (smsResult.success) {
+          return res.json({
+            success: true,
+            message: 'OTP sent successfully to your phone number',
+            otpId,
+            channel: 'phone'
+          });
+        }
+
+        // If Twilio fails and dev mode, fall through to dev OTP
+        if (!shouldExposeDevelopmentOtp) {
+          await deleteOTP(otpId);
+          return res.status(500).json({
+            error: 'Failed to send OTP via SMS. Please try email verification or contact support.'
+          });
+        }
+      }
+
+      // Twilio not configured or failed - dev fallback
       if (shouldExposeDevelopmentOtp) {
-        console.warn('Email OTP fallback enabled because SMTP is not configured', {
+        console.warn('Phone OTP fallback enabled because Twilio is not configured or failed', {
           otpId,
-          recipient: maskRecipient(otpRecipientEmail)
+          recipient: maskedRecipient
         });
 
         return res.json({
           success: true,
-          message:
-            contact.identifierType === 'phone'
-              ? 'Email delivery is unavailable. Development OTP fallback is enabled for the email linked to this phone number.'
-              : 'Email delivery is unavailable. Development OTP fallback is enabled.',
+          message: 'SMS delivery is unavailable. Development OTP fallback is enabled.',
           otpId,
+          channel: 'phone',
+          ...developmentOtpPayload
+        });
+      }
+
+      await deleteOTP(otpId);
+      return res.status(500).json({ error: 'SMS service not configured. Please contact support.' });
+    }
+
+    // Email OTP
+    if (!process.env.EMAIL_USER) {
+      if (shouldExposeDevelopmentOtp) {
+        console.warn('Email OTP fallback enabled because SMTP is not configured', {
+          otpId,
+          recipient: maskedRecipient
+        });
+
+        return res.json({
+          success: true,
+          message: 'Email delivery is unavailable. Development OTP fallback is enabled.',
+          otpId,
+          channel: 'email',
           ...developmentOtpPayload
         });
       }
@@ -1314,7 +1385,7 @@ router.post('/send-otp', async (req, res) => {
 
       const mailResult = await transporter.sendMail({
         from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-        to: otpRecipientEmail,
+        to: deliveryTarget,
         subject: 'Your LinkUp OTP Code',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1329,15 +1400,13 @@ router.post('/send-otp', async (req, res) => {
         `
       });
 
-      console.log(`OTP email sent successfully to ${maskedEmail} (MessageID: ${mailResult.messageId})`);
+      console.log(`OTP email sent successfully to ${maskedRecipient} (MessageID: ${mailResult.messageId})`);
 
       return res.json({
         success: true,
-        message:
-          contact.identifierType === 'phone'
-            ? 'OTP sent successfully to the email linked to this phone number'
-            : 'OTP sent successfully to your email',
-        otpId
+        message: 'OTP sent successfully to your email',
+        otpId,
+        channel: 'email'
       });
     } catch (emailError) {
       console.error('Email send error:', {
@@ -1350,16 +1419,14 @@ router.post('/send-otp', async (req, res) => {
       if (shouldExposeDevelopmentOtp) {
         console.warn('Email OTP fallback enabled because SMTP delivery failed', {
           otpId,
-          recipient: maskRecipient(otpRecipientEmail)
+          recipient: maskedRecipient
         });
 
         return res.json({
           success: true,
-          message:
-            contact.identifierType === 'phone'
-              ? 'Email delivery failed. Development OTP fallback is enabled for the email linked to this phone number.'
-              : 'Email delivery failed. Development OTP fallback is enabled.',
+          message: 'Email delivery failed. Development OTP fallback is enabled.',
           otpId,
+          channel: 'email',
           ...developmentOtpPayload
         });
       }
@@ -1467,9 +1534,37 @@ router.post('/verify-otp', async (req, res) => {
         bio
       });
 
+      // Update verification flags based on OTP channel
+      const verificationUpdates = [];
+      const verificationValues = [];
+
+      if (storedData.channel === 'email') {
+        verificationUpdates.push('email_verified = TRUE');
+      }
+
+      if (storedData.channel === 'phone') {
+        verificationUpdates.push('phone_verified = TRUE');
+      }
+
+      if (verificationUpdates.length > 0) {
+        await db.query(
+          `UPDATE users SET ${verificationUpdates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+          [userRecord.id]
+        );
+      }
+
+      // Refresh user record with verification flags
+      const refreshedUserResult = await db.query(
+        `SELECT id, email, phone, created_at, is_admin,
+                mpin_hash, phone_verified, email_verified
+         FROM users WHERE id = $1 LIMIT 1`,
+        [userRecord.id]
+      );
+      const refreshedUser = refreshedUserResult.rows[0] || userRecord;
+
       authenticatedUser = buildAuthUserPayload({
-        ...userRecord,
-        phone: userRecord.phone || storedData.profilePhone || null,
+        ...refreshedUser,
+        phone: refreshedUser.phone || storedData.profilePhone || null,
         username: profileRecord?.username || userRecord.username,
         first_name: profileRecord?.first_name || userRecord.first_name
       });
@@ -1478,12 +1573,12 @@ router.post('/verify-otp', async (req, res) => {
         return;
       }
 
-      token = generateToken(userRecord);
+      token = generateToken(refreshedUser);
       needsUsernameSetup = !(profileRecord?.username || userRecord.username);
 
       spamFraudService.trackUserActivity({
         userId: userRecord.id,
-        action: 'otp_login',
+        action: `${storedData.channel}_otp_login`,
         analyticsUpdates: { session_count: 1 },
         ipAddress: requestMetadata.ipAddress,
         userAgent: requestMetadata.userAgent,
@@ -1497,7 +1592,8 @@ router.post('/verify-otp', async (req, res) => {
       verified: true,
       token,
       user: authenticatedUser,
-      needsUsernameSetup
+      needsUsernameSetup,
+      verifiedChannel: storedData.channel
     });
   } catch (error) {
     console.error('Verify OTP error:', error);
@@ -1818,6 +1914,274 @@ router.delete('/account', authenticateToken, async (req, res) => {
 });
 
 router.all('/account', methodNotAllowed('DELETE'));
+
+// SET MPIN (authenticated)
+router.post('/set-mpin', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    const { mpin, oldMpin } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (!mpin) {
+      return res.status(400).json({ error: 'MPIN is required' });
+    }
+
+    if (!/^\d{4,6}$/.test(mpin)) {
+      return res.status(400).json({ error: 'MPIN must be 4-6 digits' });
+    }
+
+    // If there's an existing MPIN, verify old MPIN first
+    const existingUserResult = await db.query(
+      'SELECT mpin_hash FROM users WHERE id = $1 LIMIT 1',
+      [userId]
+    );
+
+    if (existingUserResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const existingMpinHash = existingUserResult.rows[0].mpin_hash;
+
+    if (existingMpinHash) {
+      if (!oldMpin) {
+        return res.status(400).json({ error: 'Old MPIN is required to change MPIN' });
+      }
+
+      const oldMpinValid = await bcrypt.compare(oldMpin, existingMpinHash);
+      if (!oldMpinValid) {
+        return res.status(401).json({ error: 'Old MPIN is incorrect' });
+      }
+    }
+
+    const hashedMpin = await hashPassword(mpin);
+
+    await db.query(
+      `UPDATE users
+       SET mpin_hash = $1,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [hashedMpin, userId]
+    );
+
+    res.json({
+      success: true,
+      message: existingMpinHash ? 'MPIN updated successfully' : 'MPIN set successfully'
+    });
+  } catch (error) {
+    console.error('Set MPIN error:', error);
+    res.status(500).json({ error: 'Failed to set MPIN' });
+  }
+});
+
+router.all('/set-mpin', methodNotAllowed('POST'));
+
+// LOGIN WITH MPIN
+router.post('/login-mpin', async (req, res) => {
+  try {
+    const { identifier, phone, email, mpin } = req.body;
+    const contact = resolveAuthContact({ identifier, email, phone });
+    const requestMetadata = getRequestMetadata(req);
+
+    if (!contact.normalizedIdentifier || !mpin) {
+      return res.status(400).json({ error: 'Email/phone and MPIN are required' });
+    }
+
+    if (!/^\d{4,6}$/.test(mpin)) {
+      return res.status(400).json({ error: 'MPIN must be 4-6 digits' });
+    }
+
+    if (contact.identifierType === 'email') {
+      await syncAdminPrivilegesForEmail(contact.normalizedEmail);
+    }
+
+    // Find user with verification flags
+    const result =
+      contact.identifierType === 'phone'
+        ? await db.query(
+            `SELECT id, email, phone, password, is_admin,
+                    mpin_hash, phone_verified, email_verified
+             FROM users
+             WHERE phone = ANY($1::varchar[])
+             ORDER BY CASE WHEN phone = $2 THEN 0 ELSE 1 END
+             LIMIT 1`,
+            [contact.phoneCandidates, contact.normalizedPhone]
+          )
+        : await db.query(
+            `SELECT id, email, phone, password, is_admin,
+                    mpin_hash, phone_verified, email_verified
+             FROM users
+             WHERE LOWER(email) = LOWER($1)
+             LIMIT 1`,
+            [contact.normalizedEmail]
+          );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: 'No account found. Sign up first.',
+        code: 'ACCOUNT_NOT_FOUND'
+      });
+    }
+
+    const user = result.rows[0];
+
+    // Check if user has an MPIN set
+    if (!user.mpin_hash) {
+      return res.status(400).json({
+        error: 'MPIN is not set for this account. Please log in with password or OTP and set MPIN first.',
+        code: 'MPIN_NOT_SET'
+      });
+    }
+
+    // Verification check rules:
+    // If both email and phone are verified, user can login with either
+    // If only one is verified, user must use that channel
+    const hasEmail = Boolean(user.email);
+    const hasPhone = Boolean(user.phone);
+    const emailVerified = Boolean(user.email_verified);
+    const phoneVerified = Boolean(user.phone_verified);
+    const usingPhone = contact.identifierType === 'phone';
+    const usingEmail = contact.identifierType === 'email';
+
+    if (hasEmail && hasPhone) {
+      // User has both email and phone
+      if (emailVerified && phoneVerified) {
+        // Both verified - allow any channel
+        // User can login with either
+      } else if (emailVerified && !phoneVerified && usingPhone) {
+        return res.status(403).json({
+          error: 'Phone number is not verified. Please verify your phone number first via OTP.',
+          code: 'PHONE_NOT_VERIFIED',
+          redirectTo: 'email_login'
+        });
+      } else if (!emailVerified && phoneVerified && usingEmail) {
+        return res.status(403).json({
+          error: 'Email is not verified. Please verify your email first via OTP.',
+          code: 'EMAIL_NOT_VERIFIED',
+          redirectTo: 'phone_login'
+        });
+      } else if (!emailVerified && !phoneVerified) {
+        return res.status(403).json({
+          error: 'Neither email nor phone is verified. Please verify at least one channel first.',
+          code: 'NOT_VERIFIED'
+        });
+      }
+    } else if (hasEmail && !hasPhone && usingPhone) {
+      return res.status(400).json({
+        error: 'No phone number on file. Use email to login.',
+        code: 'PHONE_NOT_LINKED'
+      });
+    } else if (!hasEmail && hasPhone && usingEmail) {
+      return res.status(400).json({
+        error: 'No email on file. Use phone number to login.',
+        code: 'EMAIL_NOT_LINKED'
+      });
+    }
+
+    // Check MPIN
+    const isMpinValid = await bcrypt.compare(mpin, user.mpin_hash);
+    if (!isMpinValid) {
+      return res.status(401).json({ error: 'Invalid MPIN' });
+    }
+
+    if (!user.is_admin && isConfiguredAdminEmail(user.email)) {
+      await syncAdminPrivilegesForEmail(user.email);
+      user.is_admin = true;
+    }
+
+    if (await respondWithActiveBan(res, user.id)) {
+      return;
+    }
+
+    const token = generateToken(user);
+
+    spamFraudService.trackUserActivity({
+      userId: user.id,
+      action: 'mpin_login',
+      analyticsUpdates: { session_count: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runFraudCheck: true
+    });
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: buildAuthUserPayload(user)
+    });
+  } catch (err) {
+    console.error('MPIN login error:', err);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+router.all('/login-mpin', methodNotAllowed('POST'));
+
+// GET AUTH METHODS — returns available login methods for a user
+router.get('/auth-methods', async (req, res) => {
+  try {
+    const { identifier, phone, email } = req.query;
+    const contact = resolveAuthContact({ identifier, email, phone });
+
+    if (!contact.normalizedIdentifier) {
+      return res.status(400).json({ error: 'Email or phone number required' });
+    }
+
+    const result =
+      contact.identifierType === 'phone'
+        ? await db.query(
+            `SELECT id, email, phone, is_admin,
+                    mpin_hash, phone_verified, email_verified
+             FROM users
+             WHERE phone = ANY($1::varchar[])
+             ORDER BY CASE WHEN phone = $2 THEN 0 ELSE 1 END
+             LIMIT 1`,
+            [contact.phoneCandidates, contact.normalizedPhone]
+          )
+        : await db.query(
+            `SELECT id, email, phone, is_admin,
+                    mpin_hash, phone_verified, email_verified
+             FROM users
+             WHERE LOWER(email) = LOWER($1)
+             LIMIT 1`,
+            [contact.normalizedEmail]
+          );
+
+    const user = result.rows[0] || null;
+
+    if (!user) {
+      return res.json({
+        exists: false,
+        methods: { password: false, otp: { email: false, phone: false }, mpin: false }
+      });
+    }
+
+    const hasEmail = Boolean(user.email);
+    const hasPhone = Boolean(user.phone);
+    const emailVerified = Boolean(user.email_verified);
+    const phoneVerified = Boolean(user.phone_verified);
+
+    res.json({
+      exists: true,
+      emailVerified,
+      phoneVerified,
+      hasMpin: Boolean(user.mpin_hash),
+      methods: {
+        password: true,
+        otp: {
+          email: hasEmail,
+          phone: hasPhone && phoneVerified
+        },
+        mpin: Boolean(user.mpin_hash)
+      }
+    });
+  } catch (err) {
+    console.error('Auth methods error:', err);
+    res.status(500).json({ error: 'Failed to get auth methods' });
+  }
+});
 
 // SET USER AS ADMIN (for initialization)
 router.post('/set-admin', async (req, res) => {

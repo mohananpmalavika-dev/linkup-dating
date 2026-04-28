@@ -7,6 +7,8 @@ const FEATURE_SECTIONS = [
     id: 'social',
     title: 'Social & Events',
     features: [
+      { key: 'chatrooms', label: 'Chatrooms', emoji: '💬', path: '/chatrooms', description: 'Browse public chatrooms and reopen rooms you have already joined.' },
+      { key: 'lobby', label: 'Lobby Chat', emoji: '🗨️', path: '/lobby', description: 'Jump into the shared public lobby and meet people live.' },
       { key: 'events', label: 'Dating Events', emoji: '🎉', path: '/events', description: 'Browse and join upcoming dating events near you.' },
       { key: 'doubleDates', label: 'Double Dates', emoji: '👯', path: '/double-dates', description: 'Match with other couples for group dates.' },
       { key: 'moments', label: 'Moments (Stories)', emoji: '⏳', path: '/moments', description: 'Share ephemeral photos that disappear in 24 hours.' },
@@ -92,4 +94,3 @@ const FeatureHub = () => {
 };
 
 export default FeatureHub;
-

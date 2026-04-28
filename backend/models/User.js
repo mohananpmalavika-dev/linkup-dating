@@ -23,6 +23,21 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(255),
       allowNull: false
     },
+    mpinHash: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'mpin_hash'
+    },
+    phoneVerified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'phone_verified'
+    },
+    emailVerified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'email_verified'
+    },
     isAdmin: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,

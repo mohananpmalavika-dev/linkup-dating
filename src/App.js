@@ -23,6 +23,7 @@ import Matches from './components/Matches';
 import DatingMessaging from './components/DatingMessaging';
 import DatingProfile from './components/DatingProfile';
 import DatingProfileView from './components/DatingProfileView';
+import MPINSetup from './components/MPINSetup';
 import VideoDating from './components/VideoDating';
 import ChatRooms from './components/ChatRooms';
 import ChatRoomView from './components/ChatRoomView';
@@ -64,12 +65,12 @@ import videoCallService from './services/videoCallService';
 import icebreakerVideoService from './services/icebreakerVideoService';
 import { BACKEND_BASE_URL } from './utils/api';
 import {
-  clearStoredAuthToken,
-  clearStoredUserData,
+  clearStoredAuthData,
   getStoredAuthToken,
   getStoredUserData,
   storeAuthToken,
-  storeUserData
+  storeUserData,
+  setPreferredLoginMethod
 } from './utils/auth';
 
 const ADMIN_DASHBOARD_ROUTE = '/admin-dashboard';
@@ -572,8 +573,7 @@ const AppContent = () => {
   };
 
   const handleLogout = () => {
-    clearStoredAuthToken();
-    clearStoredUserData();
+    clearStoredAuthData();
     setCurrentUser(null);
     setIsAuthenticated(false);
     setUnreadCount(0);
@@ -1011,6 +1011,7 @@ const AppContent = () => {
               element={
                 <SocialHub
                   onMatchCreated={refreshDatingCounts}
+                  onBrowseChatrooms={() => navigate('/chatrooms', { state: { returnPath: '/social' } })}
                   onOpenLobby={() => navigate('/lobby', { state: { returnPath: '/social' } })}
                   onOpenChatroom={(chatroomId) =>
                     navigate(`/chatrooms/${chatroomId}`, { state: { returnPath: '/social' } })
@@ -1051,6 +1052,15 @@ const AppContent = () => {
               }
             />
             <Route path="profile" element={<DatingProfile onLogout={handleLogout} />} />
+            <Route
+              path="mpin-setup"
+              element={
+                <MPINSetup
+                  onComplete={() => navigate('/profile')}
+                  onCancel={() => navigate('/profile')}
+                />
+              }
+            />
             <Route path="legal/privacy" element={<PrivacyPolicyPage />} />
             <Route path="legal/terms" element={<TermsOfServicePage />} />
             <Route path="legal/refund" element={<RefundPolicyPage />} />

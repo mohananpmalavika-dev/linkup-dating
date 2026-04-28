@@ -94,6 +94,29 @@ const verifyOtpValidator = [
   handleValidationErrors
 ];
 
+const mpinValidator = [
+  body('mpin')
+    .isLength({ min: 4, max: 6 })
+    .isNumeric()
+    .withMessage('MPIN must be 4-6 digits'),
+  handleValidationErrors
+];
+
+const setMpinValidator = [
+  body('mpin')
+    .isLength({ min: 4, max: 6 })
+    .isNumeric()
+    .withMessage('MPIN must be 4-6 digits'),
+  body('confirmMpin')
+    .custom((value, { req }) => {
+      if (value !== req.body.mpin) {
+        throw new Error('MPINs do not match');
+      }
+      return true;
+    }),
+  handleValidationErrors
+];
+
 const usernameValidator = [
   body('username')
     .isLength({ min: 3, max: 20 })
@@ -206,6 +229,8 @@ module.exports = {
   loginValidator,
   otpValidator,
   verifyOtpValidator,
+  mpinValidator,
+  setMpinValidator,
   usernameValidator,
   profileValidator,
   photoUploadValidator,

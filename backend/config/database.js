@@ -541,10 +541,13 @@ const init = async () => {
     `);
 
       // Migration: backfill legacy users columns expected by auth and profile flows
-      await client.query(`
+    await client.query(`
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS phone VARCHAR(32),
+      ADD COLUMN IF NOT EXISTS mpin_hash VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
     `);

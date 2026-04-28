@@ -478,12 +478,10 @@ app.get('/', (req, res) => {
     status: 'running',
     endpoints: {
       health: '/health',
-      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/check-username, /api/auth/check-email, /api/auth/send-otp, /api/auth/verify-otp, /api/auth/set-username, /api/auth/me, /api/auth/visibility, /api/auth/contact-means',
+      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/check-username, /api/auth/check-email, /api/auth/send-otp, /api/auth/verify-otp, /api/auth/set-username, /api/auth/me, /api/auth/visibility, /api/auth/contact-means, /api/auth/set-mpin, /api/auth/login-mpin, /api/auth/auth-methods',
       dating: '/api/dating/* (requires auth)',
       messaging: '/api/messaging/* (requires auth)',
       chatrooms: '/api/chatrooms/* (requires auth)',
-      lobby: '/api/lobby/* (requires auth)'
-    }
   });
 });
 
