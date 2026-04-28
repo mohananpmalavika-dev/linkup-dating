@@ -481,7 +481,8 @@ app.get('/', (req, res) => {
       auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/check-username, /api/auth/check-email, /api/auth/send-otp, /api/auth/verify-otp, /api/auth/set-username, /api/auth/me, /api/auth/visibility, /api/auth/contact-means, /api/auth/set-mpin, /api/auth/login-mpin, /api/auth/auth-methods',
       dating: '/api/dating/* (requires auth)',
       messaging: '/api/messaging/* (requires auth)',
-      chatrooms: '/api/chatrooms/* (requires auth)',
+      chatrooms: '/api/chatrooms/* (requires auth)'
+    }
   });
 });
 
@@ -534,7 +535,7 @@ app.use((req, res) => {
   res.status(404).json({
     message: `The endpoint ${req.method} ${req.path} does not exist`,
     availableEndpoints: {
-      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/check-username, /api/auth/check-email, /api/auth/send-otp, /api/auth/verify-otp, /api/auth/set-username, /api/auth/me, /api/auth/visibility, /api/auth/contact-means',
+      auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/check-username, /api/auth/check-email, /api/auth/send-otp, /api/auth/verify-otp, /api/auth/set-username, /api/auth/me, /api/auth/visibility, /api/auth/contact-means, /api/auth/set-mpin, /api/auth/login-mpin, /api/auth/auth-methods',
       products: '/api/products, /api/products/manage',
       orders: '/api/orders/*, /api/orders/mine, /api/orders/manage, /api/orders/payment-config, /api/orders/verify-payment',
       appData: '/api/app-data/public, /api/app-data/classifieds/*, /api/app-data/realestate/*',
