@@ -1,12 +1,15 @@
 {
-  "name": "LinkUp",
+  "name": "LinkUp - Kerala Dating",
   "short_name": "LinkUp",
-  "description": "Kerala dating, events, and local services platform",
+  "description": "Kerala's trusted dating, events & local services platform",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#f8fafc",
   "theme_color": "#667eea",
+  "orientation": "portrait",
   "scope": ".",
+  "categories": ["dating", "social", "lifestyle"],
+  "lang": "en",
   "icons": [
     {
       "src": "icon-192.png",
@@ -20,5 +23,22 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Discover",
+      "short_name": "Discover",
+      "description": "Find matches near you",
+      "url": "/discover",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Messages",
+      "short_name": "Messages",
+      "description": "Chat with your matches",
+      "url": "/messages",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
   ]
 }
+
