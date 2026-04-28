@@ -34,7 +34,10 @@ const getEmailTransporter = () => {
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS || process.env.EMAIL_PASSWORD
-    }
+    },
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,   // 10 seconds
+    socketTimeout: 10000      // 10 seconds
   });
 };
 
@@ -1427,26 +1430,36 @@ router.post('/send-otp', async (req, res) => {
     try {
       const transporter = getEmailTransporter();
 
-      // Verify connection before sending
-      await transporter.verify();
+      // Verify connection before sending (with 8s timeout to prevent hanging)
+      await Promise.race([
+        transporter.verify(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('SMTP connection timeout')), 8000)
+        )
+      ]);
       console.log('Email transporter verified');
 
-      const mailResult = await transporter.sendMail({
-        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-        to: deliveryTarget,
-        subject: 'Your LinkUp OTP Code',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2>LinkUp - Email Verification</h2>
-            <p>Your One-Time Password (OTP) is:</p>
-            <h1 style="color: #6366f1; letter-spacing: 2px; text-align: center;">${otp}</h1>
-            <p>This OTP will expire in 10 minutes.</p>
-            <p>If you didn't request this code, please ignore this email.</p>
-            <hr />
-            <p style="color: #666; font-size: 12px;">LinkUp Dating - Your Perfect Match Awaits</p>
-          </div>
-        `
-      });
+      const mailResult = await Promise.race([
+        transporter.sendMail({
+          from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+          to: deliveryTarget,
+          subject: 'Your LinkUp OTP Code',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>LinkUp - Email Verification</h2>
+              <p>Your One-Time Password (OTP) is:</p>
+              <h1 style="color: #6366f1; letter-spacing: 2px; text-align: center;">${otp}</h1>
+              <p>This OTP will expire in 10 minutes.</p>
+              <p>If you didn't request this code, please ignore this email.</p>
+              <hr />
+              <p style="color: #666; font-size: 12px;">LinkUp Dating - Your Perfect Match Awaits</p>
+            </div>
+          `
+        }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('SMTP send timeout')), 8000)
+        )
+      ]);
 
       console.log(`OTP email sent successfully to ${maskedRecipient} (MessageID: ${mailResult.messageId})`);
 
