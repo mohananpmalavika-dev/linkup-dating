@@ -1,12 +1,9 @@
-const db = require('../config/database');
 const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
+const dbModels = require('../models');
 
-const Moment = db.models.Moment;
-const MomentView = db.models.MomentView;
-const User = db.models.User;
-const Match = db.models.Match;
+const { Moment, MomentView, User, Match } = dbModels;
 
 const MOMENT_EXPIRY_HOURS = 24;
 
@@ -249,7 +246,7 @@ const momentService = {
         },
         include: [
           {
-            model: db.models.MomentView,
+            model: MomentView,
             as: 'views',
             attributes: ['viewer_user_id', 'viewed_at'],
           },

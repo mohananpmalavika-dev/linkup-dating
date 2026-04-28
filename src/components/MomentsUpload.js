@@ -53,13 +53,7 @@ const MomentsUpload = ({ onUploadSuccess, onClose }) => {
       setUploading(true);
       setError(null);
 
-      // In a real app, you'd upload to S3 or similar
-      // For now, using data URL as placeholder
-      const result = await momentService.uploadMoment(
-        selectedImage.preview,
-        selectedImage.file.name,
-        caption
-      );
+      const result = await momentService.uploadMoment(selectedImage.file, caption);
 
       if (result.success) {
         setSuccess(true);

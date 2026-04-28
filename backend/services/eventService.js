@@ -4,6 +4,7 @@
  */
 
 const { Op, Sequelize } = require('sequelize');
+const db = require('../config/database');
 const { DatingEvent, EventAttendees, User, Interest, DatingProfile } = require('../models');
 
 const EVENT_CONFIG = {
@@ -536,6 +537,120 @@ class EventService {
     } catch (error) {
       console.error('Error getting event analytics:', error);
       return { success: false, message: 'Failed to get analytics' };
+    }
+  }
+
+  /**
+   * Get all published events for a specific interest.
+   * Uses the raw Postgres tables directly because the Sequelize event models
+   * are currently behind the latest events schema.
+   */
+  static async getEventsByInterest(interestId, options = {}) {
+    try {
+      const normalizedInterestId = Number.parseInt(interestId, 10);
+
+      if (!Number.isFinite(normalizedInterestId) || normalizedInterestId <= 0) {
+        return { success: false, message: 'Invalid interest id' };
+      }
+
+      const limit = Math.max(1, Math.min(Number.parseInt(options.limit, 10) || 20, 100));
+      const offset = Math.max(0, Number.parseInt(options.offset, 10) || 0);
+      const sortBy = ['date', 'popularity', 'recent'].includes(options.sortBy) ? options.sortBy : 'date';
+
+      const tableExistsResult = await db.query(
+        `SELECT EXISTS (
+           SELECT 1
+           FROM information_schema.tables
+           WHERE table_schema = 'public'
+             AND table_name = 'dating_events'
+         ) AS exists`
+      );
+
+      if (!tableExistsResult.rows[0]?.exists) {
+        return {
+          success: true,
+          interestId: normalizedInterestId,
+          events: [],
+          total: 0,
+          pagination: { limit, offset, hasMore: false }
+        };
+      }
+
+      const orderByClause = {
+        date: 'e.event_date ASC, e.event_time_start ASC NULLS LAST, e.id DESC',
+        popularity: 'e.current_attendee_count DESC, e.interested_count DESC, e.event_date ASC, e.id DESC',
+        recent: 'e.created_at DESC, e.id DESC'
+      }[sortBy];
+
+      const baseParams = [normalizedInterestId];
+      const currentUserJoin =
+        options.userId && Number.isFinite(Number(options.userId))
+          ? 'LEFT JOIN event_attendees viewer_attendee ON viewer_attendee.event_id = e.id AND viewer_attendee.user_id = $2'
+          : 'LEFT JOIN event_attendees viewer_attendee ON 1 = 0';
+
+      if (options.userId && Number.isFinite(Number(options.userId))) {
+        baseParams.push(Number(options.userId));
+      }
+
+      const countResult = await db.query(
+        `SELECT COUNT(*)::int AS total
+         FROM dating_events e
+         WHERE e.interest_id = $1
+           AND e.status = 'published'
+           AND e.event_date >= CURRENT_DATE`,
+        [normalizedInterestId]
+      );
+
+      const paginationParams = [...baseParams, limit, offset];
+      const limitParamIndex = paginationParams.length - 1;
+      const offsetParamIndex = paginationParams.length;
+
+      const eventsResult = await db.query(
+        `SELECT e.*,
+                creator.first_name AS creator_first_name,
+                creator.last_name AS creator_last_name,
+                creator.avatar_url AS creator_avatar_url,
+                viewer_attendee.status AS user_rsvp_status
+         FROM dating_events e
+         LEFT JOIN users creator ON creator.id = e.creator_id
+         ${currentUserJoin}
+         WHERE e.interest_id = $1
+           AND e.status = 'published'
+           AND e.event_date >= CURRENT_DATE
+         ORDER BY ${orderByClause}
+         LIMIT $${limitParamIndex} OFFSET $${offsetParamIndex}`,
+        paginationParams
+      );
+
+      const total = Number.parseInt(countResult.rows[0]?.total, 10) || 0;
+
+      return {
+        success: true,
+        interestId: normalizedInterestId,
+        events: eventsResult.rows.map((row) => ({
+          ...row,
+          creator: row.creator_first_name
+            ? {
+                first_name: row.creator_first_name,
+                last_name: row.creator_last_name,
+                avatar_url: row.creator_avatar_url
+              }
+            : null,
+          userRsvpStatus: row.user_rsvp_status || null,
+          spotsAvailable: row.max_attendees
+            ? Math.max(0, Number(row.max_attendees) - Number(row.current_attendee_count || 0))
+            : null
+        })),
+        total,
+        pagination: {
+          limit,
+          offset,
+          hasMore: offset + eventsResult.rows.length < total
+        }
+      };
+    } catch (error) {
+      console.error('Error getting events by interest:', error);
+      return { success: false, message: 'Failed to get events by interest' };
     }
   }
 

@@ -1,17 +1,7 @@
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+/* Import Premium Design System */
+@import url('./styles/designSystem.css');
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
-}
-
+/* ── Base Styles ── */
 * {
   box-sizing: border-box;
 }
@@ -21,4 +11,51 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+}
+
+body {
+  font-family: var(--lu-font-sans);
+  background: var(--lu-bg-primary);
+  color: var(--lu-text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+code {
+  font-family: var(--lu-font-mono);
+}
+
+/* ── Selection ── */
+::selection {
+  background: rgba(102, 126, 234, 0.25);
+  color: var(--lu-text-primary);
+}
+
+/* ── Focus Styles ── */
+:focus-visible {
+  outline: 2px solid var(--lu-primary-start);
+  outline-offset: 2px;
+  border-radius: var(--lu-radius-sm);
+}
+
+/* ── Scroll Behavior ── */
+html {
+  scroll-behavior: smooth;
+}
+
+/* ── Touch Action ── */
+button, a {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Reduced Motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

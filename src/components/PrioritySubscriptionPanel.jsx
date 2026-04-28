@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import usePreferences from '../../hooks/usePreferences';
+import usePreferences from '../hooks/usePreferences';
 import './PrioritySubscriptionPanel.css';
 
 const PrioritySubscriptionPanel = ({ onClose, onSubscribed }) => {

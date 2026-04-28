@@ -16,6 +16,31 @@ const handleValidationErrors = (req, res, next) => {
   next();
 };
 
+const validateRequest = (requiredFields = []) => (req, res, next) => {
+  const missingFields = requiredFields.filter((field) => {
+    const value = req.body?.[field];
+
+    if (value === undefined || value === null) {
+      return true;
+    }
+
+    return typeof value === 'string' && value.trim() === '';
+  });
+
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      error: 'Validation failed',
+      details: missingFields.map((field) => ({
+        field,
+        message: `${field} is required`,
+        value: req.body?.[field]
+      }))
+    });
+  }
+
+  return next();
+};
+
 // Auth validators
 const signupValidator = [
   body('email')
@@ -176,6 +201,7 @@ const paginationValidator = [
 
 module.exports = {
   handleValidationErrors,
+  validateRequest,
   signupValidator,
   loginValidator,
   otpValidator,

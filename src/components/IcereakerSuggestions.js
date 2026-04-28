@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import apiClient from '../services/apiClient';
 import '../styles/IcereakerSuggestions.css';
 
 /**
@@ -20,24 +21,10 @@ const IcereakerSuggestions = ({ recipientProfile, onSelectSuggestion, onClose })
     try {
       setLoading(true);
       setError('');
-
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(
-        `/api/dating/opening-templates/${recipientProfile.id}/suggestions`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
+      const response = await apiClient.get(
+        `/dating/opening-templates/${recipientProfile.id}/suggestions`
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch suggestions');
-      }
-
-      const data = await response.json();
-      setSuggestions(data.suggestions || []);
+      setSuggestions(response.data.suggestions || []);
     } catch (err) {
       console.error('Error fetching suggestions:', err);
       setError(err.message || 'Failed to load suggestions');

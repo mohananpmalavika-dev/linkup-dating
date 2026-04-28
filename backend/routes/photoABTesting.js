@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { photoABTestService } = require('../services');
+const photoABTestService = require('../services/photoABTestService');
 const { authenticateToken } = require('../middleware/auth');
 
 /**

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../../utils/api';
-import axios from 'axios';
+import apiClient from '../../services/apiClient';
 import './SmartRewindHistory.css';
 
 const SmartRewindHistory = ({ userId, onProfileRestore }) => {
@@ -21,15 +20,13 @@ const SmartRewindHistory = ({ userId, onProfileRestore }) => {
       setLoading(true);
       
       // Load by-reason view
-      const reasonResponse = await axios.get(`${API_BASE_URL}/api/dating/rewind/history/by-reason`, {
-        withCredentials: true
-      });
+      const reasonResponse = await apiClient.get('/dating/rewind/history/by-reason');
       
       setHistoryData(reasonResponse.data.data || []);
       
       // Load timeline view
-      const timelineResponse = await axios.get(`${API_BASE_URL}/api/dating/rewind/history?limit=50`, {
-        withCredentials: true
+      const timelineResponse = await apiClient.get('/dating/rewind/history', {
+        params: { limit: 50 }
       });
       
       setTimelineData(timelineResponse.data.data || []);
@@ -46,11 +43,7 @@ const SmartRewindHistory = ({ userId, onProfileRestore }) => {
     try {
       setRestoring(profileId);
       
-      const response = await axios.post(
-        `${API_BASE_URL}/api/dating/rewind/restore/${profileId}`,
-        {},
-        { withCredentials: true }
-      );
+      const response = await apiClient.post(`/dating/rewind/restore/${profileId}`, {});
       
       if (response.data.success) {
         // Reload history
@@ -247,9 +240,7 @@ const RewindQuotaInfo = () => {
 
   const loadQuota = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/dating/rewind/quota`, {
-        withCredentials: true
-      });
+      const response = await apiClient.get('/dating/rewind/quota');
       setQuota(response.data.quota);
     } catch (err) {
       console.error('Failed to load rewind quota:', err);

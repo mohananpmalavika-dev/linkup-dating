@@ -3,8 +3,11 @@
  * Frontend API wrapper for icebreaker video functionality
  */
 
+import { API_BASE_URL } from '../utils/api';
+import { getStoredAuthToken } from '../utils/auth';
+
 class IcebreakerVideoService {
-  constructor(baseURL = '/api') {
+  constructor(baseURL = API_BASE_URL) {
     this.baseURL = baseURL;
   }
 
@@ -12,7 +15,7 @@ class IcebreakerVideoService {
    * Get auth token from localStorage
    */
   getAuthToken() {
-    return localStorage.getItem('authToken');
+    return getStoredAuthToken();
   }
 
   /**
@@ -30,14 +33,44 @@ class IcebreakerVideoService {
    */
   async uploadVideo(videoData) {
     try {
-      const response = await fetch(
-        `${this.baseURL}/icebreaker-videos/upload`,
-        {
-          method: 'POST',
-          headers: this.getHeaders(),
-          body: JSON.stringify(videoData),
+      const payload = videoData && typeof videoData === 'object' ? videoData : {};
+      const file = payload.file instanceof Blob ? payload.file : null;
+      let response;
+
+      if (file) {
+        const formData = new FormData();
+        formData.append('video', file, payload.filename || `icebreaker-${Date.now()}.webm`);
+        formData.append('durationSeconds', String(payload.durationSeconds || 5));
+        if (payload.title) {
+          formData.append('title', payload.title);
         }
-      );
+        if (payload.videoKey) {
+          formData.append('videoKey', payload.videoKey);
+        }
+        if (payload.thumbnailUrl) {
+          formData.append('thumbnailUrl', payload.thumbnailUrl);
+        }
+
+        response = await fetch(
+          `${this.baseURL}/icebreaker-videos/upload`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${this.getAuthToken()}`
+            },
+            body: formData
+          }
+        );
+      } else {
+        response = await fetch(
+          `${this.baseURL}/icebreaker-videos/upload`,
+          {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(videoData),
+          }
+        );
+      }
 
       if (!response.ok) {
         const error = await response.json();

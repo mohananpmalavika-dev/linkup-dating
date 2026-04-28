@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from '../router';
 import { authService } from '../services/authService';
 import datingProfileService from '../services/datingProfileService';
 import { getStoredUserData } from '../utils/auth';
@@ -268,6 +269,7 @@ const buildLearningHighlights = (learningProfile) => {
 };
 
 const AccountSettings = ({ onBack, onLogout }) => {
+  const navigate = useNavigate();
   const currentUser = getStoredUserData();
   const [activeTab, setActiveTab] = useState('security');
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
@@ -1034,6 +1036,40 @@ const AccountSettings = ({ onBack, onLogout }) => {
     </div>
   );
 
+  const renderLegalTab = () => (
+    <div className="legal-section">
+      <div className="settings-item">
+        <div className="setting-info">
+          <h3>🔐 Privacy Policy</h3>
+          <p>Understand how we collect, use, and protect your data</p>
+        </div>
+        <button className="btn-view-legal" onClick={() => navigate('/profile/legal/privacy')}>
+          View Privacy Policy
+        </button>
+      </div>
+
+      <div className="settings-item">
+        <div className="setting-info">
+          <h3>📋 Terms of Service</h3>
+          <p>Our terms, your rights, and community guidelines</p>
+        </div>
+        <button className="btn-view-legal" onClick={() => navigate('/profile/legal/terms')}>
+          View Terms of Service
+        </button>
+      </div>
+
+      <div className="settings-item">
+        <div className="setting-info">
+          <h3>💰 Refund & Subscription Policy</h3>
+          <p>Information about subscriptions, refunds, and billing</p>
+        </div>
+        <button className="btn-view-legal" onClick={() => navigate('/profile/legal/refund')}>
+          View Refund Policy
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="account-settings-container">
       <div className="settings-header">
@@ -1049,6 +1085,8 @@ const AccountSettings = ({ onBack, onLogout }) => {
           onClick={() => { setActiveTab('preferences'); setError(''); setSuccess(''); }}>Preferences</button>
         <button className={`tab-btn ${activeTab === 'account' ? 'active' : ''}`}
           onClick={() => { setActiveTab('account'); setError(''); setSuccess(''); }}>Account</button>
+        <button className={`tab-btn ${activeTab === 'legal' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('legal'); setError(''); setSuccess(''); }}>Legal</button>
         <button 
           className="tab-btn notification-settings-btn"
           onClick={() => setShowNotificationSettings(true)}
@@ -1064,6 +1102,7 @@ const AccountSettings = ({ onBack, onLogout }) => {
         {activeTab === 'security' && renderSecurityTab()}
         {activeTab === 'preferences' && renderPreferencesTab()}
         {activeTab === 'account' && renderAccountTab()}
+        {activeTab === 'legal' && renderLegalTab()}
       </div>
 
       {showNotificationSettings && (

@@ -8,6 +8,11 @@ const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 const spamFraudService = require('../services/spamFraudService');
 const {
+  calculateAgeFromDOB,
+  storeAgeVerification,
+  validateAgeVerification
+} = require('../utils/ageVerification');
+const {
   getConfiguredAdminEmails,
   isConfiguredAdminEmail,
   syncConfiguredAdminForEmail
@@ -120,7 +125,7 @@ const getUserWithProfileByEmail = async (email) => {
   );
 };
 
-const ensureUserForOtpLogin = async (email) => {
+const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerification = null } = {}) => {
   const normalizedEmail = normalizeRecipient(email);
   await syncAdminPrivilegesForEmail(normalizedEmail);
   const existingUserResult = await getUserWithProfileByEmail(normalizedEmail);
@@ -136,8 +141,22 @@ const ensureUserForOtpLogin = async (email) => {
     return existingUserResult.rows[0];
   }
 
+  if (!allowCreate) {
+    throw createHttpError(404, 'No account found for that email address. Sign up first.');
+  }
+
+  const ageValidation = validateAgeVerification(ageVerification);
+  if (!ageValidation.valid) {
+    throw createHttpError(400, ageValidation.errors[0] || 'Age verification is required');
+  }
+
+  if (!ageValidation.isOver18) {
+    throw createHttpError(403, 'You must be at least 18 years old to use LinkUp');
+  }
+
   const fallbackName = buildDisplayNameFromEmail(normalizedEmail);
   const generatedPasswordHash = await hashPassword(uuidv4());
+  const verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
   const createdUserResult = await db.query(
     'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email, created_at, is_admin',
     [normalizedEmail, generatedPasswordHash]
@@ -145,11 +164,13 @@ const ensureUserForOtpLogin = async (email) => {
 
   const createdUser = createdUserResult.rows[0];
 
+  await storeAgeVerification(db, createdUser.id, ageVerification);
+
   await db.query(
     `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
      ON CONFLICT (user_id) DO NOTHING`,
-    [createdUser.id, fallbackName, 18, 10]
+    [createdUser.id, fallbackName, verifiedAge, 10]
   );
 
   await db.query(
@@ -363,7 +384,7 @@ const respondWithActiveBan = async (res, userId) => {
 // SIGNUP
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password, confirmPassword } = req.body;
+    const { email, password, confirmPassword, ageVerification } = req.body;
     const normalizedEmail = normalizeRecipient(email);
 
     if (!normalizedEmail || !password || !confirmPassword) {
@@ -372,6 +393,22 @@ router.post('/signup', async (req, res) => {
 
     if (password !== confirmPassword) {
       return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    const ageValidation = validateAgeVerification(ageVerification);
+    if (!ageValidation.valid) {
+      return res.status(400).json({
+        error: ageValidation.errors[0] || 'Age verification failed',
+        details: ageValidation.errors,
+        code: 'AGE_VERIFICATION_FAILED'
+      });
+    }
+
+    if (!ageValidation.isOver18) {
+      return res.status(403).json({
+        error: 'You must be at least 18 years old to use LinkUp',
+        code: 'UNDERAGE_USER'
+      });
     }
 
     // Check if user exists
@@ -390,13 +427,16 @@ router.post('/signup', async (req, res) => {
     );
 
     const userId = createdUserResult.rows[0].id;
+    const verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
+
+    await storeAgeVerification(db, userId, ageVerification);
 
     // Create empty dating profile
     await db.query(
       `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO NOTHING`,
-      [userId, buildDisplayNameFromEmail(normalizedEmail), 18, 10]
+      [userId, buildDisplayNameFromEmail(normalizedEmail), verifiedAge, 10]
     );
 
     // Create user preferences
@@ -916,6 +956,9 @@ router.post('/send-otp', async (req, res) => {
   try {
     const normalizedEmail = normalizeRecipient(req.body?.email);
     const normalizedPhone = String(req.body?.phone || '').trim();
+    const normalizedPurpose = String(req.body?.purpose || 'login').trim().toLowerCase();
+    const otpPurpose = normalizedPurpose === 'signup' ? 'signup' : 'login';
+    const requestedAgeVerification = req.body?.ageVerification || null;
 
     if (!normalizedEmail && !normalizedPhone) {
       return res.status(400).json({ error: 'Email or phone number required' });
@@ -936,6 +979,37 @@ router.post('/send-otp', async (req, res) => {
       });
     }
 
+    await syncAdminPrivilegesForEmail(normalizedEmail);
+    const existingUserResult = await getUserWithProfileByEmail(normalizedEmail);
+    const accountExists = existingUserResult.rows.length > 0;
+
+    if (otpPurpose === 'signup') {
+      if (accountExists) {
+        return res.status(409).json({ error: 'User already exists' });
+      }
+
+      const ageValidation = validateAgeVerification(requestedAgeVerification);
+      if (!ageValidation.valid) {
+        return res.status(400).json({
+          error: ageValidation.errors[0] || 'Age verification failed',
+          details: ageValidation.errors,
+          code: 'AGE_VERIFICATION_FAILED'
+        });
+      }
+
+      if (!ageValidation.isOver18) {
+        return res.status(403).json({
+          error: 'You must be at least 18 years old to use LinkUp',
+          code: 'UNDERAGE_USER'
+        });
+      }
+    } else if (!accountExists) {
+      return res.status(404).json({
+        error: 'No account found for that email address. Sign up first.',
+        code: 'ACCOUNT_NOT_FOUND'
+      });
+    }
+
     // Generate a random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpId = uuidv4();
@@ -947,6 +1021,14 @@ router.post('/send-otp', async (req, res) => {
       otp,
       recipient: normalizedEmail,
       channel: 'email',
+      purpose: otpPurpose,
+      ageVerification:
+        otpPurpose === 'signup'
+          ? {
+              method: requestedAgeVerification.method,
+              dateOfBirth: requestedAgeVerification.dateOfBirth
+            }
+          : null,
       createdAt: Date.now()
     });
 
@@ -1102,7 +1184,11 @@ router.post('/verify-otp', async (req, res) => {
     let needsUsernameSetup = false;
 
     if (recipientEmail) {
-      const userRecord = await ensureUserForOtpLogin(recipientEmail);
+      const otpPurpose = storedData.purpose === 'signup' ? 'signup' : 'login';
+      const userRecord = await ensureUserForOtpLogin(recipientEmail, {
+        allowCreate: otpPurpose === 'signup',
+        ageVerification: storedData.ageVerification || null
+      });
       const profileRecord = await applyOtpRegistrationProfile(userRecord.id, recipientEmail, {
         fullName,
         username,

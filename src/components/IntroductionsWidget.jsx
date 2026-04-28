@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import useIntroductions from '../hooks/useIntroductions';
 import IntroductionCard from './IntroductionCard';
-import './IntroductionsWidget.css';
+import '../styles/IntroductionsWidget.css';
 
 const IntroductionsWidget = ({ maxVisible = 3, compact = false }) => {
   const {

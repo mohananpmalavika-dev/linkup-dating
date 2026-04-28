@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import io from 'socket.io-client';
 import '../styles/ChatRoomView.css';
+import ModerationWarning from './ModerationWarning';
 import chatroomService from '../services/chatroomService';
+import moderationService from '../services/moderationService';
 import { getStoredUserData, getStoredAuthToken } from '../utils/auth';
 import { BACKEND_BASE_URL } from '../utils/api';
 
@@ -19,6 +21,14 @@ const ChatRoomView = ({ chatroomId, onBack }) => {
   const [loadingChatroom, setLoadingChatroom] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState('');
+  const [moderationWarningOpen, setModerationWarningOpen] = useState(false);
+  const [moderationWarningData, setModerationWarningData] = useState({
+    severity: 'medium',
+    issues: [],
+    contentType: 'message'
+  });
+  const [pendingMessage, setPendingMessage] = useState(null);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
   const [showMembers, setShowMembers] = useState(false);
@@ -104,9 +114,38 @@ const ChatRoomView = ({ chatroomId, onBack }) => {
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return;
 
-    const draftMessage = inputMessage;
+    setError('');
 
     try {
+      // Scan content for moderation flags
+      const scanResult = await moderationService.scanText(inputMessage);
+
+      // If content is flagged with medium or high severity, show warning
+      if (moderationService.shouldShowWarning(scanResult.severity)) {
+        setPendingMessage(inputMessage);
+        setModerationWarningData({
+          severity: scanResult.severity,
+          issues: scanResult.issues,
+          contentType: 'message'
+        });
+        setModerationWarningOpen(true);
+        return; // Stop here - user must confirm
+      }
+
+      // Content is clean, proceed with sending
+      await sendMessageNow(inputMessage);
+    } catch (err) {
+      console.error('Moderation scan error:', err);
+      // On scan error, proceed anyway
+      await sendMessageNow(inputMessage);
+    }
+  };
+
+  const sendMessageNow = async (messageText) => {
+    const draftMessage = messageText;
+
+    try {
+      setSendingMessage(true);
       setInputMessage('');
 
       await chatroomService.sendMessage(chatroomId, draftMessage);
@@ -115,7 +154,22 @@ const ChatRoomView = ({ chatroomId, onBack }) => {
       setError('Failed to send message');
       setInputMessage(draftMessage); // Restore message on error
       console.error(err);
+    } finally {
+      setSendingMessage(false);
     }
+  };
+
+  const handleModerationContinue = async () => {
+    if (!pendingMessage) return;
+
+    setModerationWarningOpen(false);
+    await sendMessageNow(pendingMessage);
+    setPendingMessage(null);
+  };
+
+  const handleModerationCancel = () => {
+    setModerationWarningOpen(false);
+    setPendingMessage(null);
   };
 
   if (loadingChatroom) {
@@ -142,6 +196,18 @@ const ChatRoomView = ({ chatroomId, onBack }) => {
 
   return (
     <div className="chatroom-view">
+      {moderationWarningOpen && (
+        <ModerationWarning
+          isOpen={moderationWarningOpen}
+          severity={moderationWarningData.severity}
+          issues={moderationWarningData.issues}
+          contentType={moderationWarningData.contentType}
+          onContinue={handleModerationContinue}
+          onCancel={handleModerationCancel}
+          loading={sendingMessage}
+        />
+      )}
+
       {/* Header */}
       <div className="chatroom-view-header">
         <div className="header-left">

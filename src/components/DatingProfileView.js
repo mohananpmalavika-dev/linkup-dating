@@ -7,6 +7,7 @@ import DateJourneyPanel from './DateJourneyPanel';
 import { getStoredUserData } from '../utils/auth';
 import { buildLocalIdentityPack, buildTrustSummary } from '../utils/datingPhaseTwo';
 import '../styles/DatingProfile.css';
+import { useActivityStatus } from '../hooks/useActivityStatus';
 
 const getProfileActivityHint = (lastActive) => {
   if (!lastActive) {
@@ -92,6 +93,16 @@ const DatingProfileView = ({
   const location = useLocation();
   const currentUser = getStoredUserData();
   const currentUserId = currentUser?.id;
+  const {
+    status: activityStatus,
+    formatted: activityFormatted,
+    isOnline,
+    currentActivity,
+    lastActiveFormatted,
+    isVideoDating,
+    loading: activityLoading
+  } = useActivityStatus(profile?.userId, profile?.matchId, true);
+
   const [profile, setProfile] = useState(initialProfile || null);
   const [loading, setLoading] = useState(Boolean(initialProfile?.userId || profileId));
   const [error, setError] = useState('');
@@ -204,7 +215,12 @@ const DatingProfileView = ({
   const canVideoCall = typeof onVideoCall === 'function' && Boolean(profile?.matchId);
   const canScheduleVideoCall =
     typeof onScheduleVideoCall === 'function' && Boolean(profile?.matchId);
-  const activityHint = getProfileActivityHint(profile?.lastActive);
+  const activityHint = useMemo(() => {
+    if (activityFormatted) {
+      return { label: activityFormatted.text, tone: activityFormatted.badge || 'online' };
+    }
+    return getProfileActivityHint(profile?.lastActive);
+  }, [activityFormatted, profile?.lastActive]);
   const identityPack = useMemo(() => buildLocalIdentityPack(profile || {}), [profile]);
   const trustSummary = useMemo(() => buildTrustSummary({ profile: profile || {} }), [profile]);
   const intentTemplates = useMemo(

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../../utils/api';
 import './AgeGate.css';
 
 /**
@@ -93,9 +94,8 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
       };
 
       // Call backend to verify age
-      const response = await axios.post('/auth/verify-age', {
-        ageVerification,
-        email: 'temp@verification.com' // Temporary, not used in this step
+      const response = await axios.post(`${API_BASE_URL}/auth/verify-age`, {
+        ageVerification
       });
 
       if (response.data.verified || response.data.success) {

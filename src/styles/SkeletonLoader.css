@@ -1,0 +1,310 @@
+/* ============================================================
+   LinkUp Skeleton Loader Styles
+   ============================================================ */
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-pulse {
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  border-radius: var(--lu-radius-md);
+}
+
+[data-theme="dark"] .skeleton-pulse {
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-700) 25%,
+    var(--lu-gray-600) 50%,
+    var(--lu-gray-700) 75%
+  );
+  background-size: 200% 100%;
+}
+
+/* ── Skeleton Card ── */
+.skeleton-card {
+  background: var(--lu-bg-elevated);
+  border-radius: var(--lu-radius-xl);
+  box-shadow: var(--lu-shadow-md);
+  border: 1px solid var(--lu-gray-100);
+  overflow: hidden;
+  margin-bottom: var(--lu-space-4);
+}
+
+.skeleton-card-image {
+  width: 100%;
+  height: 200px;
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-card-body {
+  padding: var(--lu-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-3);
+}
+
+.skeleton-card-title {
+  width: 60%;
+  height: 20px;
+  border-radius: var(--lu-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-card-subtitle {
+  width: 40%;
+  height: 14px;
+  border-radius: var(--lu-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-card-row {
+  display: flex;
+  gap: var(--lu-space-2);
+  margin-top: var(--lu-space-1);
+}
+
+.skeleton-card-tag {
+  width: 60px;
+  height: 24px;
+  border-radius: var(--lu-radius-full);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+/* ── Skeleton Profile ── */
+.skeleton-profile {
+  padding: var(--lu-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-6);
+}
+
+.skeleton-profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--lu-space-3);
+}
+
+.skeleton-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-name {
+  width: 50%;
+  height: 24px;
+  border-radius: var(--lu-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-location {
+  width: 30%;
+  height: 16px;
+  border-radius: var(--lu-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-profile-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-4);
+}
+
+.skeleton-block {
+  width: 100%;
+  height: 80px;
+  border-radius: var(--lu-radius-lg);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-block-short {
+  width: 80%;
+}
+
+.skeleton-block-shorter {
+  width: 60%;
+}
+
+/* ── Skeleton List ── */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-3);
+  padding: var(--lu-space-4);
+}
+
+.skeleton-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-3);
+}
+
+.skeleton-list-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-list-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-2);
+}
+
+.skeleton-list-title {
+  width: 60%;
+  height: 16px;
+  border-radius: var(--lu-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-list-subtitle {
+  width: 40%;
+  height: 12px;
+  border-radius: var(--lu-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+/* ── Skeleton Stats ── */
+.skeleton-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--lu-space-3);
+  padding: var(--lu-space-4);
+}
+
+.skeleton-stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--lu-space-2);
+}
+
+.skeleton-stat-value {
+  width: 40px;
+  height: 28px;
+  border-radius: var(--lu-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+.skeleton-stat-label {
+  width: 60px;
+  height: 12px;
+  border-radius: var(--lu-radius-sm);
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@media (max-width: 480px) {
+  .skeleton-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

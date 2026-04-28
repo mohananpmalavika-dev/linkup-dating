@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import useProfileReset from '../../hooks/useProfileReset';
+import useProfileReset from '../hooks/useProfileReset';
 import './ProfileResetPanel.css';
 
 const RESET_REASONS = [

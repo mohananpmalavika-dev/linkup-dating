@@ -10,7 +10,7 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [referralCode, setReferralCode] = useState('');
-  const [inviteMethod, setInviteMethod] = useState('link'); // 'link', 'sms', 'email'
+  const [inviteMethod, setInviteMethod] = useState('link');
   const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
@@ -23,24 +23,18 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
   const loadFriends = async () => {
     setLoading(true);
     try {
-      // This would call a service to get the user's friends list
-      // For now, we'll use mock data - replace with actual API call
       const result = await referralService.getFriends();
       if (result.success) {
         setFriends(result.data || []);
+        setError('');
       } else {
-        setError('Failed to load friends list');
+        setFriends([]);
+        setError(result.message || 'Failed to load friends list');
       }
     } catch (err) {
       console.error('Error loading friends:', err);
-      // For demo purposes, create mock friends
-      setFriends([
-        { id: 1, name: 'Alice Johnson', email: 'alice@example.com', phone: '+1234567890', avatar: '👩' },
-        { id: 2, name: 'Bob Smith', email: 'bob@example.com', phone: '+1234567891', avatar: '👨' },
-        { id: 3, name: 'Carol Davis', email: 'carol@example.com', phone: '+1234567892', avatar: '👩‍🦱' },
-        { id: 4, name: 'David Miller', email: 'david@example.com', phone: '+1234567893', avatar: '👨‍🦲' },
-        { id: 5, name: 'Eve Wilson', email: 'eve@example.com', phone: '+1234567894', avatar: '👩‍🦰' },
-      ]);
+      setFriends([]);
+      setError(err.message || 'Failed to load friends list');
     } finally {
       setLoading(false);
     }
@@ -57,15 +51,15 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
     }
   };
 
-  const filteredFriends = friends.filter(friend =>
+  const filteredFriends = friends.filter((friend) =>
     friend.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     friend.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const toggleFriendSelection = useCallback((friendId) => {
-    setSelectedFriends(prev =>
+    setSelectedFriends((prev) =>
       prev.includes(friendId)
-        ? prev.filter(id => id !== friendId)
+        ? prev.filter((id) => id !== friendId)
         : [...prev, friendId]
     );
   }, []);
@@ -74,9 +68,9 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
     if (selectedFriends.length === filteredFriends.length) {
       setSelectedFriends([]);
     } else {
-      setSelectedFriends(filteredFriends.map(f => f.id));
+      setSelectedFriends(filteredFriends.map((friend) => friend.id));
     }
-  }, [selectedFriends, filteredFriends]);
+  }, [filteredFriends, selectedFriends]);
 
   const handleSendInvites = async () => {
     if (selectedFriends.length === 0) {
@@ -89,8 +83,7 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
     setSuccessMessage('');
 
     try {
-      const selectedFriendsList = friends.filter(f => selectedFriends.includes(f.id));
-
+      const selectedFriendsList = friends.filter((friend) => selectedFriends.includes(friend.id));
       const result = await referralService.sendInvites(
         selectedFriendsList,
         inviteMethod,
@@ -98,13 +91,13 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
       );
 
       if (result.success) {
-        setSuccessMessage(`✅ Invitations sent to ${selectedFriends.length} friend(s)!`);
+        setSuccessMessage(result.message || `Invitations sent to ${selectedFriends.length} friend(s)!`);
         setSelectedFriends([]);
         setSearchQuery('');
 
-        setTimeout(() => {
+        window.setTimeout(() => {
           onClose();
-          if (onSuccess) onSuccess();
+          onSuccess?.();
         }, 2000);
       } else {
         setError(result.message || 'Failed to send invites');
@@ -121,17 +114,16 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
   return (
     <div className="referral-invite-overlay">
       <div className="invite-modal">
-        <button className="modal-close" onClick={onClose}>✕</button>
+        <button className="modal-close" onClick={onClose}>x</button>
 
         <div className="modal-header">
-          <h2>👥 Invite Friends</h2>
+          <h2>Invite Friends</h2>
           <p>Send your referral code and earn rewards when they sign up!</p>
         </div>
 
         {error && <div className="error-alert">{error}</div>}
         {successMessage && <div className="success-alert">{successMessage}</div>}
 
-        {/* Invite Method Selection */}
         <div className="invite-method-section">
           <label>How would you like to invite?</label>
           <div className="method-buttons">
@@ -139,30 +131,29 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
               className={`method-btn ${inviteMethod === 'link' ? 'active' : ''}`}
               onClick={() => setInviteMethod('link')}
             >
-              🔗 Link
+              Link
             </button>
             <button
               className={`method-btn ${inviteMethod === 'sms' ? 'active' : ''}`}
               onClick={() => setInviteMethod('sms')}
             >
-              💬 SMS
+              SMS
             </button>
             <button
               className={`method-btn ${inviteMethod === 'email' ? 'active' : ''}`}
               onClick={() => setInviteMethod('email')}
             >
-              ✉️ Email
+              Email
             </button>
           </div>
         </div>
 
-        {/* Search Friends */}
         <div className="search-section">
           <input
             type="text"
             placeholder="Search friends by name or email..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(event) => setSearchQuery(event.target.value)}
             className="search-input"
           />
           <span className="friend-count">
@@ -170,7 +161,6 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
           </span>
         </div>
 
-        {/* Friends List */}
         <div className="friends-list-container">
           {loading ? (
             <div className="loading-state">
@@ -178,7 +168,6 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
           ) : filteredFriends.length > 0 ? (
             <>
-              {/* Select All */}
               <div className="select-all-row">
                 <input
                   type="checkbox"
@@ -192,9 +181,8 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
                 </label>
               </div>
 
-              {/* Friends List */}
               <div className="friends-list">
-                {filteredFriends.map(friend => (
+                {filteredFriends.map((friend) => (
                   <div
                     key={friend.id}
                     className={`friend-item ${selectedFriends.includes(friend.id) ? 'selected' : ''}`}
@@ -213,7 +201,7 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
                         <div className="friend-contact">
                           {inviteMethod === 'email' && friend.email}
                           {inviteMethod === 'sms' && friend.phone}
-                          {inviteMethod === 'link' && friend.email}
+                          {inviteMethod === 'link' && (friend.email || friend.phone || 'Share invite')}
                         </div>
                       </div>
                     </label>
@@ -223,30 +211,25 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
             </>
           ) : (
             <div className="empty-state">
-              <p>😔 No friends found</p>
+              <p>No friends found</p>
               <small>Try adjusting your search</small>
             </div>
           )}
         </div>
 
-        {/* Referral Code Display */}
         <div className="referral-code-display">
           <p>Your referral code:</p>
           <div className="code-display">
             <code>{referralCode}</code>
             <button
               className="copy-code-btn"
-              onClick={() => {
-                navigator.clipboard.writeText(referralCode);
-                // Show copy feedback
-              }}
+              onClick={() => navigator.clipboard.writeText(referralCode)}
             >
-              📋
+              Copy
             </button>
           </div>
         </div>
 
-        {/* Action Buttons */}
         <div className="modal-footer">
           <button
             className="btn-cancel"
@@ -260,23 +243,8 @@ const ReferralInviteModal = ({ isOpen, onClose, onSuccess }) => {
             onClick={handleSendInvites}
             disabled={sending || selectedFriends.length === 0}
           >
-            {sending ? '📤 Sending...' : `✈️ Send to ${selectedFriends.length} Friend${selectedFriends.length !== 1 ? 's' : ''}`}
+            {sending ? 'Sending...' : 'Send Invites'}
           </button>
-        </div>
-
-        {/* Benefits Section */}
-        <div className="benefits-section">
-          <h4>🎁 Benefits</h4>
-          <ul>
-            <li>
-              <span>You get:</span>
-              <strong>+7 days premium, +5 superlikes</strong>
-            </li>
-            <li>
-              <span>They get:</span>
-              <strong>+7 days premium, +5 superlikes</strong>
-            </li>
-          </ul>
         </div>
       </div>
     </div>

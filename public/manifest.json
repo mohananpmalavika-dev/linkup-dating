@@ -1,7 +1,7 @@
 {
   "name": "LinkUp",
   "short_name": "LinkUp",
-  "description": "Real-time Messaging & Chatroom Communication Platform",
+  "description": "Kerala dating, events, and local services platform",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#ffffff",

@@ -1,11 +1,13 @@
-const db = require('../config/database');
 const { Op } = require('sequelize');
+const dbModels = require('../models');
 
-const VideoCallRating = db.models.VideoCallRating;
-const VideoCallAnalytics = db.models.VideoCallAnalytics;
-const VideoCompatibilityScore = db.models.VideoCompatibilityScore;
-const VideoDate = db.models.VideoDate;
-const User = db.models.User;
+const {
+  VideoCallRating,
+  VideoCallAnalytics,
+  VideoCompatibilityScore,
+  VideoDate,
+  User
+} = dbModels;
 
 const INDUSTRY_AVERAGE_CALL_MINUTES = 12;
 

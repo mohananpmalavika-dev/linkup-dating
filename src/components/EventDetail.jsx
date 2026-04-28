@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import useEvent from '../../hooks/useEvent';
+import useEvent from '../hooks/useEvent';
 import './EventDetail.css';
 
 const EventDetail = ({ eventId, onClose, onRsvpComplete }) => {

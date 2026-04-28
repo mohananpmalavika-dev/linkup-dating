@@ -9,8 +9,8 @@
  * /admin/moderation/stats - Moderation statistics
  */
 
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useCallback } from 'react';
+import adminService from '../../services/adminService';
 import './AdminModeration.css';
 
 const AdminModeration = () => {
@@ -23,25 +23,27 @@ const AdminModeration = () => {
   const [filterStatus, setFilterStatus] = useState('pending');
   const [sortBy, setSortBy] = useState('recent');
 
+  // Load appropriate data when tab or filters change
   useEffect(() => {
     if (activeTab === 'queue') {
       fetchFlags();
     } else if (activeTab === 'stats') {
       fetchStats();
     }
-  }, [activeTab, filterStatus, sortBy]);
+  }, [activeTab, fetchFlags, fetchStats]);
 
-  // Fetch pending flags
-  const fetchFlags = async () => {
+  // Fetch pending flags/queue items (wrapped in useCallback)
+  const fetchFlags = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
       
-      const response = await axios.get('/api/moderation/pending-flags', {
-        params: { limit: 50, status: filterStatus }
+      const response = await adminService.getModerationQueue({ 
+        limit: 50,
+        status: filterStatus === 'all' ? undefined : filterStatus
       });
       
-      let flagsList = response.data.flags || [];
+      let flagsList = response.queue || [];
       
       // Sort flags
       if (sortBy === 'recent') {
@@ -52,46 +54,52 @@ const AdminModeration = () => {
       
       setFlags(flagsList);
     } catch (err) {
-      setError('Failed to load flags');
-      console.error(err);
+      setError(err?.response?.data?.error || 'Failed to load flags');
+      console.error('Fetch flags error:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus, sortBy]);
 
-  // Fetch moderation stats
-  const fetchStats = async () => {
+  // Fetch moderation stats and analytics (wrapped in useCallback)
+  const fetchStats = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/moderation/stats');
-      setStats(response.data);
+      const response = await adminService.getModerationAnalytics({ days: 30 });
+      setStats(response);
     } catch (err) {
-      setError('Failed to load statistics');
-      console.error(err);
+      setError(err?.response?.data?.error || 'Failed to load statistics');
+      console.error('Fetch stats error:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Resolve flag (approve/reject)
+  // Resolve flag based on type
   const handleResolveFlag = async (flagId, action, reason = '') => {
     try {
       setLoading(true);
+      setError('');
       
-      const response = await axios.post('/api/moderation/resolve-flag', {
-        flagId,
-        action,
-        reason
+      // Determine the appropriate resolution status
+      const status = action === 'approved' ? 'dismissed' : 'resolved';
+      
+      // Use the appropriate admin service method based on flag type
+      await adminService.reviewModerationFlag(flagId, {
+        status,
+        notes: reason
       });
       
       // Remove flag from list
       setFlags(flags.filter(f => f.id !== flagId));
       setSelectedFlag(null);
       
-      alert(`Content ${action} successfully`);
+      // Show success
+      const actionText = action === 'approved' ? 'approved' : 'rejected';
+      console.log(`Flag ${actionText} successfully`);
     } catch (err) {
-      setError('Failed to resolve flag');
-      console.error(err);
+      setError(err?.response?.data?.error || 'Failed to resolve flag');
+      console.error('Resolve flag error:', err);
     } finally {
       setLoading(false);
     }

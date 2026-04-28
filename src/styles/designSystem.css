@@ -1,0 +1,455 @@
+/* ============================================================
+   LinkUp Premium Design System
+   Target: Kerala Launch — May 1, 2026
+   ============================================================ */
+
+/* ── Font Imports ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Manjari:wght@400;700&display=swap');
+
+/* ── CSS Custom Properties (Design Tokens) ── */
+:root {
+  /* Primary Gradient (Signature LinkUp Purple) */
+  --lu-primary-start: #667eea;
+  --lu-primary-end: #764ba2;
+  --lu-primary-gradient: linear-gradient(135deg, var(--lu-primary-start) 0%, var(--lu-primary-end) 100%);
+
+  /* Kerala Brand Accents (Warm, Trustworthy) */
+  --lu-kerala-terracotta: #d04c2f;
+  --lu-kerala-gold: #c9a227;
+  --lu-kerala-green: #2d7a3e;
+  --lu-kerala-sand: #f5ebe0;
+
+  /* Premium Metallic Accents */
+  --lu-gold: #d4af37;
+  --lu-gold-light: #f3e5ab;
+  --lu-gold-gradient: linear-gradient(135deg, #d4af37 0%, #f3e5ab 50%, #d4af37 100%);
+  --lu-platinum: #e5e4e2;
+  --lu-diamond: #b9f2ff;
+
+  /* Semantic Colors */
+  --lu-success: #22c55e;
+  --lu-warning: #f59e0b;
+  --lu-error: #ef4444;
+  --lu-info: #3b82f6;
+
+  /* Neutral Scale (Slate-based for premium feel) */
+  --lu-white: #ffffff;
+  --lu-gray-50: #f8fafc;
+  --lu-gray-100: #f1f5f9;
+  --lu-gray-200: #e2e8f0;
+  --lu-gray-300: #cbd5e1;
+  --lu-gray-400: #94a3b8;
+  --lu-gray-500: #64748b;
+  --lu-gray-600: #475569;
+  --lu-gray-700: #334155;
+  --lu-gray-800: #1e293b;
+  --lu-gray-900: #0f172a;
+
+  /* Backgrounds */
+  --lu-bg-primary: var(--lu-gray-50);
+  --lu-bg-elevated: var(--lu-white);
+  --lu-bg-dark: var(--lu-gray-900);
+  --lu-bg-dark-elevated: var(--lu-gray-800);
+
+  /* Text Colors */
+  --lu-text-primary: var(--lu-gray-900);
+  --lu-text-secondary: var(--lu-gray-600);
+  --lu-text-tertiary: var(--lu-gray-400);
+  --lu-text-inverse: var(--lu-white);
+  --lu-text-link: var(--lu-primary-start);
+
+  /* Typography */
+  --lu-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  --lu-font-ml: 'Manjari', 'Noto Sans Malayalam', sans-serif;
+  --lu-font-mono: 'SF Mono', SFMono-Regular, ui-monospace, Menlo, Monaco, Consolas, monospace;
+
+  /* Font Sizes (Major Third Scale) */
+  --lu-text-xs: 0.75rem;
+  --lu-text-sm: 0.875rem;
+  --lu-text-base: 1rem;
+  --lu-text-lg: 1.125rem;
+  --lu-text-xl: 1.25rem;
+  --lu-text-2xl: 1.5rem;
+  --lu-text-3xl: 1.875rem;
+  --lu-text-4xl: 2.25rem;
+
+  /* Font Weights */
+  --lu-font-normal: 400;
+  --lu-font-medium: 500;
+  --lu-font-semibold: 600;
+  --lu-font-bold: 700;
+  --lu-font-extrabold: 800;
+
+  /* Line Heights */
+  --lu-leading-tight: 1.25;
+  --lu-leading-normal: 1.5;
+  --lu-leading-relaxed: 1.625;
+
+  /* Spacing Scale (4px base) */
+  --lu-space-1: 0.25rem;
+  --lu-space-2: 0.5rem;
+  --lu-space-3: 0.75rem;
+  --lu-space-4: 1rem;
+  --lu-space-5: 1.25rem;
+  --lu-space-6: 1.5rem;
+  --lu-space-8: 2rem;
+  --lu-space-10: 2.5rem;
+  --lu-space-12: 3rem;
+  --lu-space-16: 4rem;
+
+  /* Border Radius */
+  --lu-radius-sm: 6px;
+  --lu-radius-md: 10px;
+  --lu-radius-lg: 14px;
+  --lu-radius-xl: 20px;
+  --lu-radius-2xl: 28px;
+  --lu-radius-full: 9999px;
+
+  /* Shadows (Layered for depth) */
+  --lu-shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --lu-shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 2px 4px -1px rgba(15, 23, 42, 0.04);
+  --lu-shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.04);
+  --lu-shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 10px 10px -5px rgba(15, 23, 42, 0.04);
+  --lu-shadow-2xl: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  --lu-shadow-gold: 0 10px 30px rgba(212, 175, 55, 0.3);
+  --lu-shadow-glow: 0 0 20px rgba(102, 126, 234, 0.3);
+
+  /* Transitions */
+  --lu-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --lu-transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --lu-transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --lu-transition-bounce: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Z-Index Scale */
+  --lu-z-dropdown: 100;
+  --lu-z-sticky: 200;
+  --lu-nav: 300;
+  --lu-z-modal-backdrop: 400;
+  --lu-z-modal: 500;
+  --lu-z-popover: 600;
+  --lu-z-toast: 700;
+
+  /* Glassmorphism */
+  --lu-glass-bg: rgba(255, 255, 255, 0.75);
+  --lu-glass-border: rgba(255, 255, 255, 0.3);
+  --lu-glass-blur: blur(20px) saturate(180%);
+}
+
+/* ── Dark Mode Variables (explicit data attribute) ── */
+[data-theme='dark'] {
+  --lu-bg-primary: var(--lu-gray-900);
+  --lu-bg-elevated: var(--lu-gray-800);
+  --lu-bg-dark: #020617;
+  --lu-bg-dark-elevated: var(--lu-gray-900);
+  --lu-text-primary: var(--lu-gray-50);
+  --lu-text-secondary: var(--lu-gray-400);
+  --lu-text-tertiary: var(--lu-gray-500);
+  --lu-text-inverse: var(--lu-gray-900);
+  --lu-glass-bg: rgba(30, 41, 59, 0.75);
+  --lu-glass-border: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Dark Mode Variables (system preference) ── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --lu-bg-primary: var(--lu-gray-900);
+    --lu-bg-elevated: var(--lu-gray-800);
+    --lu-bg-dark: #020617;
+    --lu-bg-dark-elevated: var(--lu-gray-900);
+    --lu-text-primary: var(--lu-gray-50);
+    --lu-text-secondary: var(--lu-gray-400);
+    --lu-text-tertiary: var(--lu-gray-500);
+    --lu-text-inverse: var(--lu-gray-900);
+    --lu-glass-bg: rgba(30, 41, 59, 0.75);
+    --lu-glass-border: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* ── Malayalam Language Adjustments ── */
+[lang='ml'] {
+  font-family: var(--lu-font-ml);
+  line-height: 1.7;
+}
+
+[lang='ml'] h1,
+[lang='ml'] h2,
+[lang='ml'] h3 {
+  line-height: 1.3;
+  word-spacing: 0.02em;
+}
+
+/* ── Base Reset Enhancements ── */
+.lu-surface {
+  background: var(--lu-bg-primary);
+  color: var(--lu-text-primary);
+  font-family: var(--lu-font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Premium Button Styles ── */
+.lu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--lu-space-2);
+  padding: var(--lu-space-3) var(--lu-space-5);
+  border: none;
+  border-radius: var(--lu-radius-full);
+  font-family: var(--lu-font-sans);
+  font-size: var(--lu-text-sm);
+  font-weight: var(--lu-font-semibold);
+  cursor: pointer;
+  transition: all var(--lu-transition-base);
+  position: relative;
+  overflow: hidden;
+}
+
+.lu-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.15), transparent);
+  opacity: 0;
+  transition: opacity var(--lu-transition-fast);
+}
+
+.lu-btn:hover::after {
+  opacity: 1;
+}
+
+.lu-btn:active {
+  transform: scale(0.97);
+}
+
+.lu-btn-primary {
+  background: var(--lu-primary-gradient);
+  color: var(--lu-text-inverse);
+  box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);
+}
+
+.lu-btn-primary:hover {
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+  transform: translateY(-1px);
+}
+
+.lu-btn-gold {
+  background: var(--lu-gold-gradient);
+  color: #5c4b1e;
+  box-shadow: var(--lu-shadow-gold);
+}
+
+.lu-btn-gold:hover {
+  box-shadow: 0 14px 36px rgba(212, 175, 55, 0.4);
+  transform: translateY(-1px);
+}
+
+.lu-btn-ghost {
+  background: transparent;
+  color: var(--lu-text-secondary);
+  border: 1.5px solid var(--lu-gray-200);
+}
+
+.lu-btn-ghost:hover {
+  background: var(--lu-gray-100);
+  border-color: var(--lu-gray-300);
+}
+
+/* ── Card Styles ── */
+.lu-card {
+  background: var(--lu-bg-elevated);
+  border-radius: var(--lu-radius-xl);
+  box-shadow: var(--lu-shadow-md);
+  border: 1px solid var(--lu-gray-100);
+  transition: all var(--lu-transition-base);
+}
+
+.lu-card:hover {
+  box-shadow: var(--lu-shadow-lg);
+  transform: translateY(-2px);
+}
+
+.lu-card-glass {
+  background: var(--lu-glass-bg);
+  backdrop-filter: var(--lu-glass-blur);
+  -webkit-backdrop-filter: var(--lu-glass-blur);
+  border: 1px solid var(--lu-glass-border);
+  border-radius: var(--lu-radius-xl);
+}
+
+/* ── Premium Badge Styles ── */
+.lu-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lu-space-1);
+  padding: var(--lu-space-1) var(--lu-space-3);
+  border-radius: var(--lu-radius-full);
+  font-size: var(--lu-text-xs);
+  font-weight: var(--lu-font-bold);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.lu-badge-premium {
+  background: var(--lu-gold-gradient);
+  color: #5c4b1e;
+  box-shadow: var(--lu-shadow-gold);
+}
+
+.lu-badge-verified {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+}
+
+.lu-badge-kerala {
+  background: linear-gradient(135deg, var(--lu-kerala-terracotta), #b93e24);
+  color: white;
+}
+
+/* ── Skeleton Shimmer ── */
+@keyframes lu-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.lu-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-200) 25%,
+    var(--lu-gray-100) 50%,
+    var(--lu-gray-200) 75%
+  );
+  background-size: 200% 100%;
+  animation: lu-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--lu-radius-md);
+}
+
+[data-theme='dark'] .lu-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--lu-gray-700) 25%,
+    var(--lu-gray-600) 50%,
+    var(--lu-gray-700) 75%
+  );
+  background-size: 200% 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lu-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--lu-gray-700) 25%,
+      var(--lu-gray-600) 50%,
+      var(--lu-gray-700) 75%
+    );
+    background-size: 200% 100%;
+  }
+}
+
+/* ── Page Transitions ── */
+@keyframes lu-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lu-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes lu-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.lu-animate-fade {
+  animation: lu-fade-in 0.3s var(--lu-transition-base) forwards;
+}
+
+.lu-animate-slide-up {
+  animation: lu-slide-up 0.4s var(--lu-transition-base) forwards;
+}
+
+.lu-animate-scale {
+  animation: lu-scale-in 0.25s var(--lu-transition-base) forwards;
+}
+
+/* ── Scrollbar Styling ── */
+.lu-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.lu-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lu-scroll::-webkit-scrollbar-thumb {
+  background: var(--lu-gray-300);
+  border-radius: var(--lu-radius-full);
+}
+
+.lu-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--lu-gray-400);
+}
+
+/* ── Utility Classes ── */
+.lu-gradient-text {
+  background: var(--lu-primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.lu-gold-text {
+  background: var(--lu-gold-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.lu-text-balance {
+  text-wrap: balance;
+}
+
+.lu-no-tap-highlight {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Divider ── */
+.lu-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--lu-gray-200), transparent);
+  margin: var(--lu-space-4) 0;
+}
+
+[data-theme='dark'] .lu-divider {
+  background: linear-gradient(to right, transparent, var(--lu-gray-700), transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  .lu-divider {
+    background: linear-gradient(to right, transparent, var(--lu-gray-700), transparent);
+  }
+}

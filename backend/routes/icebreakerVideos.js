@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const { authenticateToken, requirePremium } = require('../middleware/auth');
 const {
   uploadIcebreakerVideo,
@@ -14,6 +15,13 @@ const {
 } = require('../services/icebreakerVideoService');
 const { logger } = require('../utils/logger');
 
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024
+  }
+});
+
 // ============================================================
 // UPLOAD & MANAGE
 // ============================================================
@@ -22,10 +30,15 @@ const { logger } = require('../utils/logger');
  * POST /api/icebreaker-videos/upload
  * Upload a new icebreaker video (Premium feature)
  */
-router.post('/upload', authenticateToken, requirePremium, async (req, res) => {
+router.post('/upload', authenticateToken, requirePremium, upload.single('video'), async (req, res) => {
   try {
-    const { videoUrl, videoKey, durationSeconds, thumbnailUrl, title } =
+    let { videoUrl, videoKey, durationSeconds, thumbnailUrl, title } =
       req.body;
+
+    if (req.file) {
+      videoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      videoKey = videoKey || `icebreaker-videos/${Date.now()}-${req.file.originalname}`;
+    }
 
     if (!videoUrl || !durationSeconds) {
       return res.status(400).json({

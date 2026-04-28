@@ -9,6 +9,8 @@ const db = require('./config/database');
 const { logger, logRequest } = require('./utils/logger');
 const { apiLimiter, authLimiter, otpLimiter } = require('./middleware/rateLimit');
 const authRoutes = require('./routes/auth');
+const achievementsRoutes = require('./routes/achievements');
+const ageVerificationRoutes = require('./routes/ageVerification');
 const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
 const messagingEnhancedRoutes = require('./routes/messagingEnhanced');
@@ -39,7 +41,15 @@ const catfishDetectionRoutes = require('./routes/catfishDetection');
 const videoVerificationRoutes = require('./routes/videoVerification');
 const dateSafetyRoutes = require('./routes/dateSafety');
 const icebreakerVideoRoutes = require('./routes/icebreakerVideos');
+const momentsRoutes = require('./routes/moments');
+const videoInsightsRoutes = require('./routes/videoInsights');
 const { authenticateToken } = require('./middleware/auth');
+
+// Category B: Socket handlers
+const handleAchievementSocketEvents = require('./sockets/achievementSocketHandlers');
+const privacyAwareActivityHandlers = require('./sockets/privacyAwareActivityHandlers');
+const reactionSocketHandlers = require('./sockets/reactionSocketHandlers');
+const SocketEventHandlers = require('./sockets/realTimeEventHandlers');
 
 const app = express();
 const server = http.createServer(app);
@@ -50,6 +60,9 @@ const io = socketIO(server, {
     allowedHeaders: ['Content-Type', 'Authorization']
   }
 });
+
+// Category B: Register real-time event handlers (presence, typing, activity, match notifications, profile changes)
+SocketEventHandlers.registerHandlers(io);
 
 // Security Middleware
 app.use(helmet({
@@ -152,6 +165,67 @@ io.on('connection', (socket) => {
     if (wasOffline) {
       io.emit('user_status', { userId, online: true });
     }
+
+    // Category B: Register achievement socket events for this user
+    socket.achievementApi = handleAchievementSocketEvents(socket, socket.data.userId);
+  });
+
+  // Category B: Privacy-aware activity handlers
+  socket.on('user_activity_update', (data) => {
+    privacyAwareActivityHandlers.handleUserActivityUpdate(io, socket, data);
+  });
+
+  socket.on('activity_ended', (data) => {
+    privacyAwareActivityHandlers.handleActivityEnded(io, socket, data);
+  });
+
+  socket.on('last_active_update', (data) => {
+    privacyAwareActivityHandlers.handleLastActiveUpdate(io, socket, data);
+  });
+
+  socket.on('typing_indicator_privacy', (data) => {
+    privacyAwareActivityHandlers.handleTypingIndicator(io, socket, data);
+  });
+
+  socket.on('online_status_privacy', (data) => {
+    privacyAwareActivityHandlers.handleOnlineStatusUpdate(io, socket, data);
+  });
+
+  socket.on('privacy_level_change', (data) => {
+    privacyAwareActivityHandlers.handlePrivacyLevelChange(io, socket, data);
+  });
+
+  socket.on('status_request', (data) => {
+    privacyAwareActivityHandlers.handleStatusRequest(io, socket, data);
+  });
+
+  // Category B: Reaction socket handlers
+  socket.on('emoji_reaction_added', (data) => {
+    reactionSocketHandlers.handleEmojiReactionAdded(io, socket, data);
+  });
+
+  socket.on('custom_reaction_added', (data) => {
+    reactionSocketHandlers.handleCustomReactionAdded(io, socket, data);
+  });
+
+  socket.on('reaction_removed', (data) => {
+    reactionSocketHandlers.handleReactionRemoved(io, socket, data);
+  });
+
+  socket.on('request_message_reactions', (data) => {
+    reactionSocketHandlers.handleRequestMessageReactions(io, socket, data);
+  });
+
+  socket.on('request_streak', (data) => {
+    reactionSocketHandlers.handleRequestStreak(io, socket, data);
+  });
+
+  socket.on('get_suggested_reactions', (data) => {
+    reactionSocketHandlers.handleGetSuggestedReactions(io, socket, data);
+  });
+
+  socket.on('get_top_reactions', (data) => {
+    reactionSocketHandlers.handleGetTopReactions(io, socket, data);
   });
 
   socket.on('send_message', (data) => {
@@ -415,7 +489,10 @@ app.get('/', (req, res) => {
 
 // Routes with specific rate limiting
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/auth', authLimiter, ageVerificationRoutes);
 app.use('/api/auth/send-otp', otpLimiter); // Override with stricter OTP limit
+app.use('/api/achievements', achievementsRoutes);
+app.use('/api/leaderboards', achievementsRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/app-data', appDataRoutes);
@@ -446,6 +523,8 @@ app.use('/api/catfish-detection', authenticateToken, catfishDetectionRoutes);
 app.use('/api/video-verification', authenticateToken, videoVerificationRoutes);
 app.use('/api/date-safety', authenticateToken, dateSafetyRoutes);
 app.use('/api/icebreaker-videos', authenticateToken, icebreakerVideoRoutes);
+app.use('/api/moments', momentsRoutes);
+app.use('/api/video-insights', videoInsightsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

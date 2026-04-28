@@ -1,7 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const { authenticateUser } = require('../middleware/auth');
 const momentService = require('../services/momentService');
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024
+  }
+});
 
 // All routes require authentication
 router.use(authenticateUser);
@@ -10,10 +18,15 @@ router.use(authenticateUser);
  * POST /api/moments/upload
  * Upload a new moment (with photo URL and optional caption)
  */
-router.post('/upload', async (req, res) => {
+router.post('/upload', upload.single('photo'), async (req, res) => {
   try {
-    const { photoUrl, photoKey, caption } = req.body;
+    let { photoUrl, photoKey, caption } = req.body;
     const userId = req.user.id;
+
+    if (req.file) {
+      photoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      photoKey = photoKey || `moments/${Date.now()}-${req.file.originalname}`;
+    }
 
     if (!photoUrl) {
       return res.status(400).json({ error: 'photoUrl is required' });

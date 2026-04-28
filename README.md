@@ -1,4 +1,4 @@
-# LinkUp Dating - Modern Dating App
+# LinkUp Dating - Kerala Dating, Events & Local Services
 
 A full-featured React-based dating application with swipe discovery, advanced profile search, real-time messaging, and video dating capabilities.
 
@@ -228,7 +228,7 @@ For issues or questions:
 
 ---
 
-**LinkUp Dating** - Find your match, start the conversation! 💕
+**LinkUp Dating** - Match, meet, and discover trusted local services across Kerala.
 
 ✅ **Rich Media**
 - Send text, images, and files
@@ -313,7 +313,7 @@ RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 Edit `capacitor.config.json`:
 ```json
 {
-  "appId": "com.linkup.messaging",
+  "appId": "com.linkup.dating",
   "appName": "LinkUp",
   "webDir": "build"
 }

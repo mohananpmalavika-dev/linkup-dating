@@ -29,11 +29,39 @@ import ChatRoomView from './components/ChatRoomView';
 import LobbyChat from './components/LobbyChat';
 import SocialHub from './components/SocialHub';
 import AdminDashboard from './components/AdminDashboard';
+import AdminModeration from './components/AdminModeration/AdminModeration';
 import SOSAlert from './components/SOSAlert';
+import AchievementsPage from './components/AchievementsPage';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import CatfishDetectionDashboard from './components/CatfishDetectionDashboard';
+import ConversationQualityMeter from './components/ConversationQualityMeter';
+import DateSafetyKit from './components/DateSafetyKit';
+import DoubleDateGroups from './components/DoubleDateGroups';
+import EventsList from './components/EventsList';
+import IcebreakerVideoRecorder from './components/IcebreakerVideoRecorder';
+import MomentsFeed from './components/MomentsFeed';
+import PhotoABTestDashboard from './components/PhotoABTestDashboard';
+import ProfileResetPanel from './components/ProfileResetPanel';
+import ReferralDashboard from './components/ReferralDashboard';
+import VideoVerificationPrompt from './components/VideoVerificationPrompt';
+import IntroductionsWidget from './components/IntroductionsWidget';
+import StatusPreferenceManager from './components/StatusPreferenceManager';
+import SubscriptionPage from './components/SubscriptionPage/SubscriptionPage';
+import FeatureHub from './components/FeatureHub';
+import DailyChallengesModal from './components/DailyChallengesModal';
+import BoostPurchasePanel from './components/BoostPurchasePanel';
+import StreakLeaderboard from './components/StreakLeaderboard';
+import SmartRewindHistory from './components/dating/SmartRewindHistory';
+import PrioritySubscriptionPanel from './components/PrioritySubscriptionPanel';
+import TemplatePerformance from './components/TemplatePerformance';
+import PrivacyPolicyPage from './components/LegalPages/PrivacyPolicyPage';
+import TermsOfServicePage from './components/LegalPages/TermsOfServicePage';
+import RefundPolicyPage from './components/LegalPages/RefundPolicyPage';
 import datingProfileService from './services/datingProfileService';
 import datingMessagingService from './services/datingMessagingService';
 import notificationService from './services/notificationService';
 import videoCallService from './services/videoCallService';
+import icebreakerVideoService from './services/icebreakerVideoService';
 import { BACKEND_BASE_URL } from './utils/api';
 import {
   clearStoredAuthToken,
@@ -248,6 +276,66 @@ const ChatRoomDetailRoute = ({
     <ChatRoomView
       chatroomId={chatroomId}
       onBack={() => onNavigateToChatrooms(location.state?.returnPath || '/chatrooms')}
+    />
+  );
+};
+
+const DailyChallengesRoute = ({ onNavigateToPath }) => (
+  <DailyChallengesModal
+    isOpen
+    onClose={() => onNavigateToPath('/more')}
+  />
+);
+
+const PreferencesPriorityRoute = ({ onNavigateToPath }) => (
+  <PrioritySubscriptionPanel
+    onClose={() => onNavigateToPath('/more')}
+  />
+);
+
+const SmartRewindRoute = () => (
+  <SmartRewindHistory />
+);
+
+const OpeningTemplatesRoute = ({ onNavigateToPath }) => (
+  <TemplatePerformance
+    onClose={() => onNavigateToPath('/more')}
+  />
+);
+
+const IcebreakerVideosRoute = ({ onNavigateToPath }) => (
+  <IcebreakerVideoRecorder
+    onUploadSuccess={async (uploadPayload) => {
+      await icebreakerVideoService.uploadVideo(uploadPayload);
+      onNavigateToPath('/more');
+    }}
+    onCancel={() => onNavigateToPath('/more')}
+  />
+);
+
+const StatusPreferencesRoute = ({ onNavigateToPath }) => {
+  const location = useLocation();
+  const pathMatch = location.pathname.match(/^\/status-preferences\/([^/]+)$/i);
+  const queryParams = new URLSearchParams(location.search);
+  const matchId = pathMatch?.[1] || queryParams.get('matchId') || location.state?.matchId || null;
+
+  if (!matchId) {
+    return (
+      <div className="feature-route-empty-state">
+        <h1>Status Preferences</h1>
+        <p>Open this screen from a specific match to manage activity-sharing privacy.</p>
+        <button type="button" onClick={() => onNavigateToPath('/messages')}>
+          Choose a match
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <StatusPreferenceManager
+      matchId={matchId}
+      isOpen
+      onClose={() => onNavigateToPath(location.state?.returnPath || '/messages')}
     />
   );
 };
@@ -758,6 +846,20 @@ const AppContent = () => {
             }
           />
           <Route
+            path="/admin/moderation"
+            element={
+              isAuthenticated ? (
+                isAdminSession ? (
+                  <AdminModeration onLogout={handleLogout} />
+                ) : (
+                  <Navigate to={DEFAULT_AUTHENTICATED_ROUTE} replace />
+                )
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
             path="/*"
             element={
               isAuthenticated && !isAdminSession ? (
@@ -949,6 +1051,57 @@ const AppContent = () => {
               }
             />
             <Route path="profile" element={<DatingProfile onLogout={handleLogout} />} />
+            <Route path="legal/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="legal/terms" element={<TermsOfServicePage />} />
+            <Route path="legal/refund" element={<RefundPolicyPage />} />
+            <Route path="achievements" element={<AchievementsPage />} />
+            <Route path="leaderboards" element={<AchievementsPage defaultTab="leaderboards" />} />
+            <Route
+              path="daily-challenges"
+              element={<DailyChallengesRoute onNavigateToPath={(path) => navigate(path)} />}
+            />
+            <Route path="boost" element={<BoostPurchasePanel />} />
+            <Route path="boosts" element={<BoostPurchasePanel />} />
+            <Route path="analytics" element={<AnalyticsDashboard />} />
+            <Route path="conversation-quality" element={<ConversationQualityMeter />} />
+            <Route path="referrals" element={<ReferralDashboard />} />
+            <Route path="profile-reset" element={<ProfileResetPanel />} />
+            <Route path="moments" element={<MomentsFeed />} />
+            <Route
+              path="icebreaker-videos"
+              element={<IcebreakerVideosRoute onNavigateToPath={(path) => navigate(path)} />}
+            />
+            <Route path="events" element={<EventsList />} />
+            <Route path="double-dates" element={<DoubleDateGroups />} />
+            <Route path="date-safety-guide" element={<DateSafetyKit />} />
+            <Route path="video-verification" element={<VideoVerificationPrompt />} />
+            <Route path="catfish-detection" element={<CatfishDetectionDashboard />} />
+            <Route path="streaks" element={<StreakLeaderboard />} />
+            <Route path="introductions" element={<IntroductionsWidget />} />
+            <Route
+              path="preferences-priority"
+              element={<PreferencesPriorityRoute onNavigateToPath={(path) => navigate(path)} />}
+            />
+            <Route
+              path="smart-rewind"
+              element={<SmartRewindRoute />}
+            />
+            <Route
+              path="opening-templates"
+              element={<OpeningTemplatesRoute onNavigateToPath={(path) => navigate(path)} />}
+            />
+            <Route
+              path="status-preferences"
+              element={<StatusPreferencesRoute onNavigateToPath={(path) => navigate(path)} />}
+            />
+            <Route
+              path="status-preferences/:matchId"
+              element={<StatusPreferencesRoute onNavigateToPath={(path) => navigate(path)} />}
+            />
+            <Route path="photo-ab-testing" element={<PhotoABTestDashboard />} />
+            <Route path="photo-ab-test" element={<PhotoABTestDashboard />} />
+            <Route path="subscription" element={<SubscriptionPage />} />
+            <Route path="more" element={<FeatureHub />} />
             <Route path="*" element={<Navigate to={DEFAULT_AUTHENTICATED_ROUTE} replace />} />
           </Route>
         </Routes>

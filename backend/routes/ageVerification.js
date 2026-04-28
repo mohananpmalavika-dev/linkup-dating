@@ -12,7 +12,6 @@ const {
   validateAgeVerification,
   storeAgeVerification,
   getAgeVerificationStatus,
-  isOldEnough,
   calculateAgeFromDOB
 } = require('../utils/ageVerification');
 
@@ -23,11 +22,11 @@ const {
  */
 router.post('/verify-age', async (req, res) => {
   try {
-    const { ageVerification, email } = req.body;
+    const { ageVerification } = req.body;
 
-    if (!email || !ageVerification) {
+    if (!ageVerification) {
       return res.status(400).json({
-        error: 'Email and age verification required'
+        error: 'Age verification required'
       });
     }
 
@@ -129,7 +128,7 @@ router.post('/complete-signup-with-age', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     // Create user (in a transaction)
-    const client = await db.connect();
+    const client = await db.pool.connect();
     try {
       await client.query('BEGIN');
 
@@ -145,19 +144,21 @@ router.post('/complete-signup-with-age', async (req, res) => {
       const user = userResult.rows[0];
 
       // Store age verification
-      await client.query(
-        `INSERT INTO age_verifications (user_id, verification_method, date_of_birth, is_verified, verified_at)
-         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
-        [userId, ageVerification.method, ageVerification.dateOfBirth || null, true]
+      await storeAgeVerification(
+        {
+          query: (text, params) => client.query(text, params)
+        },
+        userId,
+        ageVerification
       );
 
       // Create dating profile
       const firstName = email.split('@')[0];
       const age = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
       await client.query(
-        `INSERT INTO dating_profiles (user_id, first_name, age, age_verified, age_verification_method, profile_completion_percent, last_active)
-         VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
-        [userId, firstName, age, true, ageVerification.method, 15]
+        `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+        [userId, firstName, age, 15]
       );
 
       // Create user preferences

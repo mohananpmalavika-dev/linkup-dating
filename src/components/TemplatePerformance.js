@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import apiClient from '../services/apiClient';
 import '../styles/TemplatePerformance.css';
 
 /**
@@ -22,33 +23,17 @@ const TemplatePerformance = ({ onClose }) => {
       setLoading(true);
       setError('');
 
-      const token = localStorage.getItem('authToken');
+      const [topResponse, recResponse] = await Promise.all([
+        apiClient.get('/dating/opening-templates/top-performers', {
+          params: { limit: 10 }
+        }),
+        apiClient.get('/dating/opening-templates/recommended', {
+          params: { limit: 5 }
+        })
+      ]);
 
-      // Fetch top performers
-      const topResponse = await fetch('/api/dating/opening-templates/top-performers?limit=10', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      // Fetch recommendations
-      const recResponse = await fetch('/api/dating/opening-templates/recommended?limit=5', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!topResponse.ok || !recResponse.ok) {
-        throw new Error('Failed to fetch performance data');
-      }
-
-      const topData = await topResponse.json();
-      const recData = await recResponse.json();
-
-      setTopTemplates(topData.templates || []);
-      setRecommendations(recData.recommendations || []);
+      setTopTemplates(topResponse.data.templates || []);
+      setRecommendations(recResponse.data.recommendations || []);
     } catch (err) {
       console.error('Error fetching performance data:', err);
       setError(err.message || 'Failed to load performance data');

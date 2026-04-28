@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import usePreferences from '../../hooks/usePreferences';
+import usePreferences from '../hooks/usePreferences';
 import './PriorityStatus.css';
 
 const PriorityStatus = ({ userId, showDetails = false, onSubscribeClick }) => {

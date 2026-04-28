@@ -5,7 +5,21 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRealTime } from './useRealTime';
+import realTimeService from '../services/realTimeService';
+import { getStoredAuthToken } from '../utils/auth';
+import { buildApiUrl } from '../utils/api';
+
+const buildAuthenticatedFetchOptions = (options = {}) => {
+  const token = getStoredAuthToken();
+
+  return {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  };
+};
 
 export const useActivityStatus = (userId, matchId, enableRealTime = true) => {
   const [status, setStatus] = useState(null);
@@ -13,16 +27,17 @@ export const useActivityStatus = (userId, matchId, enableRealTime = true) => {
   const [formatted, setFormatted] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { socket } = useRealTime();
+  const socket = realTimeService.socket;
 
   const fetchStatus = useCallback(async () => {
     if (!userId || !matchId) return;
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/dating/activity-status/${matchId}/${userId}`, {
-        credentials: 'include'
-      });
+      const response = await fetch(
+        buildApiUrl(`/dating/activity-status/${matchId}/${userId}`),
+        buildAuthenticatedFetchOptions()
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -100,9 +115,10 @@ export const useStatusPreference = (matchId) => {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/dating/status-preferences/${matchId}`, {
-        credentials: 'include'
-      });
+      const response = await fetch(
+        buildApiUrl(`/dating/status-preferences/${matchId}`),
+        buildAuthenticatedFetchOptions()
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -125,10 +141,11 @@ export const useStatusPreference = (matchId) => {
     async (updates) => {
       try {
         setSaving(true);
-        const response = await fetch('/api/dating/status-preferences', {
+        const response = await fetch(buildApiUrl('/dating/status-preferences'), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          ...buildAuthenticatedFetchOptions({
+            headers: { 'Content-Type': 'application/json' }
+          }),
           body: JSON.stringify({
             matchId,
             ...updates
@@ -163,11 +180,12 @@ export const useStatusPreference = (matchId) => {
       try {
         setSaving(true);
         const response = await fetch(
-          `/api/dating/status-preferences/${matchId}/quick-set`,
+          buildApiUrl(`/dating/status-preferences/${matchId}/quick-set`),
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
+            ...buildAuthenticatedFetchOptions({
+              headers: { 'Content-Type': 'application/json' }
+            }),
             body: JSON.stringify({ privacyLevel: level })
           }
         );
@@ -198,9 +216,9 @@ export const useStatusPreference = (matchId) => {
   const deletePreference = useCallback(async () => {
     try {
       setSaving(true);
-      const response = await fetch(`/api/dating/status-preferences/${matchId}`, {
+      const response = await fetch(buildApiUrl(`/dating/status-preferences/${matchId}`), {
         method: 'DELETE',
-        credentials: 'include'
+        ...buildAuthenticatedFetchOptions()
       });
 
       if (!response.ok) {
@@ -262,9 +280,10 @@ export const useAllStatusPreferences = () => {
   const fetchPreferences = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/dating/status-preferences', {
-        credentials: 'include'
-      });
+      const response = await fetch(
+        buildApiUrl('/dating/status-preferences'),
+        buildAuthenticatedFetchOptions()
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

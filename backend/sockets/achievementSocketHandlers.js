@@ -20,27 +20,20 @@ const handleAchievementSocketEvents = (socket, userId) => {
     // Only process if it's the current user
     if (Number(achievedUserId) === Number(userId)) {
       // Emit event for frontend to handle notification
-      window.dispatchEvent(
-        new CustomEvent('achievement-unlocked', {
-          detail: {
-            code: achievementCode,
-            name: achievementName,
-            emoji: achievementEmoji,
-            timestamp: unlockedAt
-          }
-        })
-      );
+      socket.emit('achievement-unlocked', {
+        code: achievementCode,
+        name: achievementName,
+        emoji: achievementEmoji,
+        timestamp: unlockedAt
+      });
 
-      // Browser notification if permitted
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(`🎉 Achievement Unlocked!`, {
-          body: `${achievementEmoji} ${achievementName}`,
-          icon: achievementEmoji,
-          badge: '🏆',
-          tag: `achievement-${achievementCode}`,
-          requireInteraction: false
-        });
-      }
+      // Emit to user room so all connected devices receive it
+      socket.to(`user_${userId}`).emit('achievement-unlocked', {
+        code: achievementCode,
+        name: achievementName,
+        emoji: achievementEmoji,
+        timestamp: unlockedAt
+      });
     }
   });
 
@@ -63,28 +56,26 @@ const handleAchievementSocketEvents = (socket, userId) => {
       const improved = previousRank && newRank < previousRank;
       const emoji = improved ? '📈' : '📉';
 
-      window.dispatchEvent(
-        new CustomEvent('leaderboard-rank-updated', {
-          detail: {
-            type,
-            newRank,
-            previousRank,
-            score,
-            city,
-            interest,
-            improved
-          }
-        })
-      );
+      socket.emit('leaderboard-rank-updated', {
+        type,
+        newRank,
+        previousRank,
+        score,
+        city,
+        interest,
+        improved
+      });
 
-      if (improved && 'Notification' in window && Notification.permission === 'granted') {
-        new Notification(`🎯 Rank Improved!`, {
-          body: `You're now #${newRank} in ${type}`,
-          icon: emoji,
-          tag: `rank-update-${type}`,
-          requireInteraction: false
-        });
-      }
+      socket.to(`user_${userId}`).emit('leaderboard-rank-updated', {
+        type,
+        newRank,
+        previousRank,
+        score,
+        city,
+        interest,
+        improved,
+        emoji
+      });
     }
   });
 
@@ -100,24 +91,17 @@ const handleAchievementSocketEvents = (socket, userId) => {
     } = data;
 
     if (Number(votedForUserId) === Number(userId)) {
-      window.dispatchEvent(
-        new CustomEvent('conversation-starter-voted', {
-          detail: {
-            voterName,
-            voteCount: newVoteCount,
-            timestamp
-          }
-        })
-      );
+      socket.emit('conversation-starter-voted', {
+        voterName,
+        voteCount: newVoteCount,
+        timestamp
+      });
 
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(`👍 Someone loved your conversation!`, {
-          body: `${voterName} voted for you`,
-          icon: '💬',
-          tag: 'conversation-vote',
-          requireInteraction: false
-        });
-      }
+      socket.to(`user_${userId}`).emit('conversation-starter-voted', {
+        voterName,
+        voteCount: newVoteCount,
+        timestamp
+      });
     }
   });
 
@@ -136,16 +120,19 @@ const handleAchievementSocketEvents = (socket, userId) => {
     if (Number(milestoneUserId) === Number(userId)) {
       const percentage = Math.round((progress / requirement) * 100);
 
-      window.dispatchEvent(
-        new CustomEvent('achievement-milestone', {
-          detail: {
-            code: achievementCode,
-            progress,
-            requirement,
-            percentage
-          }
-        })
-      );
+      socket.emit('achievement-milestone', {
+        code: achievementCode,
+        progress,
+        requirement,
+        percentage
+      });
+
+      socket.to(`user_${userId}`).emit('achievement-milestone', {
+        code: achievementCode,
+        progress,
+        requirement,
+        percentage
+      });
     }
   });
 
@@ -156,14 +143,15 @@ const handleAchievementSocketEvents = (socket, userId) => {
     const { userId: featuredUserId, achievementCode, achievementName } = data;
 
     if (Number(featuredUserId) === Number(userId)) {
-      window.dispatchEvent(
-        new CustomEvent('badge-featured', {
-          detail: {
-            code: achievementCode,
-            name: achievementName
-          }
-        })
-      );
+      socket.emit('badge-featured', {
+        code: achievementCode,
+        name: achievementName
+      });
+
+      socket.to(`user_${userId}`).emit('badge-featured', {
+        code: achievementCode,
+        name: achievementName
+      });
     }
   });
 
@@ -174,14 +162,15 @@ const handleAchievementSocketEvents = (socket, userId) => {
   socket.on('leaderboard:refreshed', (data) => {
     const { type, timestamp } = data;
 
-    window.dispatchEvent(
-      new CustomEvent('leaderboard-refreshed', {
-        detail: {
-          type,
-          timestamp
-        }
-      })
-    );
+    socket.emit('leaderboard-refreshed', {
+      type,
+      timestamp
+    });
+
+    socket.to(`user_${userId}`).emit('leaderboard-refreshed', {
+      type,
+      timestamp
+    });
   });
 
   return {

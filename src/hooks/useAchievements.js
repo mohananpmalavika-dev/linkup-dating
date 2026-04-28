@@ -4,6 +4,17 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { getStoredAuthToken } from '../utils/auth';
+import { buildApiUrl } from '../utils/api';
+
+const buildAuthenticatedHeaders = () => {
+  const token = getStoredAuthToken();
+
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+};
 
 const useAchievements = (userId) => {
   const [unlockedAchievements, setUnlockedAchievements] = useState([]);
@@ -67,9 +78,11 @@ const useAchievements = (userId) => {
     };
   }, [userId]);
 
-  const fetchUserAchievements = useCallback(async () => {
+    const fetchUserAchievements = useCallback(async () => {
     try {
-      const response = await fetch(`/api/achievements/user/${userId}`);
+      const response = await fetch(buildApiUrl(`/achievements/user/${userId}`), {
+        headers: buildAuthenticatedHeaders()
+      });
       const data = await response.json();
       if (data.success) {
         setUnlockedAchievements(data.achievements || []);
@@ -81,9 +94,9 @@ const useAchievements = (userId) => {
 
   const checkAndUnlockAchievements = useCallback(async () => {
     try {
-      const response = await fetch('/api/achievements/check', {
+      const response = await fetch(buildApiUrl('/achievements/check'), {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+        headers: buildAuthenticatedHeaders()
       });
       const data = await response.json();
       if (data.success && data.newAchievements) {
@@ -100,9 +113,9 @@ const useAchievements = (userId) => {
 
   const featureAchievement = useCallback(async (achievementId) => {
     try {
-      const response = await fetch(`/api/achievements/feature/${achievementId}`, {
+      const response = await fetch(buildApiUrl(`/achievements/feature/${achievementId}`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: buildAuthenticatedHeaders()
       });
       const data = await response.json();
       if (data.success) {
@@ -121,8 +134,8 @@ const useAchievements = (userId) => {
       if (interest) params.append('interest', interest);
 
       const response = await fetch(
-        `/api/leaderboards/user/${userId}/positions?${params}`,
-        { method: 'GET' }
+        buildApiUrl(`/leaderboards/user/${userId}/positions?${params}`),
+        { method: 'GET', headers: buildAuthenticatedHeaders() }
       );
       const data = await response.json();
       return data.positions || [];
@@ -134,9 +147,9 @@ const useAchievements = (userId) => {
 
   const voteForConversationStarter = useCallback(async (votedForUserId, reason = '') => {
     try {
-      const response = await fetch('/api/leaderboards/vote-conversation-starter', {
+      const response = await fetch(buildApiUrl('/leaderboards/vote-conversation-starter'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildAuthenticatedHeaders(),
         body: JSON.stringify({ votedForUserId, reason })
       });
       const data = await response.json();
@@ -149,8 +162,8 @@ const useAchievements = (userId) => {
   const getAchievementProgress = useCallback(async (achievementCode) => {
     try {
       const response = await fetch(
-        `/api/achievements/progress/${achievementCode}`,
-        { method: 'GET' }
+        buildApiUrl(`/achievements/progress/${achievementCode}`),
+        { method: 'GET', headers: buildAuthenticatedHeaders() }
       );
       const data = await response.json();
       return data;

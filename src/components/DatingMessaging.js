@@ -7,11 +7,13 @@ import MessageReactionDisplay from './MessageReactionDisplay';
 import StreakBadge from './StreakBadge';
 import MilestoneNotification from './MilestoneNotification';
 import EngagementScoreDisplay from './EngagementScoreDisplay';
+import ModerationWarning from './ModerationWarning';
 import { useLocation } from '../router';
 import datingMessagingService from '../services/datingMessagingService';
 import datingProfileService from '../services/datingProfileService';
 import messagingEnhancedService from '../services/messagingEnhancedService';
 import notificationService from '../services/notificationService';
+import moderationService from '../services/moderationService';
 import { getStoredUserData } from '../utils/auth';
 import { BACKEND_BASE_URL } from '../utils/api';
 import { getConversationRescuePlan } from '../utils/datingRescue';
@@ -212,6 +214,13 @@ const DatingMessaging = ({
   const [streakActive, setStreakActive] = useState(false);
   const [totalReactions, setTotalReactions] = useState(0);
   const [milestoneNotification, setMilestoneNotification] = useState(null);
+  const [moderationWarningOpen, setModerationWarningOpen] = useState(false);
+  const [moderationWarningData, setModerationWarningData] = useState({
+    severity: 'medium',
+    issues: [],
+    contentType: 'message'
+  });
+  const [pendingMessage, setPendingMessage] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
@@ -703,11 +712,38 @@ const DatingMessaging = ({
       return;
     }
 
-    setSendingMessage(true);
     setError('');
 
+    // Scan content for moderation flags
     try {
-      const createdMessage = await sendTextMessage(trimmedMessage, {
+      const scanResult = await moderationService.scanText(trimmedMessage);
+
+      // If content is flagged with medium or high severity, show warning
+      if (moderationService.shouldShowWarning(scanResult.severity)) {
+        setPendingMessage(trimmedMessage);
+        setModerationWarningData({
+          severity: scanResult.severity,
+          issues: scanResult.issues,
+          contentType: 'message'
+        });
+        setModerationWarningOpen(true);
+        return; // Stop here - user must confirm
+      }
+
+      // Content is clean or low-severity, proceed with sending
+      await sendMessageNow(trimmedMessage);
+    } catch (err) {
+      console.error('Moderation scan error:', err);
+      // On scan error, proceed anyway to not block users
+      await sendMessageNow(trimmedMessage);
+    }
+  };
+
+  const sendMessageNow = async (messageText) => {
+    setSendingMessage(true);
+
+    try {
+      const createdMessage = await sendTextMessage(messageText, {
         disappearing: disappearingEnabled,
         disappearAfterSeconds
       });
@@ -731,6 +767,19 @@ const DatingMessaging = ({
     } finally {
       setSendingMessage(false);
     }
+  };
+
+  const handleModerationContinue = async () => {
+    if (!pendingMessage) return;
+
+    setModerationWarningOpen(false);
+    await sendMessageNow(pendingMessage);
+    setPendingMessage(null);
+  };
+
+  const handleModerationCancel = () => {
+    setModerationWarningOpen(false);
+    setPendingMessage(null);
   };
 
   const handleTyping = (event) => {
@@ -1168,6 +1217,18 @@ const DatingMessaging = ({
           milestone={milestoneNotification.milestone}
           userName={milestoneNotification.userName}
           onDismiss={() => setMilestoneNotification(null)}
+        />
+      )}
+
+      {moderationWarningOpen && (
+        <ModerationWarning
+          isOpen={moderationWarningOpen}
+          severity={moderationWarningData.severity}
+          issues={moderationWarningData.issues}
+          contentType={moderationWarningData.contentType}
+          onContinue={handleModerationContinue}
+          onCancel={handleModerationCancel}
+          loading={sendingMessage}
         />
       )}
 

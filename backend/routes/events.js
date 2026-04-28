@@ -323,16 +323,18 @@ router.get('/:eventId/analytics', async (req, res) => {
  */
 router.get('/interest/:interestId', async (req, res) => {
   try {
+    const userId = req.user.id;
     const { interestId } = req.params;
     const { limit = 20, offset = 0, sort_by = 'date' } = req.query;
 
-    // This would call a service method to get events by interest
-    // For now returning placeholder
-    res.status(200).json({
-      success: true,
-      events: [],
-      message: 'Feature coming soon'
+    const result = await eventService.getEventsByInterest(interestId, {
+      userId,
+      limit: parseInt(limit, 10),
+      offset: parseInt(offset, 10),
+      sortBy: sort_by
     });
+
+    res.status(result.success ? 200 : 400).json(result);
   } catch (error) {
     console.error('Error getting events by interest:', error);
     res.status(500).json({

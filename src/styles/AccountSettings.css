@@ -494,6 +494,66 @@
   cursor: not-allowed;
 }
 
+.btn-view-legal {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #ff6b9d 0%, #c23aee 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+  margin-left: 16px;
+}
+
+.btn-view-legal:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff8bb8 0%, #d95aff 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 157, 0.3);
+}
+
+.btn-view-legal:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.legal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.legal-section .settings-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  transition: all 0.3s;
+}
+
+.legal-section .settings-item:hover {
+  border-color: #ff6b9d;
+  box-shadow: 0 2px 8px rgba(255, 107, 157, 0.1);
+}
+
+.legal-section .setting-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.legal-section .setting-info p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #666;
+}
+
 .settings-error {
   background: #f8d7da;
   color: #721c24;

@@ -22,6 +22,15 @@ pool.on('error', (err) => {
 });
 
 let databaseAvailable = false;
+let ormBridge = null;
+
+const getOrmBridge = () => {
+  if (!ormBridge) {
+    ormBridge = require('../models');
+  }
+
+  return ormBridge;
+};
 
 const init = async () => {
   let client;
@@ -39,6 +48,19 @@ const init = async () => {
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         is_admin BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS age_verifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        verification_method VARCHAR(50) NOT NULL,
+        date_of_birth DATE,
+        is_verified BOOLEAN DEFAULT FALSE,
+        verified_at TIMESTAMP,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -1129,6 +1151,7 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_user_notifications_user_id ON user_notifications(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_notifications_is_read ON user_notifications(is_read);
       CREATE INDEX IF NOT EXISTS idx_user_notifications_created_at ON user_notifications(created_at);
+      CREATE INDEX IF NOT EXISTS idx_age_verifications_verified_at ON age_verifications(verified_at);
 
       -- Discovery queue deduplication table
       CREATE TABLE IF NOT EXISTS discovery_queue_shown (
@@ -1191,9 +1214,32 @@ const init = async () => {
 
 const isAvailable = () => databaseAvailable;
 
-module.exports = {
+const database = {
   pool,
   query: (text, params) => pool.query(text, params),
   init,
   isAvailable
 };
+
+Object.defineProperties(database, {
+  sequelize: {
+    enumerable: true,
+    get() {
+      return getOrmBridge().sequelize;
+    }
+  },
+  Sequelize: {
+    enumerable: true,
+    get() {
+      return getOrmBridge().Sequelize;
+    }
+  },
+  models: {
+    enumerable: true,
+    get() {
+      return getOrmBridge().sequelize.models;
+    }
+  }
+});
+
+module.exports = database;

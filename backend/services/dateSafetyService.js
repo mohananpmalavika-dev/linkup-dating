@@ -1,9 +1,7 @@
-const db = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
+const dbModels = require('../models');
 
-const DateSafetyKit = db.models.DateSafetyKit;
-const User = db.models.User;
-const Match = db.models.Match;
+const { DateSafetyKit, User, Match } = dbModels;
 
 const dateSafetyService = {
   /**

@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import icebreakerVideoService from '../services/icebreakerVideoService';
 import '../styles/IcebreakerVideos.css';
 
 /**
@@ -18,6 +19,7 @@ function IcebreakerVideoRecorder({ onUploadSuccess, onCancel }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const timerRef = useRef(null);
+  const recordedChunksRef = useRef([]);
 
   const RECORDING_TIME_LIMIT = 5000; // 5 seconds in milliseconds
 
@@ -76,12 +78,13 @@ function IcebreakerVideoRecorder({ onUploadSuccess, onCancel }) {
 
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data);
           setRecordedChunks((prev) => [...prev, event.data]);
         }
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
         setPreviewUrl(url);
       };
@@ -108,6 +111,7 @@ function IcebreakerVideoRecorder({ onUploadSuccess, onCancel }) {
    */
   const startRecording = () => {
     if (mediaRecorderRef.current && stream) {
+      recordedChunksRef.current = [];
       setRecordedChunks([]);
       setPreviewUrl(null);
       setError(null);
@@ -137,6 +141,7 @@ function IcebreakerVideoRecorder({ onUploadSuccess, onCancel }) {
   const resetRecording = () => {
     setPreviewUrl(null);
     setRecordedChunks([]);
+    recordedChunksRef.current = [];
     setError(null);
     setTimeLeft(5);
     setIsRecording(false);
@@ -148,7 +153,7 @@ function IcebreakerVideoRecorder({ onUploadSuccess, onCancel }) {
    * Upload video
    */
   const handleUpload = async () => {
-    if (!previewUrl || recordedChunks.length === 0) {
+    if (!previewUrl || recordedChunksRef.current.length === 0) {
       setError('No video to upload');
       return;
     }
@@ -158,20 +163,24 @@ function IcebreakerVideoRecorder({ onUploadSuccess, onCancel }) {
       setError(null);
 
       // Create blob from recorded chunks
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const blob = new File(
+        [new Blob(recordedChunksRef.current, { type: 'video/webm' })],
+        `icebreaker-${Date.now()}.webm`,
+        { type: 'video/webm' }
+      );
 
-      // TODO: Upload to S3 and get URL
-      // For now, use the preview URL (in production, upload to S3)
-      const videoUrl = previewUrl;
-      const videoKey = `icebreaker-videos/${Date.now()}.webm`;
-
-      // Call parent's upload handler
-      await onUploadSuccess({
-        videoUrl,
-        videoKey,
+      const uploadPayload = {
+        file: blob,
+        filename: blob.name,
         durationSeconds: 5,
-        thumbnailUrl: previewUrl, // Generate proper thumbnail
-      });
+        title: "Why I'm looking for someone"
+      };
+
+      if (onUploadSuccess) {
+        await onUploadSuccess(uploadPayload);
+      } else {
+        await icebreakerVideoService.uploadVideo(uploadPayload);
+      }
 
       resetRecording();
     } catch (err) {

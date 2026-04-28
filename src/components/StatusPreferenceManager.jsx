@@ -9,7 +9,21 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { getStoredAuthToken } from '../utils/auth';
+import { buildApiUrl } from '../utils/api';
 import './StatusPreferenceManager.css';
+
+const buildAuthenticatedFetchOptions = (options = {}) => {
+  const token = getStoredAuthToken();
+
+  return {
+    ...options,
+    headers: {
+      ...(options.headers || {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  };
+};
 
 const StatusPreferenceManager = ({ matchId, userId, onSave = null, isOpen = false, onClose = null }) => {
   const [preference, setPreference] = useState(null);
@@ -33,9 +47,10 @@ const StatusPreferenceManager = ({ matchId, userId, onSave = null, isOpen = fals
   const fetchPreference = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/dating/status-preferences/${matchId}`, {
-        credentials: 'include'
-      });
+      const response = await fetch(
+        buildApiUrl(`/dating/status-preferences/${matchId}`),
+        buildAuthenticatedFetchOptions()
+      );
       const data = await response.json();
       if (data.success) {
         const pref = data.preference;
@@ -110,10 +125,11 @@ const StatusPreferenceManager = ({ matchId, userId, onSave = null, isOpen = fals
   const handleSave = async () => {
     try {
       setSaving(true);
-      const response = await fetch('/api/dating/status-preferences', {
+      const response = await fetch(buildApiUrl('/dating/status-preferences'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        ...buildAuthenticatedFetchOptions({
+          headers: { 'Content-Type': 'application/json' }
+        }),
         body: JSON.stringify({
           matchId,
           privacyLevel,
@@ -141,10 +157,11 @@ const StatusPreferenceManager = ({ matchId, userId, onSave = null, isOpen = fals
   const handleQuickSet = async (level) => {
     try {
       setSaving(true);
-      const response = await fetch(`/api/dating/status-preferences/${matchId}/quick-set`, {
+      const response = await fetch(buildApiUrl(`/dating/status-preferences/${matchId}/quick-set`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        ...buildAuthenticatedFetchOptions({
+          headers: { 'Content-Type': 'application/json' }
+        }),
         body: JSON.stringify({ privacyLevel: level })
       });
 

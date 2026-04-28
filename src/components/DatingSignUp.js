@@ -10,6 +10,7 @@ import {
   resolveKeralaLocation
 } from '../utils/keralaLocation';
 import PublicLegalNotice from './PublicLegalNotice';
+import AgeGate from './AgeGate/AgeGate';
 import '../styles/DatingSignUp.css';
 
 const RELATIONSHIP_INTENT_OPTIONS = [
@@ -84,6 +85,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   const [referralValidated, setReferralValidated] = useState(false);
   const [referralMessage, setReferralMessage] = useState('');
   const [validatingReferral, setValidatingReferral] = useState(false);
+  const [ageVerification, setAgeVerification] = useState(null);
   
   // Username state
   const [username, setUsername] = useState('');
@@ -156,7 +158,8 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   };
 
   useEffect(() => {
-    const urlCode = new URLSearchParams(window.location.search).get('ref');
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlCode = urlParams.get('ref') || urlParams.get('referral');
     if (urlCode) {
       const normalizedCode = urlCode.trim().toUpperCase();
       setReferralCode(normalizedCode);
@@ -230,11 +233,20 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       return;
     }
 
+    if (!ageVerification?.dateOfBirth || !ageVerification?.method) {
+      setError('Complete age verification before requesting an OTP.');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
         email: normalizedEmail,
-        purpose: 'signup'
+        purpose: 'signup',
+        ageVerification: {
+          method: ageVerification.method,
+          dateOfBirth: ageVerification.dateOfBirth
+        }
       });
 
       setOtpId(response.data.otpId || '');
@@ -275,7 +287,11 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
         email: normalizedEmail,
-        purpose: 'signup'
+        purpose: 'signup',
+        ageVerification: {
+          method: ageVerification?.method,
+          dateOfBirth: ageVerification?.dateOfBirth
+        }
       });
 
       setOtpId(response.data.otpId || '');
@@ -652,6 +668,32 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     }
   };
 
+  const handleAgeVerified = (verification) => {
+    setAgeVerification(verification);
+    setFormData((prev) => ({
+      ...prev,
+      age: verification?.age ? String(verification.age) : prev.age
+    }));
+    setError('');
+    setSuccess('Age verified. Now create your account.');
+  };
+
+  if (!ageVerification) {
+    return (
+      <AgeGate
+        onAgeVerified={handleAgeVerified}
+        onCancel={() => {
+          if (onBackToLaunch) {
+            onBackToLaunch();
+            return;
+          }
+
+          onLoginClick?.();
+        }}
+      />
+    );
+  }
+
   return (
     <div className="dating-signup-container">
       <div className="signup-card">
@@ -841,10 +883,16 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                   name="age"
                   value={formData.age}
                   onChange={handleProfileInputChange}
-                  placeholder="Your age"
+                  placeholder="Verified from your date of birth"
                   min="18"
                   max="120"
+                  readOnly={Boolean(ageVerification)}
                 />
+                {ageVerification ? (
+                  <small className="helper-text">
+                    Pulled from your verified date of birth.
+                  </small>
+                ) : null}
               </div>
               <div className="form-group">
                 <label>Gender</label>

@@ -1,11 +1,6 @@
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+import apiClient from './apiClient';
 
 const videoCallInsightsService = {
-  /**
-   * Submit a post-call rating
-   */
   async submitCallRating(
     videoDeteId,
     rating,
@@ -18,7 +13,7 @@ const videoCallInsightsService = {
     ratedUserId
   ) {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/video-insights/rate-call`, {
+      const response = await apiClient.post('/video-insights/rate-call', {
         videoDeteId,
         ratedUserId,
         rating,
@@ -27,98 +22,79 @@ const videoCallInsightsService = {
         communicationQuality,
         chemistryLevel,
         appearanceMatch,
-        personalityMatch,
+        personalityMatch
       });
 
       return response.data;
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
+        error: error.response?.data?.error || error.message
       };
     }
   },
 
-  /**
-   * Get user's video call analytics
-   */
   async getUserAnalytics() {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/video-insights/analytics`);
+      const response = await apiClient.get('/video-insights/analytics');
       return response.data;
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
+        error: error.response?.data?.error || error.message
       };
     }
   },
 
-  /**
-   * Get compatibility score for a video call
-   */
   async getCompatibilityScore(videoDeteId) {
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/api/video-insights/compatibility/${videoDeteId}`
-      );
+      const response = await apiClient.get(`/video-insights/compatibility/${videoDeteId}`);
       return response.data;
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
+        error: error.response?.data?.error || error.message
       };
     }
   },
 
-  /**
-   * Generate compatibility score (trigger analysis)
-   */
   async generateCompatibilityScore(videoDeteId) {
     try {
-      const response = await axios.post(
-        `${API_BASE_URL}/api/video-insights/generate-compatibility/${videoDeteId}`
-      );
+      const response = await apiClient.post(`/video-insights/generate-compatibility/${videoDeteId}`);
       return response.data;
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
+        error: error.response?.data?.error || error.message
       };
     }
   },
 
-  /**
-   * Get upcoming video calls
-   */
   async getUpcomingCalls() {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/video-insights/upcoming-calls`);
+      const response = await apiClient.get('/video-insights/upcoming-calls');
       return response.data;
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
+        error: error.response?.data?.error || error.message
       };
     }
   },
 
-  /**
-   * Get video call history
-   */
   async getCallHistory(limit = 10) {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/video-insights/call-history`, {
-        params: { limit },
+      const response = await apiClient.get('/video-insights/call-history', {
+        params: { limit }
       });
       return response.data;
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.error || error.message,
+        error: error.response?.data?.error || error.message
       };
     }
-  },
+  }
 };
 
 export default videoCallInsightsService;
