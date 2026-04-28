@@ -209,6 +209,19 @@
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.15);
 }
 
+.btn-quick-view {
+  align-self: flex-start;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  padding: 10px 16px;
+  font-size: 13px;
+  box-shadow: 0 12px 24px rgba(102, 126, 234, 0.3);
+}
+
+.btn-quick-view:hover {
+  box-shadow: 0 16px 32px rgba(102, 126, 234, 0.4);
+}
+
 .quick-preset-row {
   display: flex;
   flex-wrap: wrap;

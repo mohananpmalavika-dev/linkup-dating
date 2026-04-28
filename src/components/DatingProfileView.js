@@ -61,6 +61,26 @@ const buildPublicSocialUrl = (platform, username, fallbackUrl) => {
   }
 };
 
+const uniqueStrings = (values = []) => [...new Set(values.filter(Boolean))];
+
+const formatCompatibilityFactorLabel = (value) =>
+  String(value || '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+
+const buildIntentTemplates = ({ profile, compatibility, identityPack, matchExplanation }) =>
+  uniqueStrings([
+    compatibility?.icebreakers?.[0] || '',
+    compatibility?.icebreakers?.[1] || '',
+    identityPack?.languageIcebreakers?.[0] || '',
+    identityPack?.cityBasedPrompts?.[0] || '',
+    matchExplanation?.startConversation || '',
+    profile?.relationshipGoals
+      ? `I like that you're here for ${profile.relationshipGoals}. What does a good connection look like to you right now?`
+      : ''
+  ]).slice(0, 5);
+
 const DatingProfileView = ({
   profile: initialProfile,
   profileId,
@@ -78,11 +98,14 @@ const DatingProfileView = ({
   const [showBlockReportModal, setShowBlockReportModal] = useState(false);
   const [showMessageRequest, setShowMessageRequest] = useState(false);
   const [requestMessage, setRequestMessage] = useState('');
+  const [requestType, setRequestType] = useState('intent');
   const [requestPriority, setRequestPriority] = useState(false);
   const [sendingRequest, setSendingRequest] = useState(false);
+  const [requestSuccess, setRequestSuccess] = useState('');
   const [subscription, setSubscription] = useState(null);
   const [compatibility, setCompatibility] = useState(null);
   const [matchExplanation, setMatchExplanation] = useState(null);
+  const [compatibilityFactorsData, setCompatibilityFactorsData] = useState(null);
   const [loadingCompatibility, setLoadingCompatibility] = useState(false);
   const [showDatePlanner, setShowDatePlanner] = useState(Boolean(location.state?.focusPlanner));
   const [publicSocialProfiles, setPublicSocialProfiles] = useState([]);
@@ -106,6 +129,7 @@ const DatingProfileView = ({
       setLoading(true);
       setError('');
       setMatchExplanation(null);
+      setCompatibilityFactorsData(null);
 
       try {
         const [latestProfile, subData, publicLinks, friendStatus] = await Promise.all([
@@ -131,13 +155,15 @@ const DatingProfileView = ({
           // Load compatibility score
           setLoadingCompatibility(true);
           try {
-            const [compatData, explanationData] = await Promise.all([
+            const [compatData, explanationData, factorData] = await Promise.all([
               datingProfileService.getCompatibility(resolvedProfileId),
-              datingProfileService.getMatchExplanation(resolvedProfileId).catch(() => null)
+              datingProfileService.getMatchExplanation(resolvedProfileId).catch(() => null),
+              datingProfileService.getCompatibilityFactors(resolvedProfileId).catch(() => null)
             ]);
             if (!cancelled) {
               setCompatibility(compatData);
-              setMatchExplanation(explanationData?.explanation || null);
+              setMatchExplanation(explanationData?.matchExplanation || explanationData?.explanation || null);
+              setCompatibilityFactorsData(factorData || null);
             }
             datingProfileService.trackFunnelEvent('dating_compatibility_viewed', {
               context: {
@@ -181,6 +207,16 @@ const DatingProfileView = ({
   const activityHint = getProfileActivityHint(profile?.lastActive);
   const identityPack = useMemo(() => buildLocalIdentityPack(profile || {}), [profile]);
   const trustSummary = useMemo(() => buildTrustSummary({ profile: profile || {} }), [profile]);
+  const intentTemplates = useMemo(
+    () => buildIntentTemplates({ profile, compatibility, identityPack, matchExplanation }),
+    [compatibility, identityPack, matchExplanation, profile]
+  );
+  const compatibilityFactorEntries = useMemo(
+    () => Object.entries(compatibilityFactorsData?.factors || {}),
+    [compatibilityFactorsData]
+  );
+  const supportsPriorityIntro = subscription?.isPremium || subscription?.isGold;
+  const supportsDirectRequest = subscription?.isGold;
 
   if (loading && !profile) {
     return (
@@ -228,14 +264,23 @@ const DatingProfileView = ({
     try {
       setSendingRequest(true);
       setError('');
-      await datingProfileService.sendMessageRequest(profile.userId, requestMessage.trim(), {
-        requestType: 'intent',
+      setRequestSuccess('');
+      const response = await datingProfileService.sendMessageRequest(profile.userId, requestMessage.trim(), {
+        requestType,
         isPriority: requestPriority
       });
       setShowMessageRequest(false);
       setRequestMessage('');
+      setRequestType('intent');
       setRequestPriority(false);
-      alert('Message request sent successfully!');
+      setRequestSuccess(
+        response?.message ||
+          (requestType === 'message_request'
+            ? 'Direct message request sent.'
+            : requestPriority
+              ? 'Priority intro sent.'
+              : 'Intent sent.')
+      );
     } catch (err) {
       setError(err || 'Failed to send message request');
     } finally {
@@ -301,6 +346,11 @@ const DatingProfileView = ({
           </button>
           {error ? <span className="profile-inline-error">{error}</span> : null}
         </div>
+        {requestSuccess ? (
+          <div className="profile-inline-success" role="status">
+            {requestSuccess}
+          </div>
+        ) : null}
 
         <div className="profile-header-section">
           {profile.photos?.length > 0 ? (
@@ -406,9 +456,12 @@ const DatingProfileView = ({
                     onClick={() => {
                       if (canMessage && onMessage) {
                         onMessage(profile, icebreaker);
+                        return;
                       }
+
+                      setShowMessageRequest(true);
+                      setRequestMessage(icebreaker);
                     }}
-                    disabled={!canMessage}
                   >
                     {icebreaker}
                   </button>
@@ -561,6 +614,68 @@ const DatingProfileView = ({
               </div>
             ) : null}
 
+            {(Array.isArray(matchExplanation?.recommendations) && matchExplanation.recommendations.length > 0) ||
+            (Array.isArray(matchExplanation?.factors) && matchExplanation.factors.length > 0) ||
+            compatibilityFactorEntries.length > 0 ? (
+              <div className="compatibility-deep-dive">
+                <p><strong>Compatibility deep dive</strong></p>
+
+                {Array.isArray(matchExplanation?.recommendations) && matchExplanation.recommendations.length > 0 ? (
+                  <ul className="compatibility-deep-list">
+                    {matchExplanation.recommendations.map((recommendation) => (
+                      <li key={recommendation}>{recommendation}</li>
+                    ))}
+                  </ul>
+                ) : null}
+
+                {Array.isArray(matchExplanation?.factors) && matchExplanation.factors.length > 0 ? (
+                  <div className="compatibility-tag-row">
+                    {matchExplanation.factors.map((factor) => (
+                      <span key={factor} className="compatibility-tag-pill">
+                        {factor}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                {compatibilityFactorEntries.length > 0 ? (
+                  <div className="compatibility-factor-grid">
+                    {compatibilityFactorEntries.map(([factorKey, factorValue]) => {
+                      const score = typeof factorValue?.score === 'number'
+                        ? Math.round(factorValue.score)
+                        : factorValue === true
+                          ? 100
+                          : 0;
+
+                      return (
+                        <div key={factorKey} className="compatibility-factor-card">
+                          <div className="compatibility-factor-top">
+                            <strong>{formatCompatibilityFactorLabel(factorKey)}</strong>
+                            <span>{score}%</span>
+                          </div>
+                          <div className="compatibility-factor-bar">
+                            <div
+                              className="compatibility-factor-fill"
+                              style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
+                            />
+                          </div>
+                          {factorValue?.details ? (
+                            <small>
+                              {Array.isArray(factorValue.details)
+                                ? factorValue.details.join(', ')
+                                : typeof factorValue.details === 'object'
+                                  ? Object.values(factorValue.details).filter(Boolean).join(', ')
+                                  : factorValue.details}
+                            </small>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
             {/* Icebreakers */}
             {compatibility.icebreakers?.length > 0 && !compatibility.isMatched ? (
               <div className="icebreakers">
@@ -574,9 +689,12 @@ const DatingProfileView = ({
                       onClick={() => {
                         if (canMessage && onMessage) {
                           onMessage(profile, icebreaker);
+                          return;
                         }
+
+                        setShowMessageRequest(true);
+                        setRequestMessage(icebreaker);
                       }}
-                      disabled={!canMessage}
                     >
                       {icebreaker}
                     </button>
@@ -688,9 +806,12 @@ const DatingProfileView = ({
             <button
               type="button"
               className="btn-edit"
-              onClick={() => setShowMessageRequest(true)}
+              onClick={() => {
+                setShowMessageRequest(true);
+                setRequestSuccess('');
+              }}
             >
-              Send Intent
+              Send Direct Intent
             </button>
           ) : null}
           {profile.matchId ? (
@@ -740,19 +861,70 @@ const DatingProfileView = ({
 
         {showMessageRequest && (
           <div className="profile-section message-request-form">
-            <h3>Send Intent</h3>
+            <h3>Direct Intent Message</h3>
             <p>
-              Send one thoughtful note to {profile.firstName} before matching. Keep it intentional,
-              specific, and easy to reply to.
+              Send one thoughtful note to {profile.firstName} before matching. Use this when you want
+              more clarity than a passive like.
             </p>
+
+            <div className="intent-capability-row">
+              <span className="intent-capability-pill">
+                {supportsPriorityIntro ? 'Priority intros available' : 'Free plan: 1 intro/day'}
+              </span>
+              <span className="intent-capability-pill">
+                {supportsDirectRequest ? 'Gold direct message requests unlocked' : 'Gold unlocks direct message requests'}
+              </span>
+            </div>
+
+            {supportsDirectRequest ? (
+              <div className="intent-mode-row">
+                <button
+                  type="button"
+                  className={`intent-mode-pill ${requestType === 'intent' ? 'active' : ''}`}
+                  onClick={() => setRequestType('intent')}
+                >
+                  Intent intro
+                </button>
+                <button
+                  type="button"
+                  className={`intent-mode-pill ${requestType === 'message_request' ? 'active' : ''}`}
+                  onClick={() => {
+                    setRequestType('message_request');
+                    setRequestPriority(false);
+                  }}
+                >
+                  Direct message request
+                </button>
+              </div>
+            ) : null}
+
+            {intentTemplates.length > 0 ? (
+              <div className="intent-template-list">
+                {intentTemplates.map((template) => (
+                  <button
+                    key={template}
+                    type="button"
+                    className="intent-template-chip"
+                    onClick={() => setRequestMessage(template)}
+                  >
+                    {template}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
             <textarea
               value={requestMessage}
               onChange={(e) => setRequestMessage(e.target.value)}
-              placeholder="Write a thoughtful intro (10-500 characters)..."
+              placeholder={
+                requestType === 'message_request'
+                  ? 'Write a clear, respectful direct message request (10-500 characters)...'
+                  : 'Write a thoughtful intro (10-500 characters)...'
+              }
               rows={4}
               maxLength={500}
             />
-            {subscription?.isPremium || subscription?.isGold ? (
+            {supportsPriorityIntro && requestType === 'intent' ? (
               <label className="date-feedback-toggle">
                 <input
                   type="checkbox"
@@ -767,7 +939,10 @@ const DatingProfileView = ({
               <button
                 type="button"
                 className="btn-cancel"
-                onClick={() => setShowMessageRequest(false)}
+                onClick={() => {
+                  setShowMessageRequest(false);
+                  setRequestType('intent');
+                }}
               >
                 Cancel
               </button>
@@ -777,7 +952,13 @@ const DatingProfileView = ({
                 onClick={handleSendMessageRequest}
                 disabled={sendingRequest || requestMessage.trim().length < 10}
               >
-                {sendingRequest ? 'Sending...' : requestPriority ? 'Send Priority Intro' : 'Send Intent'}
+                {sendingRequest
+                  ? 'Sending...'
+                  : requestType === 'message_request'
+                    ? 'Send Direct Message Request'
+                    : requestPriority
+                      ? 'Send Priority Intro'
+                      : 'Send Intent'}
               </button>
             </div>
           </div>

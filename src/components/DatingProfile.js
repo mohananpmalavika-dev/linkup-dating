@@ -1771,6 +1771,78 @@ const DatingProfile = ({ onLogout }) => {
                 ))}
               </div>
 
+              {premiumDashboard.likedYou?.preview?.length > 0 || premiumDashboard.viewedYou?.preview?.length > 0 ? (
+                <div className="compact-dual-grid">
+                  {premiumDashboard.likedYou?.preview?.length > 0 ? (
+                    <div className="recommendations-list">
+                      <p><strong>Premium direct-intent opportunities</strong></p>
+                      <ul>
+                        {premiumDashboard.likedYou.preview.map((liker) => (
+                          <li key={`liked-${liker.userId}`}>
+                            {(liker.firstName || 'Someone')}{liker.age ? `, ${liker.age}` : ''} {liker.location?.city ? `from ${liker.location.city}` : ''} already liked you.
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {premiumDashboard.viewedYou?.preview?.length > 0 ? (
+                    <div className="recommendations-list">
+                      <p><strong>Recent profile views</strong></p>
+                      <ul>
+                        {premiumDashboard.viewedYou.preview.map((viewer) => (
+                          <li key={`viewed-${viewer.userId}`}>
+                            {(viewer.firstName || 'Someone')}{viewer.age ? `, ${viewer.age}` : ''} viewed your profile
+                            {viewer.location?.city ? ` from ${viewer.location.city}` : ''}.
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {premiumDashboard.bestPerformingPhotos?.length > 0 || premiumDashboard.bestPerformingPrompts?.length > 0 ? (
+                <div className="compact-dual-grid">
+                  {premiumDashboard.bestPerformingPhotos?.length > 0 ? (
+                    <div className="recommendations-list">
+                      <p><strong>Best-performing photos</strong></p>
+                      <ul>
+                        {premiumDashboard.bestPerformingPhotos.map((photo) => (
+                          <li key={photo.photoId || photo.position}>
+                            Photo {photo.position}: {photo.summary}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  {premiumDashboard.bestPerformingPrompts?.length > 0 ? (
+                    <div className="recommendations-list">
+                      <p><strong>Prompt performance</strong></p>
+                      <ul>
+                        {premiumDashboard.bestPerformingPrompts.map((prompt) => (
+                          <li key={prompt.promptId}>
+                            {prompt.text}: {prompt.summary}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {premiumDashboard.upgradeReasons?.length > 0 ? (
+                <div className="recommendations-list">
+                  <p><strong>Why upgrade now</strong></p>
+                  <ul>
+                    {premiumDashboard.upgradeReasons.map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               <div className="recommendations-list">
                 <p><strong>Phase 2 targets</strong></p>
                 <ul>
@@ -1965,6 +2037,76 @@ const DatingProfile = ({ onLogout }) => {
                       <span className="interaction-stat-label">Passes</span>
                     </div>
                   </div>
+                </div>
+
+                <div className="analytics-card">
+                  <h4>Funnel Analytics</h4>
+                  <div className="views-stats-grid">
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.funnel?.metrics?.likeToMatchRate || 0}%</span>
+                      <span className="view-stat-label">Like to Match</span>
+                    </div>
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.funnel?.metrics?.firstMessageRate || 0}%</span>
+                      <span className="view-stat-label">First Message Rate</span>
+                    </div>
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.funnel?.metrics?.datePlanCreationRate || 0}%</span>
+                      <span className="view-stat-label">Date Plan Rate</span>
+                    </div>
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.profileCompletionPercent || 0}%</span>
+                      <span className="view-stat-label">Profile Complete</span>
+                    </div>
+                  </div>
+
+                  <div className="analytics-chip-row">
+                    <span className="analytics-chip">Compatibility views: {analytics.funnel?.actions?.compatibilityViews || 0}</span>
+                    <span className="analytics-chip">Planner opens: {analytics.funnel?.actions?.plannerOpens || 0}</span>
+                    <span className="analytics-chip">Safety shares: {analytics.funnel?.actions?.safetyShares || 0}</span>
+                    <span className="analytics-chip">Check-ins: {analytics.funnel?.actions?.checkInReminders || 0}</span>
+                  </div>
+
+                  <div className="recommendations-list">
+                    <p><strong>Onboarding timeline</strong></p>
+                    <ul>
+                      <li>Email verified: {analytics.funnel?.onboarding?.emailVerifiedAt ? new Date(analytics.funnel.onboarding.emailVerifiedAt).toLocaleDateString() : 'Not tracked yet'}</li>
+                      <li>Profile details saved: {analytics.funnel?.onboarding?.profileSavedAt ? new Date(analytics.funnel.onboarding.profileSavedAt).toLocaleDateString() : 'Not tracked yet'}</li>
+                      <li>Onboarding completed: {analytics.funnel?.onboarding?.completedAt ? new Date(analytics.funnel.onboarding.completedAt).toLocaleDateString() : 'Not tracked yet'}</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="analytics-card">
+                  <h4>Conversation Timing</h4>
+                  <div className="views-stats-grid">
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.advanced?.replyRate || 0}%</span>
+                      <span className="view-stat-label">Reply Rate</span>
+                    </div>
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.advanced?.matchRate || 0}%</span>
+                      <span className="view-stat-label">Match Rate</span>
+                    </div>
+                    <div className="view-stat">
+                      <span className="view-stat-value">{analytics.advanced?.averageTimeToFirstReplyLabel || 'n/a'}</span>
+                      <span className="view-stat-label">Avg First Reply</span>
+                    </div>
+                  </div>
+
+                  {analytics.advanced?.bestActiveHours?.length > 0 ? (
+                    <div className="analytics-chip-row">
+                      {analytics.advanced.bestActiveHours.map((slot) => (
+                        <span key={slot.label} className="analytics-chip">
+                          {slot.label}: {slot.engagementCount}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {analytics.advanced?.replyRateBasis ? (
+                    <p className="analytics-helper-copy">{analytics.advanced.replyRateBasis}</p>
+                  ) : null}
                 </div>
               </div>
             ) : showAnalytics && !analytics ? (

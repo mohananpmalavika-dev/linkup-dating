@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { authService } from '../services/authService';
 import datingProfileService from '../services/datingProfileService';
 import { getStoredUserData } from '../utils/auth';
+import NotificationSettingsModal from './NotificationSettingsModal';
 import '../styles/AccountSettings.css';
 
 const GENDER_OPTIONS = ['male', 'female', 'non-binary', 'other'];
@@ -284,6 +285,7 @@ const AccountSettings = ({ onBack, onLogout }) => {
   const [preferences, setPreferences] = useState(createDefaultPreferences());
   const [preferencesLoading, setPreferencesLoading] = useState(false);
   const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
 
   useEffect(() => {
     loadPreferences();
@@ -1047,6 +1049,13 @@ const AccountSettings = ({ onBack, onLogout }) => {
           onClick={() => { setActiveTab('preferences'); setError(''); setSuccess(''); }}>Preferences</button>
         <button className={`tab-btn ${activeTab === 'account' ? 'active' : ''}`}
           onClick={() => { setActiveTab('account'); setError(''); setSuccess(''); }}>Account</button>
+        <button 
+          className="tab-btn notification-settings-btn"
+          onClick={() => setShowNotificationSettings(true)}
+          title="Manage notification preferences"
+        >
+          🔔 Notifications
+        </button>
       </div>
 
       <div className="settings-content">
@@ -1056,6 +1065,14 @@ const AccountSettings = ({ onBack, onLogout }) => {
         {activeTab === 'preferences' && renderPreferencesTab()}
         {activeTab === 'account' && renderAccountTab()}
       </div>
+
+      {showNotificationSettings && (
+        <NotificationSettingsModal
+          isOpen={showNotificationSettings}
+          onClose={() => setShowNotificationSettings(false)}
+          userId={currentUser?.id}
+        />
+      )}
 
       {showDeleteConfirmation && (
         <div className="delete-confirmation-overlay" onClick={() => !loading && setShowDeleteConfirmation(false)}>

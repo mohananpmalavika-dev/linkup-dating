@@ -2,6 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import io from 'socket.io-client';
 import MessageToolbar from './MessageToolbar';
 import DateJourneyPanel from './DateJourneyPanel';
+import ReactionPicker from './ReactionPicker';
+import MessageReactionDisplay from './MessageReactionDisplay';
+import StreakBadge from './StreakBadge';
+import MilestoneNotification from './MilestoneNotification';
+import EngagementScoreDisplay from './EngagementScoreDisplay';
 import { useLocation } from '../router';
 import datingMessagingService from '../services/datingMessagingService';
 import datingProfileService from '../services/datingProfileService';
@@ -202,6 +207,11 @@ const DatingMessaging = ({
   const [countdownNow, setCountdownNow] = useState(Date.now());
   const [showDatePlanner, setShowDatePlanner] = useState(Boolean(location.state?.focusPlanner));
   const [matchStatePending, setMatchStatePending] = useState('');
+  const [streakDays, setStreakDays] = useState(0);
+  const [engagementScore, setEngagementScore] = useState(0);
+  const [streakActive, setStreakActive] = useState(false);
+  const [totalReactions, setTotalReactions] = useState(0);
+  const [milestoneNotification, setMilestoneNotification] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
@@ -279,6 +289,22 @@ const DatingMessaging = ({
 
     return baseActions;
   }, [activeMatchId, conversationHealth.readyForCall, conversationRescuePlan, revivePrompts]);
+  const identityStarterChips = useMemo(
+    () => [
+      ...(identityPack.languageIcebreakers || []).slice(0, 1),
+      ...(identityPack.cityBasedPrompts || []).slice(0, 1)
+    ].filter(Boolean),
+    [identityPack]
+  );
+  const showPhaseTwoRescueStrip = Boolean(
+    !showDatePlanner &&
+      phaseTwoRescueActions.length > 0 &&
+      (
+        conversationHealth.readyForCall ||
+        conversationHealth.needsRevive ||
+        (conversationRescuePlan?.actions?.length || 0) > 0
+      )
+  );
   const showComposerStarters = messages.length < 3 && icebreakers.length > 0;
 
   const showStatus = useCallback((message, tone = 'info') => {
@@ -337,6 +363,42 @@ const DatingMessaging = ({
       }
     }
   }, [activeMatchId, currentUserId, notifyConversationActivity]);
+
+  // Fetch streak and engagement score data
+  const loadStreakData = useCallback(async () => {
+    if (!activeMatchId) {
+      return;
+    }
+
+    try {
+      // Fetch streak information
+      const streakResponse = await fetch(`/api/matches/${activeMatchId}/streak`);
+      if (streakResponse.ok) {
+        const streakData = await streakResponse.json();
+        if (streakData.success && streakData.streak) {
+          setStreakDays(streakData.streak.streakDays || 0);
+          setStreakActive(streakData.streak.isActive !== false);
+        }
+      }
+
+      // Fetch engagement score
+      const scoreResponse = await fetch(`/api/matches/${activeMatchId}/engagement-score`);
+      if (scoreResponse.ok) {
+        const scoreData = await scoreResponse.json();
+        if (scoreData.success) {
+          setEngagementScore(scoreData.engagementScore || 0);
+          setTotalReactions(scoreData.totalReactions || 0);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading streak data:', error);
+    }
+  }, [activeMatchId]);
+
+  // Load streak data when match changes
+  useEffect(() => {
+    loadStreakData();
+  }, [activeMatchId, loadStreakData]);
 
   useEffect(() => () => {
     if (statusTimeoutRef.current) {
@@ -534,6 +596,49 @@ const DatingMessaging = ({
             : message
         ))
       );
+    });
+
+    // Real-time streak milestone notifications
+    socket.on('streak_milestone_reached', (payload = {}) => {
+      if (Number(payload.matchId) !== Number(activeMatchId)) {
+        return;
+      }
+
+      // Update streak data
+      setStreakDays(payload.streakDays || 0);
+      setStreakActive(payload.isActive !== false);
+
+      // Show milestone notification
+      setMilestoneNotification({
+        milestone: payload.milestone || payload.streakDays,
+        userName: payload.userName || activeMatch?.firstName || 'Your match'
+      });
+
+      // Play notification sound if enabled
+      notificationService.playNotificationSound?.();
+    });
+
+    // Real-time engagement score updates
+    socket.on('engagement_score_updated', (payload = {}) => {
+      if (Number(payload.matchId) !== Number(activeMatchId)) {
+        return;
+      }
+
+      setEngagementScore(payload.engagementScore || 0);
+      setStreakDays(payload.streakDays || 0);
+      setTotalReactions(payload.totalReactions || 0);
+    });
+
+    // Streak data sync
+    socket.on('streak_data_sync', (payload = {}) => {
+      if (Number(payload.matchId) !== Number(activeMatchId)) {
+        return;
+      }
+
+      setStreakDays(payload.streakDays || 0);
+      setEngagementScore(payload.engagementScore || 0);
+      setStreakActive(payload.isActive !== false);
+      setTotalReactions(payload.totalReactions || 0);
     });
 
     return () => {
@@ -1058,6 +1163,14 @@ const DatingMessaging = ({
 
   return (
     <div className="dating-messaging-container">
+      {milestoneNotification && (
+        <MilestoneNotification
+          milestone={milestoneNotification.milestone}
+          userName={milestoneNotification.userName}
+          onDismiss={() => setMilestoneNotification(null)}
+        />
+      )}
+
       <div className="messaging-header">
         <div className="messaging-header-left">
           {onBack ? (
@@ -1131,6 +1244,28 @@ const DatingMessaging = ({
           {statusBanner.message}
         </div>
       ) : null}
+
+      {streakDays > 0 && (
+        <StreakBadge
+          matchId={activeMatchId}
+          streakDays={streakDays}
+          emoji={streakDays >= 30 ? '🔥' : '❤️'}
+          isActive={streakActive}
+          totalMessages={messages.length}
+          engagementScore={engagementScore}
+        />
+      )}
+
+      {(engagementScore > 0 || totalReactions > 0) && (
+        <EngagementScoreDisplay
+          matchId={activeMatchId}
+          streakDays={streakDays}
+          engagementScore={engagementScore}
+          totalMessages={messages.length}
+          reactionCount={totalReactions}
+          isActive={streakActive}
+        />
+      )}
 
       {journey ? (
         <div className="messaging-journey-card">
@@ -1240,20 +1375,12 @@ const DatingMessaging = ({
                 </div>
 
                 {message.reactions?.length > 0 ? (
-                  <div className="message-reactions">
-                    {message.reactions.map((reaction) => (
-                      <button
-                        key={`${message.id}-${reaction.emoji}`}
-                        type="button"
-                        className={`reaction-chip ${reaction.reactedByCurrentUser ? 'reacted' : ''}`}
-                        onClick={() => handleToggleReaction(message.id, reaction.emoji)}
-                        disabled={reactionLoadingMessageId === message.id}
-                      >
-                        <span>{reaction.emoji}</span>
-                        <span>{reaction.count}</span>
-                      </button>
-                    ))}
-                  </div>
+                  <MessageReactionDisplay
+                    messageId={message.id}
+                    reactions={message.reactions}
+                    onRemoveReaction={(emoji) => handleToggleReaction(message.id, emoji)}
+                    currentUserId={currentUserId}
+                  />
                 ) : null}
 
                 <div className={`message-tools ${message.isOwn ? 'own' : 'other'}`}>
@@ -1265,24 +1392,19 @@ const DatingMessaging = ({
                     ))}
                     disabled={reactionLoadingMessageId === message.id}
                   >
-                    React
+                    😊
                   </button>
                 </div>
 
                 {activeReactionPickerMessageId === message.id ? (
-                  <div className="reaction-picker">
-                    {REACTION_OPTIONS.map((emoji) => (
-                      <button
-                        key={`${message.id}-${emoji}`}
-                        type="button"
-                        className="reaction-option"
-                        onClick={() => handleToggleReaction(message.id, emoji)}
-                        disabled={reactionLoadingMessageId === message.id}
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
+                  <ReactionPicker
+                    messageId={message.id}
+                    matchId={activeMatchId}
+                    onReactionSelected={(emoji) => {
+                      handleToggleReaction(message.id, emoji);
+                      setActiveReactionPickerMessageId(null);
+                    }}
+                  />
                 ) : null}
               </div>
             </div>
@@ -1326,11 +1448,31 @@ const DatingMessaging = ({
         </div>
       ) : null}
 
-      {conversationRescuePlan?.actions?.length > 0 && !showDatePlanner ? (
-        <div className="conversation-rescue-strip">
-          <span className="composer-starters-label">{conversationRescuePlan.label}</span>
+      {identityStarterChips.length > 0 && !showDatePlanner ? (
+        <div className="identity-pack-strip">
+          <span className="composer-starters-label">Local and language angle:</span>
           <div className="composer-starters-list">
-            {conversationRescuePlan.actions.map((action) => (
+            {identityStarterChips.map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                className="composer-starter-chip identity-starter-chip"
+                onClick={() => handleUseIcebreaker(starter)}
+              >
+                {starter}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {showPhaseTwoRescueStrip ? (
+        <div className="conversation-rescue-strip">
+          <span className="composer-starters-label">
+            {conversationHealth.readyForCall ? 'Best next move:' : conversationRescuePlan?.label || 'Conversation rescue:'}
+          </span>
+          <div className="composer-starters-list">
+            {phaseTwoRescueActions.map((action) => (
               <button
                 key={action.id}
                 type="button"

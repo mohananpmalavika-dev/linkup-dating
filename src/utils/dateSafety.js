@@ -10,6 +10,27 @@ const getProposalDateValue = (proposal = {}) => {
   return Number.isNaN(nextDate.getTime()) ? null : nextDate;
 };
 
+const formatDateParts = (dateValue) => {
+  if (!(dateValue instanceof Date) || Number.isNaN(dateValue.getTime())) {
+    return {
+      dueDate: '',
+      dueTime: ''
+    };
+  }
+
+  const dueDate = [
+    dateValue.getFullYear(),
+    String(dateValue.getMonth() + 1).padStart(2, '0'),
+    String(dateValue.getDate()).padStart(2, '0')
+  ].join('-');
+  const dueTime = [
+    String(dateValue.getHours()).padStart(2, '0'),
+    String(dateValue.getMinutes()).padStart(2, '0')
+  ].join(':');
+
+  return { dueDate, dueTime };
+};
+
 export const getDateSafetyShareTarget = ({
   acceptedProposal = null,
   outgoingPendingProposal = null,
@@ -77,6 +98,53 @@ export const buildDateSafetyReminderPayload = ({
     description,
     dueDate: proposal.proposedDate,
     dueTime: String(proposal.proposedTime || '12:00').slice(0, 5),
+    category: 'Personal',
+    reminders: ['In-app'],
+    completed: false,
+  };
+};
+
+export const buildDateCheckInReminderPayload = ({
+  proposal,
+  partnerName = 'your match',
+  minutesAfterStart = 180,
+  note = '',
+}) => {
+  const proposalDateValue = getProposalDateValue(proposal);
+  if (!proposalDateValue) {
+    return null;
+  }
+
+  const reminderDateValue = new Date(
+    proposalDateValue.getTime() + Math.max(30, Number(minutesAfterStart || 0)) * 60 * 1000
+  );
+  const { dueDate, dueTime } = formatDateParts(reminderDateValue);
+
+  if (!dueDate || !dueTime) {
+    return null;
+  }
+
+  const activityLabel = proposal?.suggestedActivity || 'date';
+  const timeLabel = reminderDateValue.toLocaleString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+  const extraNote = String(note || '').trim();
+
+  return {
+    title: `Safety check-in after ${partnerName}`,
+    description: [
+      `Please check in with me if you have not heard from me after ${activityLabel} with ${partnerName}.`,
+      `Expected check-in by ${timeLabel}.`,
+      extraNote ? `Check-in note: ${extraNote}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    dueDate,
+    dueTime,
     category: 'Personal',
     reminders: ['In-app'],
     completed: false,

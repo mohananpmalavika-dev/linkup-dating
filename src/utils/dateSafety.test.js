@@ -1,4 +1,5 @@
 import {
+  buildDateCheckInReminderPayload,
   buildDateSafetyReminderPayload,
   extractReminderId,
   formatDateSafetyCopy,
@@ -58,6 +59,30 @@ describe('dateSafety', () => {
       })
     );
     expect(payload.description).toContain('Safety note: Checking in after the date would help.');
+  });
+
+  test('builds a follow-up check-in reminder after the date start time', () => {
+    const payload = buildDateCheckInReminderPayload({
+      proposal: {
+        proposedDate: '2030-05-20',
+        proposedTime: '18:30',
+        suggestedActivity: 'Dinner',
+      },
+      partnerName: 'Noah',
+      minutesAfterStart: 150,
+      note: 'If I do not reply by then, please call me.',
+    });
+
+    expect(payload).toEqual(
+      expect.objectContaining({
+        title: 'Safety check-in after Noah',
+        dueDate: '2030-05-20',
+        dueTime: '21:00',
+        category: 'Personal',
+      })
+    );
+    expect(payload.description).toContain('Expected check-in by');
+    expect(payload.description).toContain('Check-in note: If I do not reply by then, please call me.');
   });
 
   test('extracts reminder ids from common API shapes', () => {

@@ -28,6 +28,30 @@ const CONVERSATION_STYLE_OPTIONS = [
   { value: 'deep', label: 'Long thoughtful talks' }
 ];
 
+const WEEKEND_STYLE_OPTIONS = [
+  { value: 'cozy', label: 'Cozy and low-key' },
+  { value: 'outdoors', label: 'Outdoors and exploring' },
+  { value: 'social', label: 'Going out with people' }
+];
+
+const PLANNING_STYLE_OPTIONS = [
+  { value: 'planner', label: 'I like a plan' },
+  { value: 'balanced', label: 'Some structure, some spontaneity' },
+  { value: 'spontaneous', label: 'Go with the flow' }
+];
+
+const SOCIAL_ENERGY_OPTIONS = [
+  { value: 'small_circle', label: 'Small circle energy' },
+  { value: 'balanced', label: 'A healthy mix' },
+  { value: 'high_energy', label: 'Always up for plans' }
+];
+
+const MESSAGE_GATING_OPTIONS = [
+  { value: 'balanced', label: 'Balanced intros' },
+  { value: 'strict', label: 'Trusted intros only' },
+  { value: 'trusted_only', label: 'Highest-trust intros' }
+];
+
 /**
  * DatingSignUp Component
  * Sign up for dating app with profile creation
@@ -72,6 +96,10 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
     religion: '',
     communityPreference: '',
     conversationStyle: '',
+    weekendStyle: '',
+    planningStyle: '',
+    socialEnergy: '',
+    messageGating: 'balanced',
     interests: [],
     height: '',
     occupation: '',
@@ -420,9 +448,12 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
       !formData.city ||
       !formData.relationshipGoals ||
       !formData.languages.length ||
-      !formData.conversationStyle
+      !formData.conversationStyle ||
+      !formData.weekendStyle ||
+      !formData.planningStyle ||
+      !formData.socialEnergy
     ) {
-      setError('Add your intent, language, city, and conversation style before continuing.');
+      setError('Add your intent, language, conversation rhythm, and dating style before continuing.');
       return;
     }
 
@@ -432,7 +463,11 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
         languageCount: formData.languages.length,
         hasReligion: Boolean(formData.religion),
         hasCommunityPreference: Boolean(formData.communityPreference),
-        conversationStyle: formData.conversationStyle
+        conversationStyle: formData.conversationStyle,
+        weekendStyle: formData.weekendStyle,
+        planningStyle: formData.planningStyle,
+        socialEnergy: formData.socialEnergy,
+        messageGating: formData.messageGating
       }
     });
     setStep(4);
@@ -463,6 +498,23 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
         height: formData.height,
         occupation: formData.occupation,
         education: formData.education,
+      }, {
+        headers: { Authorization: `Bearer ${verifiedToken}` }
+      });
+
+      await axios.put(`${API_BASE_URL}/dating/preferences`, {
+        relationshipGoals: [formData.relationshipGoals],
+        compatibilityAnswers: {
+          communicationStyle: formData.conversationStyle,
+          weekendStyle: formData.weekendStyle,
+          planningStyle: formData.planningStyle,
+          socialEnergy: formData.socialEnergy
+        },
+        preferenceFlexibility: {
+          safetyControls: {
+            messageGating: formData.messageGating
+          }
+        }
       }, {
         headers: { Authorization: `Bearer ${verifiedToken}` }
       });
@@ -513,7 +565,11 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
         context: {
           photoCount: formData.photos.length,
           relationshipGoals: formData.relationshipGoals,
-          languageCount: formData.languages.length
+          languageCount: formData.languages.length,
+          weekendStyle: formData.weekendStyle,
+          planningStyle: formData.planningStyle,
+          socialEnergy: formData.socialEnergy,
+          messageGating: formData.messageGating
         }
       });
 
@@ -697,6 +753,13 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
           <div className="signup-step">
             <h2>Tell Us About Yourself</h2>
             <p>We use these answers to make your profile clearer and your first matches more relevant.</p>
+            <div className="intent-capture-card">
+              <strong>Intent snapshot</strong>
+              <span>
+                LinkUp now learns not just what you want, but how you want early dating to feel:
+                direct, warm, low-pressure, and safe.
+              </span>
+            </div>
             <div className="form-group">
               <label>First Name *</label>
               <input
@@ -801,6 +864,69 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="form-group">
+              <label>Weekend Energy *</label>
+              <div className="interests-grid">
+                {WEEKEND_STYLE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`interest-tag ${formData.weekendStyle === option.value ? 'selected' : ''}`}
+                    onClick={() => setFormData((prev) => ({ ...prev, weekendStyle: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Planning Style *</label>
+              <div className="interests-grid">
+                {PLANNING_STYLE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`interest-tag ${formData.planningStyle === option.value ? 'selected' : ''}`}
+                    onClick={() => setFormData((prev) => ({ ...prev, planningStyle: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Social Rhythm *</label>
+              <div className="interests-grid">
+                {SOCIAL_ENERGY_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`interest-tag ${formData.socialEnergy === option.value ? 'selected' : ''}`}
+                    onClick={() => setFormData((prev) => ({ ...prev, socialEnergy: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Who Can Send First Intros?</label>
+              <div className="interests-grid">
+                {MESSAGE_GATING_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    className={`interest-tag ${formData.messageGating === option.value ? 'selected' : ''}`}
+                    onClick={() => setFormData((prev) => ({ ...prev, messageGating: option.value }))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <small className="helper-text">
+                This becomes your default trust setting for premium direct-intent intros.
+              </small>
             </div>
             <div className="form-group">
               <label>Height</label>

@@ -121,19 +121,24 @@ const reactionSocketHandlers = {
       const streak = streakResult.rows[0];
       const matchRoom = `match_${matchId}`;
 
-      // Check milestones
+      // Check milestones and emit to both users
       if (streak.streak_days === 3 && !streak.milestone_3_days) {
         // 3-day streak milestone - send ❤️ emoji
-        io.to(matchRoom).emit('streak_milestone_3days', {
+        const user1Result = await db.query(`SELECT first_name FROM users WHERE id = $1`, [user_id_1]);
+        const user2Result = await db.query(`SELECT first_name FROM users WHERE id = $1`, [user_id_2]);
+        
+        const userName1 = user1Result.rows[0]?.first_name || 'User';
+        const userName2 = user2Result.rows[0]?.first_name || 'Your match';
+
+        // Emit milestone reached event
+        io.to(matchRoom).emit('streak_milestone_reached', {
           matchId,
-          users: [user_id_1, user_id_2],
+          milestone: 3,
+          streakDays: 3,
+          isActive: true,
           emoji: '❤️',
           message: '🎉 You are on a 3-day message streak! ❤️',
-          streak: {
-            days: 3,
-            emoji: '❤️',
-            text: `3❤️ Day Streak!`
-          },
+          userName: userName2,
           engagementBoost: 'You both are really connecting!',
           timestamp: new Date()
         });
@@ -143,20 +148,19 @@ const reactionSocketHandlers = {
           `UPDATE message_streak_trackers SET milestone_3_days = true WHERE id = $1`,
           [streak.id]
         );
-      }
-
-      if (streak.streak_days === 7 && !streak.milestone_7_days) {
+      } else if (streak.streak_days === 7 && !streak.milestone_7_days) {
         // 7-day streak milestone
-        io.to(matchRoom).emit('streak_milestone_7days', {
+        const userResult = await db.query(`SELECT first_name FROM users WHERE id = $1`, [user_id_2]);
+        const userName = userResult.rows[0]?.first_name || 'Your match';
+
+        io.to(matchRoom).emit('streak_milestone_reached', {
           matchId,
-          users: [user_id_1, user_id_2],
+          milestone: 7,
+          streakDays: 7,
+          isActive: true,
           emoji: '❤️',
           message: '🎉 Impressive! You have a 7-day message streak! ❤️❤️',
-          streak: {
-            days: 7,
-            emoji: '❤️',
-            text: `7❤️ Day Streak!`
-          },
+          userName,
           engagementBoost: 'This is a strong connection forming!',
           timestamp: new Date()
         });
@@ -165,20 +169,19 @@ const reactionSocketHandlers = {
           `UPDATE message_streak_trackers SET milestone_7_days = true WHERE id = $1`,
           [streak.id]
         );
-      }
-
-      if (streak.streak_days === 30 && !streak.milestone_30_days) {
+      } else if (streak.streak_days === 30 && !streak.milestone_30_days) {
         // 30-day streak milestone - fire emoji!
-        io.to(matchRoom).emit('streak_milestone_30days', {
+        const userResult = await db.query(`SELECT first_name FROM users WHERE id = $1`, [user_id_2]);
+        const userName = userResult.rows[0]?.first_name || 'Your match';
+
+        io.to(matchRoom).emit('streak_milestone_reached', {
           matchId,
-          users: [user_id_1, user_id_2],
+          milestone: 30,
+          streakDays: 30,
+          isActive: true,
           emoji: '🔥',
           message: '🔥🔥🔥 AMAZING! 30-day message streak! You two are incredible! 🔥🔥🔥',
-          streak: {
-            days: 30,
-            emoji: '🔥',
-            text: `30🔥 Day Streak!`
-          },
+          userName,
           engagementBoost: 'Outstanding connection! This is rare!',
           achievement: true,
           timestamp: new Date()
@@ -190,7 +193,25 @@ const reactionSocketHandlers = {
         );
       }
 
-      // Calculate and update engagement score
+      // Calculate and update engagement score with detailed breakdown
+      const messageCountResult = await db.query(
+        `SELECT COUNT(*) as count FROM messages 
+         WHERE (from_user_id = $1 AND to_user_id = $2) 
+            OR (from_user_id = $2 AND to_user_id = $1)`,
+        [user_id_1, user_id_2]
+      );
+      
+      const reactionCountResult = await db.query(
+        `SELECT COUNT(*) as count FROM message_reactions mr
+         WHERE EXISTS (
+           SELECT 1 FROM messages m 
+           WHERE m.id = mr.message_id 
+           AND ((m.from_user_id = $1 AND m.to_user_id = $2) 
+                OR (m.from_user_id = $2 AND m.to_user_id = $1))
+         )`,
+        [user_id_1, user_id_2]
+      );
+
       const engagementScore = await MessageReactionService.calculateEngagementScore(
         matchId,
         user_id_1,
@@ -201,13 +222,18 @@ const reactionSocketHandlers = {
         io.to(matchRoom).emit('engagement_score_updated', {
           matchId,
           engagementScore,
+          streakDays: streak.streak_days,
+          totalMessages: parseInt(messageCountResult.rows[0]?.count || 0),
+          totalReactions: parseInt(reactionCountResult.rows[0]?.count || 0),
+          isActive: streak.is_active,
           psychology: {
             message: 'Your engagement score increased!',
-            boost: Math.round(engagementScore / 10) + '%'
+            boost: Math.round((engagementScore / 1000) * 100) + '%'
           },
           timestamp: new Date()
         });
       }
+
     } catch (error) {
       console.error('Error checking streak milestones:', error);
     }

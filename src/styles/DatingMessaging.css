@@ -542,6 +542,11 @@
   background: white;
 }
 
+.identity-pack-strip {
+  padding: 10px 12px 0;
+  background: white;
+}
+
 .conversation-rescue-strip {
   padding: 10px 12px 0;
   background: white;
@@ -565,6 +570,12 @@
   background: #eef4ff;
   color: #3150a6;
   border-color: #c7d2fe;
+}
+
+.identity-starter-chip {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fed7aa;
 }
 
 .disappearing-strip {

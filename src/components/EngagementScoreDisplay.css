@@ -1,0 +1,369 @@
+/**
+ * EngagementScoreDisplay Styles
+ */
+
+.engagement-score-display {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+.score-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.score-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #667eea;
+}
+
+.score-value {
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.score-container {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.score-circle-wrapper {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  flex-shrink: 0;
+}
+
+.score-circle {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.score-circle circle {
+  fill: none;
+  stroke-linecap: round;
+  stroke-width: 8;
+}
+
+.score-background {
+  stroke: rgba(0, 0, 0, 0.08);
+}
+
+.score-progress {
+  stroke: url(#scoreGradient);
+  transition: stroke-dasharray 0.5s ease;
+}
+
+.score-progress.low {
+  stroke: #9ca3af;
+}
+
+.score-progress.building {
+  stroke: #fbbf24;
+}
+
+.score-progress.growing {
+  stroke: #10b981;
+}
+
+.score-progress.strong {
+  stroke: #667eea;
+}
+
+.score-progress.fire {
+  stroke: #f5576c;
+}
+
+.score-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.score-icon {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.score-level {
+  font-size: 12px;
+  font-weight: 600;
+  color: #667eea;
+}
+
+.score-metrics {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.metric-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.metric-item:hover {
+  background: rgba(255, 255, 255, 0.8);
+  transform: translateX(2px);
+}
+
+.metric-icon {
+  font-size: 18px;
+}
+
+.metric-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.metric-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+/* Next Milestone Card */
+.next-milestone {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 16px;
+  color: white;
+}
+
+.milestone-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.milestone-emoji {
+  font-size: 28px;
+  animation: bounceEmoji 1s ease-in-out infinite;
+}
+
+.milestone-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.milestone-text {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.milestone-countdown {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.milestone-progress {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  height: 6px;
+  overflow: hidden;
+}
+
+.milestone-bar {
+  background: rgba(255, 255, 255, 0.9);
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.5s ease;
+}
+
+/* Milestone Achieved Card */
+.milestone-achieved {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  border-radius: 12px;
+  padding: 12px;
+  margin-top: 16px;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.achieved-icon {
+  font-size: 28px;
+  animation: rotateEmoji 0.8s ease-out infinite;
+}
+
+.achieved-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.achieved-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.achieved-message {
+  font-size: 12px;
+  opacity: 0.95;
+  line-height: 1.3;
+}
+
+/* Streak Alert */
+.streak-alert {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #b8860b;
+}
+
+.alert-icon {
+  font-size: 16px;
+}
+
+.alert-text {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Animations */
+@keyframes bounceEmoji {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes rotateEmoji {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .score-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .score-circle-wrapper {
+    margin: 0 auto;
+  }
+
+  .score-metrics {
+    flex-direction: row;
+  }
+
+  .metric-item {
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+@media (max-width: 600px) {
+  .engagement-score-display {
+    padding: 12px;
+    margin: 12px 0;
+  }
+
+  .score-header {
+    margin-bottom: 12px;
+  }
+
+  .score-title {
+    font-size: 14px;
+  }
+
+  .score-value {
+    font-size: 24px;
+  }
+
+  .score-container {
+    gap: 12px;
+  }
+
+  .score-circle-wrapper {
+    width: 100px;
+    height: 100px;
+  }
+
+  .score-icon {
+    font-size: 24px;
+  }
+
+  .score-level {
+    font-size: 11px;
+  }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .engagement-score-display {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    border-color: rgba(102, 126, 234, 0.3);
+  }
+
+  .metric-item {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .metric-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .metric-label {
+    color: #9ca3af;
+  }
+
+  .metric-value {
+    color: #f3f4f6;
+  }
+
+  .score-background {
+    stroke: rgba(255, 255, 255, 0.1);
+  }
+}

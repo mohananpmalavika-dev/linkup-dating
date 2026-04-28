@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import datingProfileService from '../services/datingProfileService';
 import {
   createReminder,
@@ -7,6 +7,7 @@ import {
 } from '../services/remindersService';
 import videoCallService from '../services/videoCallService';
 import {
+  buildDateCheckInReminderPayload,
   buildDateSafetyReminderPayload,
   extractReminderId,
   formatDateSafetyCopy,
@@ -14,6 +15,10 @@ import {
   getShareTypeLabel,
   normalizeTrustedContacts,
 } from '../utils/dateSafety';
+import {
+  buildLocalIdentityPack,
+  buildVideoDateExperience,
+} from '../utils/datingPhaseTwo';
 import '../styles/DateJourneyPanel.css';
 
 const DATE_TYPE_LABELS = {
@@ -48,6 +53,12 @@ const FALLBACK_DATE_TYPES = [
     reason: 'A comfortable option when you want a quick vibe check first.',
     isRecommended: false
   }
+];
+
+const CHECK_IN_OFFSET_OPTIONS = [
+  { value: 90, label: '90 minutes after start' },
+  { value: 150, label: '2.5 hours after start' },
+  { value: 210, label: '3.5 hours after start' }
 ];
 
 const toLocalDateTimeInputValue = (value) => {
@@ -201,9 +212,13 @@ const DateJourneyPanel = ({
   const [loadingTrustedContacts, setLoadingTrustedContacts] = useState(false);
   const [selectedTrustedContactIds, setSelectedTrustedContactIds] = useState([]);
   const [safetyNote, setSafetyNote] = useState('');
+  const [checkInEnabled, setCheckInEnabled] = useState(true);
+  const [checkInOffsetMinutes, setCheckInOffsetMinutes] = useState(150);
+  const plannerTrackedRef = useRef(false);
 
   const slotSuggestions = useMemo(() => createSlotSuggestions(), []);
   const activeMatch = match || initialMatch || null;
+  const identityPack = useMemo(() => buildLocalIdentityPack(activeMatch || {}), [activeMatch]);
   const dateTypes = activeMatch?.journey?.suggestedDateTypes?.length
     ? activeMatch.journey.suggestedDateTypes
     : FALLBACK_DATE_TYPES;
@@ -237,6 +252,16 @@ const DateJourneyPanel = ({
   const safetyShareSummary = safetyShareTarget?.proposal
     ? formatDateSafetyCopy(safetyShareTarget.proposal, partnerName, safetyShareTypeLabel)
     : '';
+  const videoDateExperience = useMemo(
+    () =>
+      buildVideoDateExperience({
+        match: activeMatch || {},
+        identityPack,
+        feedback: videoFeedback,
+        latestSession: latestCompletedVideoSession || {}
+      }),
+    [activeMatch, identityPack, latestCompletedVideoSession, videoFeedback]
+  );
 
   const refreshPanel = useCallback(async (showLoader = true) => {
     if (!matchId) {
@@ -328,6 +353,21 @@ const DateJourneyPanel = ({
     }
   }, [activeMatch?.matchId, dateTypes, rescheduleTarget, slotSuggestions]);
 
+  useEffect(() => {
+    if (!matchId || plannerTrackedRef.current) {
+      return;
+    }
+
+    plannerTrackedRef.current = true;
+    datingProfileService.trackFunnelEvent('dating_date_planner_opened', {
+      matchId,
+      context: {
+        hasAcceptedProposal: Boolean(acceptedProposal),
+        hasPendingProposal: Boolean(incomingPendingProposal || outgoingPendingProposal)
+      }
+    }).catch(() => {});
+  }, [acceptedProposal, incomingPendingProposal, matchId, outgoingPendingProposal]);
+
   if (!matchId) {
     return null;
   }
@@ -400,9 +440,57 @@ const DateJourneyPanel = ({
       }
 
       await shareReminderWithContacts(reminderId, selectedTrustedContactIds);
-      setPanelStatus(
+      const statusMessages = [
         `Shared this ${safetyShareTypeLabel} with ${selectedTrustedContactIds.length} trusted contact${selectedTrustedContactIds.length === 1 ? '' : 's'}.`
-      );
+      ];
+
+      datingProfileService.trackFunnelEvent('dating_safety_plan_shared', {
+        matchId,
+        context: {
+          shareType: safetyShareTypeLabel,
+          contactCount: selectedTrustedContactIds.length
+        }
+      }).catch(() => {});
+
+      if (checkInEnabled) {
+        const checkInPayload = buildDateCheckInReminderPayload({
+          proposal: safetyShareTarget.proposal,
+          partnerName,
+          minutesAfterStart: checkInOffsetMinutes,
+          note: safetyNote
+        });
+
+        if (checkInPayload) {
+          const checkInResponse = await createReminder(checkInPayload);
+          const checkInReminderId = extractReminderId(checkInResponse);
+
+          if (checkInReminderId) {
+            await shareReminderWithContacts(checkInReminderId, selectedTrustedContactIds);
+            datingProfileService.trackFunnelEvent('dating_check_in_reminder_created', {
+              matchId,
+              context: {
+                contactCount: selectedTrustedContactIds.length,
+                minutesAfterStart: checkInOffsetMinutes
+              }
+            }).catch(() => {});
+
+            const checkInAt = new Date(`${checkInPayload.dueDate}T${checkInPayload.dueTime}`);
+            const checkInLabel = Number.isNaN(checkInAt.getTime())
+              ? `${checkInPayload.dueDate} ${checkInPayload.dueTime}`
+              : checkInAt.toLocaleString([], {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit'
+                });
+
+            statusMessages.push(`Trusted-contact check-in set for ${checkInLabel}.`);
+          }
+        }
+      }
+
+      setPanelStatus(statusMessages.join(' '));
       setSafetyNote('');
     } catch (error) {
       setPanelError(typeof error === 'string' ? error : error.message || 'Failed to share the safety plan');
@@ -768,6 +856,38 @@ const DateJourneyPanel = ({
                 />
               </label>
 
+              <div className="date-safety-checkin-card">
+                <label className="date-feedback-toggle">
+                  <input
+                    type="checkbox"
+                    checked={checkInEnabled}
+                    onChange={(event) => setCheckInEnabled(event.target.checked)}
+                  />
+                  <span>Also schedule a trusted-contact check-in</span>
+                </label>
+
+                <p className="date-safety-checkin-copy">
+                  LinkUp can create a second reminder so your trusted contacts know when to expect your
+                  "I'm okay" message after the plan starts.
+                </p>
+
+                {checkInEnabled ? (
+                  <label className="date-planner-field">
+                    <span>Check-in timing</span>
+                    <select
+                      value={checkInOffsetMinutes}
+                      onChange={(event) => setCheckInOffsetMinutes(Number.parseInt(event.target.value, 10) || 150)}
+                    >
+                      {CHECK_IN_OFFSET_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
+
               <div className="date-safety-actions">
                 <button
                   type="button"
@@ -792,6 +912,20 @@ const DateJourneyPanel = ({
             </div>
           )}
         </section>
+      ) : null}
+
+      {identityPack.localDateSuggestions?.length > 0 ? (
+        <div className="date-journey-nudge-card">
+          <strong>Local ideas that fit this match</strong>
+          <p>{partnerName} can probably say yes faster when the plan feels simple, familiar, and easy to picture.</p>
+          <div className="date-journey-suggestions">
+            {identityPack.localDateSuggestions.slice(0, 2).map((idea) => (
+              <span key={`${idea.type}-${idea.title}`} className="date-journey-suggestion">
+                {idea.title}
+              </span>
+            ))}
+          </div>
+        </div>
       ) : null}
 
       <div className="date-planner-form">
@@ -1029,6 +1163,39 @@ const DateJourneyPanel = ({
           >
             {actionLoading === `video-feedback-${latestCompletedVideoSession?.id}` ? 'Saving...' : 'Save Video Reflection'}
           </button>
+        </div>
+      ) : null}
+
+      {latestCompletedVideoSession ? (
+        <div className="date-feedback-card video-follow-up-card">
+          <div className="date-feedback-header">
+            <h4>Video-date follow-up</h4>
+            <p>Use the call to decide the next low-pressure step instead of leaving the momentum hanging.</p>
+          </div>
+
+          {videoDateExperience.postCallSuggestions?.length > 0 ? (
+            <div className="date-journey-suggestions">
+              {videoDateExperience.postCallSuggestions.map((suggestion) => (
+                <span key={suggestion} className="date-journey-suggestion">
+                  {suggestion}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          {videoDateExperience.showBookAnotherDateCta ? (
+            <button
+              type="button"
+              className="date-planner-submit"
+              onClick={() => {
+                setSelectedDateType(dateTypes[0]?.value || 'coffee');
+                setPanelStatus('A real-world plan is ready to send below while the call is still fresh.');
+                setPanelError('');
+              }}
+            >
+              Turn This Into a Real Date
+            </button>
+          ) : null}
         </div>
       ) : null}
     </section>

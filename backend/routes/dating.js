@@ -3772,14 +3772,15 @@ const buildDiscoveryQuery = ({
 router.get('/discovery', async (req, res) => {
   try {
     const userId = req.user.id;
-    const limit = Math.min(parseInt(req.query.limit, 10) || CURSOR_PAGE_SIZE, 50);
+    const mode = req.query.mode || 'detail'; // 'detail' or 'quick_view'
+    const limit = Math.min(parseInt(req.query.limit, 10) || CURSOR_PAGE_SIZE, mode === 'quick_view' ? 50 : 20);
     const cursor = req.query.cursor || null;
 
     if (!userId) {
       return res.status(401).json({ error: 'User ID not found in token' });
     }
 
-    const cacheKey = buildCacheKey('discovery', userId, 'discovery', req.query, cursor);
+    const cacheKey = buildCacheKey('discovery', userId, `discovery_${mode}`, req.query, cursor);
     const cached = await cacheGetPaginated(cacheKey);
     if (cached) {
       return res.json(cached);
@@ -3864,13 +3865,29 @@ router.get('/discovery', async (req, res) => {
       .sort((leftProfile, rightProfile) => rightProfile.compatibilityScore - leftProfile.compatibilityScore)
       .slice(0, limit);
 
+    // Filter profiles for quick-view mode (minimal fields for rapid browsing)
+    let filteredProfiles = profiles;
+    if (mode === 'quick_view') {
+      filteredProfiles = profiles.map((profile) => ({
+        id: profile.id,
+        first_name: profile.first_name,
+        age: profile.age,
+        location: profile.location,
+        photo_url: profile.photos && profile.photos.length > 0 ? profile.photos[0].photo_url : null,
+        photos: profile.photos && profile.photos.length > 0 ? [profile.photos[0]] : [],
+        compatibility_score: profile.compatibilityScore,
+        compatibility_percent: profile.compatibilityPercent
+      }));
+    }
+
     const lastRow = rows[rows.length - 1];
     const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.updated_at, lastRow.id) : null;
 
     const response = {
-      profiles,
+      profiles: filteredProfiles,
       nextCursor,
-      hasMore: Boolean(nextCursor)
+      hasMore: Boolean(nextCursor),
+      mode
     };
 
     await cacheSetPaginated(cacheKey, response, DISCOVERY_CACHE_TTL);

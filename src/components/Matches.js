@@ -55,6 +55,8 @@ const Matches = ({
   const [loadingWhoLiked, setLoadingWhoLiked] = useState(false);
   const [messageRequests, setMessageRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(false);
+  const [dateProposals, setDateProposals] = useState([]);
+  const [loadingDateProposals, setLoadingDateProposals] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
   const [requestActionLoading, setRequestActionLoading] = useState(null);
   const [matchStateLoadingId, setMatchStateLoadingId] = useState(null);
@@ -66,6 +68,7 @@ const Matches = ({
     if (isMessagesPage) {
       loadWhoLikedMe();
       loadMessageRequests();
+      loadDateProposals();
       datingProfileService.trackFunnelEvent('dating_action_inbox_viewed').catch(() => {});
     }
   }, [isMessagesPage]);
@@ -136,6 +139,19 @@ const Matches = ({
       console.error('Failed to load message requests:', loadError);
     } finally {
       setLoadingRequests(false);
+    }
+  };
+
+  const loadDateProposals = async () => {
+    setLoadingDateProposals(true);
+
+    try {
+      const data = await datingProfileService.getDateProposals('all');
+      setDateProposals(data.proposals || []);
+    } catch (loadError) {
+      console.error('Failed to load date proposals:', loadError);
+    } finally {
+      setLoadingDateProposals(false);
     }
   };
 
@@ -295,9 +311,10 @@ const Matches = ({
       likesReceived,
       whoLikedMe,
       messageRequests,
-      actionableMatches
+      actionableMatches,
+      dateProposals
     }),
-    [actionableMatches, likesReceived, messageRequests, whoLikedMe]
+    [actionableMatches, dateProposals, likesReceived, messageRequests, whoLikedMe]
   );
   const headerCount = isMessagesPage ? actionInboxItems.length : displayMatches.length;
 
@@ -336,6 +353,26 @@ const Matches = ({
       return;
     }
 
+    if (item.kind === 'date') {
+      const proposal = item.payload;
+      const existingMatch = matches.find((match) => String(match.id) === String(proposal.matchId));
+      const fallbackMatch = {
+        id: proposal.matchId,
+        matchId: proposal.matchId,
+        userId: proposal.isReceived ? proposal.proposerId : proposal.recipientId,
+        firstName: proposal.isReceived ? proposal.proposerName : proposal.recipientName,
+        location: {
+          city: proposal.isReceived ? proposal.proposerCity : proposal.recipientCity
+        }
+      };
+
+      onPlanDate?.(existingMatch || fallbackMatch, location.pathname, {
+        focusPlanner: true,
+        proposalId: proposal.id
+      });
+      return;
+    }
+
     if (item.kind === 'request') {
       handleAcceptRequest(item.payload.id);
       return;
@@ -356,6 +393,23 @@ const Matches = ({
 
   const handleActionInboxSecondary = (item) => {
     if (!item) {
+      return;
+    }
+
+    if (item.kind === 'date') {
+      const proposal = item.payload;
+      const existingMatch = matches.find((match) => String(match.id) === String(proposal.matchId));
+      const fallbackMatch = {
+        id: proposal.matchId,
+        matchId: proposal.matchId,
+        userId: proposal.isReceived ? proposal.proposerId : proposal.recipientId,
+        firstName: proposal.isReceived ? proposal.proposerName : proposal.recipientName,
+        location: {
+          city: proposal.isReceived ? proposal.proposerCity : proposal.recipientCity
+        }
+      };
+
+      onSelectMatch?.(existingMatch || fallbackMatch, location.pathname);
       return;
     }
 
@@ -572,7 +626,7 @@ const Matches = ({
               <div className="action-inbox-header">
                 <div>
                   <h3>Action Inbox</h3>
-                  <p>One place for likes, requests, reveals, and rescue nudges that can move a match forward.</p>
+                  <p>One place for likes, date plans, direct intents, reveals, and rescue nudges that can move a match forward.</p>
                 </div>
                 <button
                   type="button"
@@ -581,6 +635,7 @@ const Matches = ({
                     loadLikesReceived();
                     loadWhoLikedMe();
                     loadMessageRequests();
+                    loadDateProposals();
                   }}
                 >
                   Refresh
@@ -646,7 +701,11 @@ const Matches = ({
                 </div>
               ) : (
                 <div className="likes-you-empty">
-                  <p>No urgent actions right now. New likes, requests, and momentum nudges will show up here.</p>
+                  <p>
+                    {loadingDateProposals
+                      ? 'Refreshing your intent inbox...'
+                      : 'No urgent actions right now. New likes, date plans, requests, and momentum nudges will show up here.'}
+                  </p>
                 </div>
               )}
             </section>

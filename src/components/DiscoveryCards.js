@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import '../styles/DiscoveryCards.css';
 import datingProfileService from '../services/datingProfileService';
+import QuickViewMode from './QuickViewMode';
+import useQuickViewMode from '../hooks/useQuickViewMode';
 
 const DEFAULT_FILTERS = {
   ageMin: '',
@@ -205,6 +207,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [presetName, setPresetName] = useState('');
   const [savingPreset, setSavingPreset] = useState(false);
   const [feedback, setFeedback] = useState(null);
+  const [quickViewActive, setQuickViewActive] = useState(false);
+  const { isActive: quickViewIsActive, startQuickView } = useQuickViewMode(profiles);
   const loadMoreTriggered = useRef(false);
   const feedbackTimeoutRef = useRef(null);
 
@@ -604,6 +608,43 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     }
   };
 
+  const handleQuickViewStart = useCallback(() => {
+    setQuickViewActive(true);
+    startQuickView();
+  }, [startQuickView]);
+
+  const handleQuickViewExit = useCallback((stats) => {
+    setQuickViewActive(false);
+    if (stats?.liked > 0 || stats?.passed > 0) {
+      showFeedback('success', `Quick view: ${stats.liked} liked, ${stats.passed} passed`);
+    }
+  }, [showFeedback]);
+
+  const handleQuickViewLike = useCallback(async (profile) => {
+    try {
+      const response = await datingProfileService.likeProfile(profile.id);
+      setRemainingLikes((likes) => Math.max(0, likes - 1));
+      if (response.isMatch) {
+        onMatch?.({ ...profile, matchId: response.match?.id || null });
+      }
+    } catch (error) {
+      console.error('Error liking from quick view:', error);
+    }
+  }, [onMatch]);
+
+  const handleQuickViewPass = useCallback(async (profile) => {
+    try {
+      await datingProfileService.passProfile(profile.id);
+    } catch (error) {
+      console.error('Error passing from quick view:', error);
+    }
+  }, []);
+
+  const handleQuickViewViewProfile = useCallback((profile) => {
+    setQuickViewActive(false);
+    onProfileView?.(profile);
+  }, [onProfileView]);
+
   const handleToggleFavorite = async () => {
     const profile = getCurrentProfile();
     if (!profile?.userId) return;
@@ -995,6 +1036,14 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           <button type="button" className="btn-filter-toggle" onClick={() => setShowFilters((current) => !current)}>
             Filters {activeFilterCount > 0 ? `(${activeFilterCount})` : ''}
           </button>
+          <button 
+            type="button" 
+            className="btn-quick-view"
+            onClick={handleQuickViewStart}
+            title="Ultra-fast profile browsing"
+          >
+            ⚡ Quick View
+          </button>
           {filterPresets.length > 0 && activeHubTab !== 'presets' ? (
             <div className="quick-preset-row">
               {filterPresets.slice(0, 3).map((preset) => (
@@ -1079,6 +1128,15 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
   return (
     <div className="discovery-container">
+      {quickViewActive && (
+        <QuickViewMode
+          profiles={profiles}
+          onLike={handleQuickViewLike}
+          onPass={handleQuickViewPass}
+          onViewProfile={handleQuickViewViewProfile}
+          onExit={handleQuickViewExit}
+        />
+      )}
       {renderDiscoveryControls()}
 
       <div className="card-stack">

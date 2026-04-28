@@ -295,6 +295,10 @@
   border-color: rgba(251, 146, 60, 0.38);
 }
 
+.action-inbox-card.date {
+  border-color: rgba(59, 130, 246, 0.34);
+}
+
 .action-inbox-card.like {
   border-color: rgba(244, 114, 182, 0.34);
 }
@@ -315,6 +319,11 @@
 .action-inbox-kind.request {
   background: #fff7ed;
   color: #c2410c;
+}
+
+.action-inbox-kind.date {
+  background: #eef4ff;
+  color: #3150a6;
 }
 
 .action-inbox-kind.like {

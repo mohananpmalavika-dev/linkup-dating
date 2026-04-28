@@ -44,18 +44,79 @@ export const mergeInboundLikes = (likesReceived = [], whoLikedMe = []) => {
   );
 };
 
+const formatProposalWhen = (proposal = {}) => {
+  if (!proposal?.proposedDate) {
+    return 'Time to be confirmed';
+  }
+
+  const proposedTime = String(proposal.proposedTime || '12:00').slice(0, 5);
+  const nextDate = new Date(`${proposal.proposedDate}T${proposedTime}`);
+
+  if (Number.isNaN(nextDate.getTime())) {
+    return `${proposal.proposedDate} ${proposedTime}`;
+  }
+
+  return nextDate.toLocaleString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+};
+
+const buildDateInboxItems = (dateProposals = []) =>
+  (Array.isArray(dateProposals) ? dateProposals : [])
+    .filter((proposal) => ['pending', 'accepted'].includes(String(proposal.status || '').toLowerCase()))
+    .map((proposal) => {
+      const counterpartName =
+        proposal.isReceived
+          ? proposal.proposerName || 'Your match'
+          : proposal.recipientName || 'Your match';
+      const isPending = proposal.status === 'pending';
+      const isAccepted = proposal.status === 'accepted';
+      const isReceived = Boolean(proposal.isReceived);
+      const title = isPending
+        ? isReceived
+          ? `${counterpartName} suggested ${proposal.suggestedActivity}`
+          : `Waiting on ${counterpartName} for ${proposal.suggestedActivity}`
+        : `${proposal.suggestedActivity} with ${counterpartName} is on the calendar`;
+
+      return {
+        id: `date-${proposal.id}`,
+        kind: 'date',
+        priority: isPending && isReceived ? 1 : isPending ? 2 : 3,
+        title,
+        subtitle: isPending
+          ? `${isReceived ? 'Reply to this plan' : 'You already made the move'} for ${formatProposalWhen(proposal)}.`
+          : `Upcoming for ${formatProposalWhen(proposal)}.`,
+        meta: isPending
+          ? isReceived
+            ? 'Date reply needed'
+            : 'Waiting on their answer'
+          : 'Upcoming date',
+        preview: proposal.notes || '',
+        primaryLabel: 'Review plan',
+        secondaryLabel: 'Open chat',
+        createdAt: proposal.createdAt || proposal.proposedDate,
+        payload: proposal
+      };
+    });
+
 export const buildActionInboxItems = ({
   likesReceived = [],
   whoLikedMe = [],
   messageRequests = [],
-  actionableMatches = []
+  actionableMatches = [],
+  dateProposals = []
 } = {}) => {
   const mergedLikes = mergeInboundLikes(likesReceived, whoLikedMe);
+  const dateItems = buildDateInboxItems(dateProposals);
 
   const likeItems = mergedLikes.map((like) => ({
     id: `like-${like.userId}`,
     kind: 'like',
-    priority: like.isRevealed ? 1 : 2,
+    priority: like.isRevealed ? 3 : 4,
     title: like.isRevealed ? `${like.firstName} liked you` : 'Someone liked you',
     subtitle: like.isRevealed
       ? 'Like back to turn this into a real conversation.'
@@ -84,7 +145,7 @@ export const buildActionInboxItems = ({
     ({ match, suggestion }) => ({
       id: `rescue-${match.id}-${suggestion.kind}`,
       kind: 'rescue',
-      priority: 3,
+      priority: 5,
       title: suggestion.title,
       subtitle: suggestion.description,
       meta:
@@ -104,7 +165,7 @@ export const buildActionInboxItems = ({
     })
   );
 
-  return [...requestItems, ...likeItems, ...rescueItems].sort((leftItem, rightItem) => {
+  return [...requestItems, ...dateItems, ...likeItems, ...rescueItems].sort((leftItem, rightItem) => {
     if (leftItem.priority !== rightItem.priority) {
       return leftItem.priority - rightItem.priority;
     }

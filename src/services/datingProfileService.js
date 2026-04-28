@@ -1092,6 +1092,18 @@ export const datingProfileService = {
   },
 
   /**
+   * Get advanced compatibility factor breakdown for a profile
+   */
+  getCompatibilityFactors: async (userId) => {
+    try {
+      const response = await axios.get(`${API_URL}/compatibility-factors/${userId}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data?.error || 'Failed to get compatibility factors';
+    }
+  },
+
+  /**
    * Get trust and verification summary for a profile
    */
   getProfileTrustScore: async (userId) => {

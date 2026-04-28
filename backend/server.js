@@ -22,6 +22,8 @@ const astrologyRoutes = require('./routes/astrology');
 const flashsalesRoutes = require('./routes/flashsales');
 const videoCallRoutes = require('./routes/video-calls');
 const socialRoutes = require('./routes/social');
+const notificationRoutes = require('./routes/notifications');
+const challengeRoutes = require('./routes/challenges');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
@@ -412,6 +414,8 @@ app.use('/api/chatrooms', authenticateToken, chatroomsRoutes);
 app.use('/api/lobby', authenticateToken, lobbyRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/notifications', authenticateToken, notificationRoutes);
+app.use('/api/challenges', authenticateToken, challengeRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
