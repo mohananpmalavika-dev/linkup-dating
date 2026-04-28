@@ -359,12 +359,12 @@ const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerificatio
 
   await storeAgeVerification(db, createdUser.id, ageVerification);
 
-  await db.query(
-    `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
-     VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
-     ON CONFLICT (user_id) DO NOTHING`,
-    [createdUser.id, fallbackName, verifiedAge, 10]
-  );
+    await db.query(
+      `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [createdUser.id, fallbackName, verifiedAge, 10]
+    );
 
   await db.query(
     `INSERT INTO user_preferences (user_id, created_at, updated_at)
@@ -688,8 +688,8 @@ router.post('/signup', async (req, res) => {
 
     // Create empty dating profile
     await db.query(
-      `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+      `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO NOTHING`,
       [userId, buildDisplayNameFromEmail(normalizedEmail), verifiedAge, 10]
     );
@@ -1860,8 +1860,8 @@ router.post('/set-username', async (req, res) => {
 
     const fallbackName = buildDisplayNameFromEmail(userResult.rows[0].email);
     const profileResult = await db.query(
-      `INSERT INTO dating_profiles (user_id, username, first_name, age, last_active)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+      `INSERT INTO dating_profiles (user_id, username, first_name, age, last_active, created_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id)
        DO UPDATE SET
          username = EXCLUDED.username,
@@ -2319,8 +2319,8 @@ router.post('/firebase-verify-phone', async (req, res) => {
         await storeAgeVerification(db, createdUser.id, ageVerification);
 
         await db.query(
-          `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
-           VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+          `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at)
+           VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
            ON CONFLICT (user_id) DO NOTHING`,
           [createdUser.id, fallbackName, verifiedAge, 10]
         );
@@ -2450,6 +2450,125 @@ router.post('/set-admin', async (req, res) => {
   } catch (err) {
     console.error('Set admin error:', err);
     res.status(500).json({ error: 'Failed to set admin' });
+  }
+});
+
+// GOOGLE/FIREBASE SIGNUP
+router.post('/google-signup', async (req, res) => {
+  try {
+    const { idToken, firebaseUid, email, displayName, photoURL, phone } = req.body;
+    const normalizedEmail = normalizeRecipient(email);
+    const normalizedPhone = normalizePhoneNumber(phone);
+    const clientIP = getClientIP(req);
+
+    if (!idToken) {
+      return res.status(400).json({ error: 'Firebase ID token required' });
+    }
+
+    if (!normalizedEmail) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Verify Firebase ID token
+    const firebaseConfig = require('../config/firebase');
+    const tokenVerification = await firebaseConfig.verifyFirebaseIdToken(idToken);
+
+    if (!tokenVerification.success) {
+      return res.status(401).json({
+        error: 'Invalid Firebase token',
+        code: 'INVALID_FIREBASE_TOKEN'
+      });
+    }
+
+    // Sync admin privileges if needed
+    await syncAdminPrivilegesForEmail(normalizedEmail);
+
+    // Check if user already exists
+    const existingUserResult = await db.query(
+      'SELECT id, email, phone, is_admin FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',
+      [normalizedEmail]
+    );
+
+    let user;
+    if (existingUserResult.rows.length > 0) {
+      // User already exists - just login
+      user = existingUserResult.rows[0];
+    } else {
+      // Check account creation limit
+      if (clientIP) {
+        const AccountCreationLimitService = require('../services/accountCreationLimitService');
+        const canCreate = await AccountCreationLimitService.canCreateAccount(clientIP);
+        if (!canCreate.canCreate) {
+          return res.status(429).json({
+            success: false,
+            error: 'Account creation limit exceeded',
+            code: 'ACCOUNT_CREATION_BLOCKED'
+          });
+        }
+      }
+
+      // Create new user
+      const hashedPassword = await bcrypt.hash(firebaseUid, 10); // Use Firebase UID as password hash
+      const newUserId = uuidv4();
+
+      const createUserResult = await db.query(
+        'INSERT INTO users (id, email, phone, password, is_admin, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id, email, phone, is_admin',
+        [newUserId, normalizedEmail, normalizedPhone || null, hashedPassword, false]
+      );
+
+      user = createUserResult.rows[0];
+
+      // Create empty dating profile
+      const firstName = displayName || email.split('@')[0];
+      await db.query(
+        `INSERT INTO dating_profiles (user_id, first_name, profile_completion_percent, last_active, created_at)
+         VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id) DO NOTHING`,
+        [user.id, firstName, 15]
+      );
+
+      // Create user preferences
+      await db.query(
+        'INSERT INTO user_preferences (user_id, created_at, updated_at) VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+        [user.id]
+      );
+
+      // Record account creation for rate limiting
+      if (clientIP) {
+        try {
+          const AccountCreationLimitService = require('../services/accountCreationLimitService');
+          await AccountCreationLimitService.recordAccountCreation(clientIP, user.id);
+        } catch (recordError) {
+          console.error('Error recording account creation for rate limiting:', recordError);
+        }
+      }
+
+      console.log(`[AUTH] New user created via Google: ${normalizedEmail}`);
+    }
+
+    // Generate JWT token
+    const token = generateToken(user);
+
+    res.status(200).json({
+      success: true,
+      message: existingUserResult.rows.length > 0 ? 'Logged in successfully' : 'Account created successfully',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone || null,
+        isAdmin: Boolean(user.is_admin),
+        role: Boolean(user.is_admin) ? 'admin' : 'user',
+        registrationType: Boolean(user.is_admin) ? 'admin' : 'user',
+        signupMethod: 'google'
+      }
+    });
+  } catch (err) {
+    console.error('Google signup error:', err);
+    res.status(500).json({
+      success: false,
+      error: err.message || 'Google signup failed'
+    });
   }
 });
 

@@ -400,6 +400,117 @@
   box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
 }
 
+/* Google Signup Button */
+.btn-google-signup {
+  width: 100%;
+  padding: 12px;
+  background: white;
+  color: #2d2d2d;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 0;
+}
+
+.btn-google-signup:hover:not(:disabled) {
+  border-color: #4285f4;
+  background: #f1f5ff;
+  box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
+}
+
+.btn-google-signup:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.google-icon {
+  font-size: 16px;
+}
+
+/* Divider */
+.divider-or {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 15px 0;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.divider-or::before,
+.divider-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+/* Signup Method Options */
+.signup-method-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Radio Group */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 8px;
+  border: 2px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.radio-option:hover {
+  border-color: #d946a6;
+  background: #fdf2f8;
+}
+
+.radio-option input[type="radio"] {
+  cursor: pointer;
+  margin: 0;
+  width: 18px;
+  height: 18px;
+  accent-color: #d946a6;
+  flex-shrink: 0;
+}
+
+.radio-option input[type="radio"]:disabled {
+  accent-color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.radio-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #2d2d2d;
+  flex: 1;
+}
+
+.radio-option input[type="radio"]:checked + .radio-label {
+  color: #d946a6;
+  font-weight: 600;
+}
+
 /* Login Link */
 .login-link {
   text-align: center;

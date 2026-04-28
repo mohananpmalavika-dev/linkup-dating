@@ -79,6 +79,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   const [otp, setOtp] = useState('');
   const [otpId, setOtpId] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [otpMethod, setOtpMethod] = useState('email'); // 'email' or 'phone'
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [verifiedUser, setVerifiedUser] = useState(null);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -87,6 +88,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   const [referralMessage, setReferralMessage] = useState('');
   const [validatingReferral, setValidatingReferral] = useState(false);
   const [ageVerification, setAgeVerification] = useState(null);
+  const [gmailSigningIn, setGmailSigningIn] = useState(false);
   
   // Username state
   const [username, setUsername] = useState('');
@@ -158,6 +160,78 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     }
   };
 
+  // Handle Gmail/Google signup
+  const handleGoogleSignup = async () => {
+    setError('');
+    setSuccess('');
+    setGmailSigningIn(true);
+
+    try {
+      // Initialize Firebase Auth
+      const firebaseConfig = {
+        apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
+        authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+        projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
+        storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+        messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+        appId: process.env.REACT_APP_FIREBASE_APP_ID
+      };
+
+      // Dynamic import to avoid build issues if Firebase not configured
+      const { initializeApp } = await import('firebase/app');
+      const { getAuth, signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const provider = new GoogleAuthProvider();
+      provider.addScope('profile');
+      provider.addScope('email');
+
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      const idToken = await user.getIdToken();
+
+      // Send Firebase ID token to backend
+      const response = await axios.post(`${API_BASE_URL}/auth/google-signup`, {
+        idToken,
+        firebaseUid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        phone: user.phoneNumber || ''
+      });
+
+      if (response.data.success) {
+        const { token, user: backendUser } = response.data;
+        setVerifiedToken(token);
+        setVerifiedUser(backendUser);
+        setEmail(user.email);
+        setOtpSent(false);
+        setStep(2); // Skip OTP step, go straight to username
+        setSuccess('✓ Google signup successful! Now set your username.');
+
+        // Track event
+        try {
+          await axios.post(
+            `${API_BASE_URL}/dating/funnel/events`,
+            { eventName: 'dating_google_signup_success' },
+            { headers: { Authorization: `Bearer ${token}` } }
+          ).catch(() => {});
+        } catch (trackErr) {
+          console.error('Failed to track event:', trackErr);
+        }
+      } else {
+        setError(response.data.error || 'Google signup failed');
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || err.message || 'Google signup failed';
+      setError(errorMessage);
+      console.error('Google signup error:', err);
+    } finally {
+      setGmailSigningIn(false);
+    }
+  };
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlCode = urlParams.get('ref') || urlParams.get('referral');
@@ -203,7 +277,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     }
   };
 
-  // Send OTP to email
+  // Send OTP to email or phone
   const handleSendOtp = async (e) => {
     e.preventDefault();
     setError('');
@@ -219,17 +293,22 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       }
     }
 
-    if (!normalizedEmail) {
+    if (otpMethod === 'phone' && !phone.trim()) {
+      setError('Please enter your phone number to receive OTP via SMS');
+      return;
+    }
+
+    if (otpMethod === 'email' && !normalizedEmail) {
       setError('Please enter your email');
       return;
     }
 
-    if (looksLikePhoneNumber(email) && !validateEmail(normalizedEmail)) {
-      setError('Phone OTP is not available yet. Please use your email address.');
+    if (otpMethod === 'email' && looksLikePhoneNumber(email) && !validateEmail(normalizedEmail)) {
+      setError('That looks like a phone number. Please use your email address or switch to phone OTP method.');
       return;
     }
 
-    if (!validateEmail(normalizedEmail)) {
+    if (otpMethod === 'email' && !validateEmail(normalizedEmail)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -250,6 +329,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
         email: normalizedEmail,
         phone: phone.trim(),
         purpose: 'signup',
+        channel: otpMethod, // 'email' or 'phone'
         ageVerification: {
           method: ageVerification.method,
           dateOfBirth: ageVerification.dateOfBirth
@@ -258,7 +338,8 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
 
       setOtpId(response.data.otpId || '');
       setOtpSent(true);
-      setSuccess(response.data?.message || 'OTP sent to your email!');
+      const channel = otpMethod === 'phone' ? 'SMS' : 'email';
+      setSuccess(response.data?.message || `OTP sent to your ${channel}!`);
       setResendCooldown(60); // 60 second cooldown
       
       // Start countdown timer
@@ -296,6 +377,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
         email: normalizedEmail,
         phone: phone.trim(),
         purpose: 'signup',
+        channel: otpMethod, // 'email' or 'phone'
         ageVerification: {
           method: ageVerification?.method,
           dateOfBirth: ageVerification?.dateOfBirth
@@ -303,7 +385,8 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       });
 
       setOtpId(response.data.otpId || '');
-      setSuccess(response.data?.message || 'OTP resent to your email!');
+      const channel = otpMethod === 'phone' ? 'SMS' : 'email';
+      setSuccess(response.data?.message || `OTP resent to your ${channel}!`);
       setResendCooldown(60); // Reset cooldown
       
       // Start countdown timer
@@ -741,6 +824,24 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
             {!otpSent ? (
               <>
                 <div className="form-group">
+                  <label>Sign Up Method</label>
+                  <div className="signup-method-options">
+                    <button
+                      type="button"
+                      className="btn-google-signup"
+                      onClick={handleGoogleSignup}
+                      disabled={loading || gmailSigningIn}
+                    >
+                      <span className="google-icon">🔐</span>
+                      {gmailSigningIn ? 'Signing in...' : 'Sign up with Google'}
+                    </button>
+                    <div className="divider-or">
+                      <span>OR</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-group">
                   <label>Email Address</label>
                   <input
                     type="email"
@@ -750,20 +851,69 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                     disabled={loading}
                   />
                 </div>
+
                 <div className="form-group">
-                  <label>Phone Number (Optional)</label>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
-                    disabled={loading}
-                    autoComplete="tel"
-                  />
-                  <small className="helper-text">
-                    Add a phone number now so you can log in with email or phone later.
-                  </small>
+                  <label>OTP Delivery Method</label>
+                  <div className="radio-group">
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="otpMethod"
+                        value="email"
+                        checked={otpMethod === 'email'}
+                        onChange={(e) => setOtpMethod(e.target.value)}
+                        disabled={loading}
+                      />
+                      <span className="radio-label">📧 Email OTP</span>
+                    </label>
+                    <label className="radio-option">
+                      <input
+                        type="radio"
+                        name="otpMethod"
+                        value="phone"
+                        checked={otpMethod === 'phone'}
+                        onChange={(e) => setOtpMethod(e.target.value)}
+                        disabled={loading || !phone.trim()}
+                      />
+                      <span className="radio-label">📱 SMS OTP (requires phone number below)</span>
+                    </label>
+                  </div>
                 </div>
+
+                {otpMethod === 'phone' && (
+                  <div className="form-group">
+                    <label>Phone Number (Required for SMS)</label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      disabled={loading}
+                      autoComplete="tel"
+                    />
+                    <small className="helper-text">
+                      Indian phone numbers are supported. Format: +91 or 10-digit number
+                    </small>
+                  </div>
+                )}
+
+                {otpMethod === 'email' && (
+                  <div className="form-group">
+                    <label>Phone Number (Optional)</label>
+                    <input
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      disabled={loading}
+                      autoComplete="tel"
+                    />
+                    <small className="helper-text">
+                      Add a phone number now so you can log in with email or phone later.
+                    </small>
+                  </div>
+                )}
+
                 <div className="form-group">
                   <label>Referral Code (Optional)</label>
                   <input
@@ -788,8 +938,12 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                     </small>
                   ) : null}
                 </div>
-                <button type="submit" className="btn-submit" disabled={loading}>
-                  {loading ? 'Sending OTP...' : 'Send Email OTP'}
+                <button 
+                  type="submit" 
+                  className="btn-submit" 
+                  disabled={loading || (otpMethod === 'phone' && !phone.trim())}
+                >
+                  {loading ? `Sending ${otpMethod === 'phone' ? 'SMS' : 'Email'} OTP...` : `Send ${otpMethod === 'phone' ? 'SMS' : 'Email'} OTP`}
                 </button>
               </>
             ) : (
@@ -806,6 +960,9 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                     autoComplete="one-time-code"
                     disabled={loading}
                   />
+                  <small className="helper-text">
+                    OTP sent to {otpMethod === 'phone' ? '📱 ' + phone : '📧 ' + email}
+                  </small>
                 </div>
                 <button type="submit" className="btn-submit" disabled={loading}>
                   {loading ? 'Verifying...' : 'Verify OTP'}
@@ -836,7 +993,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                     }}
                     disabled={loading}
                   >
-                    Change Email
+                    Change Method
                   </button>
                 </div>
               </>
