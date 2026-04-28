@@ -45,6 +45,9 @@ async function syncModelsInOrder(sequelize, dbModels, logger) {
       'UserPreferenceProfile',
       'DailyCheckIn',
       'UserLocation',
+      'IPBlocklist',
+      'AccountCreationLimit',
+      'AdminSetting',
       
       // THIRD TIER (depend on User)
       'Matches',
