@@ -46,6 +46,7 @@ const init = async () => {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
+        phone VARCHAR(32) UNIQUE,
         password VARCHAR(255) NOT NULL,
         is_admin BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -543,6 +544,7 @@ const init = async () => {
       await client.query(`
       ALTER TABLE users
       ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS phone VARCHAR(32),
       ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
     `);
@@ -552,6 +554,12 @@ const init = async () => {
       ALTER COLUMN is_admin SET DEFAULT FALSE,
       ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP,
       ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique
+      ON users(phone)
+      WHERE phone IS NOT NULL;
     `);
 
       await client.query(`

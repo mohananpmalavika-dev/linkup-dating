@@ -47,7 +47,7 @@ const Login = ({
   onLoginSuccess,
   onSignUpClick,
 }) => {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [otp, setOtp] = useState("");
   const [otpId, setOtpId] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -73,7 +73,6 @@ const Login = ({
   } = useVoice(language);
 
   const { login: loginCopy, direction } = getTranslation(language);
-  const normalizedEmail = email.trim().toLowerCase();
   const legalNoticeMessage = getTranslationValue(language, "public.loginNotice");
 
   const clearMessages = () => {
@@ -84,6 +83,10 @@ const Login = ({
   const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   const validateUsername = (value) => /^[a-zA-Z0-9_-]{3,20}$/.test(value);
   const looksLikePhoneNumber = (value) => /^\+?[0-9\s()-]{7,}$/.test(String(value || "").trim());
+  const trimmedIdentifier = identifier.trim();
+  const normalizedEmail = validateEmail(trimmedIdentifier) ? trimmedIdentifier.toLowerCase() : "";
+  const normalizedPhone =
+    !normalizedEmail && looksLikePhoneNumber(trimmedIdentifier) ? trimmedIdentifier : "";
 
   const resetOtpFlow = () => {
     setOtp("");
@@ -186,18 +189,13 @@ const Login = ({
     event.preventDefault();
     clearMessages();
 
-    if (!normalizedEmail) {
-      setError("Please enter your email address");
+    if (!trimmedIdentifier) {
+      setError("Please enter your email address or phone number");
       return;
     }
 
-    if (looksLikePhoneNumber(email) && !validateEmail(normalizedEmail)) {
-      setError("Phone OTP is not available yet. Please use your email address.");
-      return;
-    }
-
-    if (!validateEmail(normalizedEmail)) {
-      setError("Please enter a valid email address");
+    if (!normalizedEmail && !normalizedPhone) {
+      setError("Please enter a valid email address or phone number");
       return;
     }
 
@@ -205,7 +203,7 @@ const Login = ({
 
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
-        email: normalizedEmail,
+        identifier: normalizedPhone || normalizedEmail,
         purpose: "login",
       });
 
@@ -216,7 +214,7 @@ const Login = ({
 
       setOtpId(response.data.otpId || "");
       setOtpSent(true);
-      setSuccess(response.data.message || "OTP sent to your email");
+      setSuccess(response.data.message || "OTP sent successfully");
     } catch (sendError) {
       if (!sendError.response) {
         setError("Backend is not running. Please start the API server and try again.");
@@ -250,7 +248,7 @@ const Login = ({
 
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, {
-        email: normalizedEmail,
+        identifier: trimmedIdentifier,
         otp: otp.trim(),
         otpId,
       });
@@ -270,7 +268,11 @@ const Login = ({
         return;
       }
 
-      completeLogin(response.data.user, response.data.token, normalizedEmail);
+      completeLogin(
+        response.data.user,
+        response.data.token,
+        response.data.user?.email || normalizedEmail || trimmedIdentifier
+      );
     } catch (verifyError) {
       if (!verifyError.response) {
         setError("Backend is not running. Please start the API server and try again.");
@@ -334,7 +336,7 @@ const Login = ({
           username: response.data.user?.username || trimmedUsername,
         },
         verifiedToken,
-        normalizedEmail
+        verifiedUser?.email || normalizedEmail || trimmedIdentifier
       );
     } catch (setUsernameError) {
       if (!setUsernameError.response) {
@@ -352,10 +354,10 @@ const Login = ({
   };
 
   const isUsernameStep = needsUsernameSetup;
-  const formTitle = isUsernameStep ? "Create your username" : "Verify your email";
+  const formTitle = isUsernameStep ? "Create your username" : "Verify your account";
   const formDescription = isUsernameStep
     ? "Set a unique username before you continue to your LinkUp account."
-    : "Enter your email and confirm the one-time password to continue.";
+    : "Enter your email address or phone number and confirm the one-time password to continue.";
 
   return (
     <div className="login-container" dir={direction}>
@@ -378,7 +380,7 @@ const Login = ({
           <p className="login-kicker">{loginCopy.welcomeBack || "Welcome back"}</p>
           <h1>LinkUp</h1>
           <p className="login-subtitle">
-            {loginCopy.loginSubtitle || "Verify your email to log in to LinkUp."}
+            Use your email address or phone number to sign in to LinkUp.
           </p>
         </div>
 
@@ -400,24 +402,24 @@ const Login = ({
 
           {!otpSent && !isUsernameStep ? (
             <div className="form-group">
-              <label htmlFor="email">
-                <span>Email Address</span>
-                {renderFieldVoiceActions("email", normalizedEmail || "Email Address", (value) => {
-                  setEmail(value);
+              <label htmlFor="identifier">
+                <span>Email Address or Phone Number</span>
+                {renderFieldVoiceActions("identifier", trimmedIdentifier || "Email address or phone number", (value) => {
+                  setIdentifier(value);
                   clearMessages();
                 })}
               </label>
               <input
-                type="email"
-                id="email"
-                placeholder="Enter your email address"
-                value={email}
+                type="text"
+                id="identifier"
+                placeholder="Enter your email address or phone number"
+                value={identifier}
                 onChange={(event) => {
-                  setEmail(event.target.value);
+                  setIdentifier(event.target.value);
                   clearMessages();
                 }}
                 className="form-input"
-                autoComplete="email"
+                autoComplete="username"
               />
             </div>
           ) : null}
@@ -507,7 +509,7 @@ const Login = ({
                   ? loading ? "Verifying..." : "Verify OTP"
                   : loading
                     ? "Sending OTP..."
-                    : "Send Email OTP"}
+                    : "Send Login OTP"}
             </button>
 
             {otpSent || isUsernameStep ? (

@@ -75,6 +75,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   
   // OTP verification state
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [otpId, setOtpId] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -233,6 +234,11 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       return;
     }
 
+    if (phone.trim() && !looksLikePhoneNumber(phone)) {
+      setError('Please enter a valid phone number or leave it blank.');
+      return;
+    }
+
     if (!ageVerification?.dateOfBirth || !ageVerification?.method) {
       setError('Complete age verification before requesting an OTP.');
       return;
@@ -242,6 +248,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
         email: normalizedEmail,
+        phone: phone.trim(),
         purpose: 'signup',
         ageVerification: {
           method: ageVerification.method,
@@ -287,6 +294,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
         email: normalizedEmail,
+        phone: phone.trim(),
         purpose: 'signup',
         ageVerification: {
           method: ageVerification?.method,
@@ -337,6 +345,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, {
         email: email.trim().toLowerCase(),
+        phone: phone.trim(),
         otp: otp.trim(),
         otpId
       });
@@ -740,6 +749,20 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                     placeholder="your@email.com"
                     disabled={loading}
                   />
+                </div>
+                <div className="form-group">
+                  <label>Phone Number (Optional)</label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
+                    disabled={loading}
+                    autoComplete="tel"
+                  />
+                  <small className="helper-text">
+                    Add a phone number now so you can log in with email or phone later.
+                  </small>
                 </div>
                 <div className="form-group">
                   <label>Referral Code (Optional)</label>

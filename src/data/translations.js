@@ -22,7 +22,7 @@ const translations = {
         "LinkUp Dating helps you move from profile to first message to real plans with more clarity, safer date tools, and stronger conversation prompts.",
       languageLabel: "Language",
       login: "Login",
-      loginHelp: "Sign in to your LinkUp account with verified email.",
+      loginHelp: "Sign in to your LinkUp account with your email address or phone number.",
       user: "Sign Up",
       userHelp: "Build your profile, get better matches, and start safer conversations.",
       highlights: [
@@ -47,7 +47,7 @@ const translations = {
       entrepreneur: "Entrepreneur",
       login: "Login",
       entrepreneurSubtitle: "Grow your dating reach with verified email",
-      loginSubtitle: "Sign in with verified email",
+      loginSubtitle: "Sign in with your email address or phone number",
       userSubtitle: "Join LinkUp Dating with verified email",
       chooseAnother: "Choose another option",
       footer: "Your login is verified by a server-issued OTP.",

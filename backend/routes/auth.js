@@ -37,6 +37,52 @@ const getEmailTransporter = () => {
 const passwordResetStorage = new Map();
 
 const normalizeRecipient = (value = '') => String(value || '').trim().toLowerCase();
+const normalizePhoneNumber = (value = '') => {
+  const digits = String(value || '').trim().replace(/\D/g, '');
+
+  if (!digits) {
+    return '';
+  }
+
+  if (digits.length === 10) {
+    return `91${digits}`;
+  }
+
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return `91${digits.slice(1)}`;
+  }
+
+  return digits;
+};
+
+const getPhoneLookupCandidates = (value = '') => {
+  const rawDigits = String(value || '').trim().replace(/\D/g, '');
+  const normalizedPhone = normalizePhoneNumber(value);
+  const candidates = new Set();
+
+  if (normalizedPhone) {
+    candidates.add(normalizedPhone);
+  }
+
+  if (rawDigits) {
+    candidates.add(rawDigits);
+
+    if (rawDigits.length > 10) {
+      candidates.add(rawDigits.slice(-10));
+    }
+
+    if (rawDigits.length === 10) {
+      candidates.add(`91${rawDigits}`);
+    }
+
+    if (rawDigits.length === 11 && rawDigits.startsWith('0')) {
+      candidates.add(rawDigits.slice(1));
+      candidates.add(`91${rawDigits.slice(1)}`);
+    }
+  }
+
+  return Array.from(candidates).filter(Boolean);
+};
 
 const getAuthRole = (userRecord) =>
   Boolean(userRecord?.is_admin || userRecord?.isAdmin) ? 'admin' : 'user';
@@ -62,6 +108,57 @@ const getRequestMetadata = (req) => ({
 const isStrongPassword = (value = '') => String(value || '').length >= 8;
 const isEmailAddress = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeRecipient(value));
 const looksLikePhoneNumber = (value = '') => /^\+?[0-9\s()-]{7,}$/.test(String(value || '').trim());
+const resolveAuthContact = ({ identifier, email, phone } = {}) => {
+  const rawIdentifier = String(identifier || '').trim();
+  const rawEmail = String(email || '').trim();
+  const rawPhone = String(phone || '').trim();
+  const primaryValue = rawIdentifier || rawEmail || rawPhone;
+  const phoneCandidateSource =
+    looksLikePhoneNumber(rawIdentifier)
+      ? rawIdentifier
+      : looksLikePhoneNumber(rawPhone)
+        ? rawPhone
+        : looksLikePhoneNumber(rawEmail)
+          ? rawEmail
+          : '';
+  let identifierType = null;
+  let normalizedEmail = '';
+  let normalizedPhone = '';
+
+  if (primaryValue) {
+    if (isEmailAddress(primaryValue)) {
+      identifierType = 'email';
+      normalizedEmail = normalizeRecipient(primaryValue);
+    } else if (looksLikePhoneNumber(primaryValue)) {
+      identifierType = 'phone';
+      normalizedPhone = normalizePhoneNumber(primaryValue);
+    }
+  }
+
+  if (!normalizedEmail && rawEmail && isEmailAddress(rawEmail)) {
+    normalizedEmail = normalizeRecipient(rawEmail);
+  }
+
+  if (!normalizedPhone && rawPhone && looksLikePhoneNumber(rawPhone)) {
+    normalizedPhone = normalizePhoneNumber(rawPhone);
+  }
+
+  if (!identifierType) {
+    if (normalizedEmail) {
+      identifierType = 'email';
+    } else if (normalizedPhone) {
+      identifierType = 'phone';
+    }
+  }
+
+  return {
+    identifierType,
+    normalizedIdentifier: identifierType === 'phone' ? normalizedPhone : normalizedEmail,
+    normalizedEmail,
+    normalizedPhone,
+    phoneCandidates: getPhoneLookupCandidates(phoneCandidateSource)
+  };
+};
 const shouldExposeDevelopmentOtp =
   process.env.NODE_ENV !== 'production' && process.env.AUTH_EXPOSE_DEV_OTP === 'true';
 
@@ -112,25 +209,111 @@ const buildDisplayNameFromEmail = (email = '') => {
     .join(' ');
 };
 
+const USER_WITH_PROFILE_SELECT = `
+  SELECT u.id, u.email, u.phone, u.created_at, u.is_admin, dp.username, dp.first_name
+  FROM users u
+  LEFT JOIN dating_profiles dp ON dp.user_id = u.id
+`;
+
 const getUserWithProfileByEmail = async (email) => {
   const normalizedEmail = normalizeRecipient(email);
 
   return db.query(
-    `SELECT u.id, u.email, u.created_at, u.is_admin, dp.username, dp.first_name
-     FROM users u
-     LEFT JOIN dating_profiles dp ON dp.user_id = u.id
+    `${USER_WITH_PROFILE_SELECT}
      WHERE LOWER(u.email) = LOWER($1)
      LIMIT 1`,
     [normalizedEmail]
   );
 };
 
-const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerification = null } = {}) => {
+const getUserWithProfileByPhone = async (phone) => {
+  const phoneCandidates = getPhoneLookupCandidates(phone);
+
+  if (phoneCandidates.length === 0) {
+    return { rows: [] };
+  }
+
+  return db.query(
+    `${USER_WITH_PROFILE_SELECT}
+     WHERE u.phone = ANY($1::varchar[])
+     ORDER BY CASE WHEN u.phone = $2 THEN 0 ELSE 1 END
+     LIMIT 1`,
+    [phoneCandidates, normalizePhoneNumber(phone)]
+  );
+};
+
+const getUserWithProfileByIdentifier = async ({ identifierType, normalizedEmail, normalizedPhone }) => {
+  if (identifierType === 'phone') {
+    return getUserWithProfileByPhone(normalizedPhone);
+  }
+
+  if (identifierType === 'email') {
+    return getUserWithProfileByEmail(normalizedEmail);
+  }
+
+  return { rows: [] };
+};
+
+const assertPhoneAvailableForUser = async (phone, userId = null) => {
+  const normalizedPhone = normalizePhoneNumber(phone);
+
+  if (!normalizedPhone) {
+    return null;
+  }
+
+  const params = userId ? [normalizedPhone, userId] : [normalizedPhone];
+  const query = userId
+    ? 'SELECT id FROM users WHERE phone = $1 AND id <> $2 LIMIT 1'
+    : 'SELECT id FROM users WHERE phone = $1 LIMIT 1';
+  const existingUserResult = await db.query(query, params);
+
+  if (existingUserResult.rows.length > 0) {
+    throw createHttpError(409, 'That phone number is already linked to another account.');
+  }
+
+  return normalizedPhone;
+};
+
+const linkPhoneToUser = async (userId, phone) => {
+  const normalizedPhone = await assertPhoneAvailableForUser(phone, userId);
+
+  if (!normalizedPhone) {
+    return null;
+  }
+
+  const updateResult = await db.query(
+    `UPDATE users
+     SET phone = $1,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $2
+       AND (phone IS NULL OR phone = $1)
+     RETURNING phone`,
+    [normalizedPhone, userId]
+  );
+
+  if (updateResult.rows.length > 0) {
+    return updateResult.rows[0].phone;
+  }
+
+  const currentUserResult = await db.query(
+    'SELECT phone FROM users WHERE id = $1 LIMIT 1',
+    [userId]
+  );
+
+  return currentUserResult.rows[0]?.phone || null;
+};
+
+const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerification = null, phone = null } = {}) => {
   const normalizedEmail = normalizeRecipient(email);
+  const normalizedPhone = normalizePhoneNumber(phone);
   await syncAdminPrivilegesForEmail(normalizedEmail);
   const existingUserResult = await getUserWithProfileByEmail(normalizedEmail);
 
   if (existingUserResult.rows.length > 0) {
+    const linkedPhone = normalizedPhone
+      ? await linkPhoneToUser(existingUserResult.rows[0].id, normalizedPhone)
+      : existingUserResult.rows[0].phone || null;
+
     await db.query(
       `INSERT INTO user_preferences (user_id)
        VALUES ($1)
@@ -138,7 +321,10 @@ const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerificatio
       [existingUserResult.rows[0].id]
     );
 
-    return existingUserResult.rows[0];
+    return {
+      ...existingUserResult.rows[0],
+      phone: linkedPhone
+    };
   }
 
   if (!allowCreate) {
@@ -157,9 +343,10 @@ const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerificatio
   const fallbackName = buildDisplayNameFromEmail(normalizedEmail);
   const generatedPasswordHash = await hashPassword(uuidv4());
   const verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
+  await assertPhoneAvailableForUser(normalizedPhone);
   const createdUserResult = await db.query(
-    'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email, created_at, is_admin',
-    [normalizedEmail, generatedPasswordHash]
+    'INSERT INTO users (email, password, phone) VALUES ($1, $2, $3) RETURNING id, email, phone, created_at, is_admin',
+    [normalizedEmail, generatedPasswordHash, normalizedPhone || null]
   );
 
   const createdUser = createdUserResult.rows[0];
@@ -185,8 +372,16 @@ const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerificatio
   return hydratedUserResult.rows[0];
 };
 
-const findStoredOtpEntry = async ({ otpId, email, phone }) => {
-  const requestedRecipient = normalizeRecipient(email || phone);
+const findStoredOtpEntry = async ({ otpId, identifier, email, phone }) => {
+  const contact = resolveAuthContact({ identifier, email, phone });
+  const requestedValues = new Set(
+    [
+      contact.normalizedIdentifier,
+      contact.normalizedEmail,
+      contact.normalizedPhone,
+      ...contact.phoneCandidates
+    ].filter(Boolean)
+  );
 
   if (otpId) {
     const storedData = await getOTP(otpId);
@@ -195,18 +390,30 @@ const findStoredOtpEntry = async ({ otpId, email, phone }) => {
       return null;
     }
 
-    if (requestedRecipient && storedData.recipient !== requestedRecipient) {
+    const storedValues = new Set(
+      [
+        storedData.recipient,
+        storedData.loginIdentifier,
+        storedData.profilePhone,
+        ...(Array.isArray(storedData.phoneCandidates) ? storedData.phoneCandidates : [])
+      ].filter(Boolean)
+    );
+
+    if (
+      requestedValues.size > 0 &&
+      !Array.from(requestedValues).some((value) => storedValues.has(value))
+    ) {
       return null;
     }
 
     return { otpId, storedData };
   }
 
-  if (!requestedRecipient) {
+  if (!contact.normalizedEmail) {
     return null;
   }
 
-  return await findOTPByRecipient(requestedRecipient);
+  return await findOTPByRecipient(contact.normalizedEmail);
 };
 
 const findStoredPasswordResetEntry = ({ resetId, email }) => {
@@ -256,6 +463,7 @@ const buildAuthUserPayload = (userRecord) => {
   return {
     id: userRecord.id,
     email: userRecord.email,
+    phone: userRecord.phone || null,
     username: userRecord.username || null,
     name: displayName,
     avatar: displayName.charAt(0).toUpperCase(),
@@ -384,8 +592,9 @@ const respondWithActiveBan = async (res, userId) => {
 // SIGNUP
 router.post('/signup', async (req, res) => {
   try {
-    const { email, password, confirmPassword, ageVerification } = req.body;
+    const { email, password, confirmPassword, ageVerification, phone } = req.body;
     const normalizedEmail = normalizeRecipient(email);
+    const normalizedPhone = normalizePhoneNumber(phone);
 
     if (!normalizedEmail || !password || !confirmPassword) {
       return res.status(400).json({ error: 'Email and password required' });
@@ -419,11 +628,12 @@ router.post('/signup', async (req, res) => {
 
     // Hash password
     const hashedPassword = await hashPassword(password);
+    await assertPhoneAvailableForUser(normalizedPhone);
 
     // Create user
     const createdUserResult = await db.query(
-      'INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email, is_admin',
-      [normalizedEmail, hashedPassword]
+      'INSERT INTO users (email, password, phone) VALUES ($1, $2, $3) RETURNING id, email, phone, is_admin',
+      [normalizedEmail, hashedPassword, normalizedPhone || null]
     );
 
     const userId = createdUserResult.rows[0].id;
@@ -448,7 +658,7 @@ router.post('/signup', async (req, res) => {
     await syncAdminPrivilegesForEmail(normalizedEmail);
 
     const persistedUserResult = await db.query(
-      `SELECT id, email, is_admin
+      `SELECT id, email, phone, is_admin
        FROM users
        WHERE id = $1
        LIMIT 1`,
@@ -463,6 +673,7 @@ router.post('/signup', async (req, res) => {
       user: {
         id: persistedUser.id,
         email: persistedUser.email,
+        phone: persistedUser.phone || null,
         isAdmin: Boolean(persistedUser.is_admin),
         role: getAuthRole(persistedUser),
         registrationType: getRegistrationType(persistedUser)
@@ -470,33 +681,54 @@ router.post('/signup', async (req, res) => {
     });
   } catch (err) {
     console.error('Signup error:', err);
-    res.status(500).json({ error: 'Signup failed' });
+    res.status(err.status || 500).json({ error: err.message || 'Signup failed' });
   }
 });
 
 // LOGIN
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const normalizedEmail = normalizeRecipient(email);
+    const { email, password, identifier, phone } = req.body;
+    const contact = resolveAuthContact({ identifier, email, phone });
     const requestMetadata = getRequestMetadata(req);
 
-    if (!normalizedEmail || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
+    if (!contact.normalizedIdentifier || !password) {
+      return res.status(400).json({ error: 'Email or phone number and password required' });
     }
 
-    await syncAdminPrivilegesForEmail(normalizedEmail);
+    if (contact.identifierType === 'email') {
+      await syncAdminPrivilegesForEmail(contact.normalizedEmail);
+    }
 
     // Find user
-    const result = await db.query(
-      'SELECT id, email, password, is_admin FROM users WHERE email = $1',
-      [normalizedEmail]
-    );
+    const result =
+      contact.identifierType === 'phone'
+        ? await db.query(
+            `SELECT id, email, phone, password, is_admin
+             FROM users
+             WHERE phone = ANY($1::varchar[])
+             ORDER BY CASE WHEN phone = $2 THEN 0 ELSE 1 END
+             LIMIT 1`,
+            [contact.phoneCandidates, contact.normalizedPhone]
+          )
+        : await db.query(
+            `SELECT id, email, phone, password, is_admin
+             FROM users
+             WHERE LOWER(email) = LOWER($1)
+             LIMIT 1`,
+            [contact.normalizedEmail]
+          );
+
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = result.rows[0];
+
+    if (!user.is_admin && isConfiguredAdminEmail(user.email)) {
+      await syncAdminPrivilegesForEmail(user.email);
+      user.is_admin = true;
+    }
 
     // Check password
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -525,6 +757,7 @@ router.post('/login', async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
+        phone: user.phone || null,
         isAdmin: Boolean(user.is_admin),
         role: getAuthRole(user),
         registrationType: getRegistrationType(user)
@@ -608,7 +841,7 @@ router.get('/verify', async (req, res) => {
     try {
       const userId = decodedUser.userId || decodedUser.id;
       const result = await db.query(
-        `SELECT id, email, is_admin
+        `SELECT id, email, phone, is_admin
          FROM users
          WHERE id = $1
          LIMIT 1`,
@@ -635,6 +868,7 @@ router.get('/verify', async (req, res) => {
         user: {
           id: userRecord.id,
           email: userRecord.email,
+          phone: userRecord.phone || null,
           isAdmin: Boolean(userRecord.is_admin),
           role: getAuthRole(userRecord),
           registrationType: getRegistrationType(userRecord)
@@ -744,7 +978,7 @@ router.get('/me', async (req, res) => {
 
     // Get user data
     const result = await db.query(
-      'SELECT id, email, created_at, is_admin FROM users WHERE id = $1',
+      'SELECT id, email, phone, created_at, is_admin FROM users WHERE id = $1',
       [userId]
     );
 
@@ -812,7 +1046,7 @@ router.patch('/me', async (req, res) => {
        SET storefront_data = COALESCE(storefront_data, '{}')::jsonb || $1::jsonb,
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $2
-       RETURNING id, email, created_at, storefront_data, is_admin`,
+       RETURNING id, email, phone, created_at, storefront_data, is_admin`,
       [JSON.stringify(storefrontData), userId]
     );
 
@@ -954,39 +1188,34 @@ router.post('/contact-means', (req, res) => {
 // SEND OTP
 router.post('/send-otp', async (req, res) => {
   try {
-    const normalizedEmail = normalizeRecipient(req.body?.email);
-    const normalizedPhone = String(req.body?.phone || '').trim();
+    const contact = resolveAuthContact(req.body);
     const normalizedPurpose = String(req.body?.purpose || 'login').trim().toLowerCase();
     const otpPurpose = normalizedPurpose === 'signup' ? 'signup' : 'login';
     const requestedAgeVerification = req.body?.ageVerification || null;
+    const signupPhone = contact.normalizedPhone;
+    let otpRecipientEmail = contact.normalizedEmail;
+    let accountRecord = null;
 
-    if (!normalizedEmail && !normalizedPhone) {
+    if (!contact.normalizedIdentifier) {
       return res.status(400).json({ error: 'Email or phone number required' });
     }
 
-    if (normalizedPhone && !normalizedEmail) {
+    if (otpPurpose === 'signup' && contact.identifierType !== 'email') {
       return res.status(400).json({
-        error: 'Phone OTP is not available yet. Please use your email address.',
-        code: 'PHONE_OTP_UNAVAILABLE'
+        error: 'A valid email address is required to sign up.'
       });
     }
-
-    if (!isEmailAddress(normalizedEmail)) {
-      return res.status(400).json({
-        error: looksLikePhoneNumber(req.body?.email)
-          ? 'Phone OTP is not available yet. Please use your email address.'
-          : 'A valid email address is required.'
-      });
-    }
-
-    await syncAdminPrivilegesForEmail(normalizedEmail);
-    const existingUserResult = await getUserWithProfileByEmail(normalizedEmail);
-    const accountExists = existingUserResult.rows.length > 0;
 
     if (otpPurpose === 'signup') {
+      await syncAdminPrivilegesForEmail(contact.normalizedEmail);
+      const existingUserResult = await getUserWithProfileByEmail(contact.normalizedEmail);
+      const accountExists = existingUserResult.rows.length > 0;
+
       if (accountExists) {
         return res.status(409).json({ error: 'User already exists' });
       }
+
+      await assertPhoneAvailableForUser(signupPhone);
 
       const ageValidation = validateAgeVerification(requestedAgeVerification);
       if (!ageValidation.valid) {
@@ -1003,25 +1232,40 @@ router.post('/send-otp', async (req, res) => {
           code: 'UNDERAGE_USER'
         });
       }
-    } else if (!accountExists) {
-      return res.status(404).json({
-        error: 'No account found for that email address. Sign up first.',
-        code: 'ACCOUNT_NOT_FOUND'
-      });
+    } else {
+      const existingUserResult = await getUserWithProfileByIdentifier(contact);
+
+      if (existingUserResult.rows.length === 0) {
+        return res.status(404).json({
+          error:
+            contact.identifierType === 'phone'
+              ? 'No account found for that phone number. Sign up first.'
+              : 'No account found for that email address. Sign up first.',
+          code: 'ACCOUNT_NOT_FOUND'
+        });
+      }
+
+      accountRecord = existingUserResult.rows[0];
+      otpRecipientEmail = accountRecord.email;
+      await syncAdminPrivilegesForEmail(otpRecipientEmail);
     }
 
     // Generate a random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpId = uuidv4();
     const developmentOtpPayload = buildDevelopmentOtpPayload(otp);
-    const maskedEmail = maskRecipient(normalizedEmail);
+    const maskedEmail = maskRecipient(otpRecipientEmail);
 
     // Store OTP with 10-minute expiration in Redis
     await storeOTP(otpId, {
       otp,
-      recipient: normalizedEmail,
+      recipient: otpRecipientEmail,
       channel: 'email',
       purpose: otpPurpose,
+      loginIdentifier: contact.normalizedIdentifier,
+      profilePhone: otpPurpose === 'signup' ? signupPhone || null : null,
+      phoneCandidates: contact.phoneCandidates,
+      userId: accountRecord?.id || null,
       ageVerification:
         otpPurpose === 'signup'
           ? {
@@ -1034,7 +1278,7 @@ router.post('/send-otp', async (req, res) => {
 
     console.info('OTP generated for recipient', {
       otpId,
-      recipient: maskRecipient(normalizedEmail),
+      recipient: maskRecipient(otpRecipientEmail),
       channel: 'email'
     });
 
@@ -1042,12 +1286,15 @@ router.post('/send-otp', async (req, res) => {
       if (shouldExposeDevelopmentOtp) {
         console.warn('Email OTP fallback enabled because SMTP is not configured', {
           otpId,
-          recipient: maskRecipient(normalizedEmail)
+          recipient: maskRecipient(otpRecipientEmail)
         });
 
         return res.json({
           success: true,
-          message: 'Email delivery is unavailable. Development OTP fallback is enabled.',
+          message:
+            contact.identifierType === 'phone'
+              ? 'Email delivery is unavailable. Development OTP fallback is enabled for the email linked to this phone number.'
+              : 'Email delivery is unavailable. Development OTP fallback is enabled.',
           otpId,
           ...developmentOtpPayload
         });
@@ -1067,7 +1314,7 @@ router.post('/send-otp', async (req, res) => {
 
       const mailResult = await transporter.sendMail({
         from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-        to: normalizedEmail,
+        to: otpRecipientEmail,
         subject: 'Your LinkUp OTP Code',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1086,7 +1333,10 @@ router.post('/send-otp', async (req, res) => {
 
       return res.json({
         success: true,
-        message: 'OTP sent successfully to your email',
+        message:
+          contact.identifierType === 'phone'
+            ? 'OTP sent successfully to the email linked to this phone number'
+            : 'OTP sent successfully to your email',
         otpId
       });
     } catch (emailError) {
@@ -1100,12 +1350,15 @@ router.post('/send-otp', async (req, res) => {
       if (shouldExposeDevelopmentOtp) {
         console.warn('Email OTP fallback enabled because SMTP delivery failed', {
           otpId,
-          recipient: maskRecipient(normalizedEmail)
+          recipient: maskRecipient(otpRecipientEmail)
         });
 
         return res.json({
           success: true,
-          message: 'Email delivery failed. Development OTP fallback is enabled.',
+          message:
+            contact.identifierType === 'phone'
+              ? 'Email delivery failed. Development OTP fallback is enabled for the email linked to this phone number.'
+              : 'Email delivery failed. Development OTP fallback is enabled.',
           otpId,
           ...developmentOtpPayload
         });
@@ -1127,7 +1380,7 @@ router.post('/send-otp', async (req, res) => {
     }
   } catch (error) {
     console.error('Send OTP error:', error);
-    res.status(500).json({ error: 'Failed to send OTP', details: error.message });
+    res.status(error.status || 500).json({ error: error.message || 'Failed to send OTP' });
   }
 });
 
@@ -1136,14 +1389,28 @@ router.all('/send-otp', methodNotAllowed('POST'));
 // VERIFY OTP
 router.post('/verify-otp', async (req, res) => {
   try {
-    const { otpId, otp, email, phone, fullName, username, location, city, state, country, bio } = req.body;
+    const {
+      otpId,
+      otp,
+      identifier,
+      email,
+      phone,
+      fullName,
+      username,
+      location,
+      city,
+      state,
+      country,
+      bio
+    } = req.body;
     const requestMetadata = getRequestMetadata(req);
+    const contact = resolveAuthContact({ identifier, email, phone });
 
     if (!otp) {
       return res.status(400).json({ error: 'OTP required' });
     }
 
-    const otpEntry = await findStoredOtpEntry({ otpId, email, phone });
+    const otpEntry = await findStoredOtpEntry({ otpId, identifier, email, phone });
     if (!otpEntry) {
       return res.status(400).json({ error: 'Invalid or expired OTP request' });
     }
@@ -1171,11 +1438,11 @@ router.post('/verify-otp', async (req, res) => {
 
     const recipientEmail = storedData.recipient.includes('@')
       ? storedData.recipient
-      : normalizeRecipient(email);
+      : contact.normalizedEmail;
 
     if (!isEmailAddress(recipientEmail)) {
       return res.status(400).json({
-        error: 'Phone OTP verification is not available yet. Please request an email OTP instead.'
+        error: 'A valid email address is required to complete OTP verification.'
       });
     }
 
@@ -1187,7 +1454,8 @@ router.post('/verify-otp', async (req, res) => {
       const otpPurpose = storedData.purpose === 'signup' ? 'signup' : 'login';
       const userRecord = await ensureUserForOtpLogin(recipientEmail, {
         allowCreate: otpPurpose === 'signup',
-        ageVerification: storedData.ageVerification || null
+        ageVerification: storedData.ageVerification || null,
+        phone: otpPurpose === 'signup' ? storedData.profilePhone || null : null
       });
       const profileRecord = await applyOtpRegistrationProfile(userRecord.id, recipientEmail, {
         fullName,
@@ -1201,6 +1469,7 @@ router.post('/verify-otp', async (req, res) => {
 
       authenticatedUser = buildAuthUserPayload({
         ...userRecord,
+        phone: userRecord.phone || storedData.profilePhone || null,
         username: profileRecord?.username || userRecord.username,
         first_name: profileRecord?.first_name || userRecord.first_name
       });

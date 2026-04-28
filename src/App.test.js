@@ -179,10 +179,11 @@ test("opens the simplified login flow", async () => {
   fireEvent.click(await screen.findByRole("button", { name: /login/i }));
 
   expect(
-    screen.getByRole("heading", { level: 2, name: /verify your email/i })
+    screen.getByRole("heading", { level: 2, name: /verify your account/i })
   ).toBeInTheDocument();
   expect(screen.getByRole("heading", { level: 1, name: /linkup/i })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /send email otp/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /send login otp/i })).toBeInTheDocument();
+  expect(screen.getByLabelText(/email address or phone number/i)).toBeInTheDocument();
   expect(screen.queryByRole("group", { name: /business categories/i })).not.toBeInTheDocument();
   expect(screen.queryByText(/seller dashboard/i)).not.toBeInTheDocument();
 });
@@ -196,6 +197,7 @@ test("opens the dating signup flow from the launch screen", async () => {
     screen.getByRole("heading", { level: 1, name: /create your dating profile/i })
   ).toBeInTheDocument();
   expect(screen.getByRole("heading", { level: 2, name: /create your account/i })).toBeInTheDocument();
+  expect(screen.getByLabelText(/phone number \(optional\)/i)).toBeInTheDocument();
   expect(screen.getByText(/real matches, safe dates, better conversations/i)).toBeInTheDocument();
 });
 

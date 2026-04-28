@@ -27,10 +27,10 @@ export const authService = {
   /**
    * User login
    */
-  login: async (email, password) => {
+  login: async (identifier, password) => {
     try {
       const response = await axios.post(`${API_URL}/login`, {
-        email,
+        identifier,
         password
       });
       return response.data;
