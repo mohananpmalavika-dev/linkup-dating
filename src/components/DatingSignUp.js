@@ -3,6 +3,7 @@ import axios from 'axios';
 import { getTranslationValue } from '../data/translations';
 import { API_BASE_URL } from '../utils/api';
 import { isValidPincode } from '../utils/ecommerceHelpers';
+import { formatPhoneForFirebase, isValidPhoneFormat, getPhoneErrorMessage } from '../utils/phoneFormatter';
 import {
   KERALA_REGION_OPTIONS,
   getDistrictOptionsForRegion,
@@ -296,6 +297,20 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     if (otpMethod === 'phone' && !phone.trim()) {
       setError('Please enter your phone number to receive OTP via SMS');
       return;
+    }
+
+    // Format and validate phone for Firebase SMS
+    if (otpMethod === 'phone') {
+      const formattedPhone = formatPhoneForFirebase(phone);
+      const phoneError = getPhoneErrorMessage(formattedPhone);
+      
+      if (phoneError) {
+        setError(phoneError);
+        return;
+      }
+      
+      // Update phone state with formatted version
+      setPhone(formattedPhone);
     }
 
     if (otpMethod === 'email' && !normalizedEmail) {
@@ -887,12 +902,12 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+91 98765 43210"
+                      placeholder="+91 9876543210 or 10-digit number"
                       disabled={loading}
                       autoComplete="tel"
                     />
                     <small className="helper-text">
-                      Indian phone numbers are supported. Format: +91 or 10-digit number
+                      Indian phone numbers supported. Format: +91XXXXXXXXXX (country code + 10 digits)
                     </small>
                   </div>
                 )}

@@ -21,7 +21,7 @@ const {
 } = require('../utils/adminAccess');
 const { getActiveBanForUser } = require('../utils/moderation');
 const { storeOTP, getOTP, incrementOTPAttempts, deleteOTP, findOTPByRecipient, MAX_OTP_ATTEMPTS } = require('../utils/redis');
-const { isTwilioConfigured, sendPhoneOTP } = require('../utils/twilio');
+const { isFirebaseConfigured: isFirebaseSMSConfigured, sendPhoneOTP } = require('../utils/firebaseSMS');
 const { verifyFirebaseIdToken } = require('../config/firebase');
 
 // Email transporter configuration - recreated on each request to ensure env vars are loaded
@@ -1358,21 +1358,22 @@ router.post('/send-otp', async (req, res) => {
       channel: otpChannel
     });
 
-    // Phone OTP via Twilio
+    // Phone OTP via Firebase
     if (otpChannel === 'phone') {
-      if (isTwilioConfigured()) {
+      if (isFirebaseSMSConfigured()) {
         const smsResult = await sendPhoneOTP(deliveryTarget, otp);
 
         if (smsResult.success) {
           return res.json({
             success: true,
-            message: 'OTP sent successfully to your phone number',
+            message: 'OTP sent successfully to your phone number via Firebase SMS',
             otpId,
-            channel: 'phone'
+            channel: 'phone',
+            phone: maskedRecipient
           });
         }
 
-        // If Twilio fails and dev mode, fall through to dev OTP
+        // If Firebase SMS fails and dev mode, fall through to dev OTP
         if (!shouldExposeDevelopmentOtp) {
           await deleteOTP(otpId);
           return res.status(500).json({
@@ -1381,9 +1382,9 @@ router.post('/send-otp', async (req, res) => {
         }
       }
 
-      // Twilio not configured or failed - dev fallback
+      // Firebase not configured or failed - dev fallback
       if (shouldExposeDevelopmentOtp) {
-        console.warn('Phone OTP fallback enabled because Twilio is not configured or failed', {
+        console.warn('Phone OTP fallback enabled because Firebase SMS is not configured', {
           otpId,
           recipient: maskedRecipient
         });
