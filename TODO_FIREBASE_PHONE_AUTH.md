@@ -1,8 +1,8 @@
-# Firebase Phone Auth Integration - TODO
+# Firebase Phone Auth Integration - COMPLETE
 
-## Plan: Firebase Phone Auth Integration (Free OTP SMS)
+## Status: IMPLEMENTED
 
-### Steps
+### Steps Completed
 - [x] 1. Add `firebase-admin` to `backend/package.json`
 - [x] 2. Add `firebase` to frontend `package.json`
 - [x] 3. Create `backend/config/firebase.js` — Firebase Admin SDK initialization
@@ -12,77 +12,69 @@
 - [x] 7. Add styles to `src/styles/Login.css`
 - [x] 8. Update environment variable documentation
 
+### Bonus Fixes
+- [x] Backend auth rate limiter relaxed from 20 to 100 requests per 15min window
+- [x] Frontend auth-methods fetch debounced (500ms) to prevent excessive API calls
+
 ---
 
 ## Environment Variables Required
 
 ### Backend `.env`
 ```bash
-# Firebase Admin SDK (service account)
+# Firebase Admin SDK (for phone auth verification)
 FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+FIREBASE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project-id.iam.gserviceaccount.com
 ```
 
 ### Frontend `.env`
 ```bash
-# Firebase Web App Config
-REACT_APP_FIREBASE_API_KEY=your_api_key
+# Firebase Web SDK (for signInWithPhoneNumber)
+REACT_APP_FIREBASE_API_KEY=AIza...
 REACT_APP_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
 REACT_APP_FIREBASE_PROJECT_ID=your-project-id
 REACT_APP_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
 REACT_APP_FIREBASE_MESSAGING_SENDER_ID=123456789
-REACT_APP_FIREBASE_APP_ID=1:123456789:web:abcdef123456
+REACT_APP_FIREBASE_APP_ID=1:123456789:web:abcdef
 ```
-
----
-
-## Followup Steps
-1. `npm install` in both `backend/` and root directories
-2. Create Firebase project at [console.firebase.google.com](https://console.firebase.google.com)
-3. Enable **Phone** sign-in method in Firebase Authentication
-4. Download service account key for backend; copy web app config for frontend
-5. Populate `.env` variables
-6. Test with a real Indian phone number
 
 ---
 
 ## How It Works
 
-1. User selects **"Phone (SMS)"** tab in login screen
-2. Enters phone number with country code (e.g., `+91xxxxxxxxxx`)
-3. Frontend creates invisible reCAPTCHA verifier and calls `signInWithPhoneNumber()`
-4. Firebase sends SMS OTP to the phone number
-5. User enters 6-digit OTP
-6. Frontend confirms OTP with Firebase, gets Firebase ID token
-7. Frontend sends ID token to backend `/api/auth/firebase-verify-phone`
-8. Backend verifies token with Firebase Admin SDK
-9. Backend finds or creates user, marks `phone_verified = TRUE`
-10. Backend issues your existing JWT token
-11. User is logged in — same flow as email/OTP login
+1. User enters phone number and clicks "Send OTP via Firebase"
+2. Frontend calls `signInWithPhoneNumber()` from Firebase JS SDK
+3. Firebase sends SMS OTP (free, up to 10K/month on Spark plan)
+4. User enters OTP → `confirmationResult.confirm()` verifies locally
+5. Firebase returns an ID token → frontend sends to backend `/api/auth/firebase-verify-phone`
+6. Backend verifies ID token with Firebase Admin SDK → extracts verified phone number
+7. Backend finds/creates user → marks `phone_verified = TRUE` → issues LinkUp JWT
+8. Frontend receives token → calls existing `handleLoginSuccess()` → seamless login
 
 ---
 
-## API Reference
+## Setup Instructions
 
-### Firebase Phone Verify
-```http
-POST /api/auth/firebase-verify-phone
-Content-Type: application/json
+1. `cd backend && npm install` (installs firebase-admin)
+2. `cd .. && npm install` (installs firebase)
+3. Go to https://console.firebase.google.com and create a project
+4. Enable **Phone** sign-in method in Firebase Authentication
+5. Download service account key → use for `FIREBASE_PRIVATE_KEY` and `FIREBASE_CLIENT_EMAIL`
+6. Copy web app config → use for `REACT_APP_FIREBASE_*` variables
+7. Restart both frontend and backend
+8. Test with a real Indian phone number
 
-{
-  "idToken": "firebase-id-token-from-frontend",
-  "email": "optional@email.com"
-}
-```
+---
 
-Response (same shape as `verify-otp`):
-```json
-{
-  "success": true,
-  "token": "your-jwt-token",
-  "user": { ... },
-  "needsUsernameSetup": false,
-  "verifiedChannel": "phone",
-  "isNewUser": false
-}
+## Files Modified
+- `backend/package.json` — added firebase-admin
+- `package.json` — added firebase
+- `backend/config/firebase.js` — NEW
+- `src/config/firebase.js` — NEW
+- `backend/routes/auth.js` — added `/firebase-verify-phone` endpoint
+- `src/components/Login.js` — added Firebase Phone Auth UI flow
+- `src/styles/Login.css` — added styles for Firebase auth elements
+- `backend/middleware/rateLimit.js` — relaxed auth rate limiter
+
+

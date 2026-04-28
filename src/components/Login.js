@@ -75,6 +75,7 @@ const Login = ({
   const [firebaseConfirmationResult, setFirebaseConfirmationResult] = useState(null);
   const recaptchaContainerRef = useRef(null);
   const recaptchaVerifierRef = useRef(null);
+  const fetchAuthMethodsTimeoutRef = useRef(null);
 
   const {
     recognitionSupported,
@@ -137,9 +138,12 @@ const Login = ({
     resetFirebaseFlow();
   };
 
-  // Cleanup reCAPTCHA on unmount
+  // Cleanup reCAPTCHA and debounce timeout on unmount
   useEffect(() => {
     return () => {
+      if (fetchAuthMethodsTimeoutRef.current) {
+        clearTimeout(fetchAuthMethodsTimeoutRef.current);
+      }
       if (recaptchaVerifierRef.current) {
         try {
           recaptchaVerifierRef.current.clear();
@@ -159,20 +163,27 @@ const Login = ({
     startListening(fieldKey, updateValue);
   };
 
-  const fetchAuthMethods = async (value) => {
+  const fetchAuthMethods = (value) => {
+    if (fetchAuthMethodsTimeoutRef.current) {
+      clearTimeout(fetchAuthMethodsTimeoutRef.current);
+    }
+
     const trimmed = value.trim();
     if (!trimmed) {
       setAuthMethods(null);
       return;
     }
-    try {
-      const response = await axios.get(`${API_BASE_URL}/auth/auth-methods`, {
-        params: { identifier: trimmed }
-      });
-      setAuthMethods(response.data);
-    } catch {
-      setAuthMethods(null);
-    }
+
+    fetchAuthMethodsTimeoutRef.current = setTimeout(async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/auth/auth-methods`, {
+          params: { identifier: trimmed }
+        });
+        setAuthMethods(response.data);
+      } catch {
+        setAuthMethods(null);
+      }
+    }, 500);
   };
 
   const renderFieldVoiceActions = (fieldKey, speakText, onVoiceResult) => (

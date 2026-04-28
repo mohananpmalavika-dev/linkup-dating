@@ -391,6 +391,33 @@ const AdminIPBlockingPanel = () => {
     }
   };
 
+  // Unblock an IP from account creation limiting
+  const handleUnblockAccountCreationIP = async (ip) => {
+    if (!window.confirm(`Unblock ${ip} from account creation limiting?`)) return;
+
+    try {
+      setError(null);
+      setSuccess(null);
+      setLoading(true);
+
+      const response = await fetch(`/api/admin/ip-blocking/account-creation/unblock/${ip}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Failed to unblock IP');
+      const data = await response.json();
+      if (data.success) {
+        setSuccess(`✓ IP ${ip} unblocked from account creation limiting`);
+        fetchLimitedIPs();
+      }
+    } catch (err) {
+      setError(`Error unblocking IP: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Reset account creation count for an IP
   const handleResetIP = async (ip) => {
     if (!window.confirm(`Reset account creation count for ${ip}?`)) return;
@@ -652,7 +679,7 @@ const AdminIPBlockingPanel = () => {
       )}
 
       {/* Statistics Tab */}
-      {activeTab === 'stats' && (
+      {activeTab === 'age_stats' && (
         <div className="tab-content stats-tab">
           {stats ? (
             <div className="stats-grid">
@@ -677,6 +704,157 @@ const AdminIPBlockingPanel = () => {
             <p>Loading statistics...</p>
           ) : (
             <p>Failed to load statistics</p>
+          )}
+        </div>
+      )}
+
+      {/* Account Creation Settings Tab */}
+      {activeTab === 'ac_settings' && (
+        <div className="tab-content settings-tab">
+          <div className="settings-card">
+            <h3>Account Creation Rate Limiting</h3>
+            <p className="help-text">Prevent spam by limiting accounts created from same IP address</p>
+            
+            <div className="setting-row">
+              <label>Current Threshold:</label>
+              <span className="current-value">{accountCreationSettings.threshold || 2} accounts per IP</span>
+            </div>
+
+            <div className="setting-row">
+              <label htmlFor="threshold-input">Max Accounts Per IP:</label>
+              <input
+                id="threshold-input"
+                type="number"
+                min="1"
+                max="100"
+                value={newThreshold}
+                onChange={(e) => setNewThreshold(e.target.value)}
+                placeholder="e.g., 2, 24, 37"
+              />
+              <small>(After this limit is reached, the IP is blocked from creating more accounts. Examples: 2, 24, 37)</small>
+            </div>
+
+            <button 
+              className="btn btn-primary"
+              onClick={handleUpdateThreshold}
+              disabled={loading}
+            >
+              {loading ? 'Updating...' : 'Update Threshold'}
+            </button>
+          </div>
+
+          <div className="settings-card">
+            <h3>Block Duration for Account Creation Spam</h3>
+            <p className="help-text">How long to block an IP after exceeding account creation limit</p>
+            
+            <div className="setting-row">
+              <label>Current Duration:</label>
+              <span className="current-value">{formatDuration(accountCreationSettings.blockDurationHours || 24)}</span>
+            </div>
+
+            <div className="setting-row">
+              <label htmlFor="ac-duration-input">Block Duration (hours):</label>
+              <input
+                id="ac-duration-input"
+                type="number"
+                min="1"
+                max="168"
+                value={newACDuration}
+                onChange={(e) => setNewACDuration(e.target.value)}
+                placeholder="e.g., 24, 37"
+              />
+              <small>(1 = 1 hour, 24 = 1 day, 37 = 1.5 days, 168 = 1 week)</small>
+            </div>
+
+            <button 
+              className="btn btn-primary"
+              onClick={handleUpdateACDuration}
+              disabled={loading}
+            >
+              {loading ? 'Updating...' : 'Update Block Duration'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Account Creation Limited IPs Tab */}
+      {activeTab === 'ac_ips' && (
+        <div className="tab-content ips-tab">
+          {limitedIPs.length > 0 ? (
+            <div className="ips-list-card">
+              <h3>📋 IPs Exceeding Account Creation Limit ({limitedIPs.length})</h3>
+              <div className="ips-table">
+                <div className="table-header">
+                  <div className="col-ip">IP Address</div>
+                  <div className="col-count">Accounts</div>
+                  <div className="col-status">Status</div>
+                  <div className="col-action">Action</div>
+                </div>
+                {limitedIPs.map((item) => (
+                  <div key={item.ipAddress} className="table-row">
+                    <div className="col-ip">{item.ipAddress}</div>
+                    <div className="col-count">{item.accountCount}/{accountCreationSettings.threshold || 2}</div>
+                    <div className="col-status">{item.isBlocked ? '🚫 Blocked' : '⚠️ Limited'}</div>
+                    <div className="col-action">
+                      {item.isBlocked ? (
+                        <button
+                          className="btn btn-small btn-unblock"
+                          onClick={() => handleUnblockAccountCreationIP(item.ipAddress)}
+                          disabled={loading}
+                        >
+                          Unblock
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-small btn-block"
+                          onClick={() => {
+                            setManualBlockIP(item.ipAddress);
+                            setManualBlockReason('account_spam');
+                          }}
+                          disabled={loading}
+                        >
+                          Block
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <p>✓ No IPs exceeding account creation limit</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Account Creation Statistics Tab */}
+      {activeTab === 'ac_stats' && (
+        <div className="tab-content stats-tab">
+          {acStats ? (
+            <div className="stats-grid">
+              <div className="stat-card">
+                <div className="stat-value">{acStats.totalIPsTracked || 0}</div>
+                <div className="stat-label">IPs Tracked</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value">{acStats.ipsExceedingLimit || 0}</div>
+                <div className="stat-label">Exceeding Limit</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value">{acStats.currentlyBlocked || 0}</div>
+                <div className="stat-label">Currently Blocked</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-value">{acStats.totalAccountsCreated || 0}</div>
+                <div className="stat-label">Total Accounts</div>
+              </div>
+            </div>
+          ) : loading ? (
+            <p>Loading account creation statistics...</p>
+          ) : (
+            <p>Failed to load account creation statistics</p>
           )}
         </div>
       )}

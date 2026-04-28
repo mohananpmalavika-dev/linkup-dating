@@ -10,7 +10,7 @@ const AdminSettingsService = require('./adminSettingsService');
 class AccountCreationLimitService {
   /**
    * Get the configured account creation limit threshold
-   * Default: 3 accounts per IP before blocking
+   * Default: 2 accounts per IP before blocking (user can create max 2 accounts)
    */
   static async getAccountCreationThreshold() {
     try {
@@ -19,22 +19,22 @@ class AccountCreationLimitService {
       });
 
       if (setting) {
-        return parseInt(setting.settingValue, 10) || 3;
+        return parseInt(setting.settingValue, 10) || 2;
       }
 
       // If setting doesn't exist, create default
       await AdminSetting.create({
         settingKey: 'account_creation_limit_threshold',
-        settingValue: '3',
+        settingValue: '2',
         settingType: 'integer',
         category: 'account_creation',
-        description: 'Maximum accounts allowed per IP before blocking'
+        description: 'Maximum accounts allowed per IP before blocking (configurable: 2, 24, 37, etc.)'
       });
 
-      return 3;
+      return 2;
     } catch (err) {
       console.error('Error getting account creation threshold:', err);
-      return 3; // Default
+      return 2; // Default
     }
   }
 

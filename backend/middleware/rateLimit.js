@@ -54,7 +54,7 @@ const apiLimiter = createRateLimiter({
 
 const authLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 100,
   skipSuccessfulRequests: true,
   message: {
     error: 'Too many login attempts. Please try again later.'
@@ -127,3 +127,4 @@ module.exports = {
   interactionLimiter,
   reportLimiter
 };
+
