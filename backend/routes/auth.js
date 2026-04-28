@@ -364,8 +364,8 @@ const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerificatio
   );
 
   await db.query(
-    `INSERT INTO user_preferences (user_id)
-     VALUES ($1)
+    `INSERT INTO user_preferences (user_id, created_at, updated_at)
+       VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
      ON CONFLICT (user_id) DO NOTHING`,
     [createdUser.id]
   );
@@ -657,11 +657,9 @@ router.post('/signup', async (req, res) => {
 
     // Create user preferences
     await db.query(
-      'INSERT INTO user_preferences (user_id) VALUES ($1)',
+      'INSERT INTO user_preferences (user_id, created_at, updated_at) VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
       [userId]
     );
-
-    await syncAdminPrivilegesForEmail(normalizedEmail);
 
     const persistedUserResult = await db.query(
       `SELECT id, email, phone, is_admin
@@ -1825,8 +1823,8 @@ router.post('/set-username', async (req, res) => {
     );
 
     await db.query(
-      `INSERT INTO user_preferences (user_id)
-       VALUES ($1)
+      `INSERT INTO user_preferences (user_id, created_at, updated_at)
+       VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO NOTHING`,
       [userId]
     );

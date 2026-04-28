@@ -163,7 +163,7 @@ router.post('/complete-signup-with-age', async (req, res) => {
 
       // Create user preferences
       await client.query(
-        'INSERT INTO user_preferences (user_id) VALUES ($1)',
+        'INSERT INTO user_preferences (user_id, created_at, updated_at) VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
         [userId]
       );
 
