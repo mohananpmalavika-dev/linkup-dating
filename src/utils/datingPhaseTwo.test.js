@@ -27,6 +27,22 @@ describe('datingPhaseTwo helpers', () => {
     );
   });
 
+  test('treats Trivandrum as Thiruvananthapuram for Kerala-local identity packs', () => {
+    const pack = buildLocalIdentityPack({
+      location: {
+        city: 'Trivandrum',
+        locality: 'Kowdiar',
+        district: 'Thiruvananthapuram',
+        keralaRegion: 'south'
+      }
+    });
+
+    expect(pack.cityVibe).toBe('Coastal-and-composed');
+    expect(pack.culturalBadges.map((badge) => badge.label)).toEqual(
+      expect.arrayContaining(['Kowdiar nearby', 'Thiruvananthapuram local', 'South Kerala'])
+    );
+  });
+
   test('builds a clearer trust summary with ladder steps and warnings', () => {
     const summary = buildTrustSummary({
       profile: {

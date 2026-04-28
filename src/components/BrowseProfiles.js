@@ -1,7 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import '../styles/BrowseProfiles.css';
 import datingProfileService from '../services/datingProfileService';
+import { isValidPincode } from '../utils/ecommerceHelpers';
 import { buildLocalIdentityPack, buildTrustSummary } from '../utils/datingPhaseTwo';
+import {
+  formatProfileLocation,
+  getDistrictOptionsForRegion,
+  KERALA_REGION_OPTIONS,
+  normalizePincodeInput,
+  resolveKeralaLocation
+} from '../utils/keralaLocation';
 
 const defaultFilters = {
   ageRange: { min: 18, max: 65 },
@@ -14,6 +22,10 @@ const defaultFilters = {
   languages: [],
   conversationStyle: '',
   city: '',
+  district: '',
+  locality: '',
+  pincode: '',
+  keralaRegion: '',
   onlyVerifiedProfiles: false,
   communityPreference: ''
 };
@@ -68,6 +80,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   const [filters, setFilters] = useState(defaultFilters);
   const [favoriteUserIds, setFavoriteUserIds] = useState(new Set());
   const [searchHistory, setSearchHistory] = useState([]);
+  const districtOptions = getDistrictOptionsForRegion(filters.keralaRegion);
 
   const loadSavedState = useCallback(async () => {
     try {
@@ -156,6 +169,13 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
   };
 
   const handleApplyFilters = () => {
+    const normalizedPincode = normalizePincodeInput(filters.pincode);
+
+    if (normalizedPincode && !isValidPincode(normalizedPincode)) {
+      setError('Use a valid 6-digit pincode to narrow Kerala discovery.');
+      return;
+    }
+
     const apiFilters = {
       ageRange: filters.ageRange,
       relationshipGoals: filters.relationshipGoals,
@@ -167,14 +187,20 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       languages: filters.languages,
       conversationStyle: filters.conversationStyle,
       city: filters.city,
+      district: filters.district,
+      locality: filters.locality,
+      pincode: normalizedPincode,
+      keralaRegion: filters.keralaRegion,
       onlyVerifiedProfiles: filters.onlyVerifiedProfiles,
       communityPreference: filters.communityPreference
     };
+    setError('');
     searchProfiles(apiFilters);
     setShowFilters(false);
   };
 
   const handleResetFilters = () => {
+    setError('');
     setFilters(defaultFilters);
     searchProfiles(defaultFilters);
     setShowFilters(false);
@@ -202,6 +228,10 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
         : defaultFilters.languages,
       conversationStyle: entry.filters?.conversationStyle || defaultFilters.conversationStyle,
       city: entry.filters?.city || defaultFilters.city,
+      district: entry.filters?.district || defaultFilters.district,
+      locality: entry.filters?.locality || defaultFilters.locality,
+      pincode: entry.filters?.pincode || defaultFilters.pincode,
+      keralaRegion: entry.filters?.keralaRegion || defaultFilters.keralaRegion,
       onlyVerifiedProfiles: Boolean(entry.filters?.onlyVerifiedProfiles),
       communityPreference: entry.filters?.communityPreference || defaultFilters.communityPreference
     };
@@ -223,7 +253,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       <div className="browse-header">
         <div>
           <h1>Browse Profiles</h1>
-          <p className="browse-subtitle">Search by age, height, goals, and shared interests.</p>
+          <p className="browse-subtitle">Search by age, goals, interests, and tighter Kerala locality signals.</p>
         </div>
         <button
           type="button"
@@ -435,6 +465,104 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
+            <label htmlFor="district-filter">District</label>
+            <select
+              id="district-filter"
+              value={filters.district}
+              onChange={(event) =>
+                setFilters((currentFilters) => {
+                  const nextLocation = resolveKeralaLocation({
+                    city: currentFilters.city,
+                    district: event.target.value,
+                    locality: currentFilters.locality,
+                    pincode: currentFilters.pincode,
+                    keralaRegion: currentFilters.keralaRegion
+                  });
+
+                  return {
+                    ...currentFilters,
+                    district: nextLocation.district,
+                    keralaRegion: nextLocation.keralaRegion
+                  };
+                })
+              }
+            >
+              <option value="">Any district</option>
+              {districtOptions.map((district) => (
+                <option key={district.value} value={district.value}>
+                  {district.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="locality-filter">Locality Or Neighborhood</label>
+            <input
+              id="locality-filter"
+              type="text"
+              value={filters.locality}
+              onChange={(event) =>
+                setFilters((currentFilters) => ({
+                  ...currentFilters,
+                  locality: event.target.value
+                }))
+              }
+              placeholder="Fort Kochi, Kakkanad, Kowdiar..."
+            />
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="pincode-filter">Pincode</label>
+            <input
+              id="pincode-filter"
+              type="text"
+              inputMode="numeric"
+              value={filters.pincode}
+              onChange={(event) =>
+                setFilters((currentFilters) => ({
+                  ...currentFilters,
+                  pincode: normalizePincodeInput(event.target.value)
+                }))
+              }
+              placeholder="682030"
+              maxLength="6"
+            />
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="kerala-region-filter">Kerala Region</label>
+            <select
+              id="kerala-region-filter"
+              value={filters.keralaRegion}
+              onChange={(event) =>
+                setFilters((currentFilters) => {
+                  const nextLocation = resolveKeralaLocation({
+                    city: currentFilters.city,
+                    district: '',
+                    locality: currentFilters.locality,
+                    pincode: currentFilters.pincode,
+                    keralaRegion: event.target.value
+                  });
+
+                  return {
+                    ...currentFilters,
+                    district: '',
+                    keralaRegion: nextLocation.keralaRegion
+                  };
+                })
+              }
+            >
+              <option value="">Any Kerala region</option>
+              {KERALA_REGION_OPTIONS.map((region) => (
+                <option key={region.value} value={region.value}>
+                  {region.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="filter-group">
             <label htmlFor="community-filter">Community Or Culture</label>
             <input
               id="community-filter"
@@ -465,7 +593,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </label>
 
           <p className="filter-hint">
-            Premium filters now include languages, city match, conversation style, and verified-only discovery.
+            Premium filters now include district, locality, pincode, Kerala-region targeting, and verified-only discovery.
           </p>
 
           <div className="filters-actions">
@@ -525,6 +653,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           {profiles.map((profile) => {
             const identityPack = buildLocalIdentityPack(profile);
             const trustSummary = buildTrustSummary({ profile });
+            const locationLabel = formatProfileLocation(profile.location);
 
             return (
               <div key={profile.userId} className="profile-card-grid">
@@ -549,7 +678,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
                 <div className="profile-card-info">
                   <h3>{profile.firstName}, {profile.age}</h3>
                   <p className="location">
-                    {profile.location?.city || 'Location unavailable'}
+                    {locationLabel || 'Location unavailable'}
                     {profile.distanceKm ? ` · ${profile.distanceKm} km` : ''}
                   </p>
                   <p className="bio-preview">{truncateText(profile.bio)}</p>

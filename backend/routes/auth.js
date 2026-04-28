@@ -55,6 +55,40 @@ const getRequestMetadata = (req) => ({
 });
 
 const isStrongPassword = (value = '') => String(value || '').length >= 8;
+const isEmailAddress = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeRecipient(value));
+const looksLikePhoneNumber = (value = '') => /^\+?[0-9\s()-]{7,}$/.test(String(value || '').trim());
+const shouldExposeDevelopmentOtp =
+  process.env.NODE_ENV !== 'production' && process.env.AUTH_EXPOSE_DEV_OTP === 'true';
+
+const buildDevelopmentOtpPayload = (otp) => (
+  shouldExposeDevelopmentOtp ? { devOtp: otp } : {}
+);
+
+const maskRecipient = (value = '') => {
+  const rawValue = String(value || '').trim();
+
+  if (!rawValue) {
+    return 'unknown';
+  }
+
+  if (rawValue.includes('@')) {
+    const [localPart, domain = ''] = rawValue.split('@');
+    const visibleLocal = localPart.slice(0, 2);
+    return `${visibleLocal || '*'}***@${domain}`;
+  }
+
+  const digits = rawValue.replace(/\D/g, '');
+
+  if (!digits) {
+    return 'unknown';
+  }
+
+  if (digits.length <= 4) {
+    return `***${digits}`;
+  }
+
+  return `${digits.slice(0, 2)}***${digits.slice(-2)}`;
+};
 
 const buildDisplayNameFromEmail = (email = '') => {
   const localPart = normalizeRecipient(email).split('@')[0] || 'linkup-user';
@@ -880,99 +914,133 @@ router.post('/contact-means', (req, res) => {
 // SEND OTP
 router.post('/send-otp', async (req, res) => {
   try {
-    const { email, phone } = req.body;
-    const recipient = normalizeRecipient(email || phone);
+    const normalizedEmail = normalizeRecipient(req.body?.email);
+    const normalizedPhone = String(req.body?.phone || '').trim();
 
-    if (!email && !phone) {
+    if (!normalizedEmail && !normalizedPhone) {
       return res.status(400).json({ error: 'Email or phone number required' });
     }
 
-    // Validate that email credentials are configured
-    if (email && !process.env.EMAIL_USER) {
-      console.error('EMAIL_USER environment variable not set');
-      return res.status(500).json({ error: 'Email service not configured. Please contact support.' });
+    if (normalizedPhone && !normalizedEmail) {
+      return res.status(400).json({
+        error: 'Phone OTP is not available yet. Please use your email address.',
+        code: 'PHONE_OTP_UNAVAILABLE'
+      });
+    }
+
+    if (!isEmailAddress(normalizedEmail)) {
+      return res.status(400).json({
+        error: looksLikePhoneNumber(req.body?.email)
+          ? 'Phone OTP is not available yet. Please use your email address.'
+          : 'A valid email address is required.'
+      });
     }
 
     // Generate a random 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpId = uuidv4();
+    const developmentOtpPayload = buildDevelopmentOtpPayload(otp);
+    const maskedEmail = maskRecipient(normalizedEmail);
 
     // Store OTP with 10-minute expiration in Redis
     await storeOTP(otpId, {
       otp,
-      recipient,
+      recipient: normalizedEmail,
+      channel: 'email',
       createdAt: Date.now()
     });
 
-    console.log(`OTP generated: ${otp} for ${email || phone}`);
+    console.info('OTP generated for recipient', {
+      otpId,
+      recipient: maskRecipient(normalizedEmail),
+      channel: 'email'
+    });
 
-    const developmentOtpPayload = process.env.NODE_ENV === 'production'
-      ? {}
-      : { devOtp: otp };
-
-    // Send OTP via email
-    if (email) {
-      try {
-        const transporter = getEmailTransporter();
-        
-        // Verify connection before sending
-        await transporter.verify();
-        console.log('Email transporter verified');
-
-        const mailResult = await transporter.sendMail({
-          from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-          to: email,
-          subject: 'Your LinkUp OTP Code',
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>LinkUp - Email Verification</h2>
-              <p>Your One-Time Password (OTP) is:</p>
-              <h1 style="color: #6366f1; letter-spacing: 2px; text-align: center;">${otp}</h1>
-              <p>This OTP will expire in 10 minutes.</p>
-              <p>If you didn't request this code, please ignore this email.</p>
-              <hr />
-              <p style="color: #666; font-size: 12px;">LinkUp Dating - Your Perfect Match Awaits</p>
-            </div>
-          `
+    if (!process.env.EMAIL_USER) {
+      if (shouldExposeDevelopmentOtp) {
+        console.warn('Email OTP fallback enabled because SMTP is not configured', {
+          otpId,
+          recipient: maskRecipient(normalizedEmail)
         });
 
-        console.log(`✓ OTP email sent successfully to ${email} (MessageID: ${mailResult.messageId})`);
-
-        res.json({
+        return res.json({
           success: true,
-          message: 'OTP sent successfully to your email',
+          message: 'Email delivery is unavailable. Development OTP fallback is enabled.',
           otpId,
           ...developmentOtpPayload
         });
-      } catch (emailError) {
-        console.error('❌ Email send error:', {
-          message: emailError.message,
-          code: emailError.code,
-          response: emailError.response,
-          command: emailError.command
+      }
+
+      await deleteOTP(otpId);
+      console.error('EMAIL_USER environment variable not set');
+      return res.status(500).json({ error: 'Email service not configured. Please contact support.' });
+    }
+
+    try {
+      const transporter = getEmailTransporter();
+
+      // Verify connection before sending
+      await transporter.verify();
+      console.log('Email transporter verified');
+
+      const mailResult = await transporter.sendMail({
+        from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+        to: normalizedEmail,
+        subject: 'Your LinkUp OTP Code',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>LinkUp - Email Verification</h2>
+            <p>Your One-Time Password (OTP) is:</p>
+            <h1 style="color: #6366f1; letter-spacing: 2px; text-align: center;">${otp}</h1>
+            <p>This OTP will expire in 10 minutes.</p>
+            <p>If you didn't request this code, please ignore this email.</p>
+            <hr />
+            <p style="color: #666; font-size: 12px;">LinkUp Dating - Your Perfect Match Awaits</p>
+          </div>
+        `
+      });
+
+      console.log(`OTP email sent successfully to ${maskedEmail} (MessageID: ${mailResult.messageId})`);
+
+      return res.json({
+        success: true,
+        message: 'OTP sent successfully to your email',
+        otpId
+      });
+    } catch (emailError) {
+      console.error('Email send error:', {
+        message: emailError.message,
+        code: emailError.code,
+        response: emailError.response,
+        command: emailError.command
+      });
+
+      if (shouldExposeDevelopmentOtp) {
+        console.warn('Email OTP fallback enabled because SMTP delivery failed', {
+          otpId,
+          recipient: maskRecipient(normalizedEmail)
         });
 
-        // Return error details in development mode for debugging
-        if (process.env.NODE_ENV === 'development') {
-          return res.status(500).json({ 
-            error: 'Failed to send OTP',
-            details: emailError.message,
-            otpId,
-            devOtp: otp
-          });
-        }
-
-        res.status(500).json({ 
-          error: 'Failed to send OTP. Please check your credentials and try again.' 
+        return res.json({
+          success: true,
+          message: 'Email delivery failed. Development OTP fallback is enabled.',
+          otpId,
+          ...developmentOtpPayload
         });
       }
-    } else if (phone) {
-      // Phone OTP (SMS) - not implemented yet
-      res.json({
-        success: true,
-        message: 'OTP will be sent via SMS (feature coming soon)',
-        otpId,
-        ...developmentOtpPayload
+
+      await deleteOTP(otpId);
+
+      // Return error details in development mode for debugging
+      if (process.env.NODE_ENV === 'development') {
+        return res.status(500).json({
+          error: 'Failed to send OTP',
+          details: emailError.message
+        });
+      }
+
+      return res.status(500).json({
+        error: 'Failed to send OTP. Please check your credentials and try again.'
       });
     }
   } catch (error) {
@@ -1022,6 +1090,12 @@ router.post('/verify-otp', async (req, res) => {
     const recipientEmail = storedData.recipient.includes('@')
       ? storedData.recipient
       : normalizeRecipient(email);
+
+    if (!isEmailAddress(recipientEmail)) {
+      return res.status(400).json({
+        error: 'Phone OTP verification is not available yet. Please request an email OTP instead.'
+      });
+    }
 
     let authenticatedUser = null;
     let token = null;

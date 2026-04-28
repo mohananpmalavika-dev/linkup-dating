@@ -26,6 +26,7 @@ A full-featured React-based dating application with swipe discovery, advanced pr
 ✅ **First Date Safety Kit** - Live location sharing with trusted friend, check-in feature, 8 safety tips, SOS emergency button
 ✅ **Video Call Insights** - Analytics showing call duration vs industry average, post-call star ratings (1-5), AI-powered compatibility predictions, video call calendar
 ✅ **Story-like Moments** - Upload photos that auto-disappear in 24 hours, visible only to current matches, builds FOMO with view counts and viewer tracking
+✅ **Icebreaker Videos** - Record 5-second video intros explaining "Why I'm looking for someone", increases authenticity perception, premium-only feature, 1-5 star ratings with authenticity scoring
 
 ### Profiles
 ✅ **Comprehensive Profiles** - Photos, bio, interests, verification

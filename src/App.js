@@ -29,6 +29,7 @@ import ChatRoomView from './components/ChatRoomView';
 import LobbyChat from './components/LobbyChat';
 import SocialHub from './components/SocialHub';
 import AdminDashboard from './components/AdminDashboard';
+import SOSAlert from './components/SOSAlert';
 import datingProfileService from './services/datingProfileService';
 import datingMessagingService from './services/datingMessagingService';
 import notificationService from './services/notificationService';
@@ -46,6 +47,25 @@ import {
 const ADMIN_DASHBOARD_ROUTE = '/admin-dashboard';
 const DEFAULT_AUTHENTICATED_ROUTE = '/discover';
 const DEFAULT_MESSAGES_ROUTE = '/messages';
+const PUBLIC_LANGUAGE_STORAGE_KEY = 'linkup-public-language';
+const SUPPORTED_PUBLIC_LANGUAGES = new Set(['en', 'ml']);
+
+const normalizePublicLanguage = (language) =>
+  SUPPORTED_PUBLIC_LANGUAGES.has(language) ? language : 'en';
+
+const getInitialPublicLanguage = () => {
+  if (typeof window === 'undefined') {
+    return 'en';
+  }
+
+  const storedLanguage = window.localStorage.getItem(PUBLIC_LANGUAGE_STORAGE_KEY);
+  if (storedLanguage) {
+    return normalizePublicLanguage(storedLanguage);
+  }
+
+  const browserLanguage = String(window.navigator?.language || '').toLowerCase();
+  return browserLanguage.startsWith('ml') ? 'ml' : 'en';
+};
 
 const isAdminUser = (user) =>
   Boolean(user && (user.isAdmin || user.is_admin || user.role === 'admin' || user.registrationType === 'admin'));
@@ -94,6 +114,10 @@ const inferNavigationPage = (pathname, returnPath = '') => {
 
   if (targetPath.startsWith('/social')) {
     return 'social';
+  }
+
+  if (targetPath.startsWith('/sosalert') || targetPath.startsWith('/date-safety')) {
+    return 'sosalert';
   }
 
   if (/^\/chatrooms\/[^/]+$/i.test(targetPath)) {
@@ -238,9 +262,18 @@ const AppContent = () => {
   const [matchCount, setMatchCount] = useState(0);
   const [lastOpenedMatchRoute, setLastOpenedMatchRoute] = useState('');
   const [incomingCall, setIncomingCall] = useState(null);
+  const [publicLanguage, setPublicLanguage] = useState(getInitialPublicLanguage);
   const appSocketRef = useRef(null);
   const isAdminSession = isAdminUser(currentUser);
   const defaultAuthenticatedRoute = getDefaultAuthenticatedRouteForUser(currentUser);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.localStorage.setItem(PUBLIC_LANGUAGE_STORAGE_KEY, publicLanguage);
+  }, [publicLanguage]);
 
   const refreshDatingCounts = useCallback(async () => {
     if (!getStoredAuthToken() || isAdminSession) {
@@ -625,6 +658,9 @@ const AppContent = () => {
       case 'social':
         navigate('/social');
         break;
+      case 'sosalert':
+        navigate('/sosalert');
+        break;
       case 'profile':
         navigate('/profile');
         break;
@@ -652,11 +688,11 @@ const AppContent = () => {
         authToken={getStoredAuthToken()}
       >
         <Routes>
-          <Route path="/privacy-policy" element={<PublicInfoPage pageKey="privacy" />} />
-          <Route path="/terms" element={<PublicInfoPage pageKey="terms" />} />
-          <Route path="/account-deletion" element={<PublicInfoPage pageKey="deletion" />} />
-          <Route path="/grievance" element={<PublicInfoPage pageKey="grievance" />} />
-          <Route path="/support" element={<PublicInfoPage pageKey="support" />} />
+          <Route path="/privacy-policy" element={<PublicInfoPage pageKey="privacy" language={publicLanguage} />} />
+          <Route path="/terms" element={<PublicInfoPage pageKey="terms" language={publicLanguage} />} />
+          <Route path="/account-deletion" element={<PublicInfoPage pageKey="deletion" language={publicLanguage} />} />
+          <Route path="/grievance" element={<PublicInfoPage pageKey="grievance" language={publicLanguage} />} />
+          <Route path="/support" element={<PublicInfoPage pageKey="support" language={publicLanguage} />} />
           <Route
             path="/"
             element={
@@ -669,7 +705,8 @@ const AppContent = () => {
                       navigate('/signup');
                     }
                   }}
-                  language="en"
+                  language={publicLanguage}
+                  onLanguageChange={setPublicLanguage}
                 />
               ) : (
                 <Navigate to={defaultAuthenticatedRoute} replace />
@@ -681,6 +718,7 @@ const AppContent = () => {
             element={
               !isAuthenticated ? (
                 <Login
+                  language={publicLanguage}
                   onLoginSuccess={handleLoginSuccess}
                   onBackToLaunch={() => navigate('/')}
                   onSignUpClick={() => navigate('/signup')}
@@ -695,6 +733,7 @@ const AppContent = () => {
             element={
               !isAuthenticated ? (
                 <DatingSignUp
+                  language={publicLanguage}
                   onSignUpSuccess={handleSignUpSuccess}
                   onLoginClick={() => navigate('/login')}
                   onBackToLaunch={() => navigate('/')}
@@ -856,6 +895,14 @@ const AppContent = () => {
                   onVideoCall={handleVideoCall}
                 />
               }
+            />
+            <Route
+              path="sosalert"
+              element={<SOSAlert currentUser={currentUser} />}
+            />
+            <Route
+              path="date-safety"
+              element={<Navigate to="/sosalert" replace />}
             />
             <Route
               path="social"

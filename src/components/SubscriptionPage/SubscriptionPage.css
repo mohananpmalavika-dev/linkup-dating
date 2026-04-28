@@ -1,0 +1,664 @@
+.subscription-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.subscription-container.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: #718096;
+  font-size: 18px;
+}
+
+/* Header */
+.subscription-header {
+  text-align: center;
+  margin-bottom: 50px;
+}
+
+.subscription-header h1 {
+  font-size: 48px;
+  font-weight: 800;
+  color: #2d3748;
+  margin: 0 0 12px 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subscription-header .subtitle {
+  font-size: 18px;
+  color: #718096;
+  margin: 0;
+}
+
+/* Error Banner */
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: #fed7d7;
+  border-left: 4px solid #f56565;
+  border-radius: 8px;
+  color: #742a2a;
+  margin-bottom: 30px;
+}
+
+.error-banner span {
+  font-size: 20px;
+}
+
+/* Current Subscription Card */
+.current-subscription-card {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dbeafe 100%);
+  border: 2px solid #86efac;
+  border-radius: 12px;
+  padding: 32px;
+  margin-bottom: 50px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 32px;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .current-subscription-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+.subscription-status h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #166534;
+  margin: 0 0 20px 0;
+}
+
+.subscription-details {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.detail-label {
+  color: #718096;
+  font-weight: 600;
+}
+
+.detail-value {
+  color: #2d3748;
+  font-weight: 700;
+}
+
+.detail-value.status-active {
+  color: #22863a;
+  background: #f0fff4;
+  padding: 4px 12px;
+  border-radius: 4px;
+}
+
+.detail-value.status-inactive {
+  color: #7c2d12;
+  background: #fff5f5;
+  padding: 4px 12px;
+  border-radius: 4px;
+}
+
+.subscription-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-upgrade {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-upgrade:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-cancel {
+  padding: 12px 24px;
+  background: white;
+  color: #e53e3e;
+  border: 2px solid #e53e3e;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-cancel:hover {
+  background: #fff5f5;
+}
+
+/* Plans Section */
+.plans-section {
+  margin-bottom: 60px;
+}
+
+.plans-section h2 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #2d3748;
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Plan Card */
+.plan-card {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.plan-card:hover:not(.current) {
+  border-color: #667eea;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.15);
+  transform: translateY(-4px);
+}
+
+.plan-card.current {
+  border-color: #667eea;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+}
+
+.plan-card.popular {
+  border-color: #667eea;
+  transform: scale(1.05);
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.25);
+}
+
+@media (max-width: 768px) {
+  .plan-card.popular {
+    transform: scale(1);
+  }
+}
+
+.popular-badge {
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  z-index: 1;
+}
+
+.plan-header {
+  padding: 32px 24px 24px 24px;
+}
+
+.plan-header h3 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0 0 16px 0;
+}
+
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.plan-price .currency {
+  font-size: 20px;
+  color: #667eea;
+}
+
+.plan-price .amount {
+  font-size: 48px;
+  font-weight: 800;
+  color: #2d3748;
+}
+
+.plan-price .period {
+  font-size: 14px;
+  color: #718096;
+}
+
+.plan-description {
+  font-size: 14px;
+  color: #718096;
+  margin: 0;
+}
+
+.plan-features {
+  flex: 1;
+  padding: 0 24px;
+}
+
+.plan-features ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plan-features li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #4a5568;
+}
+
+.plan-features .checkmark {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #c6f6d5;
+  color: #22543d;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.plan-action {
+  padding: 24px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-select,
+.btn-current {
+  width: 100%;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-select {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-select:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-current {
+  background: #f7fafc;
+  color: #718096;
+  cursor: default;
+}
+
+/* Checkout Modal */
+.checkout-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.checkout-modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 500px;
+  width: 100%;
+  padding: 40px;
+  position: relative;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f7fafc;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.modal-close:hover {
+  background: #e2e8f0;
+}
+
+.checkout-header h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0 0 24px 0;
+}
+
+.checkout-summary {
+  background: #f7fafc;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 14px;
+}
+
+.summary-row:last-child {
+  border-bottom: none;
+}
+
+.summary-row.gst {
+  color: #718096;
+}
+
+.summary-row.total {
+  border-top: 2px solid #e2e8f0;
+  padding-top: 12px;
+  font-weight: 700;
+  color: #2d3748;
+}
+
+.summary-row .value {
+  font-weight: 600;
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #fed7d7;
+  border-left: 4px solid #f56565;
+  border-radius: 8px;
+  color: #742a2a;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.checkout-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-pay {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-pay:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-pay:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-cancel-modal {
+  padding: 12px 24px;
+  background: white;
+  color: #718096;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-cancel-modal:hover {
+  background: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+.security-badge {
+  text-align: center;
+  font-size: 12px;
+  color: #718096;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+/* Receipts Section */
+.receipts-section {
+  margin-top: 60px;
+  padding-top: 40px;
+  border-top: 2px solid #e2e8f0;
+}
+
+.receipts-section h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 24px;
+}
+
+.receipts-table {
+  overflow-x: auto;
+}
+
+.receipts-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.receipts-table th {
+  background: #f7fafc;
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a5568;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.receipts-table td {
+  padding: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 14px;
+  color: #2d3748;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-completed {
+  background: #c6f6d5;
+  color: #22543d;
+}
+
+.status-pending {
+  background: #feebc8;
+  color: #7c2d12;
+}
+
+.status-failed {
+  background: #fed7d7;
+  color: #742a2a;
+}
+
+.status-refunded {
+  background: #bee3f8;
+  color: #2c5282;
+}
+
+.payment-id {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #718096;
+}
+
+/* FAQ Section */
+.faq-section {
+  margin-top: 60px;
+  padding-top: 40px;
+  border-top: 2px solid #e2e8f0;
+}
+
+.faq-section h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #2d3748;
+  margin-bottom: 32px;
+}
+
+.faq-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 24px;
+}
+
+.faq-item {
+  background: #f7fafc;
+  padding: 24px;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.faq-item h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2d3748;
+  margin: 0 0 12px 0;
+}
+
+.faq-item p {
+  font-size: 14px;
+  color: #4a5568;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Mobile Responsive */
+@media (max-width: 640px) {
+  .subscription-container {
+    padding: 24px 16px;
+  }
+
+  .subscription-header h1 {
+    font-size: 32px;
+  }
+
+  .subscription-header .subtitle {
+    font-size: 16px;
+  }
+
+  .current-subscription-card {
+    padding: 24px;
+  }
+
+  .plans-section h2 {
+    font-size: 24px;
+  }
+
+  .plan-card.popular {
+    transform: scale(1);
+  }
+
+  .checkout-modal {
+    padding: 24px;
+  }
+
+  .receipts-table {
+    font-size: 12px;
+  }
+
+  .receipts-table th,
+  .receipts-table td {
+    padding: 12px 8px;
+  }
+}

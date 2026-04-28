@@ -38,6 +38,7 @@ const photoABTestingRoutes = require('./routes/photoABTesting');
 const catfishDetectionRoutes = require('./routes/catfishDetection');
 const videoVerificationRoutes = require('./routes/videoVerification');
 const dateSafetyRoutes = require('./routes/dateSafety');
+const icebreakerVideoRoutes = require('./routes/icebreakerVideos');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
@@ -444,6 +445,7 @@ app.use('/api/photo-ab-testing', authenticateToken, photoABTestingRoutes);
 app.use('/api/catfish-detection', authenticateToken, catfishDetectionRoutes);
 app.use('/api/video-verification', authenticateToken, videoVerificationRoutes);
 app.use('/api/date-safety', authenticateToken, dateSafetyRoutes);
+app.use('/api/icebreaker-videos', authenticateToken, icebreakerVideoRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

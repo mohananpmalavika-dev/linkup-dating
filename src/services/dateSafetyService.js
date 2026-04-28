@@ -1,15 +1,17 @@
 import axios from 'axios';
+import { API_BASE_URL } from '../utils/api';
+import { getStoredAuthToken } from '../utils/auth';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 const client = axios.create({
-  baseURL: `${API_BASE_URL}/api/date-safety`,
+  baseURL: `${API_BASE_URL}/date-safety`,
   timeout: 10000,
 });
 
 // Add authorization header
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
+  const token = getStoredAuthToken();
   if (token) {
+    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;

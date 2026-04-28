@@ -43,6 +43,26 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
       field: 'location_city'
     },
+    locationDistrict: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'location_district'
+    },
+    locationLocality: {
+      type: DataTypes.STRING(150),
+      allowNull: true,
+      field: 'location_locality'
+    },
+    locationPincode: {
+      type: DataTypes.STRING(6),
+      allowNull: true,
+      field: 'location_pincode'
+    },
+    keralaRegion: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'kerala_region'
+    },
     locationState: {
       type: DataTypes.STRING(100),
       allowNull: true,
@@ -277,6 +297,10 @@ module.exports = (sequelize, DataTypes) => {
       { fields: ['age'] },
       { fields: ['gender'] },
       { fields: ['location_city'] },
+      { fields: ['location_district'] },
+      { fields: ['location_locality'] },
+      { fields: ['location_pincode'] },
+      { fields: ['kerala_region'] },
       { fields: ['location_state'] },
       { fields: ['relationship_goals'] },
       { fields: ['is_active'] },

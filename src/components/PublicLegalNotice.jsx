@@ -1,12 +1,14 @@
 import React from 'react';
+import { getTranslationValue } from '../data/translations';
 import PublicResourceLinks from './PublicResourceLinks';
 
 const PublicLegalNotice = ({
-  message = 'Review our Privacy Policy, Terms, Grievance, and Support pages before you continue.'
+  language = 'en',
+  message
 }) => (
   <div className="public-legal-callout">
-    <p>{message}</p>
-    <PublicResourceLinks variant="inline" />
+    <p>{message || getTranslationValue(language, 'public.reviewNotice')}</p>
+    <PublicResourceLinks language={language} variant="inline" />
   </div>
 );
 

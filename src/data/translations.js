@@ -275,6 +275,63 @@ const translations = {
   },
 };
 
+translations.en.launch = {
+  ...translations.en.launch,
+  languageHelper: "Choose English or Malayalam before you continue.",
+};
+
+translations.en.public = {
+  reviewNotice: "Review our Privacy Policy, Terms, Grievance, and Support pages before you continue.",
+  launchNotice:
+    "Privacy, terms, grievance, and support pages are public before signup or login. Optional ID, location, camera, and microphone features are described there.",
+  loginNotice:
+    "By continuing, you agree to the Terms and acknowledge the Privacy Policy. Support and grievance channels are public, and optional ID, location, camera, and microphone features are covered there.",
+  signupNotice:
+    "By creating an account, you agree to the Terms and acknowledge the Privacy Policy. Grievance and support contacts are public, including guidance for ID verification, location sharing, and camera or microphone features.",
+  resourceNavLabel: "Public legal and support resources",
+  openLinkUp: "Open LinkUp",
+  publicPageAudience: "Public page for LinkUp Dating users and reviewers",
+};
+
+translations.ml = {
+  ...translations.ml,
+  languageName: "മലയാളം",
+  launch: {
+    ...translations.ml?.launch,
+    brand: "LinkUp Dating",
+    title: "യഥാർത്ഥ ബന്ധങ്ങൾ ഇവിടെ തുടങ്ങുന്നു",
+    promise: "യഥാർത്ഥ മാച്ചുകൾ, സുരക്ഷിതമായ ഡേറ്റുകൾ, കൂടുതൽ നല്ല സംഭാഷണങ്ങൾ.",
+    intro:
+      "LinkUp Dating നിങ്ങളുടെ പ്രൊഫൈലിൽ നിന്ന് ആദ്യ സന്ദേശത്തിലേക്കും പിന്നീട് യഥാർത്ഥ കൂടിക്കാഴ്ചകളിലേക്കും കൂടുതൽ വ്യക്തതയോടും സുരക്ഷാ സഹായങ്ങളോടും കൂടി എത്തിക്കാൻ സഹായിക്കുന്നു.",
+    languageLabel: "ഭാഷ",
+    languageHelper: "തുടരുന്നതിനുമുമ്പ് English അല്ലെങ്കിൽ മലയാളം തിരഞ്ഞെടുക്കൂ.",
+    login: "ലോഗിൻ",
+    loginHelp: "സ്ഥിരീകരിച്ച ഇമെയിൽ ഉപയോഗിച്ച് നിങ്ങളുടെ LinkUp അക്കൗണ്ടിലേക്ക് പ്രവേശിക്കൂ.",
+    user: "സൈൻ അപ്പ്",
+    userHelp: "നിങ്ങളുടെ പ്രൊഫൈൽ തയ്യാറാക്കി കൂടുതൽ അനുയോജ്യമായ മാച്ചുകൾ കണ്ടെത്തൂ.",
+    highlights: ["യഥാർത്ഥ മാച്ചുകൾ", "സുരക്ഷിതമായ ഡേറ്റുകൾ", "നല്ല സംഭാഷണങ്ങൾ"],
+  },
+  login: {
+    ...translations.ml?.login,
+    welcomeBack: "വീണ്ടും സ്വാഗതം",
+    loginSubtitle: "LinkUp-ലേക്ക് പ്രവേശിക്കാൻ സ്ഥിരീകരിച്ച ഇമെയിൽ ഉപയോഗിക്കൂ.",
+    userSubtitle: "സ്ഥിരീകരിച്ച ഇമെയിൽ ഉപയോഗിച്ച് LinkUp Dating-ലേക്ക് ചേരൂ.",
+    footer: "സെർവർ നൽകുന്ന OTP ഉപയോഗിച്ചാണ് നിങ്ങളുടെ ലോഗിൻ സ്ഥിരീകരിക്കുന്നത്.",
+  },
+  public: {
+    reviewNotice: "തുടരുന്നതിന് മുമ്പ് സ്വകാര്യതാ നയം, നിബന്ധനകൾ, പരാതി, സഹായം പേജുകൾ പരിശോധിക്കൂ.",
+    launchNotice:
+      "സൈൻ അപ്പ് ചെയ്യുന്നതിനും ലോഗിൻ ചെയ്യുന്നതിനും മുമ്പ് സ്വകാര്യതാ നയം, നിബന്ധനകൾ, പരാതി, സഹായം പേജുകൾ എല്ലാവർക്കും തുറന്നിരിക്കുന്നു. ഐഡി, ലൊക്കേഷൻ, ക്യാമറ, മൈക്രോഫോൺ പോലുള്ള ഐച്ഛിക സവിശേഷതകളുടെ വിവരങ്ങളും അവിടെ ലഭിക്കും.",
+    loginNotice:
+      "തുടരുന്നതിലൂടെ നിങ്ങൾ നിബന്ധനകൾ അംഗീകരിക്കുകയും സ്വകാര്യതാ നയം വായിച്ചതായി സമ്മതിക്കുകയും ചെയ്യുന്നു. സഹായവും പരാതിയും സംബന്ധിച്ച വിവരങ്ങൾ പൊതുവായി ലഭ്യമാണ്; ഐച്ഛിക ഐഡി, ലൊക്കേഷൻ, ക്യാമറ, മൈക്രോഫോൺ സവിശേഷതകളുടെ വിവരങ്ങളും അവിടെ ഉൾപ്പെടുത്തിയിരിക്കുന്നു.",
+    signupNotice:
+      "അക്കൗണ്ട് സൃഷ്ടിക്കുന്നതിലൂടെ നിങ്ങൾ നിബന്ധനകൾ അംഗീകരിക്കുകയും സ്വകാര്യതാ നയം വായിച്ചതായി സമ്മതിക്കുകയും ചെയ്യുന്നു. പരാതി-സഹായ ചാനലുകളും ഐഡി സ്ഥിരീകരണം, ലൊക്കേഷൻ പങ്കിടൽ, ക്യാമറ, മൈക്രോഫോൺ സവിശേഷതകളെക്കുറിച്ചുള്ള മാർഗ്ഗനിർദ്ദേശങ്ങളും പൊതുവായി ലഭ്യമാണ്.",
+    resourceNavLabel: "പൊതു നിയമ, സുരക്ഷ, സഹായ സ്രോതസ്സുകൾ",
+    openLinkUp: "LinkUp തുറക്കുക",
+    publicPageAudience: "LinkUp Dating ഉപയോക്താക്കളും വിലയിരുത്തുന്നവരും ഉപയോഗിക്കുന്ന പൊതുപേജ്",
+  },
+};
+
 export const languageOptions = Object.entries(translations).map(([code, value]) => ({
   code,
   name: value.languageName,

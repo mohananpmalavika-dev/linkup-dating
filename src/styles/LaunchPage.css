@@ -53,6 +53,67 @@
   font-weight: 700;
 }
 
+.launch-language {
+  margin-top: 1.2rem;
+  padding: 1rem;
+  border: 1px solid #f1dfd3;
+  border-radius: 18px;
+  background: #fff8f3;
+  text-align: left;
+}
+
+.launch-language-header {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.launch-language-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #7c2d12;
+}
+
+.launch-language-help {
+  color: #5b6472;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.launch-language-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+}
+
+.launch-language-option {
+  border: 1px solid #eadfd6;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1f2937;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 0.65rem 1rem;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.launch-language-option:hover {
+  transform: translateY(-1px);
+}
+
+.launch-language-option.is-active {
+  background: #d04c2f;
+  border-color: #d04c2f;
+  color: #fffaf7;
+}
+
+.launch-language-option:focus-visible {
+  outline: 3px solid rgba(208, 76, 47, 0.22);
+  outline-offset: 3px;
+}
+
 .launch-highlights {
   display: flex;
   flex-wrap: wrap;

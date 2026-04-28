@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
-import { getTranslation } from "../data/translations";
+import { getTranslation, getTranslationValue } from "../data/translations";
 import useVoice from "../hooks/useVoice";
 import { API_BASE_URL } from "../utils/api";
 import PublicLegalNotice from "./PublicLegalNotice";
@@ -54,7 +54,6 @@ const Login = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const [devOtp, setDevOtp] = useState("");
   const [needsUsernameSetup, setNeedsUsernameSetup] = useState(false);
   const [setupUsername, setSetupUsername] = useState("");
   const [setupUsernameStatus, setSetupUsernameStatus] = useState(null);
@@ -75,6 +74,7 @@ const Login = ({
 
   const { login: loginCopy, direction } = getTranslation(language);
   const normalizedEmail = email.trim().toLowerCase();
+  const legalNoticeMessage = getTranslationValue(language, "public.loginNotice");
 
   const clearMessages = () => {
     setError("");
@@ -83,12 +83,12 @@ const Login = ({
 
   const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   const validateUsername = (value) => /^[a-zA-Z0-9_-]{3,20}$/.test(value);
+  const looksLikePhoneNumber = (value) => /^\+?[0-9\s()-]{7,}$/.test(String(value || "").trim());
 
   const resetOtpFlow = () => {
     setOtp("");
     setOtpId("");
     setOtpSent(false);
-    setDevOtp("");
     clearMessages();
   };
 
@@ -185,10 +185,14 @@ const Login = ({
   const handleSendOtp = async (event) => {
     event.preventDefault();
     clearMessages();
-    setDevOtp("");
 
     if (!normalizedEmail) {
       setError("Please enter your email address");
+      return;
+    }
+
+    if (looksLikePhoneNumber(email) && !validateEmail(normalizedEmail)) {
+      setError("Phone OTP is not available yet. Please use your email address.");
       return;
     }
 
@@ -213,7 +217,6 @@ const Login = ({
       setOtpId(response.data.otpId || "");
       setOtpSent(true);
       setSuccess(response.data.message || "OTP sent to your email");
-      setDevOtp(response.data.devOtp || response.data.otp || "");
     } catch (sendError) {
       if (!sendError.response) {
         setError("Backend is not running. Please start the API server and try again.");
@@ -496,13 +499,6 @@ const Login = ({
 
           {error ? <div className="error-message">{error}</div> : null}
           {success ? <div className="success-message">{success}</div> : null}
-          {devOtp ? (
-            <div className="dev-otp-message">
-              <span>Development OTP</span>
-              <strong>{devOtp}</strong>
-            </div>
-          ) : null}
-
           <div className="form-actions">
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {isUsernameStep
@@ -511,7 +507,7 @@ const Login = ({
                   ? loading ? "Verifying..." : "Verify OTP"
                   : loading
                     ? "Sending OTP..."
-                    : "Send Login OTP"}
+                    : "Send Email OTP"}
             </button>
 
             {otpSent || isUsernameStep ? (
@@ -531,7 +527,7 @@ const Login = ({
           <p className="security-info">
             {loginCopy.footer || "Your login is verified by a server-issued OTP."}
           </p>
-          <PublicLegalNotice message="By continuing, you agree to the Terms and acknowledge the Privacy Policy. Support and grievance channels are public, and optional ID, location, camera, and microphone features are covered there." />
+          <PublicLegalNotice language={language} message={legalNoticeMessage} />
           {!otpSent && !isUsernameStep && onSignUpClick ? (
             <p className="signup-prompt">
               Don't have an account?{" "}

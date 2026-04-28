@@ -42,6 +42,10 @@ export const EMPTY_DATING_PROFILE = {
   gender: 'male',
   location: {
     city: '',
+    district: '',
+    locality: '',
+    pincode: '',
+    keralaRegion: '',
     state: '',
     country: '',
     coordinates: { lat: null, lng: null },

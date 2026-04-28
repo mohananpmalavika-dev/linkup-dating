@@ -50,11 +50,41 @@ jest.mock("./services/videoCallService", () => ({
   },
 }));
 
+jest.mock("./services/dateSafetyService", () => ({
+  __esModule: true,
+  default: {
+    startSession: jest.fn(),
+    updateLocation: jest.fn(),
+    sendCheckIn: jest.fn(),
+    activateSOS: jest.fn(),
+    endSession: jest.fn(),
+    getSessionDetails: jest.fn(),
+    getSharedLocation: jest.fn(),
+    getSafetyTips: jest.fn(),
+    acknowledgeSafetyTips: jest.fn(),
+    getSessionHistory: jest.fn(),
+    getUserLocation: jest.fn(),
+    watchUserLocation: jest.fn(),
+    stopWatchingLocation: jest.fn(),
+    reverseGeocode: jest.fn(),
+  },
+}));
+
+jest.mock("./services/remindersService", () => ({
+  __esModule: true,
+  default: {
+    getAcceptedTrustedContacts: jest.fn(),
+  },
+  getAcceptedTrustedContacts: jest.fn(),
+}));
+
 const App = require("./App").default;
 const datingProfileService = require("./services/datingProfileService").default;
 const datingMessagingService = require("./services/datingMessagingService").default;
 const notificationService = require("./services/notificationService").default;
 const videoCallService = require("./services/videoCallService").default;
+const dateSafetyService = require("./services/dateSafetyService").default;
+const { getAcceptedTrustedContacts } = require("./services/remindersService");
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -78,6 +108,29 @@ beforeEach(() => {
   datingMessagingService.getUnreadCount.mockResolvedValue({ unreadCount: 0 });
   notificationService.getPermissionStatus.mockReturnValue({ canNotify: false });
   videoCallService.deliverDueReminders.mockResolvedValue({ reminders: [] });
+  getAcceptedTrustedContacts.mockResolvedValue({
+    contacts: [
+      { id: "contact-1", name: "Anu", relationship: "Sister" },
+    ],
+  });
+  dateSafetyService.getSafetyTips.mockResolvedValue({
+    success: true,
+    tips: [
+      {
+        id: 1,
+        title: "Meet in Public",
+        description: "Pick a busy first-date venue.",
+      },
+    ],
+  });
+  dateSafetyService.getSessionHistory.mockResolvedValue({ success: true, sessions: [] });
+  dateSafetyService.getUserLocation.mockResolvedValue({
+    latitude: 9.9312,
+    longitude: 76.2673,
+    accuracy: 15,
+  });
+  dateSafetyService.watchUserLocation.mockReturnValue(1);
+  dateSafetyService.reverseGeocode.mockResolvedValue("Kochi, Kerala");
 });
 
 test("renders the dating-only launch screen", async () => {
@@ -113,7 +166,7 @@ test("opens the public delete-account resource from the launch screen", async ()
   expect(
     await screen.findByRole("heading", { level: 1, name: /delete account/i })
   ).toBeInTheDocument();
-  expect(screen.getByText(/outside-the-app deletion access/i)).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 2, name: /request deletion without app access/i })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: /email deletion request/i })).toHaveAttribute(
     "href",
     expect.stringContaining("Account%20Deletion%20Request")
@@ -129,7 +182,7 @@ test("opens the simplified login flow", async () => {
     screen.getByRole("heading", { level: 2, name: /verify your email/i })
   ).toBeInTheDocument();
   expect(screen.getByRole("heading", { level: 1, name: /linkup/i })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /send login otp/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /send email otp/i })).toBeInTheDocument();
   expect(screen.queryByRole("group", { name: /business categories/i })).not.toBeInTheDocument();
   expect(screen.queryByText(/seller dashboard/i)).not.toBeInTheDocument();
 });
@@ -170,10 +223,37 @@ test("authenticated users only see dating navigation and inbox content", async (
   expect(screen.getByRole("button", { name: /matches/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /inbox/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /social/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /sos safety center/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /profile/i })).toBeInTheDocument();
 
   expect(screen.queryByRole("button", { name: /local market/i })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /globemart/i })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /feastly/i })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: /sos safety center/i })).not.toBeInTheDocument();
+});
+
+test("authenticated users can open the Kerala SOS safety center", async () => {
+  localStorage.setItem("mb_auth_token", "token");
+  localStorage.setItem(
+    "linkup_user_data",
+    JSON.stringify({
+      email: "person@example.com",
+      name: "Person",
+      city: "Kochi",
+      district: "ernakulam",
+      keralaRegion: "central",
+      registrationType: "user",
+      role: "user",
+    })
+  );
+  window.history.pushState({}, "", "/messages");
+
+  render(<App />);
+
+  fireEvent.click(await screen.findByRole("button", { name: /sos safety center/i }));
+
+  expect(
+    await screen.findByRole("heading", { level: 1, name: /kerala sos safety center/i })
+  ).toBeInTheDocument();
+  expect(screen.getByText(/official kerala help paths/i)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /call kerala emergency 112/i })).toBeInTheDocument();
 });

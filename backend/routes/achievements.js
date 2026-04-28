@@ -5,7 +5,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { protect } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 const AchievementService = require('../services/achievementService');
 const LeaderboardService = require('../services/leaderboardService');
 
@@ -13,7 +13,7 @@ const LeaderboardService = require('../services/leaderboardService');
  * GET /api/achievements/check
  * Check and unlock achievements for current user
  */
-router.get('/check', protect, async (req, res) => {
+router.get('/check', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await AchievementService.checkAndUnlockAchievements(userId);
@@ -52,7 +52,7 @@ router.get('/user/:userId', async (req, res) => {
  * POST /api/achievements/feature/:achievementId
  * Feature an achievement on profile
  */
-router.post('/feature/:achievementId', protect, async (req, res) => {
+router.post('/feature/:achievementId', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { achievementId } = req.params;
@@ -96,7 +96,7 @@ router.get('/definitions', async (req, res) => {
  * GET /api/leaderboards/update
  * Force update all leaderboards (admin only)
  */
-router.get('/update', protect, async (req, res) => {
+router.get('/update', authenticateToken, async (req, res) => {
   try {
     // TODO: Add admin check
     const result = await LeaderboardService.updateMonthlyLeaderboards();
@@ -183,7 +183,7 @@ router.get('/conversation-starters', async (req, res) => {
  * POST /api/leaderboards/vote-conversation-starter
  * Vote for someone as a great conversation starter
  */
-router.post('/vote-conversation-starter', protect, async (req, res) => {
+router.post('/vote-conversation-starter', authenticateToken, async (req, res) => {
   try {
     const { votedForUserId, reason } = req.body;
     const votedByUserId = req.user.id;

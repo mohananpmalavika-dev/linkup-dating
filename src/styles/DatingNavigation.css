@@ -46,6 +46,15 @@
   color: #667eea;
 }
 
+.nav-btn-sos {
+  color: #dc2626;
+}
+
+.nav-btn-sos:hover,
+.nav-btn-sos.active {
+  color: #dc2626;
+}
+
 .nav-btn.active::after {
   content: '';
   position: absolute;
@@ -54,6 +63,10 @@
   right: 0;
   height: 3px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.nav-btn-sos.active::after {
+  background: linear-gradient(135deg, #ef4444 0%, #f97316 100%);
 }
 
 .nav-icon {

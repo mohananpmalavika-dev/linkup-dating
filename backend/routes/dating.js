@@ -35,6 +35,13 @@ const invalidateDiscoveryCache = async (userId) => {
 };
 const userNotificationService = require('../services/userNotificationService');
 const { createModerationFlag } = require('../utils/moderation');
+const {
+  buildLocationSearchTerms,
+  normalizeIndianPincode,
+  normalizeKeralaDistrict,
+  normalizeKeralaRegion,
+  resolveKeralaLocation
+} = require('../utils/keralaLocation');
 const spamFraudService = require('../services/spamFraudService');
 const mlCompatibilityService = require('../services/mlCompatibilityService');
 const rewindService = require('../services/rewindService');
@@ -1921,11 +1928,28 @@ const calculateDistanceKm = (currentLocation = {}, candidateLocation = {}) => {
   }
 
   const currentCity = normalizeSignalKey(currentLocation.city);
+  const currentDistrict = normalizeSignalKey(currentLocation.district);
+  const currentLocality = normalizeSignalKey(currentLocation.locality);
+  const currentKeralaRegion = normalizeSignalKey(currentLocation.keralaRegion);
   const candidateCity = normalizeSignalKey(candidateLocation.city);
+  const candidateDistrict = normalizeSignalKey(candidateLocation.district);
+  const candidateLocality = normalizeSignalKey(candidateLocation.locality);
+  const candidateKeralaRegion = normalizeSignalKey(candidateLocation.keralaRegion);
   const currentState = normalizeSignalKey(currentLocation.state);
   const candidateState = normalizeSignalKey(candidateLocation.state);
   const currentCountry = normalizeSignalKey(currentLocation.country);
   const candidateCountry = normalizeSignalKey(candidateLocation.country);
+
+  if (
+    currentLocality &&
+    candidateLocality &&
+    currentDistrict &&
+    candidateDistrict &&
+    currentLocality === candidateLocality &&
+    currentDistrict === candidateDistrict
+  ) {
+    return 3;
+  }
 
   if (
     currentCity &&
@@ -1936,6 +1960,25 @@ const calculateDistanceKm = (currentLocation = {}, candidateLocation = {}) => {
     currentState === candidateState
   ) {
     return 10;
+  }
+
+  if (
+    currentDistrict &&
+    candidateDistrict &&
+    currentState &&
+    candidateState &&
+    currentDistrict === candidateDistrict &&
+    currentState === candidateState
+  ) {
+    return 25;
+  }
+
+  if (
+    currentKeralaRegion &&
+    candidateKeralaRegion &&
+    currentKeralaRegion === candidateKeralaRegion
+  ) {
+    return 60;
   }
 
   if (
@@ -2221,13 +2264,39 @@ const buildCompatibilitySuggestion = ({
   }
 
   const currentCity = currentProfile.location?.city?.toLowerCase?.() || '';
+  const currentDistrict = currentProfile.location?.district?.toLowerCase?.() || '';
+  const currentLocality = currentProfile.location?.locality?.toLowerCase?.() || '';
+  const currentKeralaRegion = currentProfile.location?.keralaRegion?.toLowerCase?.() || '';
   const candidateCity = candidateProfile.location?.city?.toLowerCase?.() || '';
+  const candidateDistrict = candidateProfile.location?.district?.toLowerCase?.() || '';
+  const candidateLocality = candidateProfile.location?.locality?.toLowerCase?.() || '';
+  const candidateKeralaRegion = candidateProfile.location?.keralaRegion?.toLowerCase?.() || '';
   const currentState = currentProfile.location?.state?.toLowerCase?.() || '';
   const candidateState = candidateProfile.location?.state?.toLowerCase?.() || '';
 
-  if (currentCity && candidateCity && currentCity === candidateCity) {
+  if (
+    currentLocality &&
+    candidateLocality &&
+    currentDistrict &&
+    candidateDistrict &&
+    currentLocality === candidateLocality &&
+    currentDistrict === candidateDistrict
+  ) {
+    score += 8;
+    addReason(`You are both around ${candidateProfile.location.locality}`, 8);
+  } else if (currentCity && candidateCity && currentCity === candidateCity) {
     score += 6;
     addReason(`You are both in ${candidateProfile.location.city}`, 6);
+  } else if (currentDistrict && candidateDistrict && currentDistrict === candidateDistrict) {
+    score += 5;
+    addReason(`You are both in ${candidateProfile.location.district} district`, 5);
+  } else if (
+    currentKeralaRegion &&
+    candidateKeralaRegion &&
+    currentKeralaRegion === candidateKeralaRegion
+  ) {
+    score += 4;
+    addReason('You are in the same part of Kerala', 4);
   } else if (currentState && candidateState && currentState === candidateState) {
     score += 4;
     addReason(`You are in the same region`, 4);
@@ -2413,6 +2482,10 @@ const normalizeProfileRow = (profileRow) => {
     videoIntroUrl: profileRow.video_intro_url || null,
     location: {
       city: profileRow.location_city || '',
+      district: profileRow.location_district || '',
+      locality: profileRow.location_locality || '',
+      pincode: profileRow.location_pincode || '',
+      keralaRegion: profileRow.kerala_region || '',
       state: profileRow.location_state || '',
       country: profileRow.location_country || '',
       lat: profileRow.location_lat ?? null,
@@ -3054,6 +3127,10 @@ router.post('/profiles', async (req, res) => {
       age,
       gender,
       city,
+      district,
+      locality,
+      pincode,
+      keralaRegion,
       state,
       country,
       bio,
@@ -3077,9 +3154,22 @@ router.post('/profiles', async (req, res) => {
     const normalizedFirstName = normalizeOptionalText(firstName);
     const normalizedAge = normalizeInteger(age);
     const normalizedGender = normalizeOptionalText(gender);
-    const normalizedCity = normalizeOptionalText(city);
-    const normalizedState = normalizeOptionalText(state);
-    const normalizedCountry = normalizeOptionalText(country);
+    const normalizedLocation = resolveKeralaLocation({
+      city: normalizeOptionalText(city),
+      district,
+      locality,
+      pincode,
+      keralaRegion,
+      state,
+      country
+    });
+    const normalizedCity = normalizeOptionalText(normalizedLocation.city);
+    const normalizedDistrict = normalizeOptionalText(normalizedLocation.district);
+    const normalizedLocality = normalizeOptionalText(normalizedLocation.locality);
+    const normalizedPincode = normalizedLocation.pincode;
+    const normalizedKeralaRegion = normalizeOptionalText(normalizedLocation.keralaRegion);
+    const normalizedState = normalizeOptionalText(normalizedLocation.state);
+    const normalizedCountry = normalizeOptionalText(normalizedLocation.country);
     const normalizedBio = normalizeOptionalText(bio);
     const normalizedHeight = normalizeHeight(height);
     const normalizedOccupation = normalizeOptionalText(occupation);
@@ -3114,9 +3204,14 @@ router.post('/profiles', async (req, res) => {
       return res.status(400).json({ error: 'Required fields missing' });
     }
 
+    if (normalizeOptionalText(pincode) && !normalizedPincode) {
+      return res.status(400).json({ error: 'A valid 6-digit pincode is required' });
+    }
+
     const result = await db.query(
       `INSERT INTO dating_profiles (
-         user_id, first_name, age, gender, location_city, location_state,
+         user_id, first_name, age, gender, location_city, location_district,
+         location_locality, location_pincode, kerala_region, location_state,
          location_country, bio, relationship_goals, interests, height,
          occupation, education, body_type, ethnicity, religion, community_preference,
          languages, conversation_style, smoking, drinking, has_kids, wants_kids,
@@ -3126,13 +3221,18 @@ router.post('/profiles', async (req, res) => {
          $1, $2, $3, $4, $5, $6,
          $7, $8, $9, $10, $11,
          $12, $13, $14, $15, $16, $17,
-         $18, $19, $20, $21, $22, $23, $24, CURRENT_TIMESTAMP
+         $18, $19, $20, $21, $22, $23,
+         $24, $25, $26, $27, $28, CURRENT_TIMESTAMP
        )
        ON CONFLICT (user_id) DO UPDATE
        SET first_name = EXCLUDED.first_name,
            age = EXCLUDED.age,
            gender = EXCLUDED.gender,
            location_city = EXCLUDED.location_city,
+           location_district = EXCLUDED.location_district,
+           location_locality = EXCLUDED.location_locality,
+           location_pincode = EXCLUDED.location_pincode,
+           kerala_region = EXCLUDED.kerala_region,
            location_state = EXCLUDED.location_state,
            location_country = EXCLUDED.location_country,
            bio = EXCLUDED.bio,
@@ -3156,10 +3256,12 @@ router.post('/profiles', async (req, res) => {
            last_active = CURRENT_TIMESTAMP
        RETURNING *`,
       [
-        userId, normalizedFirstName, normalizedAge, normalizedGender, normalizedCity, normalizedState,
-        normalizedCountry, normalizedBio, normalizedRelationshipGoals, normalizedInterests, normalizedHeight,
-        normalizedOccupation, normalizedEducation, normalizedBodyType, normalizedEthnicity, normalizedReligion, normalizedCommunityPreference,
-        normalizedLanguages, normalizedConversationStyle, normalizedSmoking, normalizedDrinking, normalizeBoolean(hasKids), normalizeBoolean(wantsKids), completionPercent
+        userId, normalizedFirstName, normalizedAge, normalizedGender, normalizedCity, normalizedDistrict,
+        normalizedLocality, normalizedPincode, normalizedKeralaRegion, normalizedState, normalizedCountry,
+        normalizedBio, normalizedRelationshipGoals, normalizedInterests, normalizedHeight, normalizedOccupation,
+        normalizedEducation, normalizedBodyType, normalizedEthnicity, normalizedReligion, normalizedCommunityPreference,
+        normalizedLanguages, normalizedConversationStyle, normalizedSmoking, normalizedDrinking,
+        normalizeBoolean(hasKids), normalizeBoolean(wantsKids), completionPercent
       ]
     );
 
@@ -3256,6 +3358,10 @@ router.put('/profiles/me', async (req, res) => {
       interests,
       relationshipGoals,
       city,
+      district,
+      locality,
+      pincode,
+      keralaRegion,
       religion,
       communityPreference,
       conversationStyle,
@@ -3265,7 +3371,27 @@ router.put('/profiles/me', async (req, res) => {
     const normalizedInterests = interests === undefined ? null : normalizeInterestList(interests);
     const normalizedRelationshipGoals =
       relationshipGoals === undefined ? null : normalizeOptionalText(relationshipGoals);
-    const normalizedCity = city === undefined ? null : normalizeOptionalText(city);
+    const normalizedLocation =
+      city === undefined &&
+      district === undefined &&
+      locality === undefined &&
+      pincode === undefined &&
+      keralaRegion === undefined
+        ? null
+        : resolveKeralaLocation({ city, district, locality, pincode, keralaRegion });
+    const normalizedCity =
+      normalizedLocation === null ? null : normalizeOptionalText(normalizedLocation.city);
+    const normalizedDistrict =
+      normalizedLocation === null ? null : normalizeOptionalText(normalizedLocation.district);
+    const normalizedLocality =
+      normalizedLocation === null ? null : normalizeOptionalText(normalizedLocation.locality);
+    const normalizedPincode = normalizedLocation === null ? null : normalizedLocation.pincode;
+    const normalizedKeralaRegion =
+      normalizedLocation === null ? null : normalizeOptionalText(normalizedLocation.keralaRegion);
+    const normalizedState =
+      normalizedLocation === null ? null : normalizeOptionalText(normalizedLocation.state);
+    const normalizedCountry =
+      normalizedLocation === null ? null : normalizeOptionalText(normalizedLocation.country);
     const normalizedReligion = religion === undefined ? null : normalizeOptionalText(religion);
     const normalizedCommunityPreference =
       communityPreference === undefined ? null : normalizeOptionalText(communityPreference);
@@ -3273,24 +3399,40 @@ router.put('/profiles/me', async (req, res) => {
       conversationStyle === undefined ? null : normalizeOptionalText(conversationStyle);
     const normalizedLanguages = languages === undefined ? null : normalizeLanguageList(languages);
 
+    if (normalizeOptionalText(pincode) && normalizedPincode === null) {
+      return res.status(400).json({ error: 'A valid 6-digit pincode is required' });
+    }
+
     const result = await db.query(
       `UPDATE dating_profiles 
        SET bio = COALESCE($1, bio),
            interests = COALESCE($2, interests),
            relationship_goals = COALESCE($3, relationship_goals),
            location_city = COALESCE($4, location_city),
-           religion = COALESCE($5, religion),
-           community_preference = COALESCE($6, community_preference),
-           conversation_style = COALESCE($7, conversation_style),
-           languages = COALESCE($8, languages),
+           location_district = COALESCE($5, location_district),
+           location_locality = COALESCE($6, location_locality),
+           location_pincode = COALESCE($7, location_pincode),
+           kerala_region = COALESCE($8, kerala_region),
+           location_state = COALESCE($9, location_state),
+           location_country = COALESCE($10, location_country),
+           religion = COALESCE($11, religion),
+           community_preference = COALESCE($12, community_preference),
+           conversation_style = COALESCE($13, conversation_style),
+           languages = COALESCE($14, languages),
            updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = $9
+       WHERE user_id = $15
        RETURNING *`,
       [
         normalizedBio,
         normalizedInterests,
         normalizedRelationshipGoals,
         normalizedCity,
+        normalizedDistrict,
+        normalizedLocality,
+        normalizedPincode,
+        normalizedKeralaRegion,
+        normalizedState,
+        normalizedCountry,
         normalizedReligion,
         normalizedCommunityPreference,
         normalizedConversationStyle,
@@ -3473,6 +3615,10 @@ router.post('/search', async (req, res) => {
       languages,
       conversationStyle,
       city,
+      district,
+      locality,
+      pincode,
+      keralaRegion,
       onlyVerifiedProfiles,
       communityPreference
     } = req.body;
@@ -3488,9 +3634,17 @@ router.post('/search', async (req, res) => {
     const normalizedLanguages = normalizeLanguageList(languages);
     const normalizedConversationStyle = normalizeOptionalText(conversationStyle);
     const normalizedCity = normalizeOptionalText(city);
+    const normalizedDistrict = normalizeKeralaDistrict(district);
+    const normalizedLocality = normalizeOptionalText(locality);
+    const normalizedPincode = pincode === undefined ? '' : normalizeIndianPincode(pincode);
+    const normalizedKeralaRegion = normalizeKeralaRegion(keralaRegion);
     const normalizedCommunityPreference = normalizeOptionalText(communityPreference);
     const verifiedOnly = normalizeBoolean(onlyVerifiedProfiles);
     const radiusKm = normalizeInteger(distance);
+
+    if (normalizeOptionalText(pincode) && !normalizedPincode) {
+      return res.status(400).json({ error: 'A valid 6-digit pincode is required' });
+    }
 
     // Get current user's location for distance filtering
     const currentProfileResult = await db.query(
@@ -3567,8 +3721,29 @@ router.post('/search', async (req, res) => {
       params.push(normalizedConversationStyle);
     }
     if (normalizedCity) {
-      query += ` AND LOWER(COALESCE(dp.location_city, '')) = LOWER($${paramIndex++})`;
-      params.push(normalizedCity);
+      query += ` AND (
+        LOWER(COALESCE(dp.location_city, '')) = ANY($${paramIndex}::text[])
+        OR LOWER(COALESCE(dp.location_district, '')) = ANY($${paramIndex}::text[])
+        OR LOWER(COALESCE(dp.location_locality, '')) = ANY($${paramIndex}::text[])
+      )`;
+      params.push(buildLocationSearchTerms(normalizedCity));
+      paramIndex += 1;
+    }
+    if (normalizedDistrict) {
+      query += ` AND LOWER(COALESCE(dp.location_district, '')) = LOWER($${paramIndex++})`;
+      params.push(normalizedDistrict);
+    }
+    if (normalizedLocality) {
+      query += ` AND LOWER(COALESCE(dp.location_locality, '')) LIKE LOWER($${paramIndex++})`;
+      params.push(`%${normalizedLocality}%`);
+    }
+    if (normalizedPincode) {
+      query += ` AND COALESCE(dp.location_pincode, '') = $${paramIndex++}`;
+      params.push(normalizedPincode);
+    }
+    if (normalizedKeralaRegion) {
+      query += ` AND LOWER(COALESCE(dp.kerala_region, '')) = LOWER($${paramIndex++})`;
+      params.push(normalizedKeralaRegion);
     }
     if (normalizedCommunityPreference) {
       query += ` AND (
@@ -3614,6 +3789,10 @@ router.post('/search', async (req, res) => {
         languages: normalizedLanguages,
         conversationStyle: normalizedConversationStyle,
         city: normalizedCity,
+        district: normalizedDistrict,
+        locality: normalizedLocality,
+        pincode: normalizedPincode,
+        keralaRegion: normalizedKeralaRegion,
         onlyVerifiedProfiles: verifiedOnly,
         communityPreference: normalizedCommunityPreference
       },

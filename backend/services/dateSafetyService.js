@@ -494,8 +494,6 @@ const dateSafetyService = {
  * @param {number} longitude
  */
 async function getLocalEmergencyNumber(latitude, longitude) {
-  // This is a simplified version - in production, use geolocation API
-  // to determine country and return appropriate emergency number
   const emergencyNumbers = {
     'US': '911',
     'UK': '999',
@@ -507,8 +505,23 @@ async function getLocalEmergencyNumber(latitude, longitude) {
     'BR': '190',
   };
 
-  // For now, return US number as default
-  return emergencyNumbers['US'];
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  const defaultCountryCode = String(process.env.DEFAULT_EMERGENCY_COUNTRY || 'IN').toUpperCase();
+
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    const isWithinIndia =
+      lat >= 6.0 &&
+      lat <= 38.5 &&
+      lng >= 68.0 &&
+      lng <= 97.5;
+
+    if (isWithinIndia) {
+      return emergencyNumbers['IN'];
+    }
+  }
+
+  return emergencyNumbers[defaultCountryCode] || emergencyNumbers['IN'];
 }
 
 /**

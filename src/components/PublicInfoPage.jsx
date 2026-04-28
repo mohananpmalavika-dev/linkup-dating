@@ -1,30 +1,33 @@
 import React from 'react';
 import { useNavigate } from '../router';
-import { PUBLIC_PAGE_CONTENT } from '../data/publicPages';
+import { getTranslation } from '../data/translations';
+import { getPublicPageContent, getPublicUiCopy } from '../data/publicPages';
 import PublicResourceLinks from './PublicResourceLinks';
 import '../styles/PublicInfoPage.css';
 
-const PublicInfoPage = ({ pageKey }) => {
+const PublicInfoPage = ({ language = 'en', pageKey }) => {
   const navigate = useNavigate();
-  const page = PUBLIC_PAGE_CONTENT[pageKey];
+  const page = getPublicPageContent(pageKey, language);
+  const uiCopy = getPublicUiCopy(language);
+  const { direction } = getTranslation(language);
 
   if (!page) {
     return null;
   }
 
   return (
-    <main className="public-info-page">
+    <main className="public-info-page" dir={direction}>
       <div className="public-info-shell">
         <header className="public-info-hero">
           <button type="button" className="public-info-home" onClick={() => navigate('/')}>
-            Open LinkUp
+            {uiCopy.openApp}
           </button>
           <p className="public-info-eyebrow">{page.eyebrow}</p>
           <h1>{page.title}</h1>
           <p className="public-info-summary">{page.summary}</p>
           <div className="public-info-meta">
             <span>{page.lastUpdated}</span>
-            <span>Public page for LinkUp Dating users and reviewers</span>
+            <span>{uiCopy.audienceLabel}</span>
           </div>
           {Array.isArray(page.heroActions) && page.heroActions.length > 0 ? (
             <div className="public-info-actions">
@@ -50,7 +53,7 @@ const PublicInfoPage = ({ pageKey }) => {
               ))}
             </div>
           ) : null}
-          <PublicResourceLinks variant="pills" />
+          <PublicResourceLinks language={language} variant="pills" />
         </header>
 
         <div className="public-info-layout">

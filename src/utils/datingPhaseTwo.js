@@ -1,3 +1,5 @@
+import { getKeralaRegionLabel, normalizeMajorKeralaCity } from './keralaLocation';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const CITY_PACKS = {
@@ -36,6 +38,44 @@ const CITY_PACKS = {
         type: 'walk',
         title: 'Fort Kochi walk with a coffee reset',
         reason: 'A strong first-date format for curious, talkative matches.'
+      }
+    ]
+  },
+  thiruvananthapuram: {
+    vibe: 'Coastal-and-composed',
+    prompts: [
+      'What part of Trivandrum still feels calm and grounding for you?',
+      'If you had to plan a first date around the city without overthinking it, what would it look like?'
+    ],
+    dateIdeas: [
+      {
+        type: 'coffee',
+        title: 'Coffee and a slower catch-up near your side of town',
+        reason: 'A strong fit for intentional matches who want clarity without pressure.'
+      },
+      {
+        type: 'walk',
+        title: 'A relaxed evening walk with room to keep talking',
+        reason: 'Good when both people want something local, safe, and easy to extend.'
+      }
+    ]
+  },
+  kozhikode: {
+    vibe: 'Seafront-and-snack-run',
+    prompts: [
+      'What is your most reliable feel-good plan in Kozhikode after a long week?',
+      'If someone was new to Calicut, what local stop would you make them experience first?'
+    ],
+    dateIdeas: [
+      {
+        type: 'food',
+        title: 'Local snack stop and a real conversation',
+        reason: 'Easy chemistry check with a familiar Kozhikode rhythm.'
+      },
+      {
+        type: 'walk',
+        title: 'Beachside walk that can stay short or stretch longer',
+        reason: 'Useful for matches who want something low-pressure and conversational.'
       }
     ]
   },
@@ -185,7 +225,10 @@ const getLanguageIcebreakers = (languages = [], viewerLanguages = []) => {
 };
 
 export const buildLocalIdentityPack = (profile = {}, viewerProfile = {}) => {
-  const cityName = normalizeText(profile.location?.city || profile.city);
+  const cityName = normalizeMajorKeralaCity(normalizeText(profile.location?.city || profile.city));
+  const districtName = normalizeText(profile.location?.district);
+  const localityName = normalizeText(profile.location?.locality);
+  const keralaRegionLabel = getKeralaRegionLabel(profile.location?.keralaRegion);
   const cityPack = CITY_PACKS[normalizeCityKey(cityName)] || DEFAULT_CITY_PACK;
   const languages = normalizeArray(profile.languages);
   const viewerLanguages = normalizeArray(viewerProfile.languages);
@@ -199,7 +242,12 @@ export const buildLocalIdentityPack = (profile = {}, viewerProfile = {}) => {
   const conversationStyle = normalizeText(profile.conversationStyle);
 
   const badges = unique([
+    localityName ? `${localityName} nearby` : '',
     cityName ? `${cityName} local` : '',
+    districtName && normalizeCityKey(districtName) !== normalizeCityKey(cityName)
+      ? `${districtName} district`
+      : '',
+    keralaRegionLabel ? keralaRegionLabel : '',
     languages.length >= 2 ? 'Multilingual' : '',
     sharedLanguages.length > 0 ? `Shared language: ${sharedLanguages[0]}` : '',
     communityPreference ? communityPreference : '',
@@ -210,7 +258,7 @@ export const buildLocalIdentityPack = (profile = {}, viewerProfile = {}) => {
     tone:
       label.includes('Shared language') || label === 'Multilingual'
         ? 'language'
-        : label.includes('local')
+        : label.includes('local') || label.includes('nearby') || label.includes('district') || label.includes('Kerala')
           ? 'city'
           : 'culture'
   }));

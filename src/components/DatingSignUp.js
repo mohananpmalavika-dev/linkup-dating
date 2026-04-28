@@ -1,6 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { getTranslationValue } from '../data/translations';
 import { API_BASE_URL } from '../utils/api';
+import { isValidPincode } from '../utils/ecommerceHelpers';
+import {
+  KERALA_REGION_OPTIONS,
+  getDistrictOptionsForRegion,
+  normalizePincodeInput,
+  resolveKeralaLocation
+} from '../utils/keralaLocation';
 import PublicLegalNotice from './PublicLegalNotice';
 import '../styles/DatingSignUp.css';
 
@@ -58,7 +66,7 @@ const MESSAGE_GATING_OPTIONS = [
  * Sign up for dating app with profile creation
  * Uses OTP-based authentication matching the Login flow
  */
-const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
+const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
   const [step, setStep] = useState(1); // 1: Email OTP, 2: Username, 3: Profile, 4: Photos
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -67,8 +75,8 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
   // OTP verification state
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
+  const [otpId, setOtpId] = useState('');
   const [otpSent, setOtpSent] = useState(false);
-  const [devOtp, setDevOtp] = useState('');
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [verifiedUser, setVerifiedUser] = useState(null);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -89,6 +97,10 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
     age: '',
     gender: 'female',
     city: '',
+    district: '',
+    locality: '',
+    pincode: '',
+    keralaRegion: '',
     state: '',
     country: '',
     bio: '',
@@ -112,8 +124,11 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
     'Travel', 'Fitness', 'Music', 'Art', 'Cooking', 'Gaming', 'Sports',
     'Hiking', 'Photography', 'Reading', 'Movies', 'Yoga', 'Meditation',
   ];
+  const districtOptions = getDistrictOptionsForRegion(formData.keralaRegion);
 
   const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const looksLikePhoneNumber = (value) => /^\+?[0-9\s()-]{7,}$/.test(String(value || '').trim());
+  const legalNoticeMessage = getTranslationValue(language, 'public.signupNotice');
 
   const validateUsername = (value) => {
     return /^[a-zA-Z0-9_-]{3,20}$/.test(value);
@@ -188,7 +203,9 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
   const handleSendOtp = async (e) => {
     e.preventDefault();
     setError('');
-    setDevOtp('');
+    setSuccess('');
+
+    const normalizedEmail = email.trim().toLowerCase();
 
     if (referralCode.trim()) {
       const validReferral = await validateReferralCode(referralCode, false);
@@ -198,12 +215,17 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
       }
     }
 
-    if (!email.trim()) {
+    if (!normalizedEmail) {
       setError('Please enter your email');
       return;
     }
 
-    if (!validateEmail(email)) {
+    if (looksLikePhoneNumber(email) && !validateEmail(normalizedEmail)) {
+      setError('Phone OTP is not available yet. Please use your email address.');
+      return;
+    }
+
+    if (!validateEmail(normalizedEmail)) {
       setError('Please enter a valid email address');
       return;
     }
@@ -211,16 +233,13 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
     setLoading(true);
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         purpose: 'signup'
       });
 
-      if (response.data.devOtp) {
-        setDevOtp(response.data.devOtp);
-      }
-
+      setOtpId(response.data.otpId || '');
       setOtpSent(true);
-      setSuccess('OTP sent to your email!');
+      setSuccess(response.data?.message || 'OTP sent to your email!');
       setResendCooldown(60); // 60 second cooldown
       
       // Start countdown timer
@@ -247,20 +266,20 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
   const handleResendOtp = async (e) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setOtp('');
+
+    const normalizedEmail = email.trim().toLowerCase();
 
     setLoading(true);
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         purpose: 'signup'
       });
 
-      if (response.data.devOtp) {
-        setDevOtp(response.data.devOtp);
-      }
-
-      setSuccess('OTP resent to your email!');
+      setOtpId(response.data.otpId || '');
+      setSuccess(response.data?.message || 'OTP resent to your email!');
       setResendCooldown(60); // Reset cooldown
       
       // Start countdown timer
@@ -293,11 +312,17 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
       return;
     }
 
+    if (!/^\d{6}$/.test(otp.trim())) {
+      setError('Please enter the 6-digit OTP');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, {
         email: email.trim().toLowerCase(),
-        otp: otp.trim()
+        otp: otp.trim(),
+        otpId
       });
 
       const { token, user } = response.data;
@@ -306,6 +331,7 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
       setStep(2); // Move to username setup
       setSuccess('Email verified! Now set your username.');
       setOtp('');
+      setOtpId('');
       setOtpSent(false);
       await Promise.all([
         axios.post(
@@ -412,7 +438,19 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
 
   const handleProfileInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const nextValue = name === 'pincode' ? normalizePincodeInput(value) : value;
+      const nextData = { ...prev, [name]: nextValue };
+
+      if (['city', 'district', 'locality', 'pincode', 'keralaRegion', 'state', 'country'].includes(name)) {
+        return {
+          ...nextData,
+          ...resolveKeralaLocation(nextData)
+        };
+      }
+
+      return nextData;
+    });
   };
 
   const handleInterestToggle = (interest) => {
@@ -443,10 +481,12 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
 
   const handleNext = () => {
     setError('');
+    const resolvedLocation = resolveKeralaLocation(formData);
+
     if (
       !formData.firstName ||
       !formData.age ||
-      !formData.city ||
+      !resolvedLocation.city ||
       !formData.relationshipGoals ||
       !formData.languages.length ||
       !formData.conversationStyle ||
@@ -458,12 +498,21 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
       return;
     }
 
+    if (formData.pincode && !isValidPincode(formData.pincode)) {
+      setError('Enter a valid 6-digit pincode so nearby discovery can use it.');
+      return;
+    }
+
     void trackFunnelEvent('dating_onboarding_profile_details_saved', {
       context: {
         relationshipGoals: formData.relationshipGoals,
         languageCount: formData.languages.length,
         hasReligion: Boolean(formData.religion),
         hasCommunityPreference: Boolean(formData.communityPreference),
+        hasDistrict: Boolean(resolvedLocation.district),
+        hasLocality: Boolean(resolvedLocation.locality),
+        hasPincode: Boolean(resolvedLocation.pincode),
+        keralaRegion: resolvedLocation.keralaRegion || null,
         conversationStyle: formData.conversationStyle,
         weekendStyle: formData.weekendStyle,
         planningStyle: formData.planningStyle,
@@ -479,6 +528,13 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    const resolvedLocation = resolveKeralaLocation(formData);
+
+    if (formData.pincode && !isValidPincode(formData.pincode)) {
+      setLoading(false);
+      setError('Enter a valid 6-digit pincode before creating your profile.');
+      return;
+    }
 
     try {
       // Create dating profile
@@ -486,9 +542,13 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
         firstName: formData.firstName,
         age: formData.age,
         gender: formData.gender,
-        city: formData.city,
-        state: formData.state,
-        country: formData.country,
+        city: resolvedLocation.city,
+        district: resolvedLocation.district,
+        locality: resolvedLocation.locality,
+        pincode: resolvedLocation.pincode,
+        keralaRegion: resolvedLocation.keralaRegion,
+        state: resolvedLocation.state,
+        country: resolvedLocation.country,
         bio: formData.bio,
         relationshipGoals: formData.relationshipGoals,
         languages: formData.languages,
@@ -567,6 +627,10 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
           photoCount: formData.photos.length,
           relationshipGoals: formData.relationshipGoals,
           languageCount: formData.languages.length,
+          hasDistrict: Boolean(resolvedLocation.district),
+          hasLocality: Boolean(resolvedLocation.locality),
+          hasPincode: Boolean(resolvedLocation.pincode),
+          keralaRegion: resolvedLocation.keralaRegion || null,
           weekendStyle: formData.weekendStyle,
           planningStyle: formData.planningStyle,
           socialEnergy: formData.socialEnergy,
@@ -660,7 +724,7 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                   ) : null}
                 </div>
                 <button type="submit" className="btn-submit" disabled={loading}>
-                  {loading ? 'Sending OTP...' : 'Send OTP'}
+                  {loading ? 'Sending OTP...' : 'Send Email OTP'}
                 </button>
               </>
             ) : (
@@ -669,18 +733,15 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                   <label>Enter OTP</label>
                   <input
                     type="text"
+                    inputMode="numeric"
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value)}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="Enter 6-digit OTP"
                     maxLength="6"
+                    autoComplete="one-time-code"
                     disabled={loading}
                   />
                 </div>
-                {devOtp && (
-                  <div className="dev-otp-message">
-                    <small>Dev OTP: <strong>{devOtp}</strong></small>
-                  </div>
-                )}
                 <button type="submit" className="btn-submit" disabled={loading}>
                   {loading ? 'Verifying...' : 'Verify OTP'}
                 </button>
@@ -702,6 +763,7 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                     onClick={() => {
                       setOtpSent(false);
                       setOtp('');
+                      setOtpId('');
                       if (resendTimerRef.current) {
                         clearInterval(resendTimerRef.current);
                       }
@@ -800,8 +862,67 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                 name="city"
                 value={formData.city}
                 onChange={handleProfileInputChange}
-                placeholder="Your city"
+                placeholder="Kochi, Trivandrum, Kozhikode..."
               />
+              <small className="helper-text">
+                Use the city people nearby would actually search for.
+              </small>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>District</label>
+                <select
+                  name="district"
+                  value={formData.district}
+                  onChange={handleProfileInputChange}
+                >
+                  <option value="">Select district</option>
+                  {districtOptions.map((district) => (
+                    <option key={district.value} value={district.value}>
+                      {district.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Locality Or Neighborhood</label>
+                <input
+                  type="text"
+                  name="locality"
+                  value={formData.locality}
+                  onChange={handleProfileInputChange}
+                  placeholder="Fort Kochi, Kakkanad, Kowdiar..."
+                />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Pincode</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  name="pincode"
+                  value={formData.pincode}
+                  onChange={handleProfileInputChange}
+                  placeholder="682030"
+                  maxLength="6"
+                />
+              </div>
+              <div className="form-group">
+                <label>Kerala Region</label>
+                <select
+                  name="keralaRegion"
+                  value={formData.keralaRegion}
+                  onChange={handleProfileInputChange}
+                >
+                  <option value="">Select region</option>
+                  {KERALA_REGION_OPTIONS.map((region) => (
+                    <option key={region.value} value={region.value}>
+                      {region.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="form-row">
               <div className="form-group">
@@ -825,6 +946,10 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
                 />
               </div>
             </div>
+            <small className="helper-text">
+              District, locality, pincode, and Kerala region help LinkUp make tighter Kochi,
+              Trivandrum, and Calicut-area matches.
+            </small>
             <div className="form-group">
               <label>Relationship Intent *</label>
               <select name="relationshipGoals" value={formData.relationshipGoals} onChange={handleProfileInputChange}>
@@ -1049,7 +1174,7 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
           </div>
         )}
 
-        <PublicLegalNotice message="By creating an account, you agree to the Terms and acknowledge the Privacy Policy. Grievance and support contacts are public, including guidance for ID verification, location sharing, and camera or microphone features." />
+        <PublicLegalNotice language={language} message={legalNoticeMessage} />
       </div>
     </div>
   );

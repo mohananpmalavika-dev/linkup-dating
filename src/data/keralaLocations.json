@@ -1,0 +1,127 @@
+{
+  "regions": [
+    { "value": "south", "label": "South Kerala" },
+    { "value": "central", "label": "Central Kerala" },
+    { "value": "north", "label": "North Kerala" }
+  ],
+  "districts": [
+    {
+      "value": "Thiruvananthapuram",
+      "label": "Thiruvananthapuram",
+      "region": "south",
+      "aliases": ["Trivandrum", "TVM"],
+      "cityAliases": ["Thiruvananthapuram", "Trivandrum", "Kazhakkoottam", "Kowdiar", "Varkala", "Attingal", "Technopark"]
+    },
+    {
+      "value": "Kollam",
+      "label": "Kollam",
+      "region": "south",
+      "aliases": ["Quilon"],
+      "cityAliases": ["Kollam", "Karunagappally", "Punalur", "Paravur"]
+    },
+    {
+      "value": "Pathanamthitta",
+      "label": "Pathanamthitta",
+      "region": "south",
+      "aliases": [],
+      "cityAliases": ["Pathanamthitta", "Adoor", "Thiruvalla", "Pandalam"]
+    },
+    {
+      "value": "Alappuzha",
+      "label": "Alappuzha",
+      "region": "south",
+      "aliases": ["Alleppey"],
+      "cityAliases": ["Alappuzha", "Alleppey", "Cherthala", "Kayamkulam", "Mavelikara"]
+    },
+    {
+      "value": "Kottayam",
+      "label": "Kottayam",
+      "region": "central",
+      "aliases": [],
+      "cityAliases": ["Kottayam", "Pala", "Changanassery", "Ettumanoor"]
+    },
+    {
+      "value": "Idukki",
+      "label": "Idukki",
+      "region": "central",
+      "aliases": [],
+      "cityAliases": ["Idukki", "Munnar", "Thodupuzha", "Kattappana"]
+    },
+    {
+      "value": "Ernakulam",
+      "label": "Ernakulam",
+      "region": "central",
+      "aliases": [],
+      "cityAliases": ["Kochi", "Cochin", "Ernakulam", "Kakkanad", "Fort Kochi", "Edappally", "Kaloor", "Aluva", "Tripunithura", "Angamaly"]
+    },
+    {
+      "value": "Thrissur",
+      "label": "Thrissur",
+      "region": "central",
+      "aliases": ["Trichur"],
+      "cityAliases": ["Thrissur", "Trichur", "Guruvayur", "Kodungallur", "Chalakudy"]
+    },
+    {
+      "value": "Palakkad",
+      "label": "Palakkad",
+      "region": "central",
+      "aliases": ["Palghat"],
+      "cityAliases": ["Palakkad", "Palghat", "Ottapalam", "Mannarkkad"]
+    },
+    {
+      "value": "Malappuram",
+      "label": "Malappuram",
+      "region": "north",
+      "aliases": [],
+      "cityAliases": ["Malappuram", "Manjeri", "Tirur", "Perinthalmanna"]
+    },
+    {
+      "value": "Kozhikode",
+      "label": "Kozhikode",
+      "region": "north",
+      "aliases": ["Calicut"],
+      "cityAliases": ["Kozhikode", "Calicut", "Feroke", "Koyilandy"]
+    },
+    {
+      "value": "Wayanad",
+      "label": "Wayanad",
+      "region": "north",
+      "aliases": [],
+      "cityAliases": ["Wayanad", "Kalpetta", "Sulthan Bathery", "Mananthavady"]
+    },
+    {
+      "value": "Kannur",
+      "label": "Kannur",
+      "region": "north",
+      "aliases": ["Cannanore"],
+      "cityAliases": ["Kannur", "Cannanore", "Thalassery", "Payyanur"]
+    },
+    {
+      "value": "Kasaragod",
+      "label": "Kasaragod",
+      "region": "north",
+      "aliases": ["Kasargod"],
+      "cityAliases": ["Kasaragod", "Kasargod", "Kanhangad", "Uppala"]
+    }
+  ],
+  "majorCities": [
+    {
+      "value": "Kochi",
+      "aliases": ["Cochin", "Ernakulam"],
+      "district": "Ernakulam",
+      "region": "central"
+    },
+    {
+      "value": "Thiruvananthapuram",
+      "aliases": ["Trivandrum", "TVM"],
+      "district": "Thiruvananthapuram",
+      "region": "south"
+    },
+    {
+      "value": "Kozhikode",
+      "aliases": ["Calicut"],
+      "district": "Kozhikode",
+      "region": "north"
+    }
+  ]
+}

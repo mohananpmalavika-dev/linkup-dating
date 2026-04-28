@@ -1,18 +1,20 @@
 import React from 'react';
 import { useLocation, useNavigate } from '../router';
-import { PUBLIC_RESOURCE_ROUTES } from '../data/publicPages';
+import { getPublicResourceRoutes, getPublicUiCopy } from '../data/publicPages';
 import '../styles/PublicResourceLinks.css';
 
-const PublicResourceLinks = ({ variant = 'inline' }) => {
+const PublicResourceLinks = ({ language = 'en', variant = 'inline' }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const resourceRoutes = getPublicResourceRoutes(language);
+  const uiCopy = getPublicUiCopy(language);
 
   return (
     <nav
-      aria-label="Public legal and support resources"
+      aria-label={uiCopy.navAriaLabel}
       className={`public-resource-links public-resource-links-${variant}`}
     >
-      {PUBLIC_RESOURCE_ROUTES.map((resource) => {
+      {resourceRoutes.map((resource) => {
         const isActive = location.pathname === resource.path;
 
         return (

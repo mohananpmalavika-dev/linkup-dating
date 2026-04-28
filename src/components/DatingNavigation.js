@@ -56,12 +56,31 @@ const DatingNavigation = ({ currentPage, onPageChange, unreadCount = 0, matchCou
       </button>
 
       <button
+        className={`nav-btn nav-btn-sos ${currentPage === 'sosalert' ? 'active' : ''}`}
+        onClick={() => onPageChange('sosalert')}
+        title="SOS Safety Center"
+        aria-label="SOS Safety Center"
+      >
+        <span className="nav-icon">!</span>
+        <span className="nav-label">SOS</span>
+      </button>
+
+      <button
         className={`nav-btn ${currentPage === 'profile' ? 'active' : ''}`}
         onClick={() => onPageChange('profile')}
         title="Profile"
       >
         <span className="nav-icon">P</span>
         <span className="nav-label">Profile</span>
+      </button>
+
+      <button
+        className={`nav-btn ${currentPage === 'more' ? 'active' : ''}`}
+        onClick={() => onPageChange('more')}
+        title="More"
+      >
+        <span className="nav-icon">+</span>
+        <span className="nav-label">More</span>
       </button>
     </nav>
   );
