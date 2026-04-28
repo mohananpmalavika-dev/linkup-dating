@@ -1,0 +1,243 @@
+/**
+ * BoostButton Styling
+ */
+
+.boost-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.boost-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: left 0.3s ease;
+}
+
+.boost-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+}
+
+.boost-btn:hover::before {
+  left: 100%;
+}
+
+.boost-btn:active {
+  transform: translateY(0);
+}
+
+.boost-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* Compact Button */
+.boost-btn.compact {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.boost-btn.compact .boost-icon {
+  font-size: 14px;
+}
+
+/* Full Button */
+.boost-btn.full-btn {
+  gap: 12px;
+  padding: 14px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.boost-btn-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+}
+
+.boost-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.boost-subtitle {
+  display: block;
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.boost-arrow {
+  font-size: 16px;
+  transition: transform 0.3s ease;
+}
+
+.boost-btn.full-btn:hover .boost-arrow {
+  transform: translateX(4px);
+}
+
+/* Active State */
+.boost-btn.active {
+  background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+}
+
+.boost-btn.active:hover {
+  box-shadow: 0 8px 20px rgba(245, 158, 11, 0.4);
+}
+
+/* Active Indicator */
+.active-indicator {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background: #4ade80;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(74, 222, 128, 0);
+  }
+}
+
+/* Upgrade Button */
+.boost-btn.upgrade-btn {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
+.boost-btn.upgrade-btn:hover {
+  opacity: 0.9;
+  transform: none;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+/* Modal Overlay */
+.boost-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.boost-modal-content {
+  max-width: 900px;
+  width: 100%;
+  max-height: 90vh;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  .boost-btn {
+    color: #fff;
+  }
+
+  .boost-modal-overlay {
+    background: rgba(0, 0, 0, 0.7);
+  }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+  .boost-btn.full-btn {
+    width: 100%;
+    padding: 12px 16px;
+  }
+
+  .boost-btn-content {
+    flex: 1;
+  }
+
+  .boost-title {
+    font-size: 13px;
+  }
+
+  .boost-subtitle {
+    font-size: 11px;
+  }
+
+  .boost-modal-content {
+    max-height: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .boost-btn.full-btn {
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .boost-btn-content {
+    align-items: center;
+    text-align: center;
+  }
+
+  .boost-arrow {
+    display: none;
+  }
+
+  .boost-modal-overlay {
+    padding: 0;
+  }
+
+  .boost-modal-content {
+    border-radius: 12px 12px 0 0;
+    max-height: 100%;
+  }
+}

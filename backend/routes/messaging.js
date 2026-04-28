@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../config/database');
 const spamFraudService = require('../services/spamFraudService');
 const userNotificationService = require('../services/userNotificationService');
+const streakService = require('../services/streakService');
 
 const ALLOWED_MESSAGE_REACTIONS = new Set(['❤️', '👍', '😂', '🔥', '👏']);
 
@@ -229,6 +230,28 @@ router.post('/matches/:matchId/messages', async (req, res) => {
         fromUserName
       }
     });
+
+    // Update streak tracking
+    try {
+      const streakResult = await streakService.updateStreakOnMessage(
+        matchId,
+        userId,
+        toUserId
+      );
+
+      // Emit streak update event
+      if (req.io && streakResult) {
+        req.io.to(`match_${matchId}`).emit('streak:updated', {
+          matchId: Number.parseInt(matchId, 10),
+          streakDays: streakResult.streak?.streakDays || 0,
+          isNew: streakResult.isNew || false,
+          milestoneTrigger: streakResult.milestoneTrigger || null
+        });
+      }
+    } catch (err) {
+      console.error('Error updating streak:', err);
+      // Don't fail the message if streak update fails
+    }
 
     spamFraudService.trackUserActivity({
       userId,

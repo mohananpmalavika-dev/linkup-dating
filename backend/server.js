@@ -24,6 +24,14 @@ const videoCallRoutes = require('./routes/video-calls');
 const socialRoutes = require('./routes/social');
 const notificationRoutes = require('./routes/notifications');
 const challengeRoutes = require('./routes/challenges');
+const streakRoutes = require('./routes/streaks');
+const introductionsRoutes = require('./routes/introductions');
+const boostRoutes = require('./routes/boosts');
+const preferencesPriorityRoutes = require('./routes/preferencesPriority');
+const profileResetRoutes = require('./routes/profileReset');
+const eventRoutes = require('./routes/events');
+const doubleDatesRoutes = require('./routes/doubleDates');
+const referralRoutes = require('./routes/referrals');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
@@ -416,6 +424,14 @@ app.use('/api/admin', authenticateToken, adminRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/notifications', authenticateToken, notificationRoutes);
 app.use('/api/challenges', authenticateToken, challengeRoutes);
+app.use('/api/streaks', authenticateToken, streakRoutes);
+app.use('/api/introductions', authenticateToken, introductionsRoutes);
+app.use('/api/boosts', boostRoutes);
+app.use('/api/preferences-priority', authenticateToken, preferencesPriorityRoutes);
+app.use('/api/profile-reset', authenticateToken, profileResetRoutes);
+app.use('/api/events', authenticateToken, eventRoutes);
+app.use('/api/double-dates', authenticateToken, doubleDatesRoutes);
+app.use('/api/referrals', referralRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

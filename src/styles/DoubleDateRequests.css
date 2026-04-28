@@ -1,0 +1,201 @@
+/* Double Date Requests */
+.double-date-requests {
+  padding: 16px;
+}
+
+.double-date-requests h3 {
+  margin: 0 0 16px 0;
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.double-date-requests .loading,
+.double-date-requests .error {
+  padding: 20px;
+  text-align: center;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.double-date-requests .loading {
+  background: #f9f9f9;
+  color: #666;
+}
+
+.double-date-requests .error {
+  background: #fee;
+  color: #c33;
+  border: 1px solid #fcc;
+}
+
+.double-date-requests .no-requests {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.double-date-requests .no-requests p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.double-date-requests .requests-list {
+  display: grid;
+  gap: 12px;
+}
+
+.double-date-requests .request-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.2s;
+}
+
+.double-date-requests .request-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border-color: #ff6b9d;
+}
+
+.double-date-requests .request-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.double-date-requests .request-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.double-date-requests .request-time {
+  font-size: 12px;
+  color: #999;
+}
+
+.double-date-requests .pair-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 8px;
+}
+
+.double-date-requests .pair {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.double-date-requests .user {
+  flex: 1;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #333;
+  border: 1px solid #e0e0e0;
+}
+
+.double-date-requests .heart {
+  font-size: 16px;
+}
+
+.double-date-requests .vs {
+  font-weight: bold;
+  color: #ff6b9d;
+  font-size: 18px;
+  padding: 0 4px;
+}
+
+.double-date-requests .details {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.double-date-requests .details p {
+  margin: 6px 0;
+  color: #666;
+}
+
+.double-date-requests .details strong {
+  color: #333;
+}
+
+.double-date-requests .message {
+  font-style: italic;
+  border-left: 2px solid #ff6b9d;
+  padding-left: 12px;
+  margin: 12px 0 6px 0 !important;
+}
+
+.double-date-requests .request-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.double-date-requests .request-actions button {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.double-date-requests .btn-approve {
+  background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+  color: white;
+}
+
+.double-date-requests .btn-approve:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.double-date-requests .btn-approve:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.double-date-requests .btn-reject {
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.double-date-requests .btn-reject:hover {
+  background: #efefef;
+}
+
+.double-date-requests .btn-reject:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .double-date-requests .pair-info {
+    flex-wrap: wrap;
+  }
+
+  .double-date-requests .vs {
+    width: 100%;
+    text-align: center;
+    margin: 8px 0;
+  }
+}

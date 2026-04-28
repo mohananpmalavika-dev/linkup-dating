@@ -1,0 +1,302 @@
+/**
+ * PriorityStatus Styling
+ * Compact badge with tooltip for quick status display
+ */
+
+.priority-status {
+  display: inline-block;
+  position: relative;
+}
+
+.priority-status-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+/* Inactive Status */
+.priority-status-inactive .priority-status-btn {
+  background: rgba(157, 157, 157, 0.1);
+  color: #9d9d9d;
+  border: 1px solid rgba(157, 157, 157, 0.2);
+}
+
+.priority-status-inactive .priority-status-btn:hover {
+  background: rgba(157, 157, 157, 0.2);
+  border-color: rgba(157, 157, 157, 0.3);
+}
+
+/* Expired Status */
+.priority-status-expired .priority-status-btn {
+  background: rgba(244, 67, 54, 0.1);
+  color: #ff6b6b;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.priority-status-expired .priority-status-btn:hover {
+  background: rgba(244, 67, 54, 0.2);
+  border-color: rgba(244, 67, 54, 0.4);
+}
+
+/* Active Status */
+.priority-status-active .priority-status-btn {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 237, 74, 0.05));
+  color: #ffd700;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.priority-status-active .priority-status-btn:hover {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 237, 74, 0.1));
+  border-color: rgba(255, 215, 0, 0.5);
+}
+
+/* Featured Status (Current Week) */
+.priority-status-active .priority-status-btn.featured {
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.2), rgba(255, 237, 74, 0.1));
+  color: #ffd700;
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
+}
+
+.priority-status-active .priority-status-btn.featured:hover {
+  box-shadow: 0 0 16px rgba(255, 215, 0, 0.3);
+}
+
+/* Pulse Animation for Featured */
+.priority-status-active .priority-status-btn.featured .icon.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+}
+
+.priority-status-btn .icon {
+  font-size: 14px;
+  display: inline-block;
+}
+
+.priority-status-btn .text {
+  display: inline-block;
+}
+
+/* Tooltip */
+.priority-status .tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  white-space: normal;
+  width: 200px;
+  font-size: 12px;
+  color: #fff;
+  z-index: 1000;
+  animation: tooltipIn 0.2s ease-out;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes tooltipIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.priority-status .tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1a1a2e;
+}
+
+.priority-status .tooltip strong {
+  display: block;
+  color: #ffd700;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.priority-status .tooltip p {
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.priority-status .tooltip small {
+  display: block;
+  color: #a0a0a0;
+  font-size: 11px;
+}
+
+.priority-status .tooltip.featured {
+  border-color: rgba(255, 215, 0, 0.5);
+  background: linear-gradient(135deg, rgba(26, 26, 46, 0.95), rgba(26, 26, 46, 0.95));
+}
+
+.priority-status .tooltip.featured::after {
+  border-top-color: rgba(26, 26, 46, 0.95);
+}
+
+.priority-status .tooltip-stats {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+.priority-status .tooltip-stats span {
+  flex: 1;
+  text-align: center;
+  color: #ffd700;
+  font-weight: 600;
+}
+
+/* Details Section */
+.priority-status-active .priority-details {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+  width: 200px;
+  font-size: 12px;
+  color: #fff;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.priority-status-active .detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 215, 0, 0.1);
+}
+
+.priority-status-active .detail-item:last-child {
+  border-bottom: none;
+}
+
+.priority-status-active .detail-item .label {
+  color: #a0a0a0;
+}
+
+.priority-status-active .detail-item .value {
+  color: #ffd700;
+  font-weight: 600;
+}
+
+/* Light Mode Overrides */
+@media (prefers-color-scheme: light) {
+  .priority-status-btn {
+    background: rgba(255, 215, 0, 0.1);
+    color: #f57c00;
+  }
+
+  .priority-status-btn:hover {
+    background: rgba(255, 215, 0, 0.2);
+  }
+
+  .priority-status-active .priority-status-btn {
+    background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 237, 74, 0.1));
+    color: #f57c00;
+    border-color: rgba(255, 215, 0, 0.4);
+  }
+
+  .priority-status .tooltip {
+    background: #fff;
+    border-color: rgba(255, 215, 0, 0.4);
+    color: #333;
+  }
+
+  .priority-status .tooltip::after {
+    border-top-color: #fff;
+  }
+
+  .priority-status .tooltip strong {
+    color: #f57c00;
+  }
+
+  .priority-status .tooltip p,
+  .priority-status .tooltip small {
+    color: #666;
+  }
+
+  .priority-status-active .priority-details {
+    background: #fff;
+    border-color: rgba(255, 215, 0, 0.4);
+    color: #333;
+  }
+
+  .priority-status-active .detail-item {
+    border-bottom-color: rgba(255, 215, 0, 0.2);
+  }
+
+  .priority-status-active .detail-item .label {
+    color: #666;
+  }
+
+  .priority-status-active .detail-item .value {
+    color: #f57c00;
+  }
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .priority-status-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .priority-status-btn .icon {
+    font-size: 13px;
+  }
+
+  .priority-status .tooltip {
+    width: 160px;
+    padding: 10px;
+  }
+
+  .priority-status-active .priority-details {
+    width: 160px;
+    padding: 10px;
+  }
+
+  .priority-status .tooltip strong {
+    font-size: 12px;
+  }
+
+  .priority-status .tooltip p {
+    font-size: 11px;
+  }
+}
