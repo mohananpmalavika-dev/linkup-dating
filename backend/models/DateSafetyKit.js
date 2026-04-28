@@ -153,23 +153,7 @@ module.exports = (sequelize) => {
     });
   };
 
-  // Index for performance
-  // Note: Syncing is handled by utils/syncModels.js in controlled order
-  // DateSafetyKit.sync({ alter: false }).then(() => {
-  //   sequelize.query(`
-  //     CREATE INDEX IF NOT EXISTS idx_date_safety_user_status 
-  //     ON date_safety_kits(user_id, session_status);
-      
-      CREATE INDEX IF NOT EXISTS idx_date_safety_friend 
-      ON date_safety_kits(trusted_friend_id, session_status);
-      
-      CREATE INDEX IF NOT EXISTS idx_date_safety_match 
-      ON date_safety_kits(date_match_id);
-      
-      CREATE INDEX IF NOT EXISTS idx_date_safety_sos 
-      ON date_safety_kits(sos_activated, created_at DESC);
-    `).catch(() => {});
-  });
+  // Note: Indexes are handled by migrations or database setup scripts
 
   return DateSafetyKit;
 };

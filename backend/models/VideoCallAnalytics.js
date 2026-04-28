@@ -145,20 +145,7 @@ module.exports = (sequelize) => {
     });
   };
 
-  // Indexes
-  // Note: Syncing is handled by utils/syncModels.js in controlled order
-  // VideoCallAnalytics.sync({ alter: false }).then(() => {
-  //   sequelize.query(`
-  //     CREATE INDEX IF NOT EXISTS idx_video_call_analytics_user 
-  //     ON video_call_analytics(user_id);
-  //     
-  //     CREATE INDEX IF NOT EXISTS idx_video_call_analytics_rating 
-  //     ON video_call_analytics(average_rating DESC);
-      
-      CREATE INDEX IF NOT EXISTS idx_video_call_analytics_conversion 
-      ON video_call_analytics(conversion_rate_percent DESC);
-    `).catch(() => {});
-  });
+  // Note: Indexes are handled by migrations or database setup scripts
 
   return VideoCallAnalytics;
 };

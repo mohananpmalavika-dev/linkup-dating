@@ -72,7 +72,7 @@ const createRedisClient = () => {
     connectTimeout: 10000,
     maxRetriesPerRequest: 1,
     retryStrategy: (times) => Math.min(times * 100, 2000),
-    tls: isProduction ? { rejectUnauthorized: false } : undefined
+    tls: redisUrl ? undefined : (isProduction ? { rejectUnauthorized: false } : undefined)
   };
 
   try {

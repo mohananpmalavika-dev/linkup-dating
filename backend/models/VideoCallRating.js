@@ -94,20 +94,7 @@ module.exports = (sequelize) => {
     });
   };
 
-  // Indexes
-  // Note: Syncing is handled by utils/syncModels.js in controlled order
-  // VideoCallRating.sync({ alter: false }).then(() => {
-  //   sequelize.query(`
-  //     CREATE INDEX IF NOT EXISTS idx_video_call_rating_date 
-  //     ON video_call_ratings(video_date_id);
-      
-      CREATE INDEX IF NOT EXISTS idx_video_call_rating_rater 
-      ON video_call_ratings(rater_user_id);
-      
-      CREATE INDEX IF NOT EXISTS idx_video_call_rating_user 
-      ON video_call_ratings(rated_user_id);
-    `).catch(() => {});
-  });
+  // Note: Indexes are handled by migrations or database setup scripts
 
   return VideoCallRating;
 };

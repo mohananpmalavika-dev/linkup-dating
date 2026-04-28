@@ -146,23 +146,7 @@ module.exports = (sequelize) => {
     });
   };
 
-  // Indexes
-  // Note: Syncing is handled by utils/syncModels.js in controlled order
-  // VideoCompatibilityScore.sync({ alter: false }).then(() => {
-  //   sequelize.query(`
-  //     CREATE INDEX IF NOT EXISTS idx_video_compat_video_date 
-  //     ON video_compatibility_scores(video_date_id);
-      
-      CREATE INDEX IF NOT EXISTS idx_video_compatibility_users 
-      ON video_compatibility_scores(user_id_1, user_id_2);
-      
-      CREATE INDEX IF NOT EXISTS idx_video_compatibility_score 
-      ON video_compatibility_scores(overall_compatibility_score DESC);
-      
-      CREATE INDEX IF NOT EXISTS idx_video_compatibility_probability 
-      ON video_compatibility_scores(will_date_probability_percent DESC);
-    `).catch(() => {});
-  });
+  // Note: Indexes are handled by migrations or database setup scripts
 
   return VideoCompatibilityScore;
 };

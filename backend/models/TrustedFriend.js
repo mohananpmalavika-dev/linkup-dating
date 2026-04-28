@@ -97,20 +97,7 @@ module.exports = (sequelize) => {
     });
   };
 
-  // Indexes for performance
-  // Note: Syncing is handled by utils/syncModels.js in controlled order
-  // TrustedFriend.sync({ alter: false }).then(() => {
-  //   sequelize.query(`
-  //     CREATE INDEX IF NOT EXISTS idx_trusted_friend_user_active 
-  //     ON trusted_friends(user_id, is_active);
-      
-      CREATE INDEX IF NOT EXISTS idx_trusted_friend_primary 
-      ON trusted_friends(user_id, is_primary);
-      
-      CREATE INDEX IF NOT EXISTS idx_trusted_friend_friend_id 
-      ON trusted_friends(trusted_friend_id);
-    `).catch(() => {});
-  });
+  // Note: Indexes are handled by migrations or database setup scripts
 
   return TrustedFriend;
 };
