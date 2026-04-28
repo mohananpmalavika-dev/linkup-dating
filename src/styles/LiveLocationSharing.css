@@ -1,0 +1,391 @@
+/* Live Location Sharing Styles */
+
+.live-location-sharing {
+  padding: 24px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.location-header {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.location-header h3 {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  color: #333;
+}
+
+.location-header p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.location-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.status-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #999;
+  animation: none;
+}
+
+.status-indicator.active .status-dot {
+  background: #4caf50;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.2);
+  }
+}
+
+.status-text {
+  color: #666;
+}
+
+.status-indicator.active .status-text {
+  color: #2e7d32;
+}
+
+.toggle-sharing-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.toggle-sharing-btn.start {
+  background: #4caf50;
+  color: white;
+}
+
+.toggle-sharing-btn.start:hover {
+  background: #388e3c;
+  transform: translateY(-2px);
+}
+
+.toggle-sharing-btn.stop {
+  background: #f44336;
+  color: white;
+}
+
+.toggle-sharing-btn.stop:hover {
+  background: #d32f2f;
+  transform: translateY(-2px);
+}
+
+.location-error {
+  padding: 16px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: #856404;
+}
+
+.error-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.location-error p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.location-error small {
+  display: block;
+  font-size: 12px;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+.location-details {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.location-info-card {
+  padding: 20px;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .info-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.info-label {
+  font-weight: 600;
+  color: #333;
+  font-size: 14px;
+  min-width: 120px;
+}
+
+.info-value {
+  color: #666;
+  font-size: 14px;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.address-value {
+  font-family: inherit;
+  max-width: 400px;
+}
+
+.accuracy-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #e3f2fd;
+  border-radius: 12px;
+  color: #1565c0;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.btn-open-maps {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-open-maps:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.location-history {
+  padding: 16px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+}
+
+.history-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.history-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-point {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.point-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: #667eea;
+  color: white;
+  border-radius: 50%;
+  font-weight: 600;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.point-time {
+  color: #999;
+  font-family: 'Monaco', 'Courier New', monospace;
+}
+
+.location-inactive-state {
+  text-align: center;
+  padding: 40px 24px;
+  background: #f8f9fa;
+  border-radius: 10px;
+  border: 1px dashed #e0e0e0;
+}
+
+.inactive-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.location-inactive-state p {
+  margin: 8px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.inactive-note {
+  color: #999;
+  font-size: 13px;
+  font-style: italic;
+}
+
+.location-permissions-note {
+  padding: 12px;
+  background: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  border-radius: 4px;
+  margin-top: 16px;
+}
+
+.location-permissions-note small {
+  color: #1565c0;
+  line-height: 1.6;
+}
+
+/* ==================== RESPONSIVE ==================== */
+
+@media (max-width: 768px) {
+  .live-location-sharing {
+    padding: 16px;
+  }
+
+  .location-status {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .status-indicator {
+    justify-content: center;
+  }
+
+  .toggle-sharing-btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .btn-open-maps {
+    width: 100%;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .live-location-sharing {
+    background: #2a2a2a;
+    color: #e0e0e0;
+  }
+
+  .location-header h3 {
+    color: #e0e0e0;
+  }
+
+  .location-header p,
+  .status-text,
+  .info-label,
+  .info-value,
+  .inactive-note,
+  .history-title {
+    color: #a0a0a0;
+  }
+
+  .location-status,
+  .location-info-card,
+  .location-history,
+  .location-inactive-state {
+    background: #1e1e1e;
+    border-color: #404040;
+  }
+
+  .accuracy-badge {
+    background: #1a237e;
+    color: #7986cb;
+  }
+
+  .history-point {
+    background: #1e1e1e;
+  }
+
+  .location-inactive-state {
+    border-color: #404040;
+  }
+
+  .location-permissions-note {
+    background: #1a237e;
+    border-left-color: #7986cb;
+    color: #7986cb;
+  }
+}

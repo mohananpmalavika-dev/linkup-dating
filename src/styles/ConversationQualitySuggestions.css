@@ -1,0 +1,276 @@
+/* Conversation Quality Suggestions Styles */
+
+.suggestions-container {
+  background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.suggestions-header {
+  margin-bottom: 12px;
+}
+
+.suggestions-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.suggestions-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
+}
+
+.suggestions-loading,
+.suggestions-empty {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+.suggestions-loading .spinner {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #ff9800;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 10px;
+}
+
+.suggestions-empty {
+  background: white;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #999;
+}
+
+/* Suggestions List */
+.suggestions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.suggestion-card {
+  background: white;
+  border-radius: 10px;
+  overflow: hidden;
+  border-left: 4px solid #667eea;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.suggestion-card:hover {
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Card Type Colors */
+.suggestion-card.icebreaker {
+  border-left-color: #74b9ff;
+}
+
+.suggestion-card.question {
+  border-left-color: #a29bfe;
+}
+
+.suggestion-card.topic_continuation {
+  border-left-color: #74b9ff;
+}
+
+.suggestion-card.deep_dive {
+  border-left-color: #00b894;
+}
+
+.suggestion-card.light_topic {
+  border-left-color: #fdcb6e;
+}
+
+.suggestion-card.connection_builder {
+  border-left-color: #ff7675;
+}
+
+/* Suggestion Header */
+.suggestion-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  cursor: pointer;
+  position: relative;
+}
+
+.suggestion-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.suggestion-info {
+  flex: 1;
+}
+
+.suggestion-title {
+  margin: 0 0 2px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.suggestion-reason {
+  margin: 0;
+  font-size: 12px;
+  color: #999;
+}
+
+.expand-icon {
+  font-size: 18px;
+  color: #ccc;
+  transition: transform 0.3s ease;
+  flex-shrink: 0;
+}
+
+.expand-icon.expanded {
+  transform: rotate(180deg);
+  color: #667eea;
+}
+
+/* Suggestion Content */
+.suggestion-content {
+  padding: 0 12px 12px 12px;
+  border-top: 1px solid #f0f0f0;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
+}
+
+.suggestion-text {
+  margin: 12px 0;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  font-style: italic;
+  line-height: 1.5;
+  border-left: 3px solid #667eea;
+}
+
+.use-suggestion-btn {
+  width: 100%;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.use-suggestion-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.use-suggestion-btn:active {
+  transform: translateY(0);
+}
+
+/* Suggestions Tip */
+.suggestions-tip {
+  background: white;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #666;
+  border-left: 3px solid #fdcb6e;
+}
+
+.suggestions-tip p {
+  margin: 0;
+}
+
+.suggestions-tip strong {
+  color: #333;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .suggestions-container {
+    padding: 12px;
+    margin-bottom: 15px;
+  }
+
+  .suggestion-card {
+    border-left-width: 3px;
+  }
+
+  .suggestion-header {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .suggestion-icon {
+    font-size: 20px;
+  }
+
+  .suggestion-title {
+    font-size: 13px;
+  }
+
+  .suggestion-text {
+    font-size: 13px;
+    margin: 10px 0;
+    padding: 10px;
+  }
+
+  .use-suggestion-btn {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .suggestions-container {
+    padding: 10px;
+  }
+
+  .suggestion-header {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .suggestion-icon {
+    font-size: 18px;
+  }
+
+  .suggestion-title {
+    font-size: 12px;
+  }
+
+  .suggestion-reason {
+    font-size: 11px;
+  }
+
+  .suggestion-text {
+    font-size: 12px;
+    padding: 8px;
+    margin: 8px 0;
+  }
+}

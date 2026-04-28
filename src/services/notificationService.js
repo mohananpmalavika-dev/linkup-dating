@@ -8,6 +8,14 @@ class NotificationService {
     this.permission = typeof Notification !== 'undefined' ? Notification.permission : 'default';
     this.socket = null;
     this.activeReminders = new Map();
+    this.localCheckInterval = null;
+  }
+
+  resolveAssetPath(assetPath = '') {
+    const normalizedAssetPath = String(assetPath || '').startsWith('/') ? assetPath : `/${assetPath}`;
+    const publicUrl = String(process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+
+    return publicUrl ? `${publicUrl}${normalizedAssetPath}` : normalizedAssetPath;
   }
 
   /**
@@ -37,16 +45,19 @@ class NotificationService {
    * Show browser notification
    */
   notify(options = {}) {
-    if (this.permission !== 'granted') {
+    const livePermission = typeof Notification !== 'undefined' ? Notification.permission : this.permission;
+    this.permission = livePermission;
+
+    if (livePermission !== 'granted') {
       console.warn('Notification permission not granted');
-      return;
+      return null;
     }
 
     const {
-      title = 'Reminder',
+      title = 'LinkUp',
       body = '',
-      icon = '/reminder-icon.png',
-      badge = '/reminder-badge.png',
+      icon = this.resolveAssetPath('/icon-192.png'),
+      badge = this.resolveAssetPath('/icon-192.png'),
       tag = 'reminder',
       requireInteraction = true,
       onClose = null,
@@ -62,7 +73,7 @@ class NotificationService {
         tag,
         requireInteraction,
         timestamp: Date.now(),
-        vibrate: [200, 100, 200], // Vibration pattern
+        vibrate: [200, 100, 200],
       });
 
       if (onShow) notification.onshow = onShow;
@@ -78,6 +89,7 @@ class NotificationService {
     } catch (error) {
       console.error('Error showing notification:', error);
       if (onError) onError(error);
+      return null;
     }
   }
 
@@ -102,10 +114,10 @@ class NotificationService {
     });
 
     return this.notify({
-      title: `🔔 ${title}`,
+      title: `Reminder: ${title}`,
       body: `${timeStr} - ${body}`,
-      icon: '/reminder-icon.png',
-      badge: '/reminder-badge.png',
+      icon: this.resolveAssetPath('/icon-192.png'),
+      badge: this.resolveAssetPath('/icon-192.png'),
       tag: `reminder-${reminderId}`,
       requireInteraction: true,
       onShow: () => {
@@ -126,10 +138,10 @@ class NotificationService {
    */
   playSound(soundPath = '/notification-sound.mp3') {
     try {
-      const audio = new Audio(soundPath);
+      const audio = new Audio(this.resolveAssetPath(soundPath));
       audio.volume = 0.5;
-      audio.play().catch((e) => {
-        console.warn('Could not play notification sound:', e);
+      audio.play().catch((error) => {
+        console.warn('Could not play notification sound:', error);
       });
     } catch (error) {
       console.error('Error playing notification sound:', error);
@@ -147,17 +159,12 @@ class NotificationService {
 
     this.socket = socketInstance;
 
-    // Listen for reminder notifications
     socketInstance.on('diary:reminder-due', (data) => {
       console.log('Received reminder notification:', data);
 
-      // Play sound
       this.playSound();
-
-      // Show browser notification
       this.notifyReminder(data);
 
-      // Emit custom event for React components
       window.dispatchEvent(
         new CustomEvent('reminderNotification', {
           detail: data,
@@ -165,7 +172,6 @@ class NotificationService {
       );
     });
 
-    // Handle connection events
     socketInstance.on('connect', () => {
       console.log('Connected to reminder notification service');
     });
@@ -183,7 +189,6 @@ class NotificationService {
    * Check for reminders periodically
    */
   startLocalReminderCheck(reminders = [], onReminderDue = null) {
-    // Clear any existing interval
     if (this.localCheckInterval) {
       clearInterval(this.localCheckInterval);
     }
@@ -193,9 +198,8 @@ class NotificationService {
 
       for (const reminder of reminders) {
         const reminderTime = new Date(reminder.reminderAt);
-        const timeDiff = reminderTime - now; // milliseconds
+        const timeDiff = reminderTime - now;
 
-        // Check if reminder is within 1 minute window and hasn't been shown
         if (
           timeDiff <= 60000 &&
           timeDiff > 0 &&
@@ -209,7 +213,7 @@ class NotificationService {
           }
         }
       }
-    }, 30000); // Check every 30 seconds
+    }, 30000);
   }
 
   /**
@@ -226,9 +230,12 @@ class NotificationService {
    * Get notification permission status
    */
   getPermissionStatus() {
+    const livePermission = typeof Notification !== 'undefined' ? Notification.permission : this.permission;
+    this.permission = livePermission;
+
     return {
-      permission: this.permission,
-      canNotify: this.permission === 'granted',
+      permission: livePermission,
+      canNotify: livePermission === 'granted',
       available: typeof window !== 'undefined' && 'Notification' in window,
     };
   }
@@ -254,7 +261,6 @@ class NotificationService {
   }
 }
 
-// Create singleton instance
 const notificationService = new NotificationService();
 
 export default notificationService;

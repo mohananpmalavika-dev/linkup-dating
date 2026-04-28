@@ -1,13 +1,20 @@
 let deferredPrompt = null;
 let installPromptAttached = false;
 
+const normalizePublicAssetPath = (assetPath = '') => {
+  const normalizedAssetPath = String(assetPath || '').startsWith('/') ? assetPath : `/${assetPath}`;
+  const publicUrl = String(process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+
+  return publicUrl ? `${publicUrl}${normalizedAssetPath}` : normalizedAssetPath;
+};
+
 export async function register() {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
     return null;
   }
 
   try {
-    const registration = await navigator.serviceWorker.register("/sw.js");
+    const registration = await navigator.serviceWorker.register(normalizePublicAssetPath('/sw.js'));
     await navigator.serviceWorker.ready;
     return registration;
   } catch (error) {
@@ -83,12 +90,12 @@ export async function requestNotificationPermission() {
 }
 
 export async function showServiceWorkerNotification({
-  title = "Malabar Bazaar",
+  title = "LinkUp",
   body = "",
   tag = "",
   data = {},
-  icon = "/logo192.png",
-  badge = "/favicon.ico",
+  icon = normalizePublicAssetPath('/icon-192.png'),
+  badge = normalizePublicAssetPath('/icon-192.png'),
 } = {}) {
   const permission = await requestNotificationPermission();
   if (permission !== "granted") {
@@ -106,8 +113,14 @@ export async function showServiceWorkerNotification({
   if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
     const registration = await navigator.serviceWorker.ready;
 
-    if (registration.active) {
-      registration.active.postMessage({
+    const activeWorker =
+      navigator.serviceWorker.controller ||
+      registration.active ||
+      registration.waiting ||
+      registration.installing;
+
+    if (activeWorker) {
+      activeWorker.postMessage({
         type: "SHOW_NOTIFICATION",
         payload: {
           title,
@@ -131,7 +144,7 @@ export async function showServiceWorkerNotification({
   return false;
 }
 
-export default {
+const pwaConfig = {
   register,
   installAppPrompt,
   handleInstall,
@@ -139,3 +152,5 @@ export default {
   getNotificationPermission,
   showServiceWorkerNotification,
 };
+
+export default pwaConfig;

@@ -19,12 +19,20 @@ A full-featured React-based dating application with swipe discovery, advanced pr
 ✅ **Real-time Messaging** - Chat with matched profiles
 ✅ **Video Dating** - Schedule and conduct video calls
 ✅ **Interaction History** - Track likes and passes
+✅ **Conversation Quality Meter** - Analyze depth, get AI suggestions, gauge connection quality
+✅ **Photo A/B Testing** - Test 2 photos, see which gets more likes over 48 hours, auto-promote winner
+✅ **Catfish Prevention AI** - Real-time scam detection, instant alerts, one-click reporting
+✅ **Verified Video Badge** - AI face verification, ✅ badge on profile, premium prioritizes verified, 80%+ fraud reduction
+✅ **First Date Safety Kit** - Live location sharing with trusted friend, check-in feature, 8 safety tips, SOS emergency button
+✅ **Video Call Insights** - Analytics showing call duration vs industry average, post-call star ratings (1-5), AI-powered compatibility predictions, video call calendar
+✅ **Story-like Moments** - Upload photos that auto-disappear in 24 hours, visible only to current matches, builds FOMO with view counts and viewer tracking
 
 ### Profiles
 ✅ **Comprehensive Profiles** - Photos, bio, interests, verification
 ✅ **Multi-Photo Support** - Upload and showcase multiple photos
 ✅ **Identity Verification** - Email, phone, and ID verification
 ✅ **Badge System** - Verified, premium status
+✅ **Photo Analytics** - A/B test photos, data-driven optimization
 
 ### Security
 ✅ **User Authentication** - Email/password registration
@@ -53,6 +61,8 @@ npx cap add android              # Add Android platform (first time only)
 npx cap sync android             # Sync to Android project
 npx cap open android             # Open in Android Studio
 ```
+
+For Google Play publishing, use a release Android App Bundle (`.aab`) and target Android 15 / API level 35 or higher.
 
 ---
 
@@ -139,6 +149,8 @@ src/
 ```
 REACT_APP_API_URL=http://your-backend-url
 REACT_APP_SOCKET_URL=http://your-socket-url
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 ```
 
 ### API Endpoints
@@ -149,6 +161,10 @@ REACT_APP_SOCKET_URL=http://your-socket-url
 - `GET /api/dating/matches` - Get all matches
 - `GET /api/dating/profiles/me` - Get user's profile
 - `PUT /api/dating/profiles/me` - Update profile
+- `GET /api/orders/payment-config` - Get tokenized checkout configuration
+- `POST /api/orders` - Create an order and optional Razorpay checkout order
+- `POST /api/orders/verify-payment` - Verify a Razorpay payment signature
+- `GET /api/orders/:orderId/invoice` - Download the generated invoice PDF
 
 ---
 
@@ -238,6 +254,7 @@ For issues or questions:
 npm start              # Start development server
 npm run build          # Build for production
 npm test               # Run tests
+npm run android:bundle:release # Build Play-ready Android App Bundle
 npm run capacitor:build # Build and open Android Studio
 ```
 
@@ -271,9 +288,9 @@ cd android
 keytool -genkey -v -keystore linkup-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias linkup
 
 # Update build.gradle with signing config
-# Build release APK
-./gradlew assembleRelease
-# APK: android/app/build/outputs/apk/release/app-release.apk
+# Build release Android App Bundle for Google Play
+./gradlew bundleRelease
+# AAB: android/app/build/outputs/bundle/release/app-release.aab
 ```
 
 ---
@@ -285,6 +302,8 @@ Create a `.env` file:
 ```env
 REACT_APP_BACKEND_URL=http://10.0.2.2:5000
 REACT_APP_SOCKET_URL=http://10.0.2.2:5000
+RAZORPAY_KEY_ID=your_razorpay_key_id
+RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 ```
 
 **For emulator:** Use `10.0.2.2` instead of `localhost`
@@ -345,7 +364,7 @@ cd android
 ```
 
 ### Android SDK issues
-- Download SDK API 34+ via Android Studio
+- Download Android SDK Platform 35 and matching build tools via Android Studio
 - Set `ANDROID_HOME` environment variable
 - Verify `adb` is in PATH
 

@@ -1,5 +1,68 @@
 # Completed Features
 
+## ✅ Story-like Moments (NEW)
+
+### What Was Implemented
+- Snapchat-style ephemeral photo sharing
+- Photos auto-disappear after 24 hours
+- Visible only to current matches
+- Real-time view tracking and FOMO building
+- Viewer list showing who viewed each moment
+
+### Backend
+- [x] Models: `backend/models/Moment.js` & `backend/models/MomentView.js`
+- [x] Service: `backend/services/momentService.js` (400+ lines, 6 core functions)
+- [x] Routes: `backend/routes/moments.js` (6 API endpoints)
+  - POST /api/moments/upload - Upload new moment
+  - GET /api/moments/feed - Get moments from matches
+  - POST /api/moments/:momentId/view - Record view
+  - GET /api/moments/:momentId/viewers - Get viewer list
+  - GET /api/moments/my-moments - Get user's moments
+  - GET /api/moments/stats - Get FOMO stats
+
+### Frontend
+- [x] Component: `src/components/MomentsUpload.js` (250+ lines) - Upload modal
+- [x] Component: `src/components/MomentsFeed.js` (300+ lines) - Feed grid display
+- [x] Component: `src/components/MomentsViewer.js` (200+ lines) - Full-screen viewer
+- [x] Service: `src/services/momentService.js` (100+ lines) - API wrapper
+- [x] Styles: `src/components/Moments.css` (1200+ lines) - Complete styling
+
+### Documentation
+- [x] `MOMENTS_IMPLEMENTATION_GUIDE.md` - Complete technical guide (1000+ lines)
+- [x] `MOMENTS_QUICK_REF.md` - Quick reference guide (500+ lines)
+- [x] `MOMENTS_COMPLETE.md` - Implementation summary
+
+### Features
+- [x] Image upload with validation (10MB max)
+- [x] Caption input (max 200 characters)
+- [x] Real-time preview before upload
+- [x] 24-hour auto-expiry with countdown
+- [x] Full-screen Snapchat-style viewer
+- [x] View tracking and viewer list
+- [x] Match-only visibility
+- [x] Stats dashboard with FOMO metrics
+- [x] Responsive design (mobile/tablet/desktop)
+- [x] Expiry progress bars on cards
+- [x] "New" badges for unviewed moments
+- [x] Soft delete for preserving view history
+
+### Data Models
+- [x] Moment table (9 fields, 3 indexes)
+- [x] MomentView table (3 fields, 3 indexes/constraints)
+
+### FOMO Mechanism
+- [x] Real-time view counts on every card
+- [x] "New" badges for unviewed content
+- [x] Expiry progress bar creating urgency
+- [x] Viewer list motivation to upload
+- [x] Stats banner showing engagement
+- [x] 24-hour expiry drives daily check-ins
+
+### Integration Status
+⏳ Ready for database setup and route registration
+
+---
+
 ## ✅ Opening Message Templates with Context
 
 ### What Was Implemented

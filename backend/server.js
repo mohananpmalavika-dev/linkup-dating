@@ -32,6 +32,12 @@ const profileResetRoutes = require('./routes/profileReset');
 const eventRoutes = require('./routes/events');
 const doubleDatesRoutes = require('./routes/doubleDates');
 const referralRoutes = require('./routes/referrals');
+const analyticsRoutes = require('./routes/analytics');
+const conversationQualityRoutes = require('./routes/conversationQuality');
+const photoABTestingRoutes = require('./routes/photoABTesting');
+const catfishDetectionRoutes = require('./routes/catfishDetection');
+const videoVerificationRoutes = require('./routes/videoVerification');
+const dateSafetyRoutes = require('./routes/dateSafety');
 const { authenticateToken } = require('./middleware/auth');
 
 const app = express();
@@ -432,6 +438,12 @@ app.use('/api/profile-reset', authenticateToken, profileResetRoutes);
 app.use('/api/events', authenticateToken, eventRoutes);
 app.use('/api/double-dates', authenticateToken, doubleDatesRoutes);
 app.use('/api/referrals', referralRoutes);
+app.use('/api/analytics', authenticateToken, analyticsRoutes);
+app.use('/api/conversation-quality', authenticateToken, conversationQualityRoutes);
+app.use('/api/photo-ab-testing', authenticateToken, photoABTestingRoutes);
+app.use('/api/catfish-detection', authenticateToken, catfishDetectionRoutes);
+app.use('/api/video-verification', authenticateToken, videoVerificationRoutes);
+app.use('/api/date-safety', authenticateToken, dateSafetyRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -445,7 +457,7 @@ app.use((req, res) => {
     availableEndpoints: {
       auth: '/api/auth/signup, /api/auth/login, /api/auth/verify, /api/auth/check-username, /api/auth/check-email, /api/auth/send-otp, /api/auth/verify-otp, /api/auth/set-username, /api/auth/me, /api/auth/visibility, /api/auth/contact-means',
       products: '/api/products, /api/products/manage',
-      orders: '/api/orders/*, /api/orders/mine, /api/orders/manage, /api/orders/payment-config',
+      orders: '/api/orders/*, /api/orders/mine, /api/orders/manage, /api/orders/payment-config, /api/orders/verify-payment',
       appData: '/api/app-data/public, /api/app-data/classifieds/*, /api/app-data/realestate/*',
       astrology: '/api/astrology/signs, /api/astrology/daily/{sign}, /api/astrology/profile',
       flashsales: '/api/flashsales, /api/flashsales/reserve/bulk',

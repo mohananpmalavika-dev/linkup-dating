@@ -90,7 +90,7 @@ test('opens the chatrooms workspace from the LinkUp sidebar', async () => {
   fireEvent.click(screen.getByRole('button', { name: /chatrooms/i }));
 
   expect(await screen.findByText('Chatroom List')).toBeInTheDocument();
-  expect(screen.getByText('Chatroom Panel')).toBeInTheDocument();
+  expect(screen.getByText(/select a chatroom or create one to start chatting/i)).toBeInTheDocument();
 
   await waitFor(() => {
     expect(mockApiCall).toHaveBeenCalledWith('/messaging/chatrooms/my-rooms', 'GET');

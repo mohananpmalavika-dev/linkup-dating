@@ -1,0 +1,197 @@
+/* Personal Stats Card Styles */
+
+.stats-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.stats-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+}
+
+.stats-card.loading {
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stats-card.error {
+  background: #fee;
+  border-left: 4px solid #ff6b6b;
+  color: #c92a2a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.main-stat {
+  margin-bottom: 2rem;
+}
+
+.stat-display {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.stat-number {
+  font-size: 3.5rem;
+  font-weight: 800;
+  margin: 0.5rem 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-number.above-average {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stat-number.below-average {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stat-label {
+  font-size: 1rem;
+  color: #666;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.stat-comparison {
+  font-size: 0.9rem;
+  color: #999;
+  margin-top: 0.5rem;
+}
+
+.comparison-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 25px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.comparison-badge.positive {
+  background: #d3f9d8;
+  color: #2b8a3e;
+}
+
+.comparison-badge.negative {
+  background: #ffe3e3;
+  color: #c92a2a;
+}
+
+.badge-icon {
+  font-size: 1.2rem;
+}
+
+.engagement-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1.5rem;
+  margin: 2rem 0;
+  padding: 1.5rem 0;
+  border-top: 2px solid #eee;
+  border-bottom: 2px solid #eee;
+}
+
+.metric {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.metric-icon {
+  font-size: 2rem;
+}
+
+.metric-info {
+  flex: 1;
+}
+
+.metric-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.metric-label {
+  font-size: 0.85rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 0.25rem;
+}
+
+.response-time {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #f8f9fa;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+}
+
+.time-icon {
+  font-size: 1.5rem;
+}
+
+.time-label {
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.time-value {
+  font-weight: 700;
+  color: #333;
+  margin-left: auto;
+}
+
+.info-box {
+  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+  border-left: 4px solid #667eea;
+  padding: 1rem 1.5rem;
+  border-radius: 8px;
+  color: #666;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .stats-card {
+    padding: 1.5rem;
+  }
+
+  .stat-number {
+    font-size: 2.5rem;
+  }
+
+  .engagement-metrics {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+
+  .metric {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .metric-icon {
+    font-size: 1.5rem;
+  }
+}

@@ -1,5 +1,6 @@
 import React from "react";
 import { getTranslation } from "../data/translations";
+import PublicLegalNotice from "./PublicLegalNotice";
 import "../styles/LaunchPage.css";
 
 const LaunchPage = ({ language, onSelectRegistrationType }) => {
@@ -40,6 +41,8 @@ const LaunchPage = ({ language, onSelectRegistrationType }) => {
             <small>{launch.loginHelp || "Sign in to your existing account."}</small>
           </button>
         </div>
+
+        <PublicLegalNotice message="Privacy, terms, grievance, and support pages are public before signup or login. Optional ID, location, camera, and microphone features are described there." />
       </section>
     </main>
   );

@@ -34,7 +34,8 @@
     "capacitor:add:ios": "npx cap add ios",
     "capacitor:open:android": "npx cap open android",
     "capacitor:open:ios": "npx cap open ios",
-    "capacitor:build": "npm run build && npx cap sync android && npx cap open android"
+    "capacitor:build": "npm run build && npx cap sync android && npx cap open android",
+    "android:bundle:release": "cd android && gradlew.bat bundleRelease"
   },
   "eslintConfig": {
     "extends": [

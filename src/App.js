@@ -15,6 +15,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import LaunchPage from './components/LaunchPage';
 import DatingSignUp from './components/DatingSignUp';
 import Login from './components/Login';
+import PublicInfoPage from './components/PublicInfoPage';
 import DatingNavigation from './components/DatingNavigation';
 import DiscoveryCards from './components/DiscoveryCards';
 import BrowseProfiles from './components/BrowseProfiles';
@@ -233,7 +234,6 @@ const AppContent = () => {
   const [currentUser, setCurrentUser] = useState(() => getStoredUserData());
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [userName, setUserName] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
   const [matchCount, setMatchCount] = useState(0);
   const [lastOpenedMatchRoute, setLastOpenedMatchRoute] = useState('');
@@ -241,15 +241,6 @@ const AppContent = () => {
   const appSocketRef = useRef(null);
   const isAdminSession = isAdminUser(currentUser);
   const defaultAuthenticatedRoute = getDefaultAuthenticatedRouteForUser(currentUser);
-
-  const loadStoredUserName = useCallback((userData) => {
-    if (userData) {
-      setUserName(userData.firstName || userData.username || userData.name || userData.email || '');
-      return;
-    }
-
-    setUserName('');
-  }, []);
 
   const refreshDatingCounts = useCallback(async () => {
     if (!getStoredAuthToken() || isAdminSession) {
@@ -278,14 +269,9 @@ const AppContent = () => {
 
     setCurrentUser(storedUser);
     setIsAuthenticated(authenticated);
-    if (authenticated) {
-      loadStoredUserName(storedUser);
-    } else {
-      setUserName('');
-    }
 
     setLoading(false);
-  }, [loadStoredUserName]);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated || isAdminSession) {
@@ -453,7 +439,6 @@ const AppContent = () => {
 
     setCurrentUser(nextUser);
     setIsAuthenticated(true);
-    loadStoredUserName(nextUser);
 
     if (isAdminUser(nextUser)) {
       setUnreadCount(0);
@@ -472,7 +457,6 @@ const AppContent = () => {
     setIsAuthenticated(false);
     setUnreadCount(0);
     setMatchCount(0);
-    setUserName('');
     setLastOpenedMatchRoute('');
     setIncomingCall(null);
     navigate('/', { replace: true });
@@ -492,7 +476,6 @@ const AppContent = () => {
 
     setCurrentUser(nextUser);
     setIsAuthenticated(true);
-    loadStoredUserName(nextUser);
 
     if (isAdminUser(nextUser)) {
       setUnreadCount(0);
@@ -669,6 +652,11 @@ const AppContent = () => {
         authToken={getStoredAuthToken()}
       >
         <Routes>
+          <Route path="/privacy-policy" element={<PublicInfoPage pageKey="privacy" />} />
+          <Route path="/terms" element={<PublicInfoPage pageKey="terms" />} />
+          <Route path="/account-deletion" element={<PublicInfoPage pageKey="deletion" />} />
+          <Route path="/grievance" element={<PublicInfoPage pageKey="grievance" />} />
+          <Route path="/support" element={<PublicInfoPage pageKey="support" />} />
           <Route
             path="/"
             element={
@@ -681,12 +669,7 @@ const AppContent = () => {
                       navigate('/signup');
                     }
                   }}
-                  enabledModules={['dating']}
                   language="en"
-                  onLanguageChange={() => {}}
-                  isAuthenticated={isAuthenticated}
-                  onLogout={handleLogout}
-                  userName={userName}
                 />
               ) : (
                 <Navigate to={defaultAuthenticatedRoute} replace />
@@ -698,7 +681,6 @@ const AppContent = () => {
             element={
               !isAuthenticated ? (
                 <Login
-                  registrationType="login"
                   onLoginSuccess={handleLoginSuccess}
                   onBackToLaunch={() => navigate('/')}
                   onSignUpClick={() => navigate('/signup')}

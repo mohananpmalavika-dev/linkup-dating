@@ -1,28 +1,50 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import axios from "axios";
 import { getTranslation } from "../data/translations";
 import useVoice from "../hooks/useVoice";
 import { API_BASE_URL } from "../utils/api";
+import PublicLegalNotice from "./PublicLegalNotice";
 import "../styles/Login.css";
 
 const ADMIN_EMAIL = "mgdhanyamohan@gmail.com";
-const IDENTITY_OPTIONS = [
-  { value: "pan", label: "PAN Card" },
-  { value: "aadhaar", label: "Aadhaar Card" },
-  { value: "passport", label: "Passport" },
-  { value: "driving-licence", label: "Driving Licence" },
-  { value: "voter-id", label: "Voter ID" },
-  { value: "other", label: "Other Identity Proof" },
-];
+
+const isAdminUser = (userRecord) =>
+  Boolean(
+    userRecord &&
+      (
+        userRecord.isAdmin ||
+        userRecord.is_admin ||
+        userRecord.role === "admin" ||
+        userRecord.registrationType === "admin"
+      )
+  );
+
+const normalizeAuthenticatedUser = (userRecord, emailAddress) => {
+  const adminSession = isAdminUser(userRecord) || emailAddress === ADMIN_EMAIL;
+
+  if (adminSession) {
+    return {
+      ...userRecord,
+      name: userRecord?.name || "LinkUp Admin",
+      email: userRecord?.email || emailAddress,
+      avatar: userRecord?.avatar || "A",
+      role: "admin",
+      registrationType: "admin",
+      isAdmin: true,
+    };
+  }
+
+  return {
+    ...userRecord,
+    role: userRecord?.role || "user",
+    registrationType: userRecord?.registrationType || "user",
+  };
+};
 
 const Login = ({
   language = "en",
-  registrationType = "user",
-  businessCategories = [],
-  registeredAccounts = [],
   onBackToLaunch,
   onLoginSuccess,
-  onRegistrationSubmit,
   onSignUpClick,
 }) => {
   const [email, setEmail] = useState("");
@@ -35,10 +57,11 @@ const Login = ({
   const [devOtp, setDevOtp] = useState("");
   const [needsUsernameSetup, setNeedsUsernameSetup] = useState(false);
   const [setupUsername, setSetupUsername] = useState("");
-  const [setupUsernameStatus, setSetupUsernameStatus] = useState(null); // 'available', 'taken', 'checking', null
+  const [setupUsernameStatus, setSetupUsernameStatus] = useState(null);
   const [setupUsernameError, setSetupUsernameError] = useState("");
   const [verifiedUser, setVerifiedUser] = useState(null);
   const [verifiedToken, setVerifiedToken] = useState(null);
+
   const {
     recognitionSupported,
     speechSupported,
@@ -49,370 +72,157 @@ const Login = ({
     speak,
     stopSpeaking,
   } = useVoice(language);
-  const [registrationForm, setRegistrationForm] = useState({
-    fullName: "",
-    phone: "",
-    username: "",
-    location: "",
-    accountType: "business",
-    businessName: "",
-    selectedBusinessCategories: [],
-    licenseNumber: "",
-    identityType: "pan",
-    identityNumber: "",
-    foodLicenseNumber: "",
-    foodLicenseAuthority: "",
-    profilePhotoName: "",
-    profilePhotoFile: null,
-    licenseDocumentName: "",
-    licenseDocumentFile: null,
-    identityDocumentName: "",
-    identityDocumentFile: null,
-    foodLicenseDocumentName: "",
-    foodLicenseDocumentFile: null,
-    registrationFeeAccepted: false,
-    agreeToTerms: false,
-  });
-  const [usernameCheckStatus, setUsernameCheckStatus] = useState(null); // 'available', 'taken', 'checking', null
-  const [usernameError, setUsernameError] = useState("");
+
+  const { login: loginCopy, direction } = getTranslation(language);
   const normalizedEmail = email.trim().toLowerCase();
-  const isAdminEmail = normalizedEmail === ADMIN_EMAIL;
-  const isAdminFlow = registrationType === "admin" || (registrationType === "entrepreneur" && isAdminEmail);
-  const isUserRegistrationFlow = registrationType === "user";
-  const isEntrepreneurRegistrationFlow = registrationType === "entrepreneur" && !isAdminFlow;
-  const isBusinessRegistrationFlow = isEntrepreneurRegistrationFlow;
-  const isLoginFlow = registrationType === "login";
-  const registeredAccount = registeredAccounts.find((account) => account.email === normalizedEmail);
-  const businessCategoryCount = businessCategories.length;
-  const isServerMarkedAdmin = (userRecord) =>
-    Boolean(
-      userRecord &&
-      (
-        userRecord.isAdmin ||
-        userRecord.is_admin ||
-        userRecord.role === "admin" ||
-        userRecord.registrationType === "admin"
-      )
-    );
-
-  const selectedCategoryRecords = useMemo(
-    () => businessCategories.filter((category) => registrationForm.selectedBusinessCategories.includes(category.id)),
-    [businessCategories, registrationForm.selectedBusinessCategories]
-  );
-
-  const totalRegistrationFee = selectedCategoryRecords.reduce(
-    (total, category) => total + Number(category.fee || 0),
-    0
-  );
-
-  const requiresFoodLicense = selectedCategoryRecords.some((category) => category.requiresFoodLicense);
-
-  const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-
-  const validatePhone = (value) => /^\+?[0-9]{10,15}$/.test(value.replace(/\s+/g, ""));
-
-  const validateUsername = (value) => /^[a-zA-Z0-9_-]+$/.test(value) && value.length >= 3 && value.length <= 20;
-
-  const checkUsernameAvailability = async (username) => {
-    if (!username || username.length < 3) {
-      setUsernameError("Username must be at least 3 characters");
-      setUsernameCheckStatus(null);
-      return false;
-    }
-
-    if (!validateUsername(username)) {
-      setUsernameError("Username can only contain letters, numbers, underscores, and dashes");
-      setUsernameCheckStatus(null);
-      return false;
-    }
-
-    try {
-      setUsernameCheckStatus("checking");
-      setUsernameError("");
-      
-      const response = await axios.get(`${API_BASE_URL}/auth/check-username?username=${encodeURIComponent(username)}`);
-
-      if (response.data.available) {
-        setUsernameCheckStatus("available");
-        setUsernameError("");
-        return true;
-      } else {
-        setUsernameCheckStatus("taken");
-        setUsernameError(response.data.message || "Username is already taken");
-        return false;
-      }
-    } catch (err) {
-      setUsernameCheckStatus(null);
-      setUsernameError("Error checking username availability");
-      return false;
-    }
-  };
-
-  const checkSetupUsernameAvailability = async (username) => {
-    if (!username || username.length < 3) {
-      setSetupUsernameError("Username must be at least 3 characters");
-      setSetupUsernameStatus(null);
-      return false;
-    }
-
-    if (!validateUsername(username)) {
-      setSetupUsernameError("Username can only contain letters, numbers, underscores, and dashes");
-      setSetupUsernameStatus(null);
-      return false;
-    }
-
-    try {
-      setSetupUsernameStatus("checking");
-      setSetupUsernameError("");
-      
-      const response = await axios.get(`${API_BASE_URL}/auth/check-username?username=${encodeURIComponent(username)}`);
-
-      if (response.data.available) {
-        setSetupUsernameStatus("available");
-        setSetupUsernameError("");
-        return true;
-      } else {
-        setSetupUsernameStatus("taken");
-        setSetupUsernameError(response.data.message || "Username is already taken");
-        return false;
-      }
-    } catch (err) {
-      setSetupUsernameStatus(null);
-      setSetupUsernameError("Error checking username availability");
-      return false;
-    }
-  };
-
-  const updateRegistrationForm = (field, value) => {
-    setRegistrationForm((currentForm) => ({
-      ...currentForm,
-      [field]: value,
-    }));
-
-    // Check username availability if username field changes
-    if (field === "username" && (isUserRegistrationFlow || isEntrepreneurRegistrationFlow)) {
-      if (value) {
-        checkUsernameAvailability(value);
-      } else {
-        setUsernameCheckStatus(null);
-        setUsernameError("");
-      }
-    }
-  };
 
   const clearMessages = () => {
     setError("");
     setSuccess("");
   };
 
-  const updateEmail = (value) => {
-    setEmail(value);
+  const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const validateUsername = (value) => /^[a-zA-Z0-9_-]{3,20}$/.test(value);
+
+  const resetOtpFlow = () => {
+    setOtp("");
+    setOtpId("");
+    setOtpSent(false);
+    setDevOtp("");
     clearMessages();
   };
 
-  const updateOtp = (value) => {
-    setOtp(value);
-    clearMessages();
+  const resetUsernameSetup = () => {
+    setNeedsUsernameSetup(false);
+    setSetupUsername("");
+    setSetupUsernameStatus(null);
+    setSetupUsernameError("");
+    setVerifiedUser(null);
+    setVerifiedToken(null);
+    resetOtpFlow();
   };
 
-  const handleRegistrationFileChange = (nameField, fileField, file) => {
-    setRegistrationForm((currentForm) => ({
-      ...currentForm,
-      [nameField]: file?.name || "",
-      [fileField]: file || null,
-    }));
+  const handleVoiceFill = (fieldKey, updateValue) => {
+    if (listeningKey === fieldKey) {
+      stopListening();
+      return;
+    }
+
+    startListening(fieldKey, updateValue);
   };
 
-  const toggleBusinessCategory = (categoryId) => {
-    setRegistrationForm((currentForm) => {
-      const alreadySelected = currentForm.selectedBusinessCategories.includes(categoryId);
-      const selectedBusinessCategories = alreadySelected
-        ? currentForm.selectedBusinessCategories.filter((item) => item !== categoryId)
-        : [...currentForm.selectedBusinessCategories, categoryId];
+  const renderFieldVoiceActions = (fieldKey, speakText, onVoiceResult) => (
+    <span className="field-actions">
+      {recognitionSupported ? (
+        <button
+          type="button"
+          className={`voice-btn ${listeningKey === fieldKey ? "active" : ""}`}
+          onClick={() => handleVoiceFill(fieldKey, onVoiceResult)}
+          aria-label={listeningKey === fieldKey ? "Stop voice input" : "Start voice input"}
+          title={listeningKey === fieldKey ? "Stop voice input" : "Start voice input"}
+        >
+          {listeningKey === fieldKey ? "Stop Mic" : "Mic"}
+        </button>
+      ) : null}
+      {speechSupported ? (
+        <button
+          type="button"
+          className={`voice-btn ${speaking ? "active" : ""}`}
+          onClick={() => (speaking ? stopSpeaking() : speak(speakText))}
+          aria-label={speaking ? "Stop voice playback" : "Read aloud"}
+          title={speaking ? "Stop voice playback" : "Read aloud"}
+        >
+          {speaking ? "Stop Audio" : "Speak"}
+        </button>
+      ) : null}
+    </span>
+  );
 
-      return {
-        ...currentForm,
-        selectedBusinessCategories,
-        registrationFeeAccepted: false,
-      };
-    });
+  const checkSetupUsernameAvailability = async (username) => {
+    const trimmedUsername = String(username || "").trim().toLowerCase();
+
+    if (!trimmedUsername) {
+      setSetupUsernameStatus(null);
+      setSetupUsernameError("");
+      return false;
+    }
+
+    if (!validateUsername(trimmedUsername)) {
+      setSetupUsernameStatus(null);
+      setSetupUsernameError(
+        "Username can only contain letters, numbers, underscores, and dashes (3-20 characters)"
+      );
+      return false;
+    }
+
+    try {
+      setSetupUsernameStatus("checking");
+      setSetupUsernameError("");
+
+      const response = await axios.post(`${API_BASE_URL}/auth/check-username`, {
+        username: trimmedUsername,
+      });
+
+      if (response.data?.available) {
+        setSetupUsernameStatus("available");
+        return true;
+      }
+
+      setSetupUsernameStatus("taken");
+      setSetupUsernameError(response.data?.message || "Username is already taken");
+      return false;
+    } catch (availabilityError) {
+      setSetupUsernameStatus(null);
+      setSetupUsernameError("Error checking username availability");
+      return false;
+    }
+  };
+
+  const completeLogin = (userRecord, token, emailAddress) => {
+    onLoginSuccess?.(normalizeAuthenticatedUser(userRecord, emailAddress), token);
   };
 
   const handleSendOtp = async (event) => {
     event.preventDefault();
-    setError("");
-    setSuccess("");
+    clearMessages();
     setDevOtp("");
 
-    if (isUserRegistrationFlow) {
-      if (!registrationForm.fullName.trim()) {
-        setError("Please enter your full name");
-        return;
-      }
-
-      if (!registrationForm.phone.trim()) {
-        setError("Please enter your phone number");
-        return;
-      }
-
-      if (!validatePhone(registrationForm.phone)) {
-        setError("Please enter a valid phone number");
-        return;
-      }
-
-      if (!registrationForm.username.trim()) {
-        setError("Please enter a unique username");
-        return;
-      }
-
-      if (!validateUsername(registrationForm.username)) {
-        setError("Username can only contain letters, numbers, underscores, and dashes (3-20 characters)");
-        return;
-      }
-
-      if (usernameCheckStatus !== "available") {
-        setError("Please choose an available username");
-        return;
-      }
-
-      if (!registrationForm.agreeToTerms) {
-        setError("Please accept the terms to continue");
-        return;
-      }
-    }
-
-    if (isEntrepreneurRegistrationFlow) {
-      if (!registrationForm.fullName.trim()) {
-        setError("Please enter your full name");
-        return;
-      }
-
-      if (!registrationForm.phone.trim()) {
-        setError("Please enter your phone number");
-        return;
-      }
-
-      if (!validatePhone(registrationForm.phone)) {
-        setError("Please enter a valid phone number");
-        return;
-      }
-
-      if (!registrationForm.username.trim()) {
-        setError("Please enter a unique username");
-        return;
-      }
-
-      if (!validateUsername(registrationForm.username)) {
-        setError("Username can only contain letters, numbers, underscores, and dashes (3-20 characters)");
-        return;
-      }
-
-      if (usernameCheckStatus !== "available") {
-        setError("Please choose an available username");
-        return;
-      }
-
-      if (!registrationForm.location.trim()) {
-        setError("Please enter your city or location");
-        return;
-      }
-
-      if (!registrationForm.businessName.trim()) {
-        setError("Please enter your business name");
-        return;
-      }
-
-      if (registrationForm.selectedBusinessCategories.length === 0) {
-        setError("Please choose at least one business category");
-        return;
-      }
-
-      if (!registrationForm.licenseNumber.trim()) {
-        setError("Please enter your licence number");
-        return;
-      }
-
-      if (!registrationForm.profilePhotoName) {
-        setError("Please upload your photo");
-        return;
-      }
-
-      if (!registrationForm.licenseDocumentName) {
-        setError("Please upload your licence document");
-        return;
-      }
-
-      if (!registrationForm.identityNumber.trim()) {
-        setError("Please enter your identity number");
-        return;
-      }
-
-      if (!registrationForm.identityDocumentName) {
-        setError("Please upload your identity document");
-        return;
-      }
-
-      if (requiresFoodLicense) {
-        if (!registrationForm.foodLicenseNumber.trim()) {
-          setError("Please enter your food licence number");
-          return;
-        }
-
-        if (!registrationForm.foodLicenseAuthority.trim()) {
-          setError("Please enter the food licence authority");
-          return;
-        }
-
-        if (!registrationForm.foodLicenseDocumentName) {
-          setError("Please upload your food licence document");
-          return;
-        }
-      }
-
-      if (!registrationForm.registrationFeeAccepted) {
-        setError("Please confirm the registration fee to continue");
-        return;
-      }
-
-      if (!registrationForm.agreeToTerms) {
-        setError("Please accept the terms to continue");
-        return;
-      }
-    }
-
-    if (!email) {
+    if (!normalizedEmail) {
       setError("Please enter your email address");
       return;
     }
 
-    if (!validateEmail(email)) {
+    if (!validateEmail(normalizedEmail)) {
       setError("Please enter a valid email address");
-      return;
-    }
-
-    if (isAdminFlow && !isAdminEmail) {
-      setError(`Use ${ADMIN_EMAIL} to access the admin dashboard`);
       return;
     }
 
     setLoading(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, { email });
+      const response = await axios.post(`${API_BASE_URL}/auth/send-otp`, {
+        email: normalizedEmail,
+        purpose: "login",
+      });
 
-      if (response.data.success) {
-        setOtpSent(true);
-        setOtpId(response.data.otpId || "");
-        setSuccess(response.data.message || "OTP sent to your email");
-        setDevOtp(response.data.devOtp || response.data.otp || "");
-      } else {
-        setError(response.data.message || response.data.error || "Failed to send OTP");
+      if (!response.data?.success) {
+        setError(response.data?.message || response.data?.error || "Failed to send OTP");
+        return;
       }
-    } catch (err) {
-      if (!err.response) {
+
+      setOtpId(response.data.otpId || "");
+      setOtpSent(true);
+      setSuccess(response.data.message || "OTP sent to your email");
+      setDevOtp(response.data.devOtp || response.data.otp || "");
+    } catch (sendError) {
+      if (!sendError.response) {
         setError("Backend is not running. Please start the API server and try again.");
       } else {
-        setError(err.response.data?.message || err.response.data?.error || "Unable to send OTP. Please try again.");
+        setError(
+          sendError.response.data?.message ||
+            sendError.response.data?.error ||
+            "Unable to send OTP. Please try again."
+        );
       }
     } finally {
       setLoading(false);
@@ -421,15 +231,14 @@ const Login = ({
 
   const handleVerifyOtp = async (event) => {
     event.preventDefault();
-    setError("");
-    setSuccess("");
+    clearMessages();
 
-    if (!otp) {
+    if (!otp.trim()) {
       setError("Please enter the OTP");
       return;
     }
 
-    if (!/^\d{6}$/.test(otp)) {
+    if (!/^\d{6}$/.test(otp.trim())) {
       setError("Please enter the 6-digit OTP");
       return;
     }
@@ -437,183 +246,58 @@ const Login = ({
     setLoading(true);
 
     try {
-      const verifyPayload = {
-        email,
-        otp,
+      const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, {
+        email: normalizedEmail,
+        otp: otp.trim(),
         otpId,
-      };
+      });
 
-      if (isUserRegistrationFlow || isEntrepreneurRegistrationFlow) {
-        verifyPayload.fullName = registrationForm.fullName.trim();
-        verifyPayload.username = registrationForm.username.trim().toLowerCase();
-        verifyPayload.phone = registrationForm.phone.trim();
+      if (!response.data?.success || !response.data?.token || !response.data?.user) {
+        setError(response.data?.message || response.data?.error || "Failed to verify OTP");
+        return;
       }
 
-      if (isEntrepreneurRegistrationFlow) {
-        verifyPayload.location = registrationForm.location.trim();
+      if (response.data.needsUsernameSetup) {
+        setVerifiedUser(response.data.user);
+        setVerifiedToken(response.data.token);
+        setNeedsUsernameSetup(true);
+        setSuccess("OTP verified. Create your username to finish logging in.");
+        setOtpSent(false);
+        setOtp("");
+        return;
       }
 
-      const response = await axios.post(`${API_BASE_URL}/auth/verify-otp`, verifyPayload);
-
-      if (response.data.success && response.data.token && response.data.user) {
-        const authenticatedAdmin =
-          isServerMarkedAdmin(response.data.user) || normalizedEmail === ADMIN_EMAIL;
-
-        // Check if username setup is needed for first-time login users
-        if (response.data.needsUsernameSetup && isLoginFlow) {
-          setVerifiedUser(response.data.user);
-          setVerifiedToken(response.data.token);
-          setNeedsUsernameSetup(true);
-          setSuccess("OTP verified! Now please create your username.");
-          setLoading(false);
-          return;
-        }
-
-        let mergedUser = response.data.user;
-
-        if (isEntrepreneurRegistrationFlow) {
-          mergedUser = {
-            ...response.data.user,
-            name: registrationForm.fullName.trim() || response.data.user.name,
-            phone: registrationForm.phone.trim(),
-            username: registrationForm.username.trim().toLowerCase(),
-            location: registrationForm.location.trim(),
-            accountType: registrationForm.accountType,
-            businessName: registrationForm.businessName.trim(),
-            selectedBusinessCategories: registrationForm.selectedBusinessCategories,
-            selectedCategoryDetails: selectedCategoryRecords,
-            licenseNumber: registrationForm.licenseNumber.trim(),
-            identityType: registrationForm.identityType,
-            identityNumber: registrationForm.identityNumber.trim(),
-            foodLicenseNumber: registrationForm.foodLicenseNumber.trim(),
-            foodLicenseAuthority: registrationForm.foodLicenseAuthority.trim(),
-            profilePhotoName: registrationForm.profilePhotoName,
-            licenseDocumentName: registrationForm.licenseDocumentName,
-            identityDocumentName: registrationForm.identityDocumentName,
-            foodLicenseDocumentName: registrationForm.foodLicenseDocumentName,
-            registrationFee: totalRegistrationFee,
-            role: "business",
-            registrationType,
-          };
-
-          if (onRegistrationSubmit) {
-            await onRegistrationSubmit({
-              applicantName: registrationForm.fullName.trim(),
-              businessName: registrationForm.businessName.trim(),
-              email,
-              username: registrationForm.username.trim().toLowerCase(),
-              registrationType,
-              phone: registrationForm.phone.trim(),
-              location: registrationForm.location.trim(),
-              selectedBusinessCategories: selectedCategoryRecords,
-              registrationFee: totalRegistrationFee,
-              licenseNumber: registrationForm.licenseNumber.trim(),
-              identityType: registrationForm.identityType,
-              identityNumber: registrationForm.identityNumber.trim(),
-              profilePhotoName: registrationForm.profilePhotoName,
-              licenseDocumentName: registrationForm.licenseDocumentName,
-              identityDocumentName: registrationForm.identityDocumentName,
-              foodLicenseNumber: registrationForm.foodLicenseNumber.trim(),
-              foodLicenseAuthority: registrationForm.foodLicenseAuthority.trim(),
-              foodLicenseDocumentName: registrationForm.foodLicenseDocumentName,
-              foodLicenseRequired: requiresFoodLicense,
-              status: "Pending Review",
-              files: {
-                profilePhoto: registrationForm.profilePhotoFile,
-                licenseDocument: registrationForm.licenseDocumentFile,
-                identityDocument: registrationForm.identityDocumentFile,
-                foodLicenseDocument: registrationForm.foodLicenseDocumentFile,
-              },
-            });
-          }
-        } else if (isUserRegistrationFlow) {
-          mergedUser = {
-            ...response.data.user,
-            name: registrationForm.fullName.trim() || response.data.user.name,
-            phone: registrationForm.phone.trim(),
-            username: registrationForm.username.trim().toLowerCase(),
-            role: "user",
-            registrationType: "user",
-          };
-
-          if (onRegistrationSubmit) {
-            await onRegistrationSubmit({
-              applicantName: registrationForm.fullName.trim(),
-              email,
-              username: registrationForm.username.trim().toLowerCase(),
-              phone: registrationForm.phone.trim(),
-              registrationType: "user",
-            });
-          }
-        } else if (isAdminFlow) {
-          mergedUser = {
-            ...response.data.user,
-            name: "LinkUp Admin",
-            email: ADMIN_EMAIL,
-            avatar: "A",
-            role: "admin",
-            registrationType: "admin",
-            isAdmin: true,
-          };
-        } else if (authenticatedAdmin) {
-          mergedUser = {
-            ...response.data.user,
-            name: response.data.user.name || "LinkUp Admin",
-            email: response.data.user.email || ADMIN_EMAIL,
-            avatar: response.data.user.avatar || "A",
-            role: "admin",
-            registrationType: "admin",
-            isAdmin: true,
-          };
-        } else if (isLoginFlow) {
-          mergedUser = {
-            ...response.data.user,
-            name: registeredAccount?.name || response.data.user.name,
-            role: "user",
-            registrationType: "user",
-          };
-        }
-
-        onLoginSuccess?.(
-          mergedUser,
-          response.data.token,
-          mergedUser.registrationType === "admin" ? "admin" : mergedUser.registrationType
-        );
-      } else {
-        setError(response.data.message || response.data.error || "Failed to verify OTP");
-      }
-    } catch (err) {
-      if (!err.response) {
+      completeLogin(response.data.user, response.data.token, normalizedEmail);
+    } catch (verifyError) {
+      if (!verifyError.response) {
         setError("Backend is not running. Please start the API server and try again.");
       } else {
-        setError(err.response.data?.message || err.response.data?.error || "Unable to verify OTP. Please try again.");
+        setError(
+          verifyError.response.data?.message ||
+            verifyError.response.data?.error ||
+            "Unable to verify OTP. Please try again."
+        );
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const resetOtpFlow = () => {
-    setOtpSent(false);
-    setOtpId("");
-    setOtp("");
-    setError("");
-    setSuccess("");
-    setDevOtp("");
-  };
-
   const handleSetUsername = async (event) => {
     event.preventDefault();
-    setError("");
-    setSuccess("");
+    clearMessages();
 
-    if (!setupUsername) {
+    const trimmedUsername = setupUsername.trim().toLowerCase();
+
+    if (!trimmedUsername) {
       setSetupUsernameError("Please enter a username");
       return;
     }
 
-    if (!validateUsername(setupUsername)) {
-      setSetupUsernameError("Username can only contain letters, numbers, underscores, and dashes (3-20 characters)");
+    if (!validateUsername(trimmedUsername)) {
+      setSetupUsernameError(
+        "Username can only contain letters, numbers, underscores, and dashes (3-20 characters)"
+      );
       return;
     }
 
@@ -627,7 +311,7 @@ const Login = ({
     try {
       const response = await axios.post(
         `${API_BASE_URL}/auth/set-username`,
-        { username: setupUsername.trim().toLowerCase() },
+        { username: trimmedUsername },
         {
           headers: {
             Authorization: `Bearer ${verifiedToken}`,
@@ -635,118 +319,45 @@ const Login = ({
         }
       );
 
-      if (response.data.success) {
-        const authenticatedAdmin =
-          isServerMarkedAdmin(response.data.user) ||
-          isServerMarkedAdmin(verifiedUser) ||
-          normalizedEmail === ADMIN_EMAIL;
-        const mergedUser = {
-          ...verifiedUser,
-          username: response.data.user.username,
-          name: authenticatedAdmin
-            ? response.data.user.name || verifiedUser?.name || "LinkUp Admin"
-            : registeredAccount?.name || response.data.user.name,
-          role: authenticatedAdmin ? "admin" : "user",
-          registrationType: authenticatedAdmin ? "admin" : "user",
-          isAdmin: authenticatedAdmin,
-        };
-
-        onLoginSuccess?.(
-          mergedUser,
-          verifiedToken,
-          authenticatedAdmin ? "admin" : "user"
-        );
-      } else {
-        setSetupUsernameError(response.data.message || response.data.error || "Failed to set username");
+      if (!response.data?.success) {
+        setSetupUsernameError(response.data?.message || response.data?.error || "Failed to set username");
+        return;
       }
-    } catch (err) {
-      if (!err.response) {
+
+      completeLogin(
+        {
+          ...verifiedUser,
+          ...response.data.user,
+          username: response.data.user?.username || trimmedUsername,
+        },
+        verifiedToken,
+        normalizedEmail
+      );
+    } catch (setUsernameError) {
+      if (!setUsernameError.response) {
         setSetupUsernameError("Backend is not running. Please start the API server and try again.");
       } else {
-        setSetupUsernameError(err.response.data?.message || err.response.data?.error || "Unable to set username. Please try again.");
+        setSetupUsernameError(
+          setUsernameError.response.data?.message ||
+            setUsernameError.response.data?.error ||
+            "Unable to set username. Please try again."
+        );
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const { login: loginCopy, direction } = getTranslation(language);
-  const registrationLabel = registrationType === "entrepreneur"
-    ? isAdminFlow ? "Admin" : loginCopy.entrepreneur
-    : registrationType === "admin"
-      ? "Admin"
-      : registrationType === "login"
-        ? loginCopy.login
-        : loginCopy.user;
-  const loginSubtitle = registrationType === "entrepreneur"
-    ? isAdminFlow
-      ? "Verify the admin email to manage category fees and registrations"
-      : `Choose from the ${businessCategoryCount} available business categories and verify your email to continue.`
-    : registrationType === "admin"
-      ? "Verify the admin email to manage category fees and registrations"
-    : registrationType === "login"
-        ? "Verify your email to log in to LinkUp."
-        : loginCopy.userSubtitle;
-  const headerKicker = registrationType === "login"
-    ? loginCopy.welcomeBack
-    : `${loginCopy.registerAs} ${registrationLabel}`;
-  const formTitle = isBusinessRegistrationFlow
-    ? "Create your business account"
-    : isUserRegistrationFlow
-      ? "Create your user account"
-    : isAdminFlow
-      ? "Admin access"
-      : "Verify your email";
-  const formDescription = isBusinessRegistrationFlow
-    ? `Choose one or more of the ${businessCategoryCount} available business categories, upload your documents, and verify your email to create your account.`
-    : isUserRegistrationFlow
-      ? "Enter your name, verify your email, and create your user account."
-    : isAdminFlow
-      ? `Use ${ADMIN_EMAIL} to sign in and manage admin-controlled category fees.`
-    : isLoginFlow
-        ? "Enter your email and confirm the one-time password to continue."
-        : "Enter your email and confirm the one-time password to continue.";
-
-  const handleVoiceFill = (fieldKey, updateValue) => {
-    if (listeningKey === fieldKey) {
-      stopListening();
-      return;
-    }
-
-    startListening(fieldKey, updateValue);
-  };
-
-  const renderFieldVoiceActions = (fieldKey, speakText, onVoiceResult) => (
-    <span className="field-actions">
-      {recognitionSupported && (
-        <button
-          type="button"
-          className={`voice-btn ${listeningKey === fieldKey ? "active" : ""}`}
-          onClick={() => handleVoiceFill(fieldKey, onVoiceResult)}
-          aria-label={listeningKey === fieldKey ? "Stop voice input" : "Start voice input"}
-          title={listeningKey === fieldKey ? "Stop voice input" : "Start voice input"}
-        >
-          {listeningKey === fieldKey ? "Stop Mic" : "Mic"}
-        </button>
-      )}
-      {speechSupported && (
-        <button
-          type="button"
-          className={`voice-btn ${speaking ? "active" : ""}`}
-          onClick={() => (speaking ? stopSpeaking() : speak(speakText))}
-          aria-label={speaking ? "Stop voice playback" : "Read aloud"}
-          title={speaking ? "Stop voice playback" : "Read aloud"}
-        >
-          {speaking ? "Stop Audio" : "Speak"}
-        </button>
-      )}
-    </span>
-  );
+  const isUsernameStep = needsUsernameSetup;
+  const formTitle = isUsernameStep ? "Create your username" : "Verify your email";
+  const formDescription = isUsernameStep
+    ? "Set a unique username before you continue to your LinkUp account."
+    : "Enter your email and confirm the one-time password to continue.";
 
   return (
     <div className="login-container" dir={direction}>
       <div className="login-card">
-        {!otpSent && onBackToLaunch && (
+        {!otpSent && !isUsernameStep && onBackToLaunch ? (
           <div className="login-topbar">
             <button
               type="button"
@@ -757,445 +368,66 @@ const Login = ({
               Home
             </button>
           </div>
-        )}
+        ) : null}
 
         <div className="login-header">
           <img src="/logo.svg" alt="LinkUp" className="login-logo" />
-          <p className="login-kicker">{headerKicker}</p>
+          <p className="login-kicker">{loginCopy.welcomeBack || "Welcome back"}</p>
           <h1>LinkUp</h1>
-          <p className="login-subtitle">{loginSubtitle}</p>
+          <p className="login-subtitle">
+            {loginCopy.loginSubtitle || "Verify your email to log in to LinkUp."}
+          </p>
         </div>
 
-        <form className="login-form" onSubmit={needsUsernameSetup ? handleSetUsername : (otpSent ? handleVerifyOtp : handleSendOtp)}>
+        <form
+          className="login-form"
+          onSubmit={isUsernameStep ? handleSetUsername : otpSent ? handleVerifyOtp : handleSendOtp}
+        >
           <div className="form-intro">
             <div className="intro-heading-row">
               <h2>{formTitle}</h2>
-              {(recognitionSupported || speechSupported) && renderFieldVoiceActions(
+              {(recognitionSupported || speechSupported) ? renderFieldVoiceActions(
                 "form-intro",
                 `${formTitle}. ${formDescription}`,
                 () => {}
-              )}
+              ) : null}
             </div>
             <p>{formDescription}</p>
           </div>
 
-          {isUserRegistrationFlow && !otpSent && (
-            <>
-              <div className="form-group">
-                <label htmlFor="fullName">
-                  <span>Full Name</span>
-                  {renderFieldVoiceActions("fullName", registrationForm.fullName || "Full Name", (value) => updateRegistrationForm("fullName", value))}
-                </label>
-                <input
-                  type="text"
-                  id="fullName"
-                  placeholder="Enter your full name"
-                  value={registrationForm.fullName}
-                  onChange={(event) => updateRegistrationForm("fullName", event.target.value)}
-                  className="form-input"
-                  autoComplete="name"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="phone">
-                  <span>Phone Number</span>
-                  {renderFieldVoiceActions("phone", registrationForm.phone || "Phone Number", (value) => updateRegistrationForm("phone", value.replace(/[^\d+\s-]/g, "")))}
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  placeholder="Enter your phone number"
-                  value={registrationForm.phone}
-                  onChange={(event) => updateRegistrationForm("phone", event.target.value)}
-                  className="form-input"
-                  autoComplete="tel"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="username">
-                  <span>Username (Unique Global)</span>
-                </label>
-                <input
-                  type="text"
-                  id="username"
-                  placeholder="Enter a unique username (3-20 characters)"
-                  value={registrationForm.username}
-                  onChange={(event) => updateRegistrationForm("username", event.target.value)}
-                  className="form-input"
-                  autoComplete="username"
-                />
-                {usernameCheckStatus === "checking" && (
-                  <p className="helper-text" style={{ color: "#FF9500" }}>Checking availability...</p>
-                )}
-                {usernameCheckStatus === "available" && (
-                  <p className="helper-text" style={{ color: "#4CAF50" }}>✓ Username is available</p>
-                )}
-                {usernameCheckStatus === "taken" && (
-                  <p className="helper-text" style={{ color: "#F44336" }}>✗ {usernameError}</p>
-                )}
-                {usernameError && usernameCheckStatus !== "taken" && usernameCheckStatus !== "available" && (
-                  <p className="helper-text" style={{ color: "#F44336" }}>{usernameError}</p>
-                )}
-              </div>
-            </>
-          )}
-
-          {isEntrepreneurRegistrationFlow && !otpSent && (
-            <>
-              <div className="form-group">
-                <label htmlFor="fullName">
-                  <span>Full Name</span>
-                  {renderFieldVoiceActions("business-fullName", registrationForm.fullName || "Full Name", (value) => updateRegistrationForm("fullName", value))}
-                </label>
-                <input
-                  type="text"
-                  id="fullName"
-                  placeholder="Enter your full name"
-                  value={registrationForm.fullName}
-                  onChange={(event) => updateRegistrationForm("fullName", event.target.value)}
-                  className="form-input"
-                  autoComplete="name"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="accountType">Account Type</label>
-                <select
-                  id="accountType"
-                  value={registrationForm.accountType}
-                  onChange={(event) => updateRegistrationForm("accountType", event.target.value)}
-                  className="form-input"
-                >
-                  <option value="business">Business Account</option>
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="businessName">
-                  <span>Business Name</span>
-                  {renderFieldVoiceActions("businessName", registrationForm.businessName || "Business Name", (value) => updateRegistrationForm("businessName", value))}
-                </label>
-                <input
-                  type="text"
-                  id="businessName"
-                  placeholder="Enter your business name"
-                  value={registrationForm.businessName}
-                  onChange={(event) => updateRegistrationForm("businessName", event.target.value)}
-                  className="form-input"
-                  autoComplete="organization"
-                />
-              </div>
-
-              <fieldset className="form-group category-group">
-                <legend>Business Categories</legend>
-                <div className="category-options">
-                  {businessCategories.map((category) => (
-                    <label className="category-option" key={category.id} htmlFor={`category-${category.id}`}>
-                      <input
-                        id={`category-${category.id}`}
-                        type="checkbox"
-                        checked={registrationForm.selectedBusinessCategories.includes(category.id)}
-                        onChange={() => toggleBusinessCategory(category.id)}
-                      />
-                      <span>{category.name}</span>
-                      <strong>INR {category.fee}</strong>
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-
-              <div className="form-group">
-                <label htmlFor="phone">
-                  <span>Phone Number</span>
-                  {renderFieldVoiceActions("business-phone", registrationForm.phone || "Phone Number", (value) => updateRegistrationForm("phone", value.replace(/[^\d+\s-]/g, "")))}
-                </label>
-                <input
-                  type="tel"
-                  id="phone"
-                  placeholder="Enter your phone number"
-                  value={registrationForm.phone}
-                  onChange={(event) => updateRegistrationForm("phone", event.target.value)}
-                  className="form-input"
-                  autoComplete="tel"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="business-username">
-                  <span>Username (Unique Global)</span>
-                </label>
-                <input
-                  type="text"
-                  id="business-username"
-                  placeholder="Enter a unique username (3-20 characters)"
-                  value={registrationForm.username}
-                  onChange={(event) => updateRegistrationForm("username", event.target.value)}
-                  className="form-input"
-                  autoComplete="username"
-                />
-                {usernameCheckStatus === "checking" && (
-                  <p className="helper-text" style={{ color: "#FF9500" }}>Checking availability...</p>
-                )}
-                {usernameCheckStatus === "available" && (
-                  <p className="helper-text" style={{ color: "#4CAF50" }}>✓ Username is available</p>
-                )}
-                {usernameCheckStatus === "taken" && (
-                  <p className="helper-text" style={{ color: "#F44336" }}>✗ {usernameError}</p>
-                )}
-                {usernameError && usernameCheckStatus !== "taken" && usernameCheckStatus !== "available" && (
-                  <p className="helper-text" style={{ color: "#F44336" }}>{usernameError}</p>
-                )}
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="location">
-                  <span>City or Location</span>
-                  {renderFieldVoiceActions("location", registrationForm.location || "City or Location", (value) => updateRegistrationForm("location", value))}
-                </label>
-                <input
-                  type="text"
-                  id="location"
-                  placeholder="Enter your city or location"
-                  value={registrationForm.location}
-                  onChange={(event) => updateRegistrationForm("location", event.target.value)}
-                  className="form-input"
-                  autoComplete="address-level2"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="licenseNumber">
-                  <span>Licence Number</span>
-                  {renderFieldVoiceActions("licenseNumber", registrationForm.licenseNumber || "Licence Number", (value) => updateRegistrationForm("licenseNumber", value))}
-                </label>
-                <input
-                  type="text"
-                  id="licenseNumber"
-                  placeholder="Enter your licence number"
-                  value={registrationForm.licenseNumber}
-                  onChange={(event) => updateRegistrationForm("licenseNumber", event.target.value)}
-                  className="form-input"
-                />
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="profilePhoto">Photo of the User</label>
-                <input
-                  type="file"
-                  id="profilePhoto"
-                  accept="image/*"
-                  capture="user"
-                  className="form-input file-input"
-                  onChange={(event) =>
-                    handleRegistrationFileChange(
-                      "profilePhotoName",
-                      "profilePhotoFile",
-                      event.target.files?.[0] || null
-                    )
-                  }
-                />
-                <span className="helper-text">
-                  On mobile, this opens your camera or photo library.
-                </span>
-                {registrationForm.profilePhotoName && (
-                  <span className="file-name">{registrationForm.profilePhotoName}</span>
-                )}
-              </div>
-
-              <div className="form-group">
-                <label htmlFor="licenseDocument">Licence Document Upload</label>
-                <input
-                  type="file"
-                  id="licenseDocument"
-                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                  className="form-input file-input"
-                  onChange={(event) =>
-                    handleRegistrationFileChange(
-                      "licenseDocumentName",
-                      "licenseDocumentFile",
-                      event.target.files?.[0] || null
-                    )
-                  }
-                />
-                {registrationForm.licenseDocumentName && (
-                  <span className="file-name">{registrationForm.licenseDocumentName}</span>
-                )}
-              </div>
-
-              <div className="supporting-panel">
-                <h3>Registration Fee</h3>
-                <div className="fee-summary" aria-label="Business registration fee">
-                  <span>Total for selected categories</span>
-                  <strong>INR {totalRegistrationFee}</strong>
-                </div>
-                <p className="helper-text">
-                  Fees are set by the admin for each category. You can register for multiple business categories at once.
-                </p>
-                <label className="checkbox-row" htmlFor="registrationFeeAccepted">
-                  <input
-                    type="checkbox"
-                    id="registrationFeeAccepted"
-                    checked={registrationForm.registrationFeeAccepted}
-                    onChange={(event) => updateRegistrationForm("registrationFeeAccepted", event.target.checked)}
-                  />
-                  <span>I understand that the total registration fee is INR {totalRegistrationFee}.</span>
-                </label>
-              </div>
-
-              <div className="supporting-panel">
-                <h3>Identity Details</h3>
-                <div className="form-group">
-                  <label htmlFor="identityType">Identity Proof Type</label>
-                  <select
-                    id="identityType"
-                    value={registrationForm.identityType}
-                    onChange={(event) => updateRegistrationForm("identityType", event.target.value)}
-                    className="form-input"
-                  >
-                    {IDENTITY_OPTIONS.map((identity) => (
-                      <option key={identity.value} value={identity.value}>
-                        {identity.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="identityNumber">
-                    <span>Identity Number</span>
-                    {renderFieldVoiceActions("identityNumber", registrationForm.identityNumber || "Identity Number", (value) => updateRegistrationForm("identityNumber", value))}
-                  </label>
-                  <input
-                    type="text"
-                    id="identityNumber"
-                    placeholder="Enter your PAN or other identity number"
-                    value={registrationForm.identityNumber}
-                    onChange={(event) => updateRegistrationForm("identityNumber", event.target.value)}
-                    className="form-input"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="identityDocument">Identity Document Upload</label>
-                  <input
-                    type="file"
-                    id="identityDocument"
-                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                    className="form-input file-input"
-                    onChange={(event) =>
-                      handleRegistrationFileChange(
-                        "identityDocumentName",
-                        "identityDocumentFile",
-                        event.target.files?.[0] || null
-                      )
-                    }
-                  />
-                  {registrationForm.identityDocumentName && (
-                    <span className="file-name">{registrationForm.identityDocumentName}</span>
-                  )}
-                </div>
-              </div>
-
-              {requiresFoodLicense && (
-                <div className="supporting-panel">
-                  <h3>Food Licence Details</h3>
-                  <div className="form-group">
-                    <label htmlFor="foodLicenseNumber">
-                      <span>Food Licence Number</span>
-                      {renderFieldVoiceActions("foodLicenseNumber", registrationForm.foodLicenseNumber || "Food Licence Number", (value) => updateRegistrationForm("foodLicenseNumber", value))}
-                    </label>
-                    <input
-                      type="text"
-                      id="foodLicenseNumber"
-                      placeholder="Enter your food licence number"
-                      value={registrationForm.foodLicenseNumber}
-                      onChange={(event) => updateRegistrationForm("foodLicenseNumber", event.target.value)}
-                      className="form-input"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="foodLicenseAuthority">
-                      <span>Food Licence Authority</span>
-                      {renderFieldVoiceActions("foodLicenseAuthority", registrationForm.foodLicenseAuthority || "Food Licence Authority", (value) => updateRegistrationForm("foodLicenseAuthority", value))}
-                    </label>
-                    <input
-                      type="text"
-                      id="foodLicenseAuthority"
-                      placeholder="Enter the issuing authority"
-                      value={registrationForm.foodLicenseAuthority}
-                      onChange={(event) => updateRegistrationForm("foodLicenseAuthority", event.target.value)}
-                      className="form-input"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label htmlFor="foodLicenseDocument">Food Licence Document Upload</label>
-                    <input
-                      type="file"
-                      id="foodLicenseDocument"
-                      accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                      className="form-input file-input"
-                      onChange={(event) =>
-                        handleRegistrationFileChange(
-                          "foodLicenseDocumentName",
-                          "foodLicenseDocumentFile",
-                          event.target.files?.[0] || null
-                        )
-                      }
-                    />
-                    {registrationForm.foodLicenseDocumentName && (
-                      <span className="file-name">{registrationForm.foodLicenseDocumentName}</span>
-                    )}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          <div className="form-group">
-            <label htmlFor="email">
-              <span>Email Address</span>
-              {renderFieldVoiceActions("email", email || "Email Address", (value) => updateEmail(value.toLowerCase().replace(/\s+/g, "")))}
-            </label>
-            <input
-              type="email"
-              id="email"
-              placeholder="Enter your email"
-              value={email}
-              onChange={(event) => updateEmail(event.target.value)}
-              disabled={otpSent || loading}
-              className="form-input"
-              autoComplete="email"
-            />
-          </div>
-
-          {(registrationType === "entrepreneur" || isAdminFlow) && !otpSent && (
-            <p className="helper-text admin-helper">
-              The {businessCategoryCount} available business categories are used for registration here. Admin access is included with <strong>{ADMIN_EMAIL}</strong>.
-            </p>
-          )}
-
-          {(isUserRegistrationFlow || isEntrepreneurRegistrationFlow) && !otpSent && (
-            <label className="checkbox-row" htmlFor="agreeToTerms">
+          {!otpSent && !isUsernameStep ? (
+            <div className="form-group">
+              <label htmlFor="email">
+                <span>Email Address</span>
+                {renderFieldVoiceActions("email", normalizedEmail || "Email Address", (value) => {
+                  setEmail(value);
+                  clearMessages();
+                })}
+              </label>
               <input
-                type="checkbox"
-                id="agreeToTerms"
-                checked={registrationForm.agreeToTerms}
-                onChange={(event) => updateRegistrationForm("agreeToTerms", event.target.checked)}
+                type="email"
+                id="email"
+                placeholder="Enter your email address"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  clearMessages();
+                }}
+                className="form-input"
+                autoComplete="email"
               />
-              <span>I agree to receive verification messages and continue with registration.</span>
-            </label>
-          )}
+            </div>
+          ) : null}
 
-          {otpSent && !needsUsernameSetup && (
+          {otpSent ? (
             <div className="form-group">
               <label htmlFor="otp">
-                <span>Enter OTP sent to your email</span>
+                <span>One-Time Password</span>
                 <span className="field-actions">
-                  {renderFieldVoiceActions("otp", otp || "OTP", (value) => updateOtp(value.replace(/\D/g, "").slice(0, 6)))}
+                  {renderFieldVoiceActions("otp", otp || "OTP", (value) => {
+                    setOtp(value.replace(/\D/g, "").slice(0, 6));
+                    clearMessages();
+                  })}
                   <button
                     type="button"
                     className="resend-otp"
@@ -1212,101 +444,95 @@ const Login = ({
                 id="otp"
                 placeholder="Enter 6-digit OTP"
                 value={otp}
-                onChange={(event) => updateOtp(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                onChange={(event) => {
+                  setOtp(event.target.value.replace(/\D/g, "").slice(0, 6));
+                  clearMessages();
+                }}
                 className="form-input"
                 maxLength="6"
                 autoComplete="one-time-code"
               />
             </div>
-          )}
+          ) : null}
 
-          {needsUsernameSetup && (
+          {isUsernameStep ? (
             <div className="form-group">
               <label htmlFor="setupUsername">
                 <span>Create your global username</span>
-                {renderFieldVoiceActions("setupUsername", setupUsername || "Username", (value) => setSetupUsername(value))}
+                {renderFieldVoiceActions("setupUsername", setupUsername || "Username", (value) => {
+                  setSetupUsername(value);
+                  setSetupUsernameError("");
+                  clearMessages();
+                })}
               </label>
               <input
                 type="text"
                 id="setupUsername"
                 placeholder="Enter a unique username (3-20 characters)"
                 value={setupUsername}
-                onChange={(event) => {
+                onChange={async (event) => {
                   const value = event.target.value;
                   setSetupUsername(value);
-                  if (value) {
-                    checkSetupUsernameAvailability(value);
-                  } else {
-                    setSetupUsernameStatus(null);
-                    setSetupUsernameError("");
-                  }
+                  clearMessages();
+                  await checkSetupUsernameAvailability(value);
                 }}
                 className="form-input"
                 autoComplete="username"
               />
-              {setupUsernameStatus === "checking" && (
+              {setupUsernameStatus === "checking" ? (
                 <div className="username-status checking">Checking availability...</div>
-              )}
-              {setupUsernameStatus === "available" && (
-                <div className="username-status available">✓ Username is available</div>
-              )}
-              {setupUsernameStatus === "taken" && (
-                <div className="username-status taken">✗ Username is taken</div>
-              )}
-              {setupUsernameError && (
+              ) : null}
+              {setupUsernameStatus === "available" ? (
+                <div className="username-status available">Username is available</div>
+              ) : null}
+              {setupUsernameStatus === "taken" ? (
+                <div className="username-status taken">Username is taken</div>
+              ) : null}
+              {setupUsernameError ? (
                 <div className="username-error">{setupUsernameError}</div>
-              )}
+              ) : null}
             </div>
-          )}
+          ) : null}
 
-          {error && <div className="error-message">{error}</div>}
-          {success && <div className="success-message">{success}</div>}
-          {devOtp && (
+          {error ? <div className="error-message">{error}</div> : null}
+          {success ? <div className="success-message">{success}</div> : null}
+          {devOtp ? (
             <div className="dev-otp-message">
               <span>Development OTP</span>
               <strong>{devOtp}</strong>
             </div>
-          )}
+          ) : null}
 
           <div className="form-actions">
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {needsUsernameSetup
-                ? loading ? "Setting username..." : "Complete Profile"
+              {isUsernameStep
+                ? loading ? "Completing login..." : "Complete Login"
                 : otpSent
                   ? loading ? "Verifying..." : "Verify OTP"
                   : loading
                     ? "Sending OTP..."
-                    : isUserRegistrationFlow || isEntrepreneurRegistrationFlow
-                      ? "Continue to Verification"
-                      : isLoginFlow
-                        ? "Send Login OTP"
-                      : isAdminFlow
-                        ? "Send Admin OTP"
-                        : "Send OTP"}
+                    : "Send Login OTP"}
             </button>
 
-            {(otpSent || needsUsernameSetup) && (
+            {otpSent || isUsernameStep ? (
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={needsUsernameSetup ? () => {
-                  setNeedsUsernameSetup(false);
-                  setSetupUsername("");
-                  setSetupUsernameStatus(null);
-                  setSetupUsernameError("");
-                } : resetOtpFlow}
+                onClick={isUsernameStep ? resetUsernameSetup : resetOtpFlow}
                 disabled={loading}
               >
                 Back
               </button>
-            )}
-
+            ) : null}
           </div>
         </form>
 
         <div className="login-footer">
-          <p className="security-info">{loginCopy.footer}</p>
-          {isLoginFlow && onSignUpClick && !otpSent && (
+          <p className="security-info">
+            {loginCopy.footer || "Your login is verified by a server-issued OTP."}
+          </p>
+          <PublicLegalNotice message="By continuing, you agree to the Terms and acknowledge the Privacy Policy. Support and grievance channels are public, and optional ID, location, camera, and microphone features are covered there." />
+          {!otpSent && !isUsernameStep && onSignUpClick ? (
             <p className="signup-prompt">
               Don't have an account?{" "}
               <button
@@ -1326,7 +552,7 @@ const Login = ({
                 Sign Up
               </button>
             </p>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

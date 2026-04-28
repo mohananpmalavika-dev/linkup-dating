@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import PublicLegalNotice from './PublicLegalNotice';
 import '../styles/DatingSignUp.css';
 
 const RELATIONSHIP_INTENT_OPTIONS = [
@@ -1047,6 +1048,8 @@ const DatingSignUp = ({ onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
             Already have an account? <button onClick={onLoginClick} type="button">Log in</button>
           </div>
         )}
+
+        <PublicLegalNotice message="By creating an account, you agree to the Terms and acknowledge the Privacy Policy. Grievance and support contacts are public, including guidance for ID verification, location sharing, and camera or microphone features." />
       </div>
     </div>
   );

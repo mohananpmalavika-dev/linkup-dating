@@ -13,7 +13,7 @@
       "signingAliasPassword": "",
       "signingKeyPassword": "",
       "signingKeystorePath": "",
-      "releaseType": "APK"
+      "releaseType": "AAB"
     }
   }
 }
