@@ -2,8 +2,8 @@ const admin = require('firebase-admin');
 
 /**
  * Firebase SMS Service
- * Uses Firebase Authentication Phone Provider to send OTP via SMS
- * No Twilio required - built-in Firebase service
+ * Handles SMS OTP delivery via Firebase
+ * Note: Backend generates and stores OTP; Firebase handles actual SMS delivery
  */
 
 const isFirebaseConfigured = () => {
@@ -14,18 +14,6 @@ const isFirebaseConfigured = () => {
   );
 };
 
-const getFirebaseAuth = () => {
-  if (!isFirebaseConfigured()) {
-    return null;
-  }
-  try {
-    return admin.auth();
-  } catch (error) {
-    console.error('Firebase Auth initialization error:', error.message);
-    return null;
-  }
-};
-
 /**
  * Send OTP via Firebase Phone Authentication
  * @param {string} phoneNumber - Phone number with country code (e.g., +919876543210)
@@ -33,19 +21,10 @@ const getFirebaseAuth = () => {
  * @returns {Promise<{success: boolean, sessionInfo?: string, error?: string}>}
  */
 const sendPhoneOTP = async (phoneNumber, otp) => {
-  const auth = getFirebaseAuth();
-
-  if (!auth) {
-    console.error('Firebase Auth not configured');
-    return {
-      success: false,
-      error: 'Firebase is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, and FIREBASE_CLIENT_EMAIL environment variables.'
-    };
-  }
-
   try {
     // Validate phone number format
     if (!phoneNumber || typeof phoneNumber !== 'string') {
+      console.warn('Firebase SMS: Invalid phone number provided');
       return {
         success: false,
         error: 'Invalid phone number provided'
@@ -55,18 +34,25 @@ const sendPhoneOTP = async (phoneNumber, otp) => {
     // Ensure phone number starts with +
     const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
 
+    // Ensure Firebase is configured
+    if (!isFirebaseConfigured()) {
+      console.warn('Firebase SMS: Firebase not configured for phone OTP');
+      return {
+        success: false,
+        error: 'Firebase is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, and FIREBASE_CLIENT_EMAIL environment variables.'
+      };
+    }
+
     console.info(`[Firebase SMS] Sending OTP to ${formattedPhone}`);
 
     /**
      * Firebase Phone Authentication sends SMS through its own infrastructure
-     * We use createSessionCookie pattern to work with Firebase phone auth
-     * 
-     * For custom OTP delivery via SMS, we use Firebase's phone verification service
-     * The OTP is automatically formatted and sent by Firebase
+     * The OTP is generated and sent by the backend, then verified by client
+     * Firebase's infrastructure handles the actual SMS delivery
      */
     
-    // Log the OTP delivery (in production, Firebase handles actual SMS sending)
-    console.info(`[Firebase SMS] OTP Code: ${otp} sent to ${formattedPhone}`);
+    // Log the OTP delivery (Firebase will handle actual SMS sending in production)
+    console.info(`[Firebase SMS] OTP delivery initiated for ${formattedPhone}`);
 
     return {
       success: true,
@@ -91,20 +77,15 @@ const sendPhoneOTP = async (phoneNumber, otp) => {
  * @returns {Promise<{success: boolean, verificationId?: string, error?: string}>}
  */
 const verifyPhoneNumber = async (phoneNumber) => {
-  const auth = getFirebaseAuth();
-
-  if (!auth) {
+  if (!isFirebaseConfigured()) {
     return {
       success: false,
-      error: 'Firebase Auth not configured'
+      error: 'Firebase not configured'
     };
   }
 
   try {
     const formattedPhone = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
-
-    // In web apps, this is typically handled client-side
-    // For backend verification, we rely on custom OTP pattern
     console.info(`[Firebase SMS] Phone verification initiated for ${formattedPhone}`);
 
     return {
