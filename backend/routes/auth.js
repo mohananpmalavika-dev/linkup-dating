@@ -2510,11 +2510,10 @@ router.post('/google-signup', async (req, res) => {
 
       // Create new user
       const hashedPassword = await bcrypt.hash(firebaseUid, 10); // Use Firebase UID as password hash
-      const newUserId = uuidv4();
 
       const createUserResult = await db.query(
-        'INSERT INTO users (id, email, phone, password, is_admin, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id, email, phone, is_admin',
-        [newUserId, normalizedEmail, normalizedPhone || null, hashedPassword, false]
+        'INSERT INTO users (email, phone, password, is_admin, created_at, updated_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id, email, phone, is_admin',
+        [normalizedEmail, normalizedPhone || null, hashedPassword, false]
       );
 
       user = createUserResult.rows[0];
