@@ -590,8 +590,9 @@ db.init()
     if (process.env.NODE_ENV !== 'production') {
       try {
         const dbModels = require('./models');
+        const { syncModelsInOrder } = require('./utils/syncModels');
 
-        dbModels.sequelize.sync({ alter: true }).then(() => {
+        syncModelsInOrder(dbModels.sequelize, dbModels, logger).then(() => {
           logger.info('Sequelize models synchronized');
         }).catch(err => {
           logger.error('Sequelize sync error', {
