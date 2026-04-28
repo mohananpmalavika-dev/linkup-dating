@@ -157,7 +157,7 @@ const SocialHub = ({
       <div className="social-hub-shell">
         <section className="social-hero-card">
           <div>
-            <p className="social-eyebrow">Phase 3 warm-up layer</p>
+            <p className="social-eyebrow">Warm-up layer</p>
             <h1>Dating-first spaces that support matching</h1>
             <p className="social-hero-copy">
               Keep referrals, profile links, friend energy, and gated warm-up spaces close by without turning LinkUp into a general social app.
