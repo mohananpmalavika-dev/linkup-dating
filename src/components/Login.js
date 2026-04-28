@@ -1,9 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
 import { getTranslation, getTranslationValue } from "../data/translations";
 import useVoice from "../hooks/useVoice";
 import { API_BASE_URL } from "../utils/api";
 import PublicLegalNotice from "./PublicLegalNotice";
+import {
+  isFirebaseConfigured,
+  createRecaptchaVerifier,
+  sendFirebasePhoneOTP
+} from "../config/firebase";
 import "../styles/Login.css";
 
 const ADMIN_EMAIL = "mgdhanyamohan@gmail.com";
@@ -65,6 +70,12 @@ const Login = ({
   const [mpin, setMpin] = useState("");
   const [authMethods, setAuthMethods] = useState(null);
 
+  // Firebase Phone Auth state
+  const [firebaseOtpSent, setFirebaseOtpSent] = useState(false);
+  const [firebaseConfirmationResult, setFirebaseConfirmationResult] = useState(null);
+  const recaptchaContainerRef = useRef(null);
+  const recaptchaVerifierRef = useRef(null);
+
   const {
     recognitionSupported,
     speechSupported,
@@ -106,6 +117,14 @@ const Login = ({
     clearMessages();
   };
 
+  const resetFirebaseFlow = () => {
+    setFirebaseOtpSent(false);
+    setFirebaseConfirmationResult(null);
+    setOtp("");
+    setAuthMethods(null);
+    clearMessages();
+  };
+
   const resetUsernameSetup = () => {
     setNeedsUsernameSetup(false);
     setSetupUsername("");
@@ -115,7 +134,21 @@ const Login = ({
     setVerifiedToken(null);
     resetOtpFlow();
     resetMpinFlow();
+    resetFirebaseFlow();
   };
+
+  // Cleanup reCAPTCHA on unmount
+  useEffect(() => {
+    return () => {
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+    };
+  }, []);
 
   const handleVoiceFill = (fieldKey, updateValue) => {
     if (listeningKey === fieldKey) {
@@ -344,7 +377,6 @@ const Login = ({
         return;
       }
 
-      // Store preferred login method
       try {
         localStorage.setItem("linkup_preferred_login_method", "mpin");
       } catch {}
@@ -434,26 +466,186 @@ const Login = ({
     }
   };
 
+  // Firebase Phone Auth handlers
+  const handleSendFirebasePhoneOTP = async (event) => {
+    event.preventDefault();
+    clearMessages();
+
+    if (!normalizedPhone) {
+      setError("Please enter a valid phone number with country code (e.g., +91xxxxxxxxxx)");
+      return;
+    }
+
+    if (!isFirebaseConfigured()) {
+      setError("Firebase Phone Auth is not configured. Please contact support.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Clean up existing reCAPTCHA verifier
+      if (recaptchaVerifierRef.current) {
+        try {
+          recaptchaVerifierRef.current.clear();
+        } catch {}
+        recaptchaVerifierRef.current = null;
+      }
+
+      // Create new invisible reCAPTCHA verifier
+      const verifier = createRecaptchaVerifier('firebase-recaptcha-container', (response) => {
+        console.log('reCAPTCHA verified:', response);
+      });
+
+      if (!verifier) {
+        setError("Failed to initialize reCAPTCHA. Please try again.");
+        return;
+      }
+
+      recaptchaVerifierRef.current = verifier;
+
+      // Send OTP via Firebase
+      const result = await sendFirebasePhoneOTP(normalizedPhone, verifier);
+
+      if (!result.success) {
+        setError(result.error || "Failed to send SMS. Please try again.");
+        return;
+      }
+
+      setFirebaseConfirmationResult(result.confirmationResult);
+      setFirebaseOtpSent(true);
+      setSuccess("OTP sent to your phone via SMS");
+    } catch (firebaseError) {
+      console.error('Firebase phone OTP error:', firebaseError);
+      setError(firebaseError.message || "Failed to send phone verification SMS");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyFirebasePhoneOTP = async (event) => {
+    event.preventDefault();
+    clearMessages();
+
+    if (!otp.trim()) {
+      setError("Please enter the OTP");
+      return;
+    }
+
+    if (!firebaseConfirmationResult) {
+      setError("No active verification session. Please request a new OTP.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Confirm the OTP with Firebase
+      const userCredential = await firebaseConfirmationResult.confirm(otp.trim());
+
+      if (!userCredential || !userCredential.user) {
+        setError("Failed to verify OTP with Firebase");
+        return;
+      }
+
+      // Get Firebase ID token
+      const idToken = await userCredential.user.getIdToken();
+
+      // Send to our backend for verification and login
+      const response = await axios.post(`${API_BASE_URL}/auth/firebase-verify-phone`, {
+        idToken,
+        email: normalizedEmail || undefined
+      });
+
+      if (!response.data?.success || !response.data?.token || !response.data?.user) {
+        setError(response.data?.message || response.data?.error || "Failed to verify phone");
+        return;
+      }
+
+      if (response.data.needsUsernameSetup) {
+        setVerifiedUser(response.data.user);
+        setVerifiedToken(response.data.token);
+        setNeedsUsernameSetup(true);
+        setSuccess("Phone verified. Create your username to finish logging in.");
+        setFirebaseOtpSent(false);
+        setOtp("");
+        return;
+      }
+
+      // Store preferred login method
+      try {
+        localStorage.setItem("linkup_preferred_login_method", "firebase_phone");
+      } catch {}
+
+      completeLogin(
+        response.data.user,
+        response.data.token,
+        response.data.user?.email || normalizedEmail || trimmedIdentifier
+      );
+    } catch (verifyError) {
+      console.error('Firebase OTP verification error:', verifyError);
+      if (!verifyError.response) {
+        setError("Backend is not running. Please start the API server and try again.");
+      } else {
+        setError(
+          verifyError.response.data?.message ||
+            verifyError.response.data?.error ||
+            "Unable to verify OTP. Please try again."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const isUsernameStep = needsUsernameSetup;
+  const isFirebaseStep = loginMethod === "firebase_phone" && firebaseOtpSent;
+
   const formTitle = isUsernameStep
     ? "Create your username"
     : loginMethod === "mpin"
       ? "Login with MPIN"
-      : otpSent
-        ? "Verify your account"
-        : "Verify your account";
+      : isFirebaseStep
+        ? "Verify your phone"
+        : otpSent
+          ? "Verify your account"
+          : "Verify your account";
+
   const formDescription = isUsernameStep
     ? "Set a unique username before you continue to your LinkUp account."
     : loginMethod === "mpin"
       ? "Enter your email or phone number and MPIN to sign in."
-      : otpSent
-        ? "Enter the one-time password sent to your device."
-        : "Enter your email address or phone number and choose how to receive your OTP.";
+      : isFirebaseStep
+        ? "Enter the one-time password sent to your phone via SMS."
+        : otpSent
+          ? "Enter the one-time password sent to your device."
+          : "Enter your email address or phone number and choose how to receive your OTP.";
+
+  const handleFormSubmit = (event) => {
+    if (isUsernameStep) {
+      return handleSetUsername(event);
+    }
+    if (loginMethod === "mpin") {
+      return handleLoginMpin(event);
+    }
+    if (isFirebaseStep) {
+      return handleVerifyFirebasePhoneOTP(event);
+    }
+    if (otpSent) {
+      return handleVerifyOtp(event);
+    }
+    if (loginMethod === "firebase_phone") {
+      return handleSendFirebasePhoneOTP(event);
+    }
+    return handleSendOtp(event);
+  };
+
+  const isBackVisible = otpSent || isFirebaseStep || isUsernameStep;
 
   return (
     <div className="login-container" dir={direction}>
       <div className="login-card">
-        {!otpSent && !isUsernameStep && onBackToLaunch ? (
+        {!otpSent && !isUsernameStep && !isFirebaseStep && onBackToLaunch ? (
           <div className="login-topbar">
             <button
               type="button"
@@ -475,7 +667,7 @@ const Login = ({
           </p>
         </div>
 
-        {!isUsernameStep && !otpSent ? (
+        {!isUsernameStep && !otpSent && !isFirebaseStep ? (
           <div className="login-method-tabs">
             <button
               type="button"
@@ -483,6 +675,7 @@ const Login = ({
               onClick={() => {
                 setLoginMethod("otp");
                 resetMpinFlow();
+                resetFirebaseFlow();
               }}
             >
               OTP Login
@@ -493,25 +686,28 @@ const Login = ({
               onClick={() => {
                 setLoginMethod("mpin");
                 resetOtpFlow();
+                resetFirebaseFlow();
               }}
             >
               MPIN Login
             </button>
+            {isFirebaseConfigured() ? (
+              <button
+                type="button"
+                className={`method-tab ${loginMethod === "firebase_phone" ? "active" : ""}`}
+                onClick={() => {
+                  setLoginMethod("firebase_phone");
+                  resetOtpFlow();
+                  resetMpinFlow();
+                }}
+              >
+                Phone (SMS)
+              </button>
+            ) : null}
           </div>
         ) : null}
 
-        <form
-          className="login-form"
-          onSubmit={
-            isUsernameStep
-              ? handleSetUsername
-              : loginMethod === "mpin"
-                ? handleLoginMpin
-                : otpSent
-                  ? handleVerifyOtp
-                  : handleSendOtp
-          }
-        >
+        <form className="login-form" onSubmit={handleFormSubmit}>
           <div className="form-intro">
             <div className="intro-heading-row">
               <h2>{formTitle}</h2>
@@ -524,10 +720,14 @@ const Login = ({
             <p>{formDescription}</p>
           </div>
 
-          {!otpSent && !isUsernameStep ? (
+          {!otpSent && !isUsernameStep && !isFirebaseStep ? (
             <div className="form-group">
               <label htmlFor="identifier">
-                <span>Email Address or Phone Number</span>
+                <span>
+                  {loginMethod === "firebase_phone"
+                    ? "Phone Number"
+                    : "Email Address or Phone Number"}
+                </span>
                 {renderFieldVoiceActions("identifier", trimmedIdentifier || "Email address or phone number", (value) => {
                   setIdentifier(value);
                   clearMessages();
@@ -537,7 +737,11 @@ const Login = ({
               <input
                 type="text"
                 id="identifier"
-                placeholder="Enter your email address or phone number"
+                placeholder={
+                  loginMethod === "firebase_phone"
+                    ? "Enter your phone number with country code (e.g., +91xxxxxxxxxx)"
+                    : "Enter your email address or phone number"
+                }
                 value={identifier}
                 onChange={(event) => {
                   setIdentifier(event.target.value);
@@ -596,6 +800,17 @@ const Login = ({
             </div>
           ) : null}
 
+          {loginMethod === "firebase_phone" && !firebaseOtpSent && !isUsernameStep ? (
+            <div className="form-group">
+              <div id="firebase-recaptcha-container" className="recaptcha-container"></div>
+              {isFirebaseConfigured() ? null : (
+                <div className="firebase-notice">
+                  Firebase Phone Auth is not configured. SMS login is unavailable.
+                </div>
+              )}
+            </div>
+          ) : null}
+
           {loginMethod === "mpin" && !isUsernameStep ? (
             <div className="form-group">
               <label htmlFor="mpin">
@@ -622,7 +837,7 @@ const Login = ({
             </div>
           ) : null}
 
-          {otpSent ? (
+          {otpSent || isFirebaseStep ? (
             <div className="form-group">
               <label htmlFor="otp">
                 <span>One-Time Password</span>
@@ -634,7 +849,7 @@ const Login = ({
                   <button
                     type="button"
                     className="resend-otp"
-                    onClick={handleSendOtp}
+                    onClick={isFirebaseStep ? handleSendFirebasePhoneOTP : handleSendOtp}
                     disabled={loading}
                   >
                     Resend
@@ -705,18 +920,24 @@ const Login = ({
                 ? loading ? "Completing login..." : "Complete Login"
                 : loginMethod === "mpin"
                   ? loading ? "Logging in..." : "Login with MPIN"
-                  : otpSent
-                    ? loading ? "Verifying..." : "Verify OTP"
-                    : loading
-                      ? "Sending OTP..."
-                      : "Send Login OTP"}
+                  : isFirebaseStep
+                    ? loading ? "Verifying..." : "Verify SMS OTP"
+                    : otpSent
+                      ? loading ? "Verifying..." : "Verify OTP"
+                      : loginMethod === "firebase_phone"
+                        ? loading ? "Sending OTP..." : "Send SMS OTP"
+                        : loading
+                          ? "Sending OTP..."
+                          : "Send Login OTP"}
             </button>
 
-            {otpSent || isUsernameStep ? (
+            {isBackVisible ? (
               <button
                 type="button"
                 className="btn btn-outline"
-                onClick={isUsernameStep ? resetUsernameSetup : resetOtpFlow}
+                onClick={isUsernameStep ? resetUsernameSetup : (
+                  isFirebaseStep ? resetFirebaseFlow : resetOtpFlow
+                )}
                 disabled={loading}
               >
                 Back
@@ -730,7 +951,7 @@ const Login = ({
             {loginCopy.footer || "Your login is verified by a server-issued OTP."}
           </p>
           <PublicLegalNotice language={language} message={legalNoticeMessage} />
-          {!otpSent && !isUsernameStep && onSignUpClick ? (
+          {!otpSent && !isUsernameStep && !isFirebaseStep && onSignUpClick ? (
             <p className="signup-prompt">
               Don't have an account?{" "}
               <button

@@ -14,6 +14,9 @@ const {
   getAgeVerificationStatus,
   calculateAgeFromDOB
 } = require('../utils/ageVerification');
+const IPBlockingService = require('../services/ipBlockingService');
+const AdminSettingsService = require('../services/adminSettingsService');
+const { getClientIP } = require('../middleware/ipBlocking');
 
 /**
  * POST /auth/verify-age
@@ -22,7 +25,8 @@ const {
  */
 router.post('/verify-age', async (req, res) => {
   try {
-    const { ageVerification } = req.body;
+    const { ageVerification, email } = req.body;
+    const clientIP = getClientIP(req);
 
     if (!ageVerification) {
       return res.status(400).json({
@@ -43,10 +47,28 @@ router.post('/verify-age', async (req, res) => {
 
     // Check if user is old enough
     if (!validation.isOver18) {
+      const age = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
+      
+      // Block IP for underage attempt (if enabled in admin settings)
+      const blockingEnabled = await AdminSettingsService.getSetting('underage_block_enabled', true);
+      
+      if (blockingEnabled && clientIP) {
+        try {
+          await IPBlockingService.blockIPForUnderageAttempt(clientIP, email, age);
+          console.log(`[SECURITY] Blocked IP ${clientIP} for underage attempt (age: ${age})`);
+        } catch (blockError) {
+          console.error('Error blocking IP:', blockError);
+          // Don't fail the request if blocking fails
+        }
+      }
+
       return res.status(403).json({
         error: 'You must be at least 18 years old to use LinkUp',
         code: 'UNDERAGE_USER',
-        age: calculateAgeFromDOB(new Date(ageVerification.dateOfBirth))
+        age: age,
+        message: blockingEnabled 
+          ? `You entered an age of ${age}. Your IP address has been blocked for 2 hours due to underage signup attempt.` 
+          : `You entered an age of ${age}. You must be 18 or older to use LinkUp.`
       });
     }
 

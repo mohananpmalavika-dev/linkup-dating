@@ -6,6 +6,8 @@ const { v4: uuidv4 } = require('uuid');
 const nodemailer = require('nodemailer');
 const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
+const { getClientIP } = require('../middleware/ipBlocking');
+const AccountCreationLimitService = require('../services/accountCreationLimitService');
 const spamFraudService = require('../services/spamFraudService');
 const {
   calculateAgeFromDOB,
@@ -20,6 +22,7 @@ const {
 const { getActiveBanForUser } = require('../utils/moderation');
 const { storeOTP, getOTP, incrementOTPAttempts, deleteOTP, findOTPByRecipient, MAX_OTP_ATTEMPTS } = require('../utils/redis');
 const { isTwilioConfigured, sendPhoneOTP } = require('../utils/twilio');
+const { verifyFirebaseIdToken } = require('../config/firebase');
 
 // Email transporter configuration - recreated on each request to ensure env vars are loaded
 
@@ -601,6 +604,7 @@ router.post('/signup', async (req, res) => {
     const { email, password, confirmPassword, ageVerification, phone } = req.body;
     const normalizedEmail = normalizeRecipient(email);
     const normalizedPhone = normalizePhoneNumber(phone);
+    const clientIP = getClientIP(req);
 
     if (!normalizedEmail || !password || !confirmPassword) {
       return res.status(400).json({ error: 'Email and password required' });
@@ -608,6 +612,41 @@ router.post('/signup', async (req, res) => {
 
     if (password !== confirmPassword) {
       return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    // Check account creation limit BEFORE age verification
+    // This prevents IP address enumeration attacks
+    if (clientIP) {
+      try {
+        const canCreate = await AccountCreationLimitService.canCreateAccount(clientIP);
+        if (!canCreate.canCreate) {
+          console.log(`[SECURITY] Account creation blocked for IP ${clientIP}: ${canCreate.reason}`);
+          
+          if (canCreate.reason === 'account_creation_blocked') {
+            return res.status(429).json({
+              success: false,
+              error: 'Account creation limit exceeded',
+              code: 'ACCOUNT_CREATION_BLOCKED',
+              message: `Your IP address is temporarily blocked from creating accounts. ${canCreate.remainingMinutes} minutes remaining.`,
+              blockedUntil: canCreate.blockedUntil,
+              remainingMinutes: canCreate.remainingMinutes,
+              blockReason: canCreate.blockReason
+            });
+          } else if (canCreate.reason === 'account_limit_exceeded') {
+            return res.status(429).json({
+              success: false,
+              error: 'Too many accounts from this IP',
+              code: 'ACCOUNT_LIMIT_EXCEEDED',
+              message: `Maximum ${canCreate.threshold} accounts allowed per IP address. Contact support if you need assistance.`,
+              threshold: canCreate.threshold,
+              accountCount: canCreate.accountCount
+            });
+          }
+        }
+      } catch (limitError) {
+        console.error('Error checking account creation limit:', limitError);
+        // Fail open - allow signup if service is unavailable
+      }
     }
 
     const ageValidation = validateAgeVerification(ageVerification);
@@ -660,6 +699,16 @@ router.post('/signup', async (req, res) => {
       'INSERT INTO user_preferences (user_id, created_at, updated_at) VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
       [userId]
     );
+
+    // Record account creation for rate limiting
+    if (clientIP) {
+      try {
+        await AccountCreationLimitService.recordAccountCreation(clientIP, userId);
+      } catch (recordError) {
+        console.error('Error recording account creation for rate limiting:', recordError);
+        // Don't fail signup if recording fails
+      }
+    }
 
     const persistedUserResult = await db.query(
       `SELECT id, email, phone, is_admin
@@ -2180,6 +2229,184 @@ router.get('/auth-methods', async (req, res) => {
     res.status(500).json({ error: 'Failed to get auth methods' });
   }
 });
+
+// FIREBASE PHONE AUTH VERIFICATION
+router.post('/firebase-verify-phone', async (req, res) => {
+  try {
+    const { idToken, email, ageVerification, fullName, username, location, city, state, country, bio } = req.body;
+    const requestMetadata = getRequestMetadata(req);
+
+    if (!idToken) {
+      return res.status(400).json({ error: 'Firebase ID token is required' });
+    }
+
+    // Verify the Firebase ID token
+    const verificationResult = await verifyFirebaseIdToken(idToken);
+
+    if (!verificationResult.success) {
+      return res.status(401).json({
+        error: 'Invalid Firebase token',
+        details: verificationResult.error,
+        code: verificationResult.code
+      });
+    }
+
+    const { phoneNumber } = verificationResult;
+
+    if (!phoneNumber) {
+      return res.status(400).json({ error: 'No phone number found in Firebase token' });
+    }
+
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+
+    if (!normalizedPhone) {
+      return res.status(400).json({ error: 'Invalid phone number format' });
+    }
+
+    // Find user by phone number
+    let userResult = await getUserWithProfileByPhone(normalizedPhone);
+    let userRecord = userResult.rows[0] || null;
+    let isNewUser = false;
+
+    // If no user found by phone, try to create one if email is provided
+    if (!userRecord) {
+      const normalizedEmail = email ? normalizeRecipient(email) : null;
+
+      if (!normalizedEmail) {
+        return res.status(404).json({
+          error: 'No account found for this phone number. Please sign up with email first or provide an email.',
+          code: 'ACCOUNT_NOT_FOUND'
+        });
+      }
+
+      // Validate age verification for new user creation
+      const ageValidation = validateAgeVerification(ageVerification);
+      if (!ageValidation.valid) {
+        return res.status(400).json({
+          error: ageValidation.errors[0] || 'Age verification failed',
+          details: ageValidation.errors,
+          code: 'AGE_VERIFICATION_FAILED'
+        });
+      }
+
+      if (!ageValidation.isOver18) {
+        return res.status(403).json({
+          error: 'You must be at least 18 years old to use LinkUp',
+          code: 'UNDERAGE_USER'
+        });
+      }
+
+      await syncAdminPrivilegesForEmail(normalizedEmail);
+      const existingUserByEmail = await getUserWithProfileByEmail(normalizedEmail);
+
+      if (existingUserByEmail.rows.length > 0) {
+        // User exists by email - link the phone number
+        userRecord = existingUserByEmail.rows[0];
+        await linkPhoneToUser(userRecord.id, normalizedPhone);
+      } else {
+        // Create new user
+        isNewUser = true;
+        const fallbackName = buildDisplayNameFromEmail(normalizedEmail);
+        const generatedPasswordHash = await hashPassword(uuidv4());
+        const verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
+
+        const createdUserResult = await db.query(
+          'INSERT INTO users (email, password, phone) VALUES ($1, $2, $3) RETURNING id, email, phone, created_at, is_admin',
+          [normalizedEmail, generatedPasswordHash, normalizedPhone]
+        );
+
+        const createdUser = createdUserResult.rows[0];
+        await storeAgeVerification(db, createdUser.id, ageVerification);
+
+        await db.query(
+          `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active)
+           VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+           ON CONFLICT (user_id) DO NOTHING`,
+          [createdUser.id, fallbackName, verifiedAge, 10]
+        );
+
+        await db.query(
+          `INSERT INTO user_preferences (user_id, created_at, updated_at)
+           VALUES ($1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           ON CONFLICT (user_id) DO NOTHING`,
+          [createdUser.id]
+        );
+
+        await syncAdminPrivilegesForEmail(normalizedEmail);
+        const hydratedUserResult = await getUserWithProfileByEmail(normalizedEmail);
+        userRecord = hydratedUserResult.rows[0];
+      }
+    }
+
+    if (!userRecord) {
+      return res.status(500).json({ error: 'Failed to resolve user account' });
+    }
+
+    // Mark phone as verified
+    await db.query(
+      `UPDATE users SET phone_verified = TRUE, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [userRecord.id]
+    );
+
+    // Refresh user record
+    const refreshedUserResult = await db.query(
+      `SELECT id, email, phone, created_at, is_admin,
+              mpin_hash, phone_verified, email_verified
+       FROM users WHERE id = $1 LIMIT 1`,
+      [userRecord.id]
+    );
+    const refreshedUser = refreshedUserResult.rows[0] || userRecord;
+
+    // Apply registration profile data if provided
+    const profileRecord = await applyOtpRegistrationProfile(refreshedUser.id, refreshedUser.email, {
+      fullName,
+      username,
+      location,
+      city,
+      state,
+      country,
+      bio
+    });
+
+    if (await respondWithActiveBan(res, refreshedUser.id)) {
+      return;
+    }
+
+    const token = generateToken(refreshedUser);
+    const needsUsernameSetup = !(profileRecord?.username || refreshedUser.username);
+
+    spamFraudService.trackUserActivity({
+      userId: refreshedUser.id,
+      action: 'firebase_phone_login',
+      analyticsUpdates: { session_count: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runFraudCheck: true
+    });
+
+    const authenticatedUser = buildAuthUserPayload({
+      ...refreshedUser,
+      username: profileRecord?.username || refreshedUser.username,
+      first_name: profileRecord?.first_name || refreshedUser.first_name
+    });
+
+    res.json({
+      success: true,
+      message: 'Phone verified and logged in successfully',
+      verified: true,
+      token,
+      user: authenticatedUser,
+      needsUsernameSetup,
+      verifiedChannel: 'phone',
+      isNewUser
+    });
+  } catch (error) {
+    console.error('Firebase phone verification error:', error);
+    res.status(error.status || 500).json({ error: error.message || 'Failed to verify phone' });
+  }
+});
+
+router.all('/firebase-verify-phone', methodNotAllowed('POST'));
 
 // SET USER AS ADMIN (for initialization)
 router.post('/set-admin', async (req, res) => {

@@ -594,6 +594,23 @@ e/* Login Page Styles */
   font-weight: 600;
 }
 
+
+/* Firebase Phone Auth */
+.recaptcha-container {
+  min-height: 0;
+  margin: 0;
+}
+
+.firebase-notice {
+  padding: 0.75rem 1rem;
+  background: #fff3cd;
+  color: #856404;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  border-left: 3px solid #ffc107;
+  text-align: center;
+}
+
 @media (max-width: 480px) {
   .login-container {
     padding: 0.75rem;

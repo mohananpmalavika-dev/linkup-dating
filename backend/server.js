@@ -35,6 +35,8 @@ const profileResetRoutes = require('./routes/profileReset');
 const eventRoutes = require('./routes/events');
 const doubleDatesRoutes = require('./routes/doubleDates');
 const referralRoutes = require('./routes/referrals');
+const referralsAdminRoutes = require('./routes/referralsAdmin');
+const ipBlockingAdminRoutes = require('./routes/ipBlockingAdmin');
 const analyticsRoutes = require('./routes/analytics');
 const conversationQualityRoutes = require('./routes/conversationQuality');
 const photoABTestingRoutes = require('./routes/photoABTesting');
@@ -45,6 +47,7 @@ const icebreakerVideoRoutes = require('./routes/icebreakerVideos');
 const momentsRoutes = require('./routes/moments');
 const videoInsightsRoutes = require('./routes/videoInsights');
 const { authenticateToken } = require('./middleware/auth');
+const { checkIPBlock } = require('./middleware/ipBlocking');
 
 // Category B: Socket handlers
 const handleAchievementSocketEvents = require('./sockets/achievementSocketHandlers');
@@ -96,6 +99,10 @@ app.use((req, res, next) => {
 
 // Apply general API rate limiting
 app.use('/api/', apiLimiter);
+
+// Mount IP blocking middleware EARLY - before other middleware
+// This checks if the requesting IP is blocked and returns 403 if so
+app.use(checkIPBlock);
 
 // Store active users for real-time features.
 // Each user can have multiple active sockets (multiple tabs/devices).
@@ -516,6 +523,8 @@ app.use('/api/profile-reset', authenticateToken, profileResetRoutes);
 app.use('/api/events', authenticateToken, eventRoutes);
 app.use('/api/double-dates', authenticateToken, doubleDatesRoutes);
 app.use('/api/referrals', referralRoutes);
+app.use('/api/admin/referrals', referralsAdminRoutes);
+app.use('/api/admin/ip-blocking', ipBlockingAdminRoutes);
 app.use('/api/analytics', authenticateToken, analyticsRoutes);
 app.use('/api/conversation-quality', authenticateToken, conversationQualityRoutes);
 app.use('/api/photo-ab-testing', authenticateToken, photoABTestingRoutes);
@@ -585,15 +594,27 @@ const startServer = () => {
 
 // Initialize database and start server
 db.init()
-  .then(() => {
+  .then(async () => {
     // Sync Sequelize models with controlled order to prevent foreign key constraint errors
     try {
       const dbModels = require('./models');
       const { syncModelsInOrder } = require('./utils/syncModels');
 
       logger.info('Starting controlled model sync...');
-      syncModelsInOrder(dbModels.sequelize, dbModels, logger).then(() => {
+      syncModelsInOrder(dbModels.sequelize, dbModels, logger).then(async () => {
         logger.info('✓ Sequelize models synchronized successfully');
+        
+        // Initialize default admin settings for IP blocking and age verification
+        try {
+          const AdminSettingsService = require('./services/adminSettingsService');
+          await AdminSettingsService.initializeDefaultSettings();
+          logger.info('✓ Default admin settings initialized');
+        } catch (err) {
+          logger.error('Failed to initialize admin settings', {
+            message: err.message,
+            stack: err.stack
+          });
+        }
       }).catch(err => {
         logger.error('Sequelize sync error', {
           message: err.message,
