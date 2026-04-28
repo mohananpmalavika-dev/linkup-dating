@@ -95,10 +95,11 @@ module.exports = (sequelize) => {
   };
 
   // Indexes
-  VideoCallRating.sync({ alter: false }).then(() => {
-    sequelize.query(`
-      CREATE INDEX IF NOT EXISTS idx_video_call_rating_call 
-      ON video_call_ratings(video_date_id);
+  // Note: Syncing is handled by utils/syncModels.js in controlled order
+  // VideoCallRating.sync({ alter: false }).then(() => {
+  //   sequelize.query(`
+  //     CREATE INDEX IF NOT EXISTS idx_video_call_rating_date 
+  //     ON video_call_ratings(video_date_id);
       
       CREATE INDEX IF NOT EXISTS idx_video_call_rating_rater 
       ON video_call_ratings(rater_user_id);

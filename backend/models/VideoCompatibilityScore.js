@@ -147,10 +147,11 @@ module.exports = (sequelize) => {
   };
 
   // Indexes
-  VideoCompatibilityScore.sync({ alter: false }).then(() => {
-    sequelize.query(`
-      CREATE INDEX IF NOT EXISTS idx_video_compatibility_call 
-      ON video_compatibility_scores(video_date_id);
+  // Note: Syncing is handled by utils/syncModels.js in controlled order
+  // VideoCompatibilityScore.sync({ alter: false }).then(() => {
+  //   sequelize.query(`
+  //     CREATE INDEX IF NOT EXISTS idx_video_compat_video_date 
+  //     ON video_compatibility_scores(video_date_id);
       
       CREATE INDEX IF NOT EXISTS idx_video_compatibility_users 
       ON video_compatibility_scores(user_id_1, user_id_2);

@@ -586,26 +586,25 @@ const startServer = () => {
 // Initialize database and start server
 db.init()
   .then(() => {
-    // Sync Sequelize models (alter: true for development, use migrations in production)
-    if (process.env.NODE_ENV !== 'production') {
-      try {
-        const dbModels = require('./models');
-        const { syncModelsInOrder } = require('./utils/syncModels');
+    // Sync Sequelize models with controlled order to prevent foreign key constraint errors
+    try {
+      const dbModels = require('./models');
+      const { syncModelsInOrder } = require('./utils/syncModels');
 
-        syncModelsInOrder(dbModels.sequelize, dbModels, logger).then(() => {
-          logger.info('Sequelize models synchronized');
-        }).catch(err => {
-          logger.error('Sequelize sync error', {
-            message: err.message,
-            stack: err.stack
-          });
-        });
-      } catch (err) {
-        logger.error('Failed to load Sequelize models for sync', {
+      logger.info('Starting controlled model sync...');
+      syncModelsInOrder(dbModels.sequelize, dbModels, logger).then(() => {
+        logger.info('✓ Sequelize models synchronized successfully');
+      }).catch(err => {
+        logger.error('Sequelize sync error', {
           message: err.message,
           stack: err.stack
         });
-      }
+      });
+    } catch (err) {
+      logger.error('Failed to load Sequelize models for sync', {
+        message: err.message,
+        stack: err.stack
+      });
     }
 
     startServer();

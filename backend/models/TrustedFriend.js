@@ -98,10 +98,11 @@ module.exports = (sequelize) => {
   };
 
   // Indexes for performance
-  TrustedFriend.sync({ alter: false }).then(() => {
-    sequelize.query(`
-      CREATE INDEX IF NOT EXISTS idx_trusted_friend_user_active 
-      ON trusted_friends(user_id, is_active);
+  // Note: Syncing is handled by utils/syncModels.js in controlled order
+  // TrustedFriend.sync({ alter: false }).then(() => {
+  //   sequelize.query(`
+  //     CREATE INDEX IF NOT EXISTS idx_trusted_friend_user_active 
+  //     ON trusted_friends(user_id, is_active);
       
       CREATE INDEX IF NOT EXISTS idx_trusted_friend_primary 
       ON trusted_friends(user_id, is_primary);

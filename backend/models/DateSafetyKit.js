@@ -154,10 +154,11 @@ module.exports = (sequelize) => {
   };
 
   // Index for performance
-  DateSafetyKit.sync({ alter: false }).then(() => {
-    sequelize.query(`
-      CREATE INDEX IF NOT EXISTS idx_date_safety_user_status 
-      ON date_safety_kits(user_id, session_status);
+  // Note: Syncing is handled by utils/syncModels.js in controlled order
+  // DateSafetyKit.sync({ alter: false }).then(() => {
+  //   sequelize.query(`
+  //     CREATE INDEX IF NOT EXISTS idx_date_safety_user_status 
+  //     ON date_safety_kits(user_id, session_status);
       
       CREATE INDEX IF NOT EXISTS idx_date_safety_friend 
       ON date_safety_kits(trusted_friend_id, session_status);
