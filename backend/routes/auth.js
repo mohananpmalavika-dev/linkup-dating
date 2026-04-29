@@ -1872,6 +1872,19 @@ router.post('/set-username', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
+    // Fetch verified age from age_verifications table
+    const ageResult = await db.query(
+      `SELECT date_of_birth FROM age_verifications 
+       WHERE user_id = $1 AND is_verified = true 
+       ORDER BY verified_at DESC LIMIT 1`,
+      [userId]
+    );
+
+    let verifiedAge = 18; // Default minimum age
+    if (ageResult.rows.length > 0) {
+      verifiedAge = calculateAgeFromDOB(new Date(ageResult.rows[0].date_of_birth));
+    }
+
     const fallbackName = buildDisplayNameFromEmail(userResult.rows[0].email);
     const profileResult = await db.query(
       `INSERT INTO dating_profiles (user_id, username, first_name, age, last_active, created_at)
@@ -1882,7 +1895,7 @@ router.post('/set-username', async (req, res) => {
          updated_at = CURRENT_TIMESTAMP,
          last_active = CURRENT_TIMESTAMP
        RETURNING user_id, username, first_name`,
-      [userId, username, fallbackName, 18]
+      [userId, username, fallbackName, verifiedAge]
     );
 
     await db.query(
@@ -1911,7 +1924,15 @@ router.post('/set-username', async (req, res) => {
       return res.status(403).json({ error: 'Invalid token' });
     }
 
-    res.status(500).json({ error: 'Failed to set username' });
+    // Provide more specific error messages for debugging
+    const errorMessage = error.message || 'Failed to set username';
+    console.error('Set username error details:', {
+      message: errorMessage,
+      code: error.code,
+      detail: error.detail
+    });
+
+    res.status(500).json({ error: 'Failed to set username', details: errorMessage });
   }
 });
 
