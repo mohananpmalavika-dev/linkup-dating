@@ -1878,6 +1878,7 @@ const persistLearningFeedback = async ({ userId, targetUserId, interactionType }
 
     const targetProfile = normalizeProfileRow(targetProfileResult.rows[0] || null);
     if (!targetProfile) {
+      console.warn(`[LEARNING] Target profile not found for user ${targetUserId}, skipping learning update`);
       return;
     }
 
@@ -1896,8 +1897,10 @@ const persistLearningFeedback = async ({ userId, targetUserId, interactionType }
            updated_at = CURRENT_TIMESTAMP`,
       [userId, JSON.stringify(flexibility), JSON.stringify(updatedLearningProfile)]
     );
+    console.log(`[LEARNING] Successfully updated learning profile for user ${userId}`);
   } catch (error) {
-    console.error('Preference learning update error:', error);
+    console.error(`[LEARNING] Preference learning update error for user ${userId}:`, error.message);
+    // Don't re-throw - learning should be optional
   }
 };
 
@@ -4522,32 +4525,64 @@ router.post('/interactions/pass', authenticateToken, async (req, res) => {
     const { toUserId, targetUserId } = req.body;
     const userId = normalizeInteger(toUserId || targetUserId);
 
+    console.log(`[PASS] Starting pass request from user ${fromUserId} to user ${userId}`);
+
     if (!userId) {
       return res.status(400).json({ error: 'toUserId or targetUserId required' });
     }
 
-    const passInsertResult = await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type, created_at)
-       VALUES ($1, $2, 'pass', CURRENT_TIMESTAMP)
-       ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING
-       RETURNING id`,
-      [fromUserId, userId]
-    );
-    if (passInsertResult.rowCount > 0) {
-      await persistLearningFeedback({
-        userId: fromUserId,
-        targetUserId: userId,
-        interactionType: 'pass'
-      });
+    // Verify target user exists before attempting interaction
+    try {
+      const targetUserCheck = await db.query(
+        `SELECT id FROM users WHERE id = $1 LIMIT 1`,
+        [userId]
+      );
+      if (targetUserCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Target user not found' });
+      }
+      console.log(`[PASS] Target user ${userId} verified`);
+    } catch (userCheckErr) {
+      console.error(`[PASS] Error checking target user:`, userCheckErr);
+      throw userCheckErr;
     }
 
-    // Invalidate discovery cache after pass
-    await invalidateDiscoveryCache(fromUserId);
+    try {
+      const passInsertResult = await db.query(
+        `INSERT INTO interactions (from_user_id, to_user_id, interaction_type, created_at)
+         VALUES ($1, $2, 'pass', CURRENT_TIMESTAMP)
+         ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING
+         RETURNING id`,
+        [fromUserId, userId]
+      );
+      console.log(`[PASS] Insert result rowCount: ${passInsertResult.rowCount}`);
+      
+      if (passInsertResult.rowCount > 0) {
+        await persistLearningFeedback({
+          userId: fromUserId,
+          targetUserId: userId,
+          interactionType: 'pass'
+        });
+        console.log(`[PASS] Learning feedback updated`);
+      }
+    } catch (insertErr) {
+      console.error(`[PASS] Error inserting interaction:`, insertErr);
+      throw insertErr;
+    }
+
+    try {
+      // Invalidate discovery cache after pass
+      await invalidateDiscoveryCache(fromUserId);
+      console.log(`[PASS] Discovery cache invalidated`);
+    } catch (cacheErr) {
+      console.error(`[PASS] Error invalidating cache:`, cacheErr);
+      // Don't throw - cache invalidation shouldn't block the pass
+    }
 
     res.json({ message: 'Profile passed' });
   } catch (err) {
-    console.error('Pass error:', err);
-    res.status(500).json({ error: 'Failed to pass profile' });
+    console.error('Pass error (FINAL):', err);
+    const errorDetails = process.env.NODE_ENV === 'development' ? err.message : 'Failed to pass profile';
+    res.status(500).json({ error: 'Failed to pass profile', details: errorDetails });
   }
 });
 
@@ -5776,6 +5811,8 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
     const userId = normalizeInteger(toUserId || targetUserId);
     const requestMetadata = getRequestMetadata(req);
 
+    console.log(`[LIKE] Starting like request from user ${fromUserId} to user ${userId}`);
+
     if (!userId) {
       return res.status(400).json({ error: 'toUserId or targetUserId required' });
     }
@@ -5784,77 +5821,131 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'You cannot like your own profile' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
-    const analyticsResult = await db.query(
-      `SELECT likes_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
-      [fromUserId, today]
-    );
-
-    const likesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_sent || 0) : 0;
-    const likeLimit = 50;
-    if (likesSent >= likeLimit) {
-      return res.status(429).json({ error: 'Daily like limit reached', limit: likeLimit, used: likesSent, remaining: 0 });
-    }
-
-    const likeInsertResult = await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type, created_at)
-       VALUES ($1, $2, 'like', CURRENT_TIMESTAMP)
-       ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING
-       RETURNING id`,
-      [fromUserId, userId]
-    );
-    if (likeInsertResult.rowCount > 0) {
-      await persistLearningFeedback({
-        userId: fromUserId,
-        targetUserId: userId,
-        interactionType: 'like'
-      });
-    }
-
-    await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, likes_sent)
-       VALUES ($1, $2, 1)
-       ON CONFLICT (user_id, activity_date) DO UPDATE
-       SET likes_sent = user_analytics.likes_sent + 1`,
-      [fromUserId, today]
-    );
-
-    await spamFraudService.trackUserActivity({ userId: fromUserId, action: 'like_profile', analyticsUpdates: { likes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
-
-    const mutualResult = await db.query(
-      `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,
-      [userId, fromUserId]
-    );
-
-    if (mutualResult.rows.length > 0) {
-      const persistedMatch = await ensureActiveMatch(fromUserId, userId);
-
-      if (!persistedMatch) {
-        throw new Error(`Failed to persist mutual like match for users ${fromUserId} and ${userId}`);
+    // Verify target user exists before attempting interaction
+    try {
+      const targetUserCheck = await db.query(
+        `SELECT id FROM users WHERE id = $1 LIMIT 1`,
+        [userId]
+      );
+      if (targetUserCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Target user not found' });
       }
+      console.log(`[LIKE] Target user ${userId} verified`);
+    } catch (userCheckErr) {
+      console.error(`[LIKE] Error checking target user:`, userCheckErr);
+      throw userCheckErr;
+    }
 
-      if (typeof req.emitToUser === 'function') {
-        [fromUserId, userId].forEach((pid) => {
-          req.emitToUser(pid, 'new_match', { match: persistedMatch, user: { id: fromUserId }, matchedUserId: pid === fromUserId ? userId : fromUserId, createdAt: new Date().toISOString() });
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const analyticsResult = await db.query(
+        `SELECT likes_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
+        [fromUserId, today]
+      );
+
+      const likesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_sent || 0) : 0;
+      const likeLimit = 50;
+      if (likesSent >= likeLimit) {
+        return res.status(429).json({ error: 'Daily like limit reached', limit: likeLimit, used: likesSent, remaining: 0 });
+      }
+    } catch (analyticsErr) {
+      console.error(`[LIKE] Error checking daily limits:`, analyticsErr);
+      throw analyticsErr;
+    }
+
+    try {
+      const likeInsertResult = await db.query(
+        `INSERT INTO interactions (from_user_id, to_user_id, interaction_type, created_at)
+         VALUES ($1, $2, 'like', CURRENT_TIMESTAMP)
+         ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING
+         RETURNING id`,
+        [fromUserId, userId]
+      );
+      console.log(`[LIKE] Insert result rowCount: ${likeInsertResult.rowCount}`);
+      
+      if (likeInsertResult.rowCount > 0) {
+        await persistLearningFeedback({
+          userId: fromUserId,
+          targetUserId: userId,
+          interactionType: 'like'
         });
       }
-
-      await Promise.all([
-        userNotificationService.createNotification(fromUserId, { type: 'new_match', title: 'You have a new match', body: 'Someone liked you back. Open the chat to say hello.', metadata: { matchId: persistedMatch.id, matchedUserId: userId } }),
-        userNotificationService.createNotification(userId, { type: 'new_match', title: 'It is a match', body: 'You matched with someone new. Start the conversation when you are ready.', metadata: { matchId: persistedMatch.id, matchedUserId: fromUserId } })
-      ]);
-
-      await spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
-      await spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
-      await spamFraudService.refreshSystemMetrics();
-
-      return res.json({ message: 'Its a match!', isMatch: true, match: persistedMatch });
+    } catch (insertErr) {
+      console.error(`[LIKE] Error inserting interaction:`, insertErr);
+      throw insertErr;
     }
 
-    res.json({ message: 'Profile liked', isMatch: false });
+    try {
+      await db.query(
+        `INSERT INTO user_analytics (user_id, activity_date, likes_sent)
+         VALUES ($1, $2, 1)
+         ON CONFLICT (user_id, activity_date) DO UPDATE
+         SET likes_sent = user_analytics.likes_sent + 1`,
+        [fromUserId, today]
+      );
+      console.log(`[LIKE] Updated user analytics`);
+    } catch (analyticsUpdateErr) {
+      console.error(`[LIKE] Error updating user analytics:`, analyticsUpdateErr);
+      throw analyticsUpdateErr;
+    }
+
+    try {
+      await spamFraudService.trackUserActivity({ userId: fromUserId, action: 'like_profile', analyticsUpdates: { likes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
+      console.log(`[LIKE] Tracked user activity`);
+    } catch (spamErr) {
+      console.error(`[LIKE] Error tracking user activity:`, spamErr);
+      // Don't throw - spam check shouldn't block the like
+    }
+
+    try {
+      const mutualResult = await db.query(
+        `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,
+        [userId, fromUserId]
+      );
+      console.log(`[LIKE] Mutual check result: ${mutualResult.rows.length} matching interactions`);
+
+      if (mutualResult.rows.length > 0) {
+        try {
+          const persistedMatch = await ensureActiveMatch(fromUserId, userId);
+          console.log(`[LIKE] Match created/updated:`, persistedMatch?.id);
+
+          if (!persistedMatch) {
+            throw new Error(`Failed to persist mutual like match for users ${fromUserId} and ${userId}`);
+          }
+
+          if (typeof req.emitToUser === 'function') {
+            [fromUserId, userId].forEach((pid) => {
+              req.emitToUser(pid, 'new_match', { match: persistedMatch, user: { id: fromUserId }, matchedUserId: pid === fromUserId ? userId : fromUserId, createdAt: new Date().toISOString() });
+            });
+          }
+
+          await Promise.all([
+            userNotificationService.createNotification(fromUserId, { type: 'new_match', title: 'You have a new match', body: 'Someone liked you back. Open the chat to say hello.', metadata: { matchId: persistedMatch.id, matchedUserId: userId } }),
+            userNotificationService.createNotification(userId, { type: 'new_match', title: 'It is a match', body: 'You matched with someone new. Start the conversation when you are ready.', metadata: { matchId: persistedMatch.id, matchedUserId: fromUserId } })
+          ]);
+          console.log(`[LIKE] Notifications sent`);
+
+          await spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
+          await spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
+          await spamFraudService.refreshSystemMetrics();
+          console.log(`[LIKE] Match analytics updated`);
+
+          return res.json({ message: 'Its a match!', isMatch: true, match: persistedMatch });
+        } catch (matchErr) {
+          console.error(`[LIKE] Error processing mutual match:`, matchErr);
+          throw matchErr;
+        }
+      }
+
+      res.json({ message: 'Profile liked', isMatch: false });
+    } catch (mutualErr) {
+      console.error(`[LIKE] Error checking mutual likes:`, mutualErr);
+      throw mutualErr;
+    }
   } catch (err) {
-    console.error('Like error:', err);
-    res.status(500).json({ error: 'Failed to like profile' });
+    console.error('Like error (FINAL):', err);
+    const errorDetails = process.env.NODE_ENV === 'development' ? err.message : 'Failed to like profile';
+    res.status(500).json({ error: 'Failed to like profile', details: errorDetails });
   }
 });
 
