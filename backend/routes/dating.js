@@ -8541,60 +8541,8 @@ const checkAndCreateMutualMatch = async (userId1, userId2) => {
 
 // DUPLICATE SUPERLIKE ROUTE REMOVED - Use primary implementation at line 5604
 
-// 8c. GET DAILY LIMITS
-router.get('/daily-limits', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const today = new Date().toISOString().split('T')[0];
-
-    // Get subscription status
-    const subResult = await db.query(
-      `SELECT plan FROM subscription WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
-      [userId]
-    );
-    const isPremium = subResult.rows[0]?.plan === 'premium';
-
-    // Define daily limits
-    const limits = {
-      likeLimit: isPremium ? 500 : 50,
-      superlikeLimit: isPremium ? 10 : 1,
-      rewindLimit: isPremium ? -1 : 3 // -1 = unlimited
-    };
-
-    // Get today's usage
-    const usageResult = await db.query(
-      `SELECT 
-         COALESCE(SUM(CASE WHEN interaction_type = 'like' THEN 1 ELSE 0 END), 0) as likes_used,
-         COALESCE(SUM(CASE WHEN interaction_type = 'superlike' THEN 1 ELSE 0 END), 0) as superlikes_used,
-         COALESCE(SUM(CASE WHEN interaction_type = 'rewind' THEN 1 ELSE 0 END), 0) as rewinds_used
-       FROM interactions 
-       WHERE from_user_id = $1 
-         AND DATE(created_at) = $2::date`,
-      [userId, today]
-    );
-
-    const row = usageResult.rows[0] || {};
-    const likesUsed = Number(row.likes_used) || 0;
-    const superlikesUsed = Number(row.superlikes_used) || 0;
-    const rewindsUsed = Number(row.rewinds_used) || 0;
-
-    res.json({
-      isPremium,
-      likeLimit: limits.likeLimit,
-      remainingLikes: Math.max(0, limits.likeLimit - likesUsed),
-      superlikeLimit: limits.superlikeLimit,
-      remainingSuperlikess: Math.max(0, limits.superlikeLimit - superlikesUsed),
-      rewindLimit: limits.rewindLimit,
-      remainingRewinds: limits.rewindLimit === -1 ? -1 : Math.max(0, limits.rewindLimit - rewindsUsed),
-      resetsAt: new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString()
-    });
-  } catch (err) {
-    console.error('Get daily limits error:', err);
-    res.status(500).json({ error: 'Failed to get daily limits' });
-  }
-});
-
 // ============ PHASE 2: REWIND, BLOCK, REPORT, FAVORITES ============
+// Note: Daily limits endpoint is defined earlier at line 5790 with complete implementation
 
 // 9c. REWIND LAST INTERACTION
 router.post('/interactions/rewind', async (req, res) => {

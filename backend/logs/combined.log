@@ -1140,3 +1140,119 @@
 {"level":"info","message":"✓ All models synchronized successfully","service":"linkup-dating-api","timestamp":"2026-04-29 14:43:44"}
 {"level":"info","message":"✓ Sequelize models synchronized successfully","service":"linkup-dating-api","timestamp":"2026-04-29 14:43:44"}
 {"level":"info","message":"✓ Default admin settings initialized","service":"linkup-dating-api","timestamp":"2026-04-29 14:43:44"}
+{"level":"info","message":"Starting controlled model sync...","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"info","message":"Dating app backend running","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49","url":"http://localhost:5000"}
+{"level":"info","message":"WebSocket enabled for real-time features","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"database":"linkup_dating","level":"info","message":"Database configuration loaded","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:49"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"info","message":"✓ All models synchronized successfully","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"info","message":"✓ Sequelize models synchronized successfully","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"info","message":"Initializing IP blocklist table...","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"code":"ECONNREFUSED","level":"warn","message":"","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
+{"level":"info","message":"✓ Default admin settings initialized","service":"linkup-dating-api","timestamp":"2026-04-29 16:06:50"}
