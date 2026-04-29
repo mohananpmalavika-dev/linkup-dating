@@ -5737,38 +5737,25 @@ router.post('/interactions/superlike', authenticateToken, async (req, res) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    const analyticsResult = await db.query(
-      `SELECT superlikes_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
-      [fromUserId, today]
-    );
-
-    const superlikesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].superlikes_sent || 0) : 0;
+    const limits = await getDailyLimitSnapshot(fromUserId);
     const subscriptionAccess = await getSubscriptionAccessForUser(fromUserId);
     const rewardBalance = await getRewardBalanceForUser(fromUserId);
-    const superlikeLimit = subscriptionAccess.isGold ? 10 : subscriptionAccess.isPremium ? 5 : 1;
     let usedRewardCredit = false;
 
-    if (superlikesSent >= superlikeLimit) {
-      if (rewardBalance.superlikeCredits <= 0) {
-        return res.status(429).json({
-          error: 'Daily superlike limit reached',
-          limit: superlikeLimit,
-          used: superlikesSent,
-          remaining: 0,
-          rewardCreditsRemaining: rewardBalance.superlikeCredits
-        });
-      }
+    if (limits.remainingSuperlikes <= 0) {
+      return res.status(429).json({
+        error: 'Daily superlike limit reached',
+        limit: limits.superlikeLimit,
+        used: limits.superlikesSent,
+        remaining: 0,
+        rewardCreditsRemaining: 0,
+        message: subscriptionAccess.isPremium ? 'Upgrade to Gold for more superlikes' : 'Upgrade to Premium for more superlikes'
+      });
+    }
 
+    // Check if we need to use coupon or reward credits
+    if (limits.likesSent >= limits.likeLimit && limits.couponSuperlikeCredits > 0) {
       usedRewardCredit = await spendRewardCredits(rewardBalance.model, 'superlikeCredits', 1);
-      if (!usedRewardCredit) {
-        return res.status(429).json({
-          error: 'Daily superlike limit reached',
-          limit: superlikeLimit,
-          used: superlikesSent,
-          remaining: 0,
-          rewardCreditsRemaining: 0
-        });
-      }
     }
 
     const superlikeInsertResult = await db.query(
@@ -5832,22 +5819,23 @@ router.post('/interactions/superlike', authenticateToken, async (req, res) => {
         match: persistedMatch,
         superlike: true,
         usedRewardCredit,
-        rewardCreditsRemaining: Math.max(
-          0,
-          rewardBalance.superlikeCredits - (usedRewardCredit ? 1 : 0)
-        )
+        remainingSuperlikes: Math.max(0, limits.remainingSuperlikes - 1),
+        rewardCreditsRemaining: rewardBalance.superlikeCredits,
+        couponSuperlikeCredits: limits.couponSuperlikeCredits
       });
     }
+
+    // Get updated limits after superlike
+    const updatedLimits = await getDailyLimitSnapshot(fromUserId);
 
     res.json({
       message: 'Profile super liked',
       isMatch: false,
       superlike: true,
       usedRewardCredit,
-      rewardCreditsRemaining: Math.max(
-        0,
-        rewardBalance.superlikeCredits - (usedRewardCredit ? 1 : 0)
-      )
+      remainingSuperlikes: Math.max(0, updatedLimits.remainingSuperlikes - 1),
+      rewardCreditsRemaining: updatedLimits.rewardSuperlikeCredits,
+      couponSuperlikeCredits: updatedLimits.couponSuperlikeCredits
     });
   } catch (err) {
     console.error('Superlike error:', err);
@@ -5926,16 +5914,20 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
     }
 
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const analyticsResult = await db.query(
-        `SELECT likes_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
-        [fromUserId, today]
-      );
+      const limits = await getDailyLimitSnapshot(fromUserId);
+      const subscriptionAccess = await getSubscriptionAccessForUser(fromUserId);
+      const rewardBalance = await getRewardBalanceForUser(fromUserId);
+      let usedCouponCredit = false;
 
-      const likesSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].likes_sent || 0) : 0;
-      const likeLimit = 50;
-      if (likesSent >= likeLimit) {
-        return res.status(429).json({ error: 'Daily like limit reached', limit: likeLimit, used: likesSent, remaining: 0 });
+      if (limits.remainingLikes <= 0) {
+        return res.status(429).json({
+          error: 'Daily like limit reached',
+          limit: limits.likeLimit,
+          used: limits.likesSent,
+          remaining: 0,
+          remainingLikes: 0,
+          message: subscriptionAccess.isPremium ? 'Upgrade to Gold for more likes' : 'Upgrade to Premium for more likes'
+        });
       }
     } catch (analyticsErr) {
       console.error(`[LIKE] Error checking daily limits:`, analyticsErr);
@@ -6019,14 +6011,31 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
           await spamFraudService.refreshSystemMetrics();
           console.log(`[LIKE] Match analytics updated`);
 
-          return res.json({ message: 'Its a match!', isMatch: true, match: persistedMatch });
+          // Get updated limits after like
+          const updatedLimits = await getDailyLimitSnapshot(fromUserId);
+
+          return res.json({
+            message: 'Its a match!',
+            isMatch: true,
+            match: persistedMatch,
+            remainingLikes: updatedLimits.remainingLikes,
+            couponLikesCredits: updatedLimits.couponLikesCredits
+          });
         } catch (matchErr) {
           console.error(`[LIKE] Error processing mutual match:`, matchErr);
           throw matchErr;
         }
       }
 
-      res.json({ message: 'Profile liked', isMatch: false });
+      // Get updated limits after like
+      const updatedLimits = await getDailyLimitSnapshot(fromUserId);
+
+      res.json({
+        message: 'Profile liked',
+        isMatch: false,
+        remainingLikes: updatedLimits.remainingLikes,
+        couponLikesCredits: updatedLimits.couponLikesCredits
+      });
     } catch (mutualErr) {
       console.error(`[LIKE] Error checking mutual likes:`, mutualErr);
       throw mutualErr;
