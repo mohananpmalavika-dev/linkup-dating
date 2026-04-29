@@ -3,6 +3,8 @@ import '../styles/DiscoveryCards.css';
 import datingProfileService from '../services/datingProfileService';
 import QuickViewMode from './QuickViewMode';
 import useQuickViewMode from '../hooks/useQuickViewMode';
+import BoostButton from './BoostButton';
+import useBoosts from '../hooks/useBoosts';
 
 const DEFAULT_FILTERS = {
   ageMin: '',
@@ -219,6 +221,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [feedback, setFeedback] = useState(null);
   const [quickViewActive, setQuickViewActive] = useState(false);
   const { isActive: quickViewIsActive, startQuickView } = useQuickViewMode(profiles);
+  const { activeBoosts, refetch: refetchBoosts } = useBoosts();
   const loadMoreTriggered = useRef(false);
   const feedbackTimeoutRef = useRef(null);
 
@@ -1139,14 +1142,13 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           <span title="Remaining likes">Likes {remainingLikes}</span>
           <span title="Remaining superlikes">Stars {remainingSuperlikes}</span>
           <span title="Remaining rewinds">Rewinds {remainingRewinds}</span>
-          <button
-            type="button"
-            className="btn-boost"
-            onClick={handleBoost}
-            disabled={boosting || !(subscription?.isPremium || subscription?.isGold)}
-          >
-            {boosting ? 'Boosting...' : 'Boost'}
-          </button>
+          <BoostButton 
+            onBoostActivated={() => {
+              showFeedback('success', 'Boost activated! Your profile is now getting more visibility.');
+              refetchBoosts();
+            }}
+            compact={true}
+          />
         </div>
       </div>
 
@@ -1185,11 +1187,22 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       <div className="discovery-container no-profiles">
         {renderDiscoveryControls()}
         <div className="empty-state">
-          <h2>No More Profiles</h2>
+          <h2>
+            {activeHubTab === 'trending' ? 'No Trending Profiles' :
+             activeHubTab === 'newProfiles' ? 'No New Profiles' :
+             activeHubTab === 'topPicks' ? 'No Top Picks Yet' :
+             'No More Profiles'}
+          </h2>
           <p>
             {activeFilterCount > 0
               ? 'No profiles match your current preferences just yet.'
-              : "You've reviewed all available profiles for this mode."}
+              : activeHubTab === 'trending'
+                ? 'No profiles are trending yet. Check back soon as more users join and engage!'
+                : activeHubTab === 'newProfiles'
+                  ? 'No new profiles this week. We will show you recently active profiles instead.'
+                  : activeHubTab === 'topPicks'
+                    ? 'We are still learning your preferences. Check back soon for personalized top picks!'
+                    : "You've reviewed all available profiles for this mode."}
           </p>
           {loadingMore ? (
             <div className="spinner small"></div>

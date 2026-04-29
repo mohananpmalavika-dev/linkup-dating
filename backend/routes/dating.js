@@ -3937,11 +3937,22 @@ const buildDiscoveryQuery = ({
     );
   }
 
-  // Exclude already interacted users using NOT EXISTS (faster than NOT IN)
+  // Exclude profiles the user passed on (user said no)
   conditions.push(`NOT EXISTS (
     SELECT 1 FROM interactions i
-    WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
-       OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
+    WHERE i.from_user_id = $1 
+      AND i.to_user_id = dp.user_id
+      AND i.interaction_type = 'pass'
+  )`);
+  
+  // Exclude mutual matches (both users liked each other - already matched)
+  conditions.push(`NOT EXISTS (
+    SELECT 1 FROM interactions i1
+    JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
+    WHERE i1.from_user_id = $1 
+      AND i1.to_user_id = dp.user_id
+      AND i1.interaction_type IN ('like', 'superlike')
+      AND i2.interaction_type IN ('like', 'superlike')
   )`);
 
   // Exclude blocked users using NOT EXISTS
@@ -4470,8 +4481,17 @@ router.get('/trending', authenticateToken, async (req, res) => {
          AND dp.is_active = true
          AND NOT EXISTS (
            SELECT 1 FROM interactions i
-           WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
-              OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
+           WHERE i.from_user_id = $1 
+             AND i.to_user_id = dp.user_id
+             AND i.interaction_type = 'pass'
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM interactions i1
+           JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
+           WHERE i1.from_user_id = $1 
+             AND i1.to_user_id = dp.user_id
+             AND i1.interaction_type IN ('like', 'superlike')
+             AND i2.interaction_type IN ('like', 'superlike')
          )
          AND NOT EXISTS (
            SELECT 1 FROM user_blocks ub
@@ -4552,8 +4572,17 @@ router.get('/new-profiles', authenticateToken, async (req, res) => {
          AND dp.created_at >= $2
          AND NOT EXISTS (
            SELECT 1 FROM interactions i
-           WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
-              OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
+           WHERE i.from_user_id = $1 
+             AND i.to_user_id = dp.user_id
+             AND i.interaction_type = 'pass'
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM interactions i1
+           JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
+           WHERE i1.from_user_id = $1 
+             AND i1.to_user_id = dp.user_id
+             AND i1.interaction_type IN ('like', 'superlike')
+             AND i2.interaction_type IN ('like', 'superlike')
          )
          AND NOT EXISTS (
            SELECT 1 FROM user_blocks ub
@@ -4569,9 +4598,52 @@ router.get('/new-profiles', authenticateToken, async (req, res) => {
     const hasMore = result.rows.length > limit;
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
-    const profiles = rows.map((row) =>
+    let profiles = rows.map((row) =>
       applyDiscoveryPresentationControls(normalizeProfileRow(row), row.preferences)
     );
+
+    // Fallback: if no new profiles in last 14 days, return recently updated profiles
+    if (profiles.length === 0) {
+      const fallbackResult = await db.query(
+        `SELECT dp.*,
+                row_to_json(up) as preferences,
+                (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+                 FROM profile_photos WHERE user_id = dp.user_id) as photos
+         FROM dating_profiles dp
+         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+         WHERE dp.user_id != $1
+           AND dp.is_active = true
+           AND NOT EXISTS (
+             SELECT 1 FROM interactions i
+             WHERE i.from_user_id = $1 
+               AND i.to_user_id = dp.user_id
+               AND i.interaction_type = 'pass'
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM interactions i1
+             JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
+             WHERE i1.from_user_id = $1 
+               AND i1.to_user_id = dp.user_id
+               AND i1.interaction_type IN ('like', 'superlike')
+               AND i2.interaction_type IN ('like', 'superlike')
+           )
+           AND NOT EXISTS (
+             SELECT 1 FROM user_blocks ub
+             WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id)
+                OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id)
+           )
+           ${cursorCondition}
+         ORDER BY dp.updated_at DESC, dp.id DESC
+         LIMIT $2`,
+        [userId, limit + 1]
+      );
+      const fbHasMore = fallbackResult.rows.length > limit;
+      const fbRows = fbHasMore ? fallbackResult.rows.slice(0, limit) : fallbackResult.rows;
+      profiles = fbRows.map((row) =>
+        applyDiscoveryPresentationControls(normalizeProfileRow(row), row.preferences)
+      );
+      rows.push(...fbRows);
+    }
 
     const lastRow = rows[rows.length - 1];
     const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.created_at, lastRow.id) : null;
@@ -6105,7 +6177,7 @@ router.get('/top-picks', authenticateToken, async (req, res) => {
 
     const result = await db.query(query.text, query.params);
 
-    const scoredProfiles = result.rows
+    let scoredProfiles = result.rows
       .map((profileRow) => {
         const normalizedProfile = applyDiscoveryPresentationControls(
           normalizeProfileRow(profileRow),
@@ -6131,6 +6203,47 @@ router.get('/top-picks', authenticateToken, async (req, res) => {
       .filter(Boolean)
       .sort((leftProfile, rightProfile) => rightProfile.topPickScore - leftProfile.topPickScore)
       .slice(0, limit);
+
+    // Fallback: if no compatible top picks, return regular discovery profiles
+    if (scoredProfiles.length === 0) {
+      const fallbackQuery = buildDiscoveryQuery({
+        userId,
+        currentLat: toFiniteNumber(currentProfile?.location?.lat),
+        currentLng: toFiniteNumber(currentProfile?.location?.lng),
+        radiusKm: currentPreferences.locationRadius,
+        ageMin: currentPreferences.ageRangeMin,
+        ageMax: currentPreferences.ageRangeMax,
+        genderPreferences: currentPreferences.genderPreferences,
+        relationshipGoals: currentPreferences.relationshipGoals,
+        interests: currentPreferences.interests,
+        heightRangeMin: currentPreferences.heightRangeMin,
+        heightRangeMax: currentPreferences.heightRangeMax,
+        bodyTypes: currentPreferences.bodyTypes,
+        excludeShown: false,
+        viewerTrustEligible:
+          Boolean(currentProfile?.profileVerified) ||
+          Number(currentProfile?.profileCompletionPercent || 0) >= 80,
+        limit,
+        offset: 0
+      });
+      const fallbackResult = await db.query(fallbackQuery.text, fallbackQuery.params);
+      scoredProfiles = fallbackResult.rows
+        .map((profileRow) => {
+          const normalizedProfile = applyDiscoveryPresentationControls(
+            normalizeProfileRow(profileRow),
+            profileRow.preferences
+          );
+          return {
+            ...normalizedProfile,
+            compatibilityScore: 50,
+            compatibilityLabel: 'Discover',
+            compatibilityColor: '#3b82f6',
+            topPickScore: 50,
+            isFallback: true
+          };
+        })
+        .slice(0, limit);
+    }
 
     const requestMetadata = getRequestMetadata(req);
     spamFraudService.trackUserActivity({

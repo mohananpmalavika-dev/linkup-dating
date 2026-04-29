@@ -33,6 +33,7 @@ import AdminDashboard from './components/AdminDashboard';
 import AdminModeration from './components/AdminModeration/AdminModeration';
 import SOSAlert from './components/SOSAlert';
 import AchievementsPage from './components/AchievementsPage';
+import AchievementNotification from './components/AchievementNotification';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import CatfishDetectionDashboard from './components/CatfishDetectionDashboard';
 import ConversationQualityMeter from './components/ConversationQualityMeter';
@@ -58,6 +59,7 @@ import TemplatePerformance from './components/TemplatePerformance';
 import PrivacyPolicyPage from './components/LegalPages/PrivacyPolicyPage';
 import TermsOfServicePage from './components/LegalPages/TermsOfServicePage';
 import RefundPolicyPage from './components/LegalPages/RefundPolicyPage';
+import useAchievements from './hooks/useAchievements';
 import datingProfileService from './services/datingProfileService';
 import datingMessagingService from './services/datingMessagingService';
 import notificationService from './services/notificationService';
@@ -356,6 +358,7 @@ const AppContent = () => {
   const [lastOpenedMatchRoute, setLastOpenedMatchRoute] = useState('');
   const [incomingCall, setIncomingCall] = useState(null);
   const [publicLanguage, setPublicLanguage] = useState(getInitialPublicLanguage);
+  const { achievementNotification, rankNotification } = useAchievements(currentUser?.id);
   const appSocketRef = useRef(null);
   const isAdminSession = isAdminUser(currentUser);
   const defaultAuthenticatedRoute = getDefaultAuthenticatedRouteForUser(currentUser);
@@ -1088,6 +1091,10 @@ const AppContent = () => {
               path="icebreaker-videos"
               element={<IcebreakerVideosRoute onNavigateToPath={(path) => navigate(path)} />}
             />
+            <Route
+              path="icebreaker-recorder"
+              element={<IcebreakerVideosRoute onNavigateToPath={(path) => navigate(path)} />}
+            />
             <Route path="events" element={<EventsList />} />
             <Route path="double-dates" element={<DoubleDateGroups />} />
             <Route path="date-safety-guide" element={<DateSafetyKit />} />
@@ -1122,6 +1129,15 @@ const AppContent = () => {
             <Route path="*" element={<Navigate to={DEFAULT_AUTHENTICATED_ROUTE} replace />} />
           </Route>
         </Routes>
+        
+        {/* Achievement & Rank Notifications */}
+        {isAuthenticated && !isAdminSession ? (
+          <>
+            <AchievementNotification notification={achievementNotification} type="achievement" />
+            <AchievementNotification notification={rankNotification} type="rank" />
+          </>
+        ) : null}
+
         {isAuthenticated && incomingCall && !/^\/matches\/[^/]+\/video$/i.test(location.pathname) ? (
           <div className="incoming-call-overlay" role="dialog" aria-modal="true" aria-label="Incoming video call">
             <div className="incoming-call-card">

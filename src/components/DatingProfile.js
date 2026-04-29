@@ -4,6 +4,17 @@ import AccountSettings from './AccountSettings';
 import { VideoIntroUploader } from './VideoIntroUploader';
 import { VideoAuthenticationResult } from './VideoAuthenticationResult';
 import CouponRedemption from './CouponRedemption';
+import BadgeDisplay from './BadgeDisplay';
+import useAchievements from '../hooks/useAchievements';
+import DailyChallengesWidget from './DailyChallengesWidget';
+import BoostButton from './BoostButton';
+import IcebreakerVideoRecorder from './IcebreakerVideoRecorder';
+import IcebreakerVideoGallery from './IcebreakerVideoGallery';
+import useIcebreakerVideos from '../hooks/useIcebreakerVideos';
+import MomentsUpload from './MomentsUpload';
+import useMoments from '../hooks/useMoments';
+import useAnalytics from '../hooks/useAnalytics';
+import useVideoProfile from '../hooks/useVideoProfile';
 import datingProfileService from '../services/datingProfileService';
 import {
   buildLocalIdentityPack,
@@ -116,7 +127,26 @@ const DatingProfile = ({ onLogout }) => {
   const [showVideoIntroUploader, setShowVideoIntroUploader] = useState(false);
   const [videoAuthResult, setVideoAuthResult] = useState(null);
   const [videoAuthLoading, setVideoAuthLoading] = useState(false);
+  
+  // Icebreaker Videos
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
+  const { myVideos, activeVideo, loading: videosLoading, fetchMyVideos, uploadVideo: uploadIcebreakerVideo } = useIcebreakerVideos();
+
+  // Moments Stories
+  const [showMomentsUpload, setShowMomentsUpload] = useState(false);
+  const { userMoments, stats: momentsStats, loading: momentsLoading, fetchMoments, uploadMoment } = useMoments();
+
+  // Analytics Dashboard
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const { personalStats, profilePerformance, matchRatePercentage, profileViews, likesReceived, recommendationCount, fetchAnalytics } = useAnalytics();
+
+  // Video Profile
+  const { hasVideoProfile, videoDuration, authenticationStatus, isAuthenticated, authenticationScore, fetchVideoProfile, uploadVideo: uploadVideoIntro, deleteVideo: deleteVideoIntro, recheckFraud: recheckVideoFraud } = useVideoProfile();
+  
   const navigate = useNavigate();
+  
+  // Achievements & Gamification
+  const { unlockedAchievements, achievementNotification } = useAchievements(profile?.userId);
 
   const completionChecklist = [
     {
@@ -275,6 +305,9 @@ const DatingProfile = ({ onLogout }) => {
 
   useEffect(() => {
     loadProfile();
+    fetchMyVideos();
+    fetchMoments();
+    fetchVideoProfile();
   }, []);
 
   const handleSaveProfile = async () => {
@@ -766,6 +799,213 @@ const DatingProfile = ({ onLogout }) => {
             </div>
           </div>
 
+          {/* Achievements & Badges Display */}
+          {profile?.userId && (
+            <div className="profile-section">
+              <BadgeDisplay userId={profile.userId} maxBadges={6} compact={false} />
+              <div className="achievements-action">
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={() => navigate('/achievements')}
+                  style={{ marginTop: '12px', width: '100%' }}
+                >
+                  🏆 View All Achievements
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Analytics Dashboard Preview */}
+          <div className="profile-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3>📊 Your Profile Analytics</h3>
+              <button 
+                className="btn btn-sm btn-secondary"
+                onClick={() => setShowAnalytics(true)}
+                style={{ fontSize: '12px' }}
+              >
+                View Full
+              </button>
+            </div>
+            
+            {personalStats?.stats ? (
+              <div className="analytics-quick-stats">
+                <div className="stat-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#666' }}>Profile Views</span>
+                    <strong>{profileViews}</strong>
+                  </div>
+                </div>
+                <div className="stat-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#666' }}>Likes Received</span>
+                    <strong>{likesReceived}</strong>
+                  </div>
+                </div>
+                <div className="stat-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px', marginBottom: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#666' }}>Match Rate</span>
+                    <strong>{matchRatePercentage}%</strong>
+                  </div>
+                </div>
+                <div className="stat-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#666' }}>Tips Available</span>
+                    <strong>{recommendationCount}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p style={{ color: '#999', fontSize: '14px' }}>Loading analytics...</p>
+            )}
+
+            <button 
+              onClick={() => navigate('/analytics')}
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '12px' }}
+            >
+              📈 View Detailed Analytics
+            </button>
+          </div>
+
+          {/* Daily Challenges Widget */}
+          <div className="profile-section">
+            <DailyChallengesWidget />
+          </div>
+
+          {/* Boost Button */}
+          <div className="profile-section">
+            <BoostButton 
+              onBoostActivated={() => {
+                // Profile is now boosted with increased visibility
+              }}
+              compact={false}
+            />
+          </div>
+
+          {/* Icebreaker Videos */}
+          <div className="profile-section">
+            {!showVideoRecorder ? (
+              <>
+                {myVideos.length === 0 ? (
+                  <div className="icebreaker-empty-state">
+                    <h3>📹 Record Your Icebreaker Video</h3>
+                    <p>Help matches know who you are! Record a quick 5-second video explaining why you're looking for someone.</p>
+                    <button 
+                      onClick={() => setShowVideoRecorder(true)}
+                      className="btn btn-primary"
+                      style={{ width: '100%', marginTop: '12px' }}
+                    >
+                      🎥 Record First Video
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <IcebreakerVideoGallery 
+                      onRecordNew={() => setShowVideoRecorder(true)}
+                      videos={myVideos}
+                      stats={{
+                        total_views: myVideos.reduce((sum, v) => sum + (v.view_count || 0), 0),
+                        average_rating: myVideos.length > 0 
+                          ? (myVideos.reduce((sum, v) => sum + (v.average_rating || 0), 0) / myVideos.length).toFixed(1)
+                          : 'N/A',
+                        authenticity_score: myVideos.length > 0 && myVideos[0].authenticity_score 
+                          ? myVideos[0].authenticity_score 
+                          : 0,
+                        total_ratings: myVideos.reduce((sum, v) => sum + (v.like_count || 0), 0)
+                      }}
+                      onDelete={fetchMyVideos}
+                    />
+                    <button 
+                      onClick={() => navigate('/icebreaker-recorder')}
+                      className="btn btn-secondary"
+                      style={{ width: '100%', marginTop: '12px' }}
+                    >
+                      🎬 View Full Gallery & Analytics
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              <IcebreakerVideoRecorder 
+                onUploadSuccess={async () => {
+                  setShowVideoRecorder(false);
+                  await fetchMyVideos();
+                }}
+                onCancel={() => setShowVideoRecorder(false)}
+              />
+            )}
+          </div>
+
+          {/* Moments Stories */}
+          <div className="profile-section">
+            {!showMomentsUpload ? (
+              <>
+                {userMoments.length === 0 ? (
+                  <div className="moments-empty-state">
+                    <h3>📸 Share Your Moments</h3>
+                    <p>Show your matches what you're up to with 24-hour stories! Your moments disappear after 24 hours.</p>
+                    <button 
+                      onClick={() => setShowMomentsUpload(true)}
+                      className="btn btn-primary"
+                      style={{ width: '100%', marginTop: '12px' }}
+                    >
+                      📸 Share First Moment
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                      <h3>Your Moments</h3>
+                      <button 
+                        onClick={() => setShowMomentsUpload(true)}
+                        className="btn btn-sm btn-primary"
+                      >
+                        + Add Moment
+                      </button>
+                    </div>
+                    <div className="moments-preview-grid">
+                      {userMoments.map(moment => (
+                        <div key={moment.id} className="moment-preview-card">
+                          <img src={moment.photoUrl} alt="moment" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
+                          <div className="moment-stats" style={{
+                            position: 'absolute',
+                            bottom: '0',
+                            left: '0',
+                            right: '0',
+                            background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)',
+                            padding: '8px',
+                            display: 'flex',
+                            justifyContent: 'space-around',
+                            borderRadius: '0 0 8px 8px'
+                          }}>
+                            <span style={{ color: '#fff', fontSize: '12px' }}>👁️ {moment.viewCount || 0}</span>
+                            <span style={{ color: '#fff', fontSize: '12px' }}>⏱️ {Math.ceil((new Date(moment.expiresAt) - new Date()) / (1000 * 60 * 60))}h</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <button 
+                      onClick={() => navigate('/moments')}
+                      className="btn btn-secondary"
+                      style={{ width: '100%', marginTop: '12px' }}
+                    >
+                      👀 View My Moments
+                    </button>
+                  </>
+                )}
+              </>
+            ) : (
+              <MomentsUpload 
+                onUploadSuccess={async () => {
+                  setShowMomentsUpload(false);
+                  await fetchMoments();
+                }}
+                onClose={() => setShowMomentsUpload(false)}
+              />
+            )}
+          </div>
+
           <div className="profile-section completion-section">
             <div className="completion-header">
               <div>
@@ -933,6 +1173,59 @@ const DatingProfile = ({ onLogout }) => {
                 )}
               </div>
             ) : null}
+          </div>
+
+          {/* Video Profile Quick Stats */}
+          <div className="profile-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3>🎥 Video Profile</h3>
+              {hasVideoProfile && (
+                <span style={{ 
+                  fontSize: '12px', 
+                  padding: '4px 12px', 
+                  background: isAuthenticated ? '#4CAF50' : '#FF9800', 
+                  color: '#fff', 
+                  borderRadius: '20px'
+                }}>
+                  {isAuthenticated ? '✓ Verified' : '⚠️ Under Review'}
+                </span>
+              )}
+            </div>
+
+            {hasVideoProfile ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className="stat-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#666' }}>Duration</span>
+                    <strong>{videoDuration || 0}s</strong>
+                  </div>
+                </div>
+                <div className="stat-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#666' }}>Authenticity Score</span>
+                    <strong>{Math.round(authenticationScore * 100)}%</strong>
+                  </div>
+                </div>
+                <div className="stat-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '12px', color: '#666' }}>Status</span>
+                    <strong>{authenticationStatus ? authenticationStatus.replace(/_/g, ' ') : 'pending'}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p style={{ color: '#999', fontSize: '14px', marginBottom: '12px' }}>
+                Add a 15-60 second video intro to boost matches by 30%! Our AI verifies it's really you.
+              </p>
+            )}
+
+            <button 
+              onClick={() => setShowVideoIntroUploader(!showVideoIntroUploader)}
+              className="btn btn-primary"
+              style={{ width: '100%', marginTop: '12px' }}
+            >
+              {hasVideoProfile ? '🎬 Replace Video' : '📹 Record Video Intro'}
+            </button>
           </div>
 
           {/* Video Intro Section - Premium Feature */}

@@ -5,6 +5,7 @@ import DateJourneyPanel from './DateJourneyPanel';
 import ReactionPicker from './ReactionPicker';
 import MessageReactionDisplay from './MessageReactionDisplay';
 import StreakBadge from './StreakBadge';
+import IcebreakerVideoPlayer from './IcebreakerVideoPlayer';
 import MilestoneNotification from './MilestoneNotification';
 import EngagementScoreDisplay from './EngagementScoreDisplay';
 import ModerationWarning from './ModerationWarning';
@@ -15,6 +16,8 @@ import datingProfileService from '../services/datingProfileService';
 import messagingEnhancedService from '../services/messagingEnhancedService';
 import notificationService from '../services/notificationService';
 import moderationService from '../services/moderationService';
+import useStreaks from '../hooks/useStreaks';
+import useIcebreakerVideos from '../hooks/useIcebreakerVideos';
 import { getStoredUserData } from '../utils/auth';
 import { BACKEND_BASE_URL } from '../utils/api';
 import { getConversationRescuePlan } from '../utils/datingRescue';
@@ -223,6 +226,7 @@ const DatingMessaging = ({
   });
   const [pendingMessage, setPendingMessage] = useState(null);
   const [showQualityMeter, setShowQualityMeter] = useState(false);
+  const [showIcebreakerPlayer, setShowIcebreakerPlayer] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
@@ -235,6 +239,8 @@ const DatingMessaging = ({
   const activeMatch = conversationMatch || matchedProfile || null;
   const activeMatchId = activeMatch?.matchId || matchId || null;
   const activeMatchUserId = activeMatch?.userId || null;
+  const { currentStreak } = useStreaks(activeMatchId);
+  const { matchVideo, fetchMatchVideo, rateVideo } = useIcebreakerVideos();
   const journey = activeMatch?.journey || null;
   const sharedActionSuggestions = Array.isArray(journey?.sharedActions) ? journey.sharedActions : [];
   const notificationsAvailable = notificationService.getPermissionStatus().available;
@@ -1259,6 +1265,14 @@ const DatingMessaging = ({
               </span>
             </div>
           </button>
+
+          {activeMatchId && currentStreak && (
+            <StreakBadge
+              matchId={activeMatchId}
+              matchName={activeMatch?.firstName}
+              compact={true}
+            />
+          )}
         </div>
 
         <div className="messaging-header-actions">
@@ -1292,6 +1306,20 @@ const DatingMessaging = ({
             title="Conversation quality insights"
           >
             {showQualityMeter ? 'Hide Quality' : 'Quality'}
+          </button>
+
+          <button
+            type="button"
+            className="btn-icebreaker-video"
+            onClick={async () => {
+              if (!matchVideo) {
+                await fetchMatchVideo(activeMatchUserId);
+              }
+              setShowIcebreakerPlayer(true);
+            }}
+            title="Watch icebreaker video"
+          >
+            📹 Video Intro
           </button>
 
           <button
@@ -1691,6 +1719,22 @@ const DatingMessaging = ({
           {sendingMessage || sendingMedia ? '...' : 'Send'}
         </button>
       </div>
+
+      {/* Icebreaker Video Player */}
+      {showIcebreakerPlayer && matchVideo && (
+        <IcebreakerVideoPlayer 
+          video={matchVideo}
+          user={{
+            first_name: activeMatch?.firstName,
+            age: activeMatch?.age,
+            photo_url: activeMatch?.photos?.[0]
+          }}
+          onRate={async (ratingData) => {
+            await rateVideo(matchVideo.id, ratingData);
+          }}
+          onClose={() => setShowIcebreakerPlayer(false)}
+        />
+      )}
     </div>
   );
 };

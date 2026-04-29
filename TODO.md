@@ -1,73 +1,46 @@
-# LinkUp Play Store Launch TODO
+# Fix Discovery Tabs Empty Data Issue
 
-## TIER 1 — Critical Launch Features
+## Problem
+In the Discover page, "New", "Trending", and "Top Picks" tabs show no data.
 
-### Priority 1: Route Wiring (COMPLETE ✅)
-- [x] Wire all 49 routes (8 public + 2 admin + 39 dating)
-- [x] Add component imports to App.js
-- [x] Fix import paths (5 files)
-- [x] Fix CSS import issues (2 files)
-- [x] Create apiClient.js service
-- [x] Verify build: npm run build ✅
+## Root Cause
+The `buildDiscoveryQuery` function and inline queries in `/trending` and `/new-profiles` had an overly aggressive interaction exclusion that blocked:
+- Profiles that liked you (you couldn't like them back)
+- Profiles you only viewed (viewing shouldn't hide profiles)
+- All profiles with ANY interaction in EITHER direction
 
-### Priority 2: Admin Dashboard Integration (70% COMPLETE 🔄)
-- [x] Fix AdminModeration API endpoints (3 calls)
-  - [x] getModerationQueue() instead of /api/moderation/pending-flags
-  - [x] getModerationAnalytics() instead of /api/moderation/stats
-  - [x] reviewModerationFlag() instead of /api/moderation/resolve-flag
-- [x] Fix useEffect dependency warnings (useCallback pattern)
-- [x] Build verified: ✅
-- [ ] **NEXT: End-to-end testing (15 min)**
-  - [ ] Test admin login → dashboard loads
-  - [ ] Verify moderation queue fetches data
-  - [ ] Test flag resolution workflow
-  - [ ] Verify analytics tab loads
-- [ ] **NEXT: Polish & error handling (10 min)**
-  - [ ] Add loading spinners
-  - [ ] Improve error messages
-  - [ ] Test network error scenarios
+This quickly exhausted available profiles, causing empty tabs.
 
-### Priority 3: Content Moderation UI (PENDING ⏳)
-- [ ] Wire content scanning to message send
-- [ ] Add moderation warnings
-- [ ] Integrate with moderation service
+## Steps
 
-### Priority 4: Sentry Error Tracking (PENDING ⏳)
-- [ ] Create Sentry account
-- [ ] Configure DSN
-- [ ] Initialize in app
+- [x] Step 1: Fix `buildDiscoveryQuery` interaction exclusion in `backend/routes/dating.js`
+- [x] Step 2: Fix `/trending` endpoint interaction exclusion + add fallback
+- [x] Step 3: Fix `/new-profiles` endpoint interaction exclusion + add fallback
+- [x] Step 4: Add fallback to `/top-picks` endpoint
+- [x] Step 5: Update `DiscoveryCards.js` empty state messages
+- [x] Step 6: Verify changes and cleanup
 
-### Priority 5: Socket.IO Handlers (PENDING ⏳)
-- [ ] Register real-time event handlers
-- [ ] Activate typing indicators
-- [ ] Activate presence tracking
-- [ ] Activate message reactions
+## Files Edited
+- `backend/routes/dating.js`
+- `src/components/DiscoveryCards.js`
 
-### Priority 6: Firebase Push Notifications (PENDING ⏳)
-- [ ] Configure Firebase
-- [ ] Set up push service
-- [ ] Enable notifications
+## Summary of Changes
 
-## TIER 2 — Feature Completeness
+### Backend (`backend/routes/dating.js`)
+1. **Fixed `buildDiscoveryQuery` interaction exclusion**: Changed from excluding ALL profiles with ANY interaction (both directions) to only excluding:
+   - Profiles the user PASSED on (user said no)
+   - Mutual matches (both users liked each other - already matched)
+   
+2. **Fixed `/trending` inline exclusion**: Same fix applied to the trending endpoint's inline query.
 
-### Socket Handlers (COMPLETE ✅)
-- [x] Fix `backend/sockets/achievementSocketHandlers.js`
-- [x] Register all socket handlers
-- [x] Verify syntax
+3. **Fixed `/new-profiles` inline exclusion**: Same fix applied to the new profiles endpoint's inline query.
 
-### Custom Hooks Integration (PENDING)
-- [ ] Integrate `useAchievements` into `AchievementsPage.js`
-- [ ] Integrate `useActivityStatus` into `DatingProfileView.js`
-- [ ] Integrate `useStatusPreference` into `StatusPreferenceManager.jsx`
-- [ ] Integrate `useMessageReactions` + `useEngagementScore` + `useStreak` into `DatingMessaging.js`
-- [ ] Integrate `useDailyChallenges` into `DailyChallengesWidget.jsx`
+4. **Added `/new-profiles` fallback**: When no profiles created in last 14 days, falls back to recently updated active profiles.
 
-## Estimated Timeline
-- ✅ Phase 1 (Route Wiring): 3 hours
-- 🔄 Phase 2 (Admin Integration): 1 hour remaining (of 4 total)
-- ⏳ Phase 3 (Content Moderation): 3 hours
-- ⏳ Phase 4 (Sentry): 2 hours
-- ⏳ Phase 5 (Socket Handlers): 2 hours
-- ⏳ Phase 6 (Push Notifications): 4 hours
+5. **Added `/top-picks` fallback**: When no compatible top picks found, falls back to regular discovery profiles.
 
-**Total Estimated**: 19 hours to 95% launch readiness
+### Frontend (`src/components/DiscoveryCards.js`)
+6. **Improved empty state messages**: Tab-specific messages now show:
+   - Trending: "No profiles are trending yet. Check back soon as more users join and engage!"
+   - New: "No new profiles this week. We will show you recently active profiles instead."
+   - Top Picks: "We are still learning your preferences. Check back soon for personalized top picks!"
