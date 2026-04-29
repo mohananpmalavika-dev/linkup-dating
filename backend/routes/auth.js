@@ -2488,7 +2488,7 @@ router.post('/set-admin', async (req, res) => {
   }
 });
 
-// GOOGLE/FIREBASE SIGNUP
+// GOOGLE/FIREBASE SIGNUP (also handles login for existing users)
 router.post('/google-signup', async (req, res) => {
   try {
     const { idToken, firebaseUid, email, displayName, photoURL, phone, ageVerification } = req.body;
@@ -2504,10 +2504,6 @@ router.post('/google-signup', async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    if (!ageVerification) {
-      return res.status(400).json({ error: 'Date of birth verification is required' });
-    }
-
     // Verify Firebase ID token
     const firebaseConfig = require('../config/firebase');
     const tokenVerification = await firebaseConfig.verifyFirebaseIdToken(idToken);
@@ -2519,22 +2515,6 @@ router.post('/google-signup', async (req, res) => {
       });
     }
 
-    // Validate age verification - collected from first screen
-    const ageValidation = validateAgeVerification(ageVerification);
-    if (!ageValidation.valid) {
-      return res.status(400).json({
-        error: ageValidation.errors[0] || 'Invalid date of birth'
-      });
-    }
-
-    if (!ageValidation.isOver18) {
-      return res.status(403).json({
-        error: 'You must be at least 18 years old to use LinkUp'
-      });
-    }
-
-    const verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
-
     // Sync admin privileges if needed
     await syncAdminPrivilegesForEmail(normalizedEmail);
 
@@ -2543,6 +2523,30 @@ router.post('/google-signup', async (req, res) => {
       'SELECT id, email, phone, is_admin FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',
       [normalizedEmail]
     );
+
+    // Age verification is only required for NEW users (signup), not existing users (login)
+    let verifiedAge = null;
+    if (existingUserResult.rows.length === 0 && !ageVerification) {
+      return res.status(400).json({ error: 'Date of birth verification is required for signup' });
+    }
+
+    // Validate age verification only if provided or if creating new account
+    if (ageVerification) {
+      const ageValidation = validateAgeVerification(ageVerification);
+      if (!ageValidation.valid) {
+        return res.status(400).json({
+          error: ageValidation.errors[0] || 'Invalid date of birth'
+        });
+      }
+
+      if (!ageValidation.isOver18) {
+        return res.status(403).json({
+          error: 'You must be at least 18 years old to use LinkUp'
+        });
+      }
+
+      verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
+    }
 
     let user;
     if (existingUserResult.rows.length > 0) {
