@@ -7,7 +7,8 @@ import PublicLegalNotice from "./PublicLegalNotice";
 import {
   isFirebaseConfigured,
   createRecaptchaVerifier,
-  sendFirebasePhoneOTP
+  sendFirebasePhoneOTP,
+  signInWithGmail
 } from "../config/firebase";
 import "../styles/Login.css";
 
@@ -412,6 +413,63 @@ const Login = ({
     }
   };
 
+  const handleGmailSignIn = async () => {
+    clearMessages();
+
+    if (!trimmedIdentifier) {
+      setError("Please enter your Gmail address");
+      return;
+    }
+
+    if (!validateEmail(trimmedIdentifier)) {
+      setError("Please enter a valid email address");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Step 1: Check if email exists in our system
+      const checkResponse = await axios.get(`${API_BASE_URL}/auth/auth-methods`, {
+        params: { identifier: trimmedIdentifier }
+      });
+
+      if (checkResponse.data?.exists) {
+        // Email already registered - proceed with OTP login
+        setOtpChannel("email");
+        setSuccess("Email found! Now send OTP to verify login.");
+        
+        // Automatically trigger OTP send
+        setTimeout(() => {
+          handleSendOtp({ preventDefault: () => {} });
+        }, 500);
+      } else {
+        // New email - set for signup flow
+        setSuccess("New email! Please complete the signup process.");
+        
+        // Redirect to signup or create account
+        // For now, we'll trigger OTP flow which will handle new account creation
+        setOtpChannel("email");
+        setTimeout(() => {
+          handleSendOtp({ preventDefault: () => {} });
+        }, 500);
+      }
+    } catch (gmailError) {
+      console.error('Gmail check error:', gmailError);
+      if (!gmailError.response) {
+        setError("Backend is not running. Please start the API server and try again.");
+      } else {
+        setError(
+          gmailError.response.data?.error ||
+            gmailError.response.data?.message ||
+            "Failed to check Gmail. Please try again."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSetUsername = async (event) => {
     event.preventDefault();
     clearMessages();
@@ -616,21 +674,25 @@ const Login = ({
     ? "Create your username"
     : loginMethod === "mpin"
       ? "Login with MPIN"
-      : isFirebaseStep
-        ? "Verify your phone"
-        : otpSent
-          ? "Verify your account"
-          : "Verify your account";
+      : loginMethod === "gmail"
+        ? "Sign in with Gmail"
+        : isFirebaseStep
+          ? "Verify your phone"
+          : otpSent
+            ? "Verify your account"
+            : "Verify your account";
 
   const formDescription = isUsernameStep
     ? "Set a unique username before you continue to your LinkUp account."
     : loginMethod === "mpin"
       ? "Enter your email or phone number and MPIN to sign in."
-      : isFirebaseStep
-        ? "Enter the one-time password sent to your phone via SMS."
-        : otpSent
-          ? "Enter the one-time password sent to your device."
-          : "Enter your email address or phone number and choose how to receive your OTP.";
+      : loginMethod === "gmail"
+        ? "Enter your Gmail address and we'll check if it's already registered or sign you up."
+        : isFirebaseStep
+          ? "Enter the one-time password sent to your phone via SMS."
+          : otpSent
+            ? "Enter the one-time password sent to your device."
+            : "Enter your email address or phone number and choose how to receive your OTP.";
 
   const handleFormSubmit = (event) => {
     if (isUsernameStep) {
@@ -638,6 +700,9 @@ const Login = ({
     }
     if (loginMethod === "mpin") {
       return handleLoginMpin(event);
+    }
+    if (loginMethod === "gmail") {
+      return handleGmailSignIn();
     }
     if (isFirebaseStep) {
       return handleVerifyFirebasePhoneOTP(event);
@@ -715,6 +780,18 @@ const Login = ({
                 Phone (SMS)
               </button>
             ) : null}
+            <button
+              type="button"
+              className={`method-tab ${loginMethod === "gmail" ? "active" : ""}`}
+              onClick={() => {
+                setLoginMethod("gmail");
+                resetOtpFlow();
+                resetMpinFlow();
+                resetFirebaseFlow();
+              }}
+            >
+              Gmail
+            </button>
           </div>
         ) : null}
 
@@ -731,7 +808,7 @@ const Login = ({
             <p>{formDescription}</p>
           </div>
 
-          {!otpSent && !isUsernameStep && !isFirebaseStep ? (
+          {!otpSent && !isUsernameStep && !isFirebaseStep && loginMethod !== "gmail" ? (
             <div className="form-group">
               <label htmlFor="identifier">
                 <span>
@@ -884,6 +961,30 @@ const Login = ({
             </div>
           ) : null}
 
+          {loginMethod === "gmail" && !isUsernameStep ? (
+            <div className="form-group">
+              <label htmlFor="identifier">
+                <span>Gmail Address</span>
+                {renderFieldVoiceActions("identifier", trimmedIdentifier || "Gmail address", (value) => {
+                  setIdentifier(value);
+                  clearMessages();
+                })}
+              </label>
+              <input
+                type="email"
+                id="identifier"
+                placeholder="Enter your Gmail address"
+                value={identifier}
+                onChange={(event) => {
+                  setIdentifier(event.target.value);
+                  clearMessages();
+                }}
+                className="form-input"
+                autoComplete="email"
+              />
+            </div>
+          ) : null}
+
           {isUsernameStep ? (
             <div className="form-group">
               <label htmlFor="setupUsername">
@@ -931,15 +1032,17 @@ const Login = ({
                 ? loading ? "Completing login..." : "Complete Login"
                 : loginMethod === "mpin"
                   ? loading ? "Logging in..." : "Login with MPIN"
-                  : isFirebaseStep
-                    ? loading ? "Verifying..." : "Verify SMS OTP"
-                    : otpSent
-                      ? loading ? "Verifying..." : "Verify OTP"
-                      : loginMethod === "firebase_phone"
-                        ? loading ? "Sending OTP..." : "Send SMS OTP"
-                        : loading
-                          ? "Sending OTP..."
-                          : "Send Login OTP"}
+                  : loginMethod === "gmail"
+                    ? loading ? "Checking Gmail..." : "Sign in with Gmail"
+                    : isFirebaseStep
+                      ? loading ? "Verifying..." : "Verify SMS OTP"
+                      : otpSent
+                        ? loading ? "Verifying..." : "Verify OTP"
+                        : loginMethod === "firebase_phone"
+                          ? loading ? "Sending OTP..." : "Send SMS OTP"
+                          : loading
+                            ? "Sending OTP..."
+                            : "Send Login OTP"}
             </button>
 
             {isBackVisible ? (

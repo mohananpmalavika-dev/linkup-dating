@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
+import { getAuth, signInWithPhoneNumber, RecaptchaVerifier, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -91,11 +91,67 @@ const sendFirebasePhoneOTP = async (phoneNumber, appVerifier) => {
   }
 };
 
+const signInWithGmail = async () => {
+  const auth = getFirebaseAuthInstance();
+
+  if (!auth) {
+    return {
+      success: false,
+      error: 'Firebase is not configured. Set REACT_APP_FIREBASE_* environment variables.'
+    };
+  }
+
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('profile');
+    provider.addScope('email');
+    
+    const result = await signInWithPopup(auth, provider);
+    
+    if (!result.user) {
+      return {
+        success: false,
+        error: 'Failed to sign in with Google'
+      };
+    }
+
+    const idToken = await result.user.getIdToken();
+    
+    return {
+      success: true,
+      user: {
+        uid: result.user.uid,
+        email: result.user.email,
+        displayName: result.user.displayName,
+        photoURL: result.user.photoURL
+      },
+      idToken
+    };
+  } catch (error) {
+    console.error('Gmail sign-in error:', error.message, error.code);
+    
+    // Check if user cancelled the popup
+    if (error.code === 'auth/popup-closed-by-user') {
+      return {
+        success: false,
+        error: 'Sign-in cancelled. Please try again.'
+      };
+    }
+
+    return {
+      success: false,
+      error: error.message,
+      code: error.code
+    };
+  }
+};
+
 export {
   isFirebaseConfigured,
   getFirebaseApp,
   getFirebaseAuthInstance,
   createRecaptchaVerifier,
-  sendFirebasePhoneOTP
+  sendFirebasePhoneOTP,
+  signInWithGmail
 };
 

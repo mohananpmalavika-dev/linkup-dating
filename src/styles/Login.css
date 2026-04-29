@@ -456,6 +456,51 @@ e/* Login Page Styles */
   cursor: not-allowed;
 }
 
+.btn-gmail {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  color: #1f2937;
+  border: 2px solid #e5e7eb;
+  font-weight: 600;
+  transition: all 0.3s;
+  width: 100%;
+  padding: 0.875rem 1.5rem;
+  font-size: 1rem;
+}
+
+.btn-gmail:hover:not(:disabled) {
+  border-color: #4285F4;
+  background: #f9fafb;
+  box-shadow: 0 2px 8px rgba(66, 133, 244, 0.2);
+  transform: translateY(-1px);
+}
+
+.btn-gmail:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.gmail-section {
+  padding: 1.5rem;
+  background: #f9fafb;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.gmail-description {
+  margin: 0 0 1.5rem 0;
+  font-size: 0.95rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+.gmail-note {
+  margin-top: 1rem;
+}
+
 .divider {
   text-align: center;
   color: #999;
