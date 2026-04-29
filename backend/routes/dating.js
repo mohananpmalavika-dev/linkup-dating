@@ -3214,15 +3214,15 @@ router.post('/profiles', authenticateToken, async (req, res) => {
          location_locality, location_pincode, kerala_region, location_state,
          location_country, bio, relationship_goals, interests, height,
          occupation, education, body_type, ethnicity, religion, community_preference,
-         languages, conversation_style, smoking, drinking, has_kids, wants_kids,
+         languages, smoking, drinking, has_kids, wants_kids,
          profile_completion_percent, last_active
        )
        VALUES (
          $1, $2, $3, $4, $5, $6,
          $7, $8, $9, $10, $11,
          $12, $13, $14, $15, $16, $17,
-         $18, $19, $20, $21, $22, $23,
-         $24, $25, $26, $27, $28, CURRENT_TIMESTAMP
+         $18, $19, $20, $21, $22,
+         $23, $24, $25, $26, $27, CURRENT_TIMESTAMP
        )
        ON CONFLICT (user_id) DO UPDATE
        SET first_name = EXCLUDED.first_name,
@@ -3246,7 +3246,6 @@ router.post('/profiles', authenticateToken, async (req, res) => {
            religion = EXCLUDED.religion,
            community_preference = EXCLUDED.community_preference,
            languages = EXCLUDED.languages,
-           conversation_style = EXCLUDED.conversation_style,
            smoking = EXCLUDED.smoking,
            drinking = EXCLUDED.drinking,
            has_kids = EXCLUDED.has_kids,
@@ -3260,7 +3259,7 @@ router.post('/profiles', authenticateToken, async (req, res) => {
         normalizedLocality, normalizedPincode, normalizedKeralaRegion, normalizedState, normalizedCountry,
         normalizedBio, normalizedRelationshipGoals, normalizedInterests, normalizedHeight, normalizedOccupation,
         normalizedEducation, normalizedBodyType, normalizedEthnicity, normalizedReligion, normalizedCommunityPreference,
-        normalizedLanguages, normalizedConversationStyle, normalizedSmoking, normalizedDrinking,
+        normalizedLanguages, normalizedSmoking, normalizedDrinking,
         normalizeBoolean(hasKids), normalizeBoolean(wantsKids), completionPercent
       ]
     );
