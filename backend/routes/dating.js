@@ -5769,7 +5769,7 @@ router.get('/daily-limits', async (req, res) => {
 });
 
 // 31. LIKE PROFILE (with daily limit check)
-router.post('/interactions/like', async (req, res) => {
+router.post('/interactions/like', authenticateToken, async (req, res) => {
   try {
     const fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
@@ -8418,7 +8418,7 @@ const checkAndCreateMutualMatch = async (userId1, userId2) => {
 };
 
 // 8. LIKE PROFILE
-router.post('/interactions/like', async (req, res) => {
+router.post('/interactions/like', authenticateToken, async (req, res) => {
   try {
     const fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
