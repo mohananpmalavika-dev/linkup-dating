@@ -5886,6 +5886,7 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
     fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
     userId = normalizeInteger(toUserId || targetUserId);
+    const today = new Date().toISOString().split('T')[0];
     const requestMetadata = getRequestMetadata(req);
 
     console.log(`[LIKE] Starting like request from user ${fromUserId} to user ${userId}`);
@@ -6156,7 +6157,7 @@ router.get('/top-picks', async (req, res) => {
 });
 
 // 33. REWIND PASS (Undo last pass)
-router.post('/interactions/rewind', async (req, res) => {
+router.post('/interactions/rewind', authenticateToken, async (req, res) => {
   let userId;
   try {
     userId = req.user.id;
@@ -6235,8 +6236,8 @@ router.post('/interactions/rewind', async (req, res) => {
     res.json({
       message: 'Pass rewound successfully',
       restoredProfile: normalizeProfileRow(restoredProfileResult.rows[0] || null),
-      rewindsUsed: rewindsUsed + 1,
-      rewindsRemaining: Math.max(0, rewindLimit - (rewindsUsed + 1))
+      rewindsUsed: rewindsSent + 1,
+      rewindsRemaining: Math.max(0, rewindLimit - (rewindsSent + 1))
     });
   } catch (err) {
     console.error('Rewind error:', err);
