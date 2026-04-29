@@ -752,6 +752,9 @@ const AppContent = () => {
       case 'profile':
         navigate('/profile');
         break;
+      case 'more':
+        navigate('/more');
+        break;
       case 'discover':
       default:
         navigate('/discover');
