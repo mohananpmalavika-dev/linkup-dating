@@ -597,9 +597,32 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
 
   const handlePhotoUpload = (e) => {
     const files = Array.from(e.target.files);
+    const photoPromises = files.map(file => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          resolve({
+            file,
+            name: file.name,
+            preview: event.target.result
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(photoPromises).then(newPhotos => {
+      setFormData(prev => ({
+        ...prev,
+        photos: [...prev.photos, ...newPhotos]
+      }));
+    });
+  };
+
+  const handleRemovePhoto = (idx) => {
     setFormData(prev => ({
       ...prev,
-      photos: [...prev.photos, ...files]
+      photos: prev.photos.filter((_, i) => i !== idx)
     }));
   };
 
@@ -706,22 +729,11 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
 
       // Upload photos if any
       if (formData.photos.length > 0) {
-        // Convert File objects to base64 data URLs
-        const photoPromises = formData.photos.map((photo, index) => {
-          return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              resolve({
-                url: reader.result, // base64 data URL
-                position: index
-              });
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(photo);
-          });
-        });
-
-        const photoUrls = await Promise.all(photoPromises);
+        // Use already-generated preview data URLs
+        const photoUrls = formData.photos.map((photo, index) => ({
+          url: photo.preview, // Already a base64 data URL
+          position: index
+        }));
 
         await axios.post(`${API_BASE_URL}/dating/profiles/me/photos`, {
           photos: photoUrls
@@ -1397,16 +1409,26 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
               <p className="helper-text">Upload at least 1 photo (recommended: 3-5)</p>
               {formData.photos.length > 0 && (
                 <div className="photo-preview">
-                  {formData.photos.map((photo, idx) => (
-                    <div key={idx} className="photo-item">
-                      {photo.name}
-                    </div>
-                  ))}
+                  <div className="photos-grid">
+                    {formData.photos.map((photo, idx) => (
+                      <div key={idx} className="photo-item">
+                        <img src={photo.preview} alt={`Photo ${idx + 1}`} />
+                        <button
+                          type="button"
+                          className="btn-remove"
+                          onClick={() => handleRemovePhoto(idx)}
+                          title="Remove photo"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
             <button type="submit" className="btn-submit" disabled={loading || formData.photos.length === 0}>
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? 'Creating Account...' : `Create Account (${formData.photos.length} photo${formData.photos.length !== 1 ? 's' : ''})`}
             </button>
           </form>
         )}

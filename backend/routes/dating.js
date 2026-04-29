@@ -3282,8 +3282,25 @@ router.post('/profiles', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Profile created', profile: normalizeProfileRow(result.rows[0]) });
   } catch (err) {
-    console.error('Profile creation error:', err);
-    res.status(500).json({ error: 'Failed to create profile' });
+    console.error('Profile creation error:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      stack: err.stack,
+      requestBody: req.body,
+      userId: req.user?.id
+    });
+    
+    // Return detailed error for debugging
+    const errorDetails = process.env.NODE_ENV === 'development'
+      ? { 
+          message: err.message,
+          code: err.code,
+          detail: err.detail
+        }
+      : {};
+    
+    res.status(500).json({ error: 'Failed to create profile', ...errorDetails });
   }
 });
 
