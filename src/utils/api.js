@@ -5,11 +5,22 @@ const DEFAULT_API_BASE_URL = "http://localhost:5000/api";
 
 const stripTrailingSlashes = (value = "") => String(value || "").trim().replace(/\/+$/, "");
 
+// Auto-detect backend URL for production if not explicitly set
+const getDefaultProductionUrl = () => {
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    // In production, use same host as frontend
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    return `${protocol}//${hostname}/api`;
+  }
+  return DEFAULT_API_BASE_URL;
+};
+
 export const normalizeApiBaseUrl = (value = "") => {
   const normalizedValue = stripTrailingSlashes(value);
 
   if (!normalizedValue) {
-    return DEFAULT_API_BASE_URL;
+    return getDefaultProductionUrl();
   }
 
   return /\/api$/i.test(normalizedValue) ? normalizedValue : `${normalizedValue}/api`;
@@ -19,7 +30,8 @@ export const normalizeBackendBaseUrl = (value = "") => {
   const normalizedValue = stripTrailingSlashes(value);
 
   if (!normalizedValue) {
-    return DEFAULT_API_BASE_URL.replace(/\/api$/i, "");
+    const defaultUrl = getDefaultProductionUrl();
+    return defaultUrl.replace(/\/api$/i, "");
   }
 
   return normalizedValue.replace(/\/api$/i, "");

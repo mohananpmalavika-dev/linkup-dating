@@ -36,19 +36,23 @@ services:
     region: oregon
     plan: free
 
-  - type: static_site
+  - type: web
     name: linkup-frontend
+    runtime: node
     buildCommand: npm install --legacy-peer-deps && npm run build
+    startCommand: npm start
     staticPublishPath: ./build
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: REACT_APP_API_URL
         value: https://linkup-backend.onrender.com/api
       - key: REACT_APP_BACKEND_URL
         value: https://linkup-backend.onrender.com
+      - key: PORT
+        value: 3000
     region: oregon
-    routes:
-      - path: /
-        priority: 100
+    plan: free
 
 databases:
   - name: linkup-db
