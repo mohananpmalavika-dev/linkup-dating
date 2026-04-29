@@ -56,6 +56,12 @@ const reactionSocketHandlers = require('./sockets/reactionSocketHandlers');
 const SocketEventHandlers = require('./sockets/realTimeEventHandlers');
 
 const app = express();
+
+// Trust proxy configuration - MUST be set before other middleware
+// This allows Express to correctly identify the client's IP address
+// when the app is behind a proxy, load balancer, or CDN (like on Render, Heroku, AWS, etc.)
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 const io = socketIO(server, {
   cors: {

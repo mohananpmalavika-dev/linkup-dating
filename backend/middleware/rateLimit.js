@@ -1,7 +1,19 @@
 const rateLimit = require('express-rate-limit');
 const { redis, isRedisReady } = require('../utils/redis');
+const { getClientIP } = require('./ipBlocking');
 
 let RedisStore = null;
+
+// Key generator that uses real client IP (handles proxy correctly)
+// Falls back to user ID for authenticated users
+const createKeyGenerator = (req) => {
+  // If user is authenticated, use their ID for better granularity
+  if (req.user?.id) {
+    return `user:${req.user.id}`;
+  }
+  // Otherwise use the real client IP
+  return getClientIP(req) || req.ip || 'unknown';
+};
 
 try {
   const importedRedisStore = require('rate-limit-redis');
@@ -44,7 +56,15 @@ const createRateLimiter = (options, prefix) =>
 
 const apiLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
+  keyGenerator: createKeyGenerator,
+  skipSuccessfulRequests: true,
+  // Skip certain paths that don't need rate limiting
+  skip: (req) => {
+    const path = req.path || req.url || '';
+    // Don't rate limit health checks
+    return path === '/health' || path === '/';
+  },
   message: {
     error: 'Too many requests from this IP, please try again later.'
   },
@@ -55,6 +75,7 @@ const apiLimiter = createRateLimiter({
 const authLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 100,
+  keyGenerator: createKeyGenerator,
   skipSuccessfulRequests: true,
   message: {
     error: 'Too many login attempts. Please try again later.'
