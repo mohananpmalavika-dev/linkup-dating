@@ -4580,9 +4580,19 @@ router.post('/interactions/pass', authenticateToken, async (req, res) => {
 
     res.json({ message: 'Profile passed' });
   } catch (err) {
-    console.error('Pass error (FINAL):', err);
-    const errorDetails = process.env.NODE_ENV === 'development' ? err.message : 'Failed to pass profile';
-    res.status(500).json({ error: 'Failed to pass profile', details: errorDetails });
+    const errorId = `PASS_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.error(`[PASS] ERROR ID: ${errorId}`, {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      userId: fromUserId,
+      targetUserId: userId
+    });
+    res.status(500).json({
+      error: 'Failed to pass profile',
+      errorId: errorId,
+      message: err.message || 'Internal server error'
+    });
   }
 });
 
@@ -5805,10 +5815,12 @@ router.get('/daily-limits', async (req, res) => {
 
 // 31. LIKE PROFILE (with daily limit check)
 router.post('/interactions/like', authenticateToken, async (req, res) => {
+  let fromUserId;
+  let userId;
   try {
-    const fromUserId = req.user.id;
+    fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
-    const userId = normalizeInteger(toUserId || targetUserId);
+    userId = normalizeInteger(toUserId || targetUserId);
     const requestMetadata = getRequestMetadata(req);
 
     console.log(`[LIKE] Starting like request from user ${fromUserId} to user ${userId}`);
@@ -5943,9 +5955,19 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
       throw mutualErr;
     }
   } catch (err) {
-    console.error('Like error (FINAL):', err);
-    const errorDetails = process.env.NODE_ENV === 'development' ? err.message : 'Failed to like profile';
-    res.status(500).json({ error: 'Failed to like profile', details: errorDetails });
+    const errorId = `LIKE_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.error(`[LIKE] ERROR ID: ${errorId}`, {
+      message: err.message,
+      stack: err.stack,
+      code: err.code,
+      userId: fromUserId,
+      targetUserId: userId
+    });
+    res.status(500).json({
+      error: 'Failed to like profile',
+      errorId: errorId,
+      message: err.message || 'Internal server error'
+    });
   }
 });
 
