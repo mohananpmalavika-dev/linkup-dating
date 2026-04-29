@@ -363,8 +363,8 @@ const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerificatio
   await storeAgeVerification(db, createdUser.id, ageVerification);
 
     await db.query(
-      `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO NOTHING`,
       [createdUser.id, fallbackName, verifiedAge, 10]
     );
@@ -691,8 +691,8 @@ router.post('/signup', async (req, res) => {
 
     // Create empty dating profile
     await db.query(
-      `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO NOTHING`,
       [userId, buildDisplayNameFromEmail(normalizedEmail), verifiedAge, 10]
     );
@@ -1887,8 +1887,8 @@ router.post('/set-username', async (req, res) => {
 
     const fallbackName = buildDisplayNameFromEmail(userResult.rows[0].email);
     const profileResult = await db.query(
-      `INSERT INTO dating_profiles (user_id, username, first_name, age, last_active, created_at)
-       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `INSERT INTO dating_profiles (user_id, username, first_name, age, last_active, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id)
        DO UPDATE SET
          username = EXCLUDED.username,
@@ -2580,8 +2580,8 @@ router.post('/google-signup', async (req, res) => {
       // Create dating profile with age
       const firstName = displayName || email.split('@')[0];
       await db.query(
-        `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at)
-         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (user_id) DO NOTHING`,
         [user.id, firstName, verifiedAge, 15]
       );
