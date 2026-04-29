@@ -192,14 +192,15 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       const user = result.user;
       const idToken = await user.getIdToken();
 
-      // Send Firebase ID token to backend
+      // Send Firebase ID token to backend with age verification
       const response = await axios.post(`${API_BASE_URL}/auth/google-signup`, {
         idToken,
         firebaseUid: user.uid,
         email: user.email,
         displayName: user.displayName,
         photoURL: user.photoURL,
-        phone: user.phoneNumber || ''
+        phone: user.phoneNumber || '',
+        ageVerification: ageVerification // Pass age verification collected from AgeGate
       });
 
       if (response.data.success) {
