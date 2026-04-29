@@ -138,7 +138,7 @@ const DatingProfile = ({ onLogout }) => {
   const { userMoments, stats: momentsStats, loading: momentsLoading, fetchMoments, uploadMoment } = useMoments();
 
 // Analytics Dashboard
-  const { personalStats, profilePerformance, matchRatePercentage, profileViews, likesReceived, recommendationCount, fetchAnalytics } = useAnalytics();
+  const { personalStats, profilePerformance, matchRatePercentage, profileViews: analyticsProfileViews, likesReceived, recommendationCount, fetchAnalytics } = useAnalytics();
 
   // Video Profile
   const { hasVideoProfile, videoDuration, authenticationStatus, isAuthenticated, authenticationScore, fetchVideoProfile, uploadVideo: uploadVideoIntro, deleteVideo: deleteVideoIntro, recheckFraud: recheckVideoFraud } = useVideoProfile();
@@ -837,7 +837,7 @@ const DatingProfile = ({ onLogout }) => {
                 <div className="stat-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px', marginBottom: '8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <span style={{ fontSize: '12px', color: '#666' }}>Profile Views</span>
-                    <strong>{profileViews}</strong>
+                    <strong>{analyticsProfileViews}</strong>
                   </div>
                 </div>
                 <div className="stat-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px', marginBottom: '8px' }}>
