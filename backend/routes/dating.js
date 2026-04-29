@@ -4520,7 +4520,7 @@ router.post('/interactions/pass', authenticateToken, async (req, res) => {
   try {
     const fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
-    const userId = toUserId || targetUserId;
+    const userId = normalizeInteger(toUserId || targetUserId);
 
     if (!userId) {
       return res.status(400).json({ error: 'toUserId or targetUserId required' });
@@ -5601,7 +5601,7 @@ router.put('/preferences', async (req, res) => {
 });
 
 // 29. SUPERLIKE PROFILE
-router.post('/interactions/superlike', async (req, res) => {
+router.post('/interactions/superlike', authenticateToken, async (req, res) => {
   try {
     const fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
@@ -8417,172 +8417,9 @@ const checkAndCreateMutualMatch = async (userId1, userId2) => {
   }
 };
 
-// 8. LIKE PROFILE
-router.post('/interactions/like', authenticateToken, async (req, res) => {
-  try {
-    const fromUserId = req.user.id;
-    const { toUserId, targetUserId } = req.body;
-    const userId = toUserId || targetUserId;
+// DUPLICATE LIKE ROUTE REMOVED - Use primary implementation at line 5772
 
-    if (!userId) {
-      return res.status(400).json({ error: 'toUserId or targetUserId required' });
-    }
-
-    if (Number(fromUserId) === Number(userId)) {
-      return res.status(400).json({ error: 'You cannot like your own profile' });
-    }
-
-    // Check daily limits
-    const usage = await checkAndEnforceDailyLimits(fromUserId, 'like');
-
-    // Record like
-    const likeInsertResult = await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
-       VALUES ($1, $2, 'like')
-       ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING
-       RETURNING id`,
-      [fromUserId, userId]
-    );
-
-    // Update analytics for today
-    if (likeInsertResult.rowCount > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      await db.query(
-        `INSERT INTO user_analytics (user_id, activity_date, likes_sent)
-         VALUES ($1, $2::date, 1)
-         ON CONFLICT (user_id, activity_date) DO UPDATE
-         SET likes_sent = user_analytics.likes_sent + 1`,
-        [fromUserId, today]
-      );
-
-      // Update learning profile
-      await persistLearningFeedback({
-        userId: fromUserId,
-        targetUserId: userId,
-        interactionType: 'like'
-      });
-
-      // Create notification for recipient
-      await createDatingNotification(userId, 'like', fromUserId, { likerName: 'Someone' });
-
-      // Check for mutual like and create match
-      const mutualResult = await checkAndCreateMutualMatch(fromUserId, userId);
-
-      // If mutual match, create match notification
-      if (mutualResult.matched) {
-        await createDatingNotification(userId, 'match', fromUserId, { matchId: mutualResult.matchId });
-        await createDatingNotification(fromUserId, 'match', userId, { matchId: mutualResult.matchId });
-      }
-
-      // Invalidate discovery cache
-      await invalidateDiscoveryCache(fromUserId);
-
-      res.json({
-        message: 'Profile liked',
-        liked: true,
-        matched: mutualResult.matched,
-        matchId: mutualResult.matchId || null,
-        remaining: usage.like.remaining - 1
-      });
-    } else {
-      res.json({
-        message: 'Already liked this profile',
-        liked: false,
-        matched: false,
-        remaining: usage.like.remaining
-      });
-    }
-  } catch (err) {
-    console.error('Like error:', err);
-    if (err.message.includes('Daily') || err.message.includes('limit')) {
-      return res.status(429).json({ error: err.message });
-    }
-    res.status(500).json({ error: 'Failed to like profile' });
-  }
-});
-
-// 8b. SUPERLIKE PROFILE
-router.post('/interactions/superlike', async (req, res) => {
-  try {
-    const fromUserId = req.user.id;
-    const { toUserId, targetUserId } = req.body;
-    const userId = toUserId || targetUserId;
-
-    if (!userId) {
-      return res.status(400).json({ error: 'toUserId or targetUserId required' });
-    }
-
-    if (Number(fromUserId) === Number(userId)) {
-      return res.status(400).json({ error: 'You cannot superlike your own profile' });
-    }
-
-    // Check daily limits
-    const usage = await checkAndEnforceDailyLimits(fromUserId, 'superlike');
-
-    // Record superlike
-    const superlikeInsertResult = await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
-       VALUES ($1, $2, 'superlike')
-       ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING
-       RETURNING id`,
-      [fromUserId, userId]
-    );
-
-    if (superlikeInsertResult.rowCount > 0) {
-      const today = new Date().toISOString().split('T')[0];
-      await db.query(
-        `INSERT INTO user_analytics (user_id, activity_date, superlikes_sent)
-         VALUES ($1, $2::date, 1)
-         ON CONFLICT (user_id, activity_date) DO UPDATE
-         SET superlikes_sent = user_analytics.superlikes_sent + 1`,
-        [fromUserId, today]
-      );
-
-      // Update learning profile (superlike = strong positive signal)
-      await persistLearningFeedback({
-        userId: fromUserId,
-        targetUserId: userId,
-        interactionType: 'superlike'
-      });
-
-      // Create notification for recipient (superlike gets special treatment)
-      await createDatingNotification(userId, 'superlike', fromUserId, { superlikerName: 'Someone' });
-
-      // Check for mutual like and create match
-      const mutualResult = await checkAndCreateMutualMatch(fromUserId, userId);
-
-      // If mutual match, create match notification
-      if (mutualResult.matched) {
-        await createDatingNotification(userId, 'match', fromUserId, { matchId: mutualResult.matchId });
-        await createDatingNotification(fromUserId, 'match', userId, { matchId: mutualResult.matchId });
-      }
-
-      // Invalidate discovery cache
-      await invalidateDiscoveryCache(fromUserId);
-
-      res.json({
-        message: 'Profile superliked',
-        superliked: true,
-        matched: mutualResult.matched,
-        matchId: mutualResult.matchId || null,
-        remaining: usage.superlike.remaining - 1
-      });
-    } else {
-      res.json({
-        message: 'Already superliked this profile',
-        superliked: false,
-        matched: false,
-        remaining: usage.superlike.remaining
-      });
-    }
-  } catch (err) {
-    console.error('Superlike error:', err);
-    if (err.message.includes('Daily') || err.message.includes('limit')) {
-      return res.status(429).json({ error: err.message });
-    }
-    res.status(500).json({ error: 'Failed to superlike profile' });
-  }
-});
+// DUPLICATE SUPERLIKE ROUTE REMOVED - Use primary implementation at line 5604
 
 // 8c. GET DAILY LIMITS
 router.get('/daily-limits', async (req, res) => {
