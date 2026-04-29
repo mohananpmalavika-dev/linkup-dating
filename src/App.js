@@ -165,6 +165,10 @@ const inferNavigationPage = (pathname, returnPath = '') => {
     return 'profile';
   }
 
+  if (targetPath.startsWith('/more')) {
+    return 'more';
+  }
+
   return 'discover';
 };
 

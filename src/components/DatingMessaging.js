@@ -8,6 +8,7 @@ import StreakBadge from './StreakBadge';
 import MilestoneNotification from './MilestoneNotification';
 import EngagementScoreDisplay from './EngagementScoreDisplay';
 import ModerationWarning from './ModerationWarning';
+import ConversationQualityMeter from './ConversationQualityMeter';
 import { useLocation } from '../router';
 import datingMessagingService from '../services/datingMessagingService';
 import datingProfileService from '../services/datingProfileService';
@@ -221,6 +222,7 @@ const DatingMessaging = ({
     contentType: 'message'
   });
   const [pendingMessage, setPendingMessage] = useState(null);
+  const [showQualityMeter, setShowQualityMeter] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
@@ -1285,6 +1287,15 @@ const DatingMessaging = ({
 
           <button
             type="button"
+            className="btn-quality-meter"
+            onClick={() => setShowQualityMeter((current) => !current)}
+            title="Conversation quality insights"
+          >
+            {showQualityMeter ? 'Hide Quality' : 'Quality'}
+          </button>
+
+          <button
+            type="button"
             className="btn-video-call"
             onClick={() => onVideoCall?.(activeMatch, location.pathname)}
             title="Start video call"
@@ -1368,6 +1379,17 @@ const DatingMessaging = ({
             match={activeMatch}
             onMatchUpdated={setConversationMatch}
             onScheduleVideoCall={(profile) => onScheduleVideoCall?.(profile, location.pathname)}
+          />
+        </div>
+      ) : null}
+
+      {showQualityMeter ? (
+        <div className="messaging-quality-meter-wrap">
+          <ConversationQualityMeter
+            matchId={activeMatchId}
+            messages={messages}
+            currentUserId={currentUserId}
+            onClose={() => setShowQualityMeter(false)}
           />
         </div>
       ) : null}
