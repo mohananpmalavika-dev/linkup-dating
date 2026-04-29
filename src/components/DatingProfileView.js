@@ -101,7 +101,7 @@ const DatingProfileView = ({
     lastActiveFormatted,
     isVideoDating,
     loading: activityLoading
-  } = useActivityStatus(profile?.userId, profile?.matchId, true);
+  } = useActivityStatus(initialProfile?.userId, initialProfile?.matchId, true);
 
   const [profile, setProfile] = useState(initialProfile || null);
   const [loading, setLoading] = useState(Boolean(initialProfile?.userId || profileId));
