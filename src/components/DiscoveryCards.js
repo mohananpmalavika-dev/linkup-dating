@@ -612,7 +612,12 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
     try {
       const response = await datingProfileService.likeProfile(profile.userId);
-      setRemainingLikes((currentLikes) => Math.max(0, currentLikes - 1));
+      // Use backend response to update remaining likes count
+      if (response.remainingLikes !== undefined) {
+        setRemainingLikes(response.remainingLikes);
+      } else {
+        setRemainingLikes((currentLikes) => Math.max(0, currentLikes - 1));
+      }
 
       if (response.isMatch) {
         onMatch?.({ ...profile, matchId: response.match?.id || null });
@@ -636,7 +641,12 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
     try {
       const response = await datingProfileService.superlikeProfile(profile.userId);
-      setRemainingSuperlikes((currentSuperlikes) => Math.max(0, currentSuperlikes - 1));
+      // Use backend response to update remaining superlikes count
+      if (response.remainingSuperlikes !== undefined) {
+        setRemainingSuperlikes(response.remainingSuperlikes);
+      } else {
+        setRemainingSuperlikes((currentSuperlikes) => Math.max(0, currentSuperlikes - 1));
+      }
 
       if (response.isMatch) {
         onMatch?.({
@@ -681,7 +691,12 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const handleQuickViewLike = useCallback(async (profile) => {
     try {
       const response = await datingProfileService.likeProfile(profile.id);
-      setRemainingLikes((likes) => Math.max(0, likes - 1));
+      // Use backend response to update remaining likes count
+      if (response.remainingLikes !== undefined) {
+        setRemainingLikes(response.remainingLikes);
+      } else {
+        setRemainingLikes((likes) => Math.max(0, likes - 1));
+      }
       if (response.isMatch) {
         onMatch?.({ ...profile, matchId: response.match?.id || null });
       }
