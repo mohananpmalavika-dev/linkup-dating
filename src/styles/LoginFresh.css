@@ -1,0 +1,597 @@
+/* Fresh Login Page Styles - Modern & Clean */
+
+:root {
+  --primary: #d946a6;
+  --primary-dark: #a71f6b;
+  --secondary: #7c3aed;
+  --success: #10b981;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-500: #6b7280;
+  --gray-700: #374151;
+  --gray-900: #111827;
+}
+
+/* Main Container */
+.login-fresh-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  width: 100%;
+  background: linear-gradient(135deg, #fff8f9 0%, #f8f5ff 100%);
+  padding: 1rem;
+  overflow-y: auto;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Main Card */
+.login-fresh-card {
+  background: white;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(217, 70, 166, 0.12);
+  overflow: hidden;
+  animation: slideUp 0.5s ease-out;
+}
+
+/* Header Section */
+.login-fresh-header {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  color: white;
+  padding: 2.5rem 2rem 2rem;
+  text-align: center;
+}
+
+.login-fresh-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.login-fresh-back-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.login-fresh-back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.login-fresh-logo {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.login-fresh-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.login-fresh-header p {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.95;
+  line-height: 1.5;
+}
+
+/* Method Tabs */
+.login-fresh-methods {
+  display: flex;
+  border-bottom: 1px solid var(--gray-200);
+  padding: 0 1.5rem;
+  gap: 0;
+  background: var(--gray-50);
+}
+
+.login-fresh-method-tab {
+  flex: 1;
+  padding: 1rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  position: relative;
+  transition: color 0.3s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.login-fresh-method-tab:hover {
+  color: var(--gray-700);
+}
+
+.login-fresh-method-tab.active {
+  color: var(--primary);
+}
+
+.login-fresh-method-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--primary);
+}
+
+/* Content Area */
+.login-fresh-content {
+  padding: 2rem;
+}
+
+/* Form Sections */
+.login-fresh-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Section Title */
+.login-fresh-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin: 0;
+}
+
+.login-fresh-section-desc {
+  font-size: 0.85rem;
+  color: var(--gray-500);
+  margin: 0.25rem 0 0;
+}
+
+/* Form Group */
+.login-fresh-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.login-fresh-form-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Input Field */
+.login-fresh-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: 10px;
+  font-size: 1rem;
+  font-family: inherit;
+  transition: all 0.3s ease;
+  background: var(--gray-50);
+}
+
+.login-fresh-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(217, 70, 166, 0.1);
+}
+
+.login-fresh-input::placeholder {
+  color: var(--gray-500);
+}
+
+.login-fresh-input.error {
+  border-color: var(--error);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* OTP Input Group */
+.login-fresh-otp-group {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.login-fresh-otp-input {
+  width: 100%;
+  max-width: 50px;
+  padding: 0.75rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: 10px;
+  font-size: 1.5rem;
+  text-align: center;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+  transition: all 0.3s ease;
+  background: var(--gray-50);
+}
+
+.login-fresh-otp-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(217, 70, 166, 0.1);
+}
+
+.login-fresh-otp-input.error {
+  border-color: var(--error);
+  background: rgba(239, 68, 68, 0.05);
+}
+
+/* Button Styles */
+.login-fresh-btn {
+  width: 100%;
+  padding: 1rem;
+  border: none;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 48px;
+}
+
+/* Primary Button */
+.login-fresh-btn-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+  color: white;
+}
+
+.login-fresh-btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(217, 70, 166, 0.3);
+}
+
+.login-fresh-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.login-fresh-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Secondary Button */
+.login-fresh-btn-secondary {
+  background: white;
+  color: var(--gray-700);
+  border: 1.5px solid var(--gray-300);
+}
+
+.login-fresh-btn-secondary:hover:not(:disabled) {
+  background: var(--gray-50);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Outline Button */
+.login-fresh-btn-outline {
+  background: transparent;
+  color: var(--gray-700);
+  border: 1.5px solid var(--gray-300);
+}
+
+.login-fresh-btn-outline:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* Social Buttons */
+.login-fresh-social-btn {
+  width: 100%;
+  padding: 0.9rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-900);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-family: inherit;
+}
+
+.login-fresh-social-btn:hover:not(:disabled) {
+  background: var(--gray-50);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+/* Divider */
+.login-fresh-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0;
+  color: var(--gray-400);
+}
+
+.login-fresh-divider::before,
+.login-fresh-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--gray-300);
+}
+
+.login-fresh-divider-text {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+/* Messages */
+.login-fresh-message {
+  padding: 1rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+.login-fresh-message.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.login-fresh-message.success {
+  background: rgba(16, 185, 129, 0.1);
+  color: #065f46;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.login-fresh-message.info {
+  background: rgba(59, 130, 246, 0.1);
+  color: #1e40af;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* Help Text */
+.login-fresh-help-text {
+  font-size: 0.8rem;
+  color: var(--gray-500);
+  margin-top: 0.5rem;
+}
+
+.login-fresh-help-text a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.login-fresh-help-text a:hover {
+  text-decoration: underline;
+}
+
+/* Loading State */
+.login-fresh-loading {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* Method Icon */
+.login-fresh-method-icon {
+  font-size: 1.25rem;
+}
+
+/* Bottom Links */
+.login-fresh-bottom {
+  padding: 1.5rem 2rem;
+  background: var(--gray-50);
+  text-align: center;
+  border-top: 1px solid var(--gray-200);
+}
+
+.login-fresh-bottom-text {
+  font-size: 0.9rem;
+  color: var(--gray-600);
+  margin: 0;
+}
+
+.login-fresh-bottom-text a {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.login-fresh-bottom-text a:hover {
+  text-decoration: underline;
+}
+
+/* Phone Input Container */
+.login-fresh-phone-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.login-fresh-country-code {
+  width: 80px;
+  padding: 0.75rem 1rem;
+  border: 1.5px solid var(--gray-300);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  background: var(--gray-50);
+  transition: all 0.3s ease;
+}
+
+.login-fresh-country-code:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(217, 70, 166, 0.1);
+}
+
+.login-fresh-phone-input {
+  flex: 1;
+}
+
+/* Animations */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .login-fresh-card {
+    border-radius: 16px;
+  }
+
+  .login-fresh-content {
+    padding: 1.5rem;
+  }
+
+  .login-fresh-header {
+    padding: 2rem 1.5rem 1.5rem;
+  }
+
+  .login-fresh-methods {
+    padding: 0 1rem;
+  }
+
+  .login-fresh-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .login-fresh-method-tab {
+    font-size: 0.8rem;
+    padding: 0.75rem 0.5rem;
+  }
+
+  .login-fresh-form-group {
+    gap: 0.5rem;
+  }
+
+  .login-fresh-btn {
+    min-height: 44px;
+    font-size: 0.95rem;
+  }
+
+  .login-fresh-otp-group {
+    gap: 0.3rem;
+  }
+
+  .login-fresh-otp-input {
+    max-width: 42px;
+    font-size: 1.25rem;
+    padding: 0.6rem;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .login-fresh-container {
+    background: linear-gradient(135deg, #1a0f2e 0%, #2a1a4e 100%);
+  }
+
+  .login-fresh-card {
+    background: #1f1f1f;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  }
+
+  .login-fresh-content {
+    background: #1f1f1f;
+  }
+
+  .login-fresh-methods {
+    background: #2a2a2a;
+    border-bottom-color: #404040;
+  }
+
+  .login-fresh-input,
+  .login-fresh-otp-input,
+  .login-fresh-country-code {
+    background: #2a2a2a;
+    border-color: #404040;
+    color: #fff;
+  }
+
+  .login-fresh-input:focus,
+  .login-fresh-otp-input:focus,
+  .login-fresh-country-code:focus {
+    background: #333;
+    border-color: var(--primary);
+  }
+
+  .login-fresh-bottom {
+    background: #2a2a2a;
+    border-top-color: #404040;
+  }
+
+  .login-fresh-form-label,
+  .login-fresh-section-title {
+    color: #fff;
+  }
+
+  .login-fresh-social-btn {
+    background: #2a2a2a;
+    border-color: #404040;
+    color: #fff;
+  }
+
+  .login-fresh-social-btn:hover {
+    background: #333;
+  }
+}

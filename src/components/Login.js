@@ -11,6 +11,7 @@ import {
   signInWithGmail
 } from "../config/firebase";
 import "../styles/Login.css";
+import "../styles/LoginFresh.css";
 
 const ADMIN_EMAIL = "mgdhanyamohan@gmail.com";
 
@@ -674,30 +675,6 @@ const Login = ({
   const isUsernameStep = needsUsernameSetup;
   const isFirebaseStep = loginMethod === "firebase_phone" && firebaseOtpSent;
 
-  const formTitle = isUsernameStep
-    ? "Create your username"
-    : loginMethod === "mpin"
-      ? "Login with MPIN"
-      : loginMethod === "gmail"
-        ? "Sign in with Google"
-        : isFirebaseStep
-          ? "Verify your phone"
-          : otpSent
-            ? "Verify your account"
-            : "Verify your account";
-
-  const formDescription = isUsernameStep
-    ? "Set a unique username before you continue to your LinkUp account."
-    : loginMethod === "mpin"
-      ? "Enter your email or phone number and MPIN to sign in."
-      : loginMethod === "gmail"
-        ? "Quick and secure login using your Google account."
-        : isFirebaseStep
-          ? "Enter the one-time password sent to your phone via SMS."
-          : otpSent
-            ? "Enter the one-time password sent to your device."
-            : "Enter your email address or phone number and choose how to receive your OTP.";
-
   const handleFormSubmit = (event) => {
     if (isUsernameStep) {
       return handleSetUsername(event);
@@ -720,360 +697,357 @@ const Login = ({
     return handleSendOtp(event);
   };
 
+  const getButtonText = () => {
+    if (isUsernameStep) return loading ? "Completing..." : "Complete Login";
+    if (loginMethod === "mpin") return loading ? "Logging in..." : "Login with MPIN";
+    if (loginMethod === "gmail") return loading ? "Opening Google..." : "Sign in with Google";
+    if (isFirebaseStep) return loading ? "Verifying..." : "Verify Phone OTP";
+    if (otpSent) return loading ? "Verifying..." : "Verify OTP";
+    if (loginMethod === "firebase_phone") return loading ? "Sending OTP..." : "Send Phone OTP";
+    return loading ? "Sending OTP..." : "Send OTP";
+  };
+
   const isBackVisible = otpSent || isFirebaseStep || isUsernameStep;
 
   return (
-    <div className="login-container" dir={direction}>
-      <div className="login-card">
-        {!otpSent && !isUsernameStep && !isFirebaseStep && onBackToLaunch ? (
-          <div className="login-topbar">
-            <button
-              type="button"
-              className="btn btn-outline login-home-btn"
-              onClick={onBackToLaunch}
-              disabled={loading}
-            >
-              Home
-            </button>
-          </div>
-        ) : null}
-
-        <div className="login-header">
-          <img src="/logo.svg" alt="LinkUp" className="login-logo" />
-          <p className="login-kicker">{loginCopy.welcomeBack || "Welcome back"}</p>
-          <h1>LinkUp</h1>
-          <p className="login-subtitle">
-            Use your email address, phone number, or MPIN to sign in to LinkUp.
-          </p>
-        </div>
-
-        {!isUsernameStep && !otpSent && !isFirebaseStep ? (
-          <div className="login-method-tabs">
-            <button
-              type="button"
-              className={`method-tab ${loginMethod === "otp" ? "active" : ""}`}
-              onClick={() => {
-                setLoginMethod("otp");
-                resetMpinFlow();
-                resetFirebaseFlow();
-              }}
-            >
-              OTP Login
-            </button>
-            <button
-              type="button"
-              className={`method-tab ${loginMethod === "mpin" ? "active" : ""}`}
-              onClick={() => {
-                setLoginMethod("mpin");
-                resetOtpFlow();
-                resetFirebaseFlow();
-              }}
-            >
-              MPIN Login
-            </button>
-            {isFirebaseConfigured() ? (
+    <div className="login-fresh-container" dir={direction}>
+      <div className="login-fresh-card">
+        {/* Header */}
+        <div className="login-fresh-header">
+          <div className="login-fresh-header-top">
+            <div></div>
+            {!otpSent && !isUsernameStep && !isFirebaseStep && onBackToLaunch && (
               <button
                 type="button"
-                className={`method-tab ${loginMethod === "firebase_phone" ? "active" : ""}`}
-                onClick={() => {
-                  setLoginMethod("firebase_phone");
-                  resetOtpFlow();
-                  resetMpinFlow();
-                }}
+                className="login-fresh-back-btn"
+                onClick={onBackToLaunch}
+                disabled={loading}
+                title="Go back"
               >
-                Phone (SMS)
+                ←
               </button>
-            ) : null}
+            )}
+            <div></div>
+          </div>
+          <h1>🔐 LinkUp</h1>
+          <p>Secure login with Phone OTP or Gmail</p>
+        </div>
+
+        {/* Method Tabs */}
+        {!isUsernameStep && !otpSent && !isFirebaseStep && (
+          <div className="login-fresh-methods">
             <button
               type="button"
-              className={`method-tab ${loginMethod === "gmail" ? "active" : ""}`}
+              className={`login-fresh-method-tab ${loginMethod === "firebase_phone" ? "active" : ""}`}
+              onClick={() => {
+                setLoginMethod("firebase_phone");
+                resetOtpFlow();
+                resetMpinFlow();
+              }}
+              title="Login with Phone OTP via Firebase"
+            >
+              <span className="login-fresh-method-icon">📱</span>
+              <span>Phone OTP</span>
+            </button>
+            <button
+              type="button"
+              className={`login-fresh-method-tab ${loginMethod === "gmail" ? "active" : ""}`}
               onClick={() => {
                 setLoginMethod("gmail");
                 resetOtpFlow();
                 resetMpinFlow();
                 resetFirebaseFlow();
               }}
+              title="Sign in with Google"
             >
-              Gmail
+              <span className="login-fresh-method-icon">🔗</span>
+              <span>Gmail</span>
+            </button>
+            <button
+              type="button"
+              className={`login-fresh-method-tab ${loginMethod === "mpin" ? "active" : ""}`}
+              onClick={() => {
+                setLoginMethod("mpin");
+                resetOtpFlow();
+                resetFirebaseFlow();
+              }}
+              title="Login with MPIN"
+            >
+              <span className="login-fresh-method-icon">🔑</span>
+              <span>MPIN</span>
             </button>
           </div>
-        ) : null}
+        )}
 
-        <form className="login-form" onSubmit={handleFormSubmit}>
-          <div className="form-intro">
-            <div className="intro-heading-row">
-              <h2>{formTitle}</h2>
-              {(recognitionSupported || speechSupported) ? renderFieldVoiceActions(
-                "form-intro",
-                `${formTitle}. ${formDescription}`,
-                () => {}
-              ) : null}
-            </div>
-            <p>{formDescription}</p>
-          </div>
-
-          {!otpSent && !isUsernameStep && !isFirebaseStep && loginMethod !== "gmail" ? (
-            <div className="form-group">
-              <label htmlFor="identifier">
-                <span>
-                  {loginMethod === "firebase_phone"
-                    ? "Phone Number"
-                    : "Email Address or Phone Number"}
-                </span>
-                {renderFieldVoiceActions("identifier", trimmedIdentifier || "Email address or phone number", (value) => {
-                  setIdentifier(value);
-                  clearMessages();
-                  fetchAuthMethods(value);
-                })}
-              </label>
-              <input
-                type="text"
-                id="identifier"
-                placeholder={
-                  loginMethod === "firebase_phone"
-                    ? "Enter your phone number with country code (e.g., +91xxxxxxxxxx)"
-                    : "Enter your email address or phone number"
-                }
-                value={identifier}
-                onChange={(event) => {
-                  setIdentifier(event.target.value);
-                  clearMessages();
-                  fetchAuthMethods(event.target.value);
-                }}
-                className="form-input"
-                autoComplete="username"
-              />
-              {authMethods?.exists ? (
-                <div className="auth-methods-hint">
-                  {authMethods.hasMpin ? (
-                    <span className="hint-item">MPIN available</span>
-                  ) : null}
-                  {authMethods.emailVerified ? (
-                    <span className="hint-item">Email verified</span>
-                  ) : null}
-                  {authMethods.phoneVerified ? (
-                    <span className="hint-item">Phone verified</span>
-                  ) : null}
+        {/* Content */}
+        <div className="login-fresh-content">
+          <form className="login-fresh-form" onSubmit={handleFormSubmit}>
+            {/* Phone OTP Flow */}
+            {loginMethod === "firebase_phone" && !isFirebaseStep && !isUsernameStep && (
+              <div>
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-section-title">📱 Phone Number</label>
+                  <p className="login-fresh-section-desc">Enter your phone number to receive an OTP</p>
                 </div>
-              ) : null}
-            </div>
-          ) : null}
 
-          {loginMethod === "otp" && !otpSent && !isUsernameStep ? (
-            <div className="form-group">
-              <label>
-                <span>Send OTP via</span>
-              </label>
-              <div className="channel-selector">
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-form-label">Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g., +91 98765 43210"
+                    value={identifier}
+                    onChange={(event) => {
+                      setIdentifier(event.target.value);
+                      clearMessages();
+                    }}
+                    className="login-fresh-input"
+                    autoComplete="tel"
+                  />
+                  <p className="login-fresh-help-text">Include country code (e.g., +91 for India)</p>
+                </div>
+
+                <div id="firebase-recaptcha-container" style={{ marginBottom: "1rem" }}></div>
+
+                {error && <div className="login-fresh-message error">⚠️ {error}</div>}
+                {success && <div className="login-fresh-message success">✓ {success}</div>}
+
                 <button
-                  type="button"
-                  className={`channel-btn ${otpChannel === "email" ? "active" : ""}`}
-                  onClick={() => setOtpChannel("email")}
+                  type="submit"
+                  className="login-fresh-btn login-fresh-btn-primary"
+                  disabled={loading || !identifier}
                 >
-                  Email
-                </button>
-                <button
-                  type="button"
-                  className={`channel-btn ${otpChannel === "phone" ? "active" : ""}`}
-                  onClick={() => setOtpChannel("phone")}
-                  disabled={
-                    authMethods?.exists &&
-                    !authMethods.phoneVerified
-                  }
-                  title={
-                    authMethods?.exists && !authMethods.phoneVerified
-                      ? "Phone not verified. Verify via email first."
-                      : "Send OTP to phone"
-                  }
-                >
-                  Phone
+                  {loading && <span className="login-fresh-loading"></span>}
+                  {getButtonText()}
                 </button>
               </div>
-            </div>
-          ) : null}
+            )}
 
-          {loginMethod === "firebase_phone" && !firebaseOtpSent && !isUsernameStep ? (
-            <div className="form-group">
-              <div id="firebase-recaptcha-container" className="recaptcha-container"></div>
-              {isFirebaseConfigured() ? null : (
-                <div className="firebase-notice">
-                  Firebase Phone Auth is not configured. SMS login is unavailable.
+            {/* Phone OTP Verification */}
+            {isFirebaseStep && (
+              <div>
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-section-title">✓ Verify OTP</label>
+                  <p className="login-fresh-section-desc">Enter the 6-digit code sent to {identifier}</p>
                 </div>
-              )}
-            </div>
-          ) : null}
 
-          {loginMethod === "mpin" && !isUsernameStep ? (
-            <div className="form-group">
-              <label htmlFor="mpin">
-                <span>MPIN</span>
-                {renderFieldVoiceActions("mpin", mpin || "M P I N", (value) => {
-                  setMpin(value.replace(/\D/g, "").slice(0, 6));
-                  clearMessages();
-                })}
-              </label>
-              <input
-                type="password"
-                inputMode="numeric"
-                id="mpin"
-                placeholder="Enter your 4-6 digit MPIN"
-                value={mpin}
-                onChange={(event) => {
-                  setMpin(event.target.value.replace(/\D/g, "").slice(0, 6));
-                  clearMessages();
-                }}
-                className="form-input"
-                maxLength="6"
-                autoComplete="current-password"
-              />
-            </div>
-          ) : null}
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-form-label">Enter OTP</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="000000"
+                    value={otp}
+                    onChange={(event) => {
+                      setOtp(event.target.value.replace(/\D/g, "").slice(0, 6));
+                      clearMessages();
+                    }}
+                    maxLength="6"
+                    className="login-fresh-input"
+                    autoComplete="one-time-code"
+                    style={{ textAlign: "center", fontSize: "1.5rem", letterSpacing: "0.5rem" }}
+                  />
+                </div>
 
-          {otpSent || isFirebaseStep ? (
-            <div className="form-group">
-              <label htmlFor="otp">
-                <span>One-Time Password</span>
-                <span className="field-actions">
-                  {renderFieldVoiceActions("otp", otp || "OTP", (value) => {
-                    setOtp(value.replace(/\D/g, "").slice(0, 6));
-                    clearMessages();
-                  })}
-                  <button
-                    type="button"
-                    className="resend-otp"
-                    onClick={isFirebaseStep ? handleSendFirebasePhoneOTP : handleSendOtp}
-                    disabled={loading}
-                  >
-                    Resend
-                  </button>
-                </span>
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                id="otp"
-                placeholder="Enter 6-digit OTP"
-                value={otp}
-                onChange={(event) => {
-                  setOtp(event.target.value.replace(/\D/g, "").slice(0, 6));
-                  clearMessages();
-                }}
-                className="form-input"
-                maxLength="6"
-                autoComplete="one-time-code"
-              />
-            </div>
-          ) : null}
+                {error && <div className="login-fresh-message error">⚠️ {error}</div>}
+                {success && <div className="login-fresh-message success">✓ {success}</div>}
 
-          {loginMethod === "gmail" && !isUsernameStep ? (
-            <div className="form-group">
-              <p className="gmail-description">
-                Click the button below to sign in with your Gmail account. A Google login popup will appear.
-              </p>
-            </div>
-          ) : null}
+                <button
+                  type="submit"
+                  className="login-fresh-btn login-fresh-btn-primary"
+                  disabled={loading || otp.length !== 6}
+                >
+                  {loading && <span className="login-fresh-loading"></span>}
+                  {getButtonText()}
+                </button>
 
-          {isUsernameStep ? (
-            <div className="form-group">
-              <label htmlFor="setupUsername">
-                <span>Create your global username</span>
-                {renderFieldVoiceActions("setupUsername", setupUsername || "Username", (value) => {
-                  setSetupUsername(value);
-                  setSetupUsernameError("");
-                  clearMessages();
-                })}
-              </label>
-              <input
-                type="text"
-                id="setupUsername"
-                placeholder="Enter a unique username (3-20 characters)"
-                value={setupUsername}
-                onChange={async (event) => {
-                  const value = event.target.value;
-                  setSetupUsername(value);
-                  clearMessages();
-                  await checkSetupUsernameAvailability(value);
-                }}
-                className="form-input"
-                autoComplete="username"
-              />
-              {setupUsernameStatus === "checking" ? (
-                <div className="username-status checking">Checking availability...</div>
-              ) : null}
-              {setupUsernameStatus === "available" ? (
-                <div className="username-status available">Username is available</div>
-              ) : null}
-              {setupUsernameStatus === "taken" ? (
-                <div className="username-status taken">Username is taken</div>
-              ) : null}
-              {setupUsernameError ? (
-                <div className="username-error">{setupUsernameError}</div>
-              ) : null}
-            </div>
-          ) : null}
+                <button
+                  type="button"
+                  className="login-fresh-btn login-fresh-btn-outline"
+                  onClick={() => resetFirebaseFlow()}
+                  disabled={loading}
+                >
+                  Back
+                </button>
+              </div>
+            )}
 
-          {error ? <div className="error-message">{error}</div> : null}
-          {success ? <div className="success-message">{success}</div> : null}
-          <div className="form-actions">
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {isUsernameStep
-                ? loading ? "Completing login..." : "Complete Login"
-                : loginMethod === "mpin"
-                  ? loading ? "Logging in..." : "Login with MPIN"
-                  : loginMethod === "gmail"
-                    ? loading ? "Opening Google..." : "Sign in with Google"
-                    : isFirebaseStep
-                      ? loading ? "Verifying..." : "Verify SMS OTP"
-                      : otpSent
-                        ? loading ? "Verifying..." : "Verify OTP"
-                        : loginMethod === "firebase_phone"
-                          ? loading ? "Sending OTP..." : "Send SMS OTP"
-                          : loading
-                            ? "Sending OTP..."
-                            : "Send Login OTP"}
-            </button>
+            {/* Gmail Sign-In */}
+            {loginMethod === "gmail" && !isUsernameStep && (
+              <div>
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-section-title">🔗 Sign in with Google</label>
+                  <p className="login-fresh-section-desc">Quick and secure login using your Gmail account</p>
+                </div>
 
-            {isBackVisible ? (
+                {error && <div className="login-fresh-message error">⚠️ {error}</div>}
+                {success && <div className="login-fresh-message success">✓ {success}</div>}
+
+                <button
+                  type="button"
+                  className="login-fresh-social-btn"
+                  onClick={handleGmailSignIn}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="login-fresh-loading"></span>
+                      Opening Google...
+                    </>
+                  ) : (
+                    <>
+                      <span>🔐</span>
+                      Sign in with Google
+                    </>
+                  )}
+                </button>
+
+                <p className="login-fresh-help-text" style={{ textAlign: "center", marginTop: "1rem" }}>
+                  You'll be redirected to Google's secure login page
+                </p>
+              </div>
+            )}
+
+            {/* MPIN Login */}
+            {loginMethod === "mpin" && !isUsernameStep && (
+              <div>
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-section-title">🔑 MPIN Login</label>
+                  <p className="login-fresh-section-desc">Enter your email/phone and MPIN to sign in</p>
+                </div>
+
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-form-label">Email or Phone</label>
+                  <input
+                    type="text"
+                    placeholder="your@email.com or +91 98765 43210"
+                    value={identifier}
+                    onChange={(event) => {
+                      setIdentifier(event.target.value);
+                      clearMessages();
+                    }}
+                    className="login-fresh-input"
+                    autoComplete="username"
+                  />
+                </div>
+
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-form-label">MPIN (4-6 digits)</label>
+                  <input
+                    type="password"
+                    inputMode="numeric"
+                    placeholder="••••••"
+                    value={mpin}
+                    onChange={(event) => {
+                      setMpin(event.target.value.replace(/\D/g, "").slice(0, 6));
+                      clearMessages();
+                    }}
+                    maxLength="6"
+                    className="login-fresh-input"
+                    autoComplete="current-password"
+                  />
+                </div>
+
+                {error && <div className="login-fresh-message error">⚠️ {error}</div>}
+                {success && <div className="login-fresh-message success">✓ {success}</div>}
+
+                <button
+                  type="submit"
+                  className="login-fresh-btn login-fresh-btn-primary"
+                  disabled={loading || !identifier || !mpin}
+                >
+                  {loading && <span className="login-fresh-loading"></span>}
+                  {getButtonText()}
+                </button>
+              </div>
+            )}
+
+            {/* Username Setup */}
+            {isUsernameStep && (
+              <div>
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-section-title">✓ Create Username</label>
+                  <p className="login-fresh-section-desc">Set a unique username for your LinkUp account</p>
+                </div>
+
+                <div className="login-fresh-form-group">
+                  <label className="login-fresh-form-label">Global Username</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., john_doe_24"
+                    value={setupUsername}
+                    onChange={async (event) => {
+                      const value = event.target.value;
+                      setSetupUsername(value);
+                      clearMessages();
+                      await checkSetupUsernameAvailability(value);
+                    }}
+                    className="login-fresh-input"
+                    autoComplete="username"
+                  />
+                  <p className="login-fresh-help-text">3-20 characters: letters, numbers, _ and -</p>
+
+                  {setupUsernameStatus === "checking" && (
+                    <div className="login-fresh-message info">⏳ Checking availability...</div>
+                  )}
+                  {setupUsernameStatus === "available" && (
+                    <div className="login-fresh-message success">✓ Username is available!</div>
+                  )}
+                  {setupUsernameError && (
+                    <div className="login-fresh-message error">⚠️ {setupUsernameError}</div>
+                  )}
+                </div>
+
+                {error && <div className="login-fresh-message error">⚠️ {error}</div>}
+                {success && <div className="login-fresh-message success">✓ {success}</div>}
+
+                <button
+                  type="submit"
+                  className="login-fresh-btn login-fresh-btn-primary"
+                  disabled={loading || setupUsernameStatus !== "available"}
+                >
+                  {loading && <span className="login-fresh-loading"></span>}
+                  {getButtonText()}
+                </button>
+
+                <button
+                  type="button"
+                  className="login-fresh-btn login-fresh-btn-outline"
+                  onClick={resetUsernameSetup}
+                  disabled={loading}
+                >
+                  Back
+                </button>
+              </div>
+            )}
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="login-fresh-bottom">
+          <p className="login-fresh-bottom-text">
+            Don't have an account?{" "}
+            {onSignUpClick ? (
               <button
                 type="button"
-                className="btn btn-outline"
-                onClick={isUsernameStep ? resetUsernameSetup : (
-                  isFirebaseStep ? resetFirebaseFlow : resetOtpFlow
-                )}
-                disabled={loading}
-              >
-                Back
-              </button>
-            ) : null}
-          </div>
-        </form>
-
-        <div className="login-footer">
-          <p className="security-info">
-            {loginCopy.footer || "Your login is verified by a server-issued OTP."}
-          </p>
-          <PublicLegalNotice language={language} message={legalNoticeMessage} />
-          {!otpSent && !isUsernameStep && !isFirebaseStep && onSignUpClick ? (
-            <p className="signup-prompt">
-              Don't have an account?{" "}
-              <button
-                type="button"
-                className="signup-link"
+                className="login-fresh-bottom-text"
                 onClick={onSignUpClick}
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#FF6B6B",
+                  color: "#d946a6",
                   cursor: "pointer",
-                  textDecoration: "underline",
+                  textDecoration: "none",
                   padding: 0,
                   font: "inherit",
                 }}
               >
-                Sign Up
+                Sign Up Free
               </button>
-            </p>
-          ) : null}
+            ) : (
+              "Sign Up Free"
+            )}
+          </p>
+          <PublicLegalNotice language={language} message={legalNoticeMessage} />
         </div>
       </div>
     </div>
