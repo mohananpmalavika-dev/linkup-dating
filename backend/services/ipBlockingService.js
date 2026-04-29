@@ -48,8 +48,14 @@ class IPBlockingService {
 
       return !!block;
     } catch (error) {
+      // If table doesn't exist (42P01), log as warning but don't fail
+      if (error.code === '42P01') {
+        console.warn('IP blocklist table does not exist yet. Table will be created on next sync.');
+        return false;
+      }
+      
       console.error('Error checking IP block:', error);
-      return false;
+      return false; // Fail open for availability
     }
   }
 
@@ -83,6 +89,11 @@ class IPBlockingService {
         attemptCount: block.attemptCount
       };
     } catch (error) {
+      // If table doesn't exist (42P01), just return null
+      if (error.code === '42P01') {
+        return null;
+      }
+      
       console.error('Error getting block details:', error);
       return null;
     }
@@ -140,6 +151,16 @@ class IPBlockingService {
         return block;
       }
     } catch (error) {
+      // If table doesn't exist, log warning but don't fail
+      if (error.code === '42P01') {
+        console.warn('[SECURITY] IP blocklist table does not exist. Block attempt will be retried when table is available:', {
+          ip: ipAddress,
+          email,
+          age
+        });
+        return null;
+      }
+      
       console.error('Error blocking IP:', error);
       throw error;
     }
@@ -180,6 +201,9 @@ class IPBlockingService {
         });
       }
     } catch (error) {
+      if (error.code === '42P01') {
+        throw new Error('IP blocklist table not yet initialized. Please try again in a moment.');
+      }
       console.error('Error manually blocking IP:', error);
       throw error;
     }
@@ -209,6 +233,9 @@ class IPBlockingService {
       console.log(`[ADMIN] Removed block for IP ${ipAddress} by admin ${adminId}`);
       return block;
     } catch (error) {
+      if (error.code === '42P01') {
+        throw new Error('IP blocklist table not yet initialized. Please try again in a moment.');
+      }
       console.error('Error unblocking IP:', error);
       throw error;
     }
@@ -258,6 +285,10 @@ class IPBlockingService {
         }))
       };
     } catch (error) {
+      if (error.code === '42P01') {
+        console.warn('IP blocklist table not yet initialized. Returning empty list.');
+        return { total: 0, page, limit, pages: 0, blocks: [] };
+      }
       console.error('Error getting blocked IPs:', error);
       throw error;
     }
@@ -283,6 +314,10 @@ class IPBlockingService {
       console.log(`[CLEANUP] Marked ${result[0]} expired IP blocks as inactive`);
       return result[0];
     } catch (error) {
+      if (error.code === '42P01') {
+        console.warn('IP blocklist table not yet initialized. Cleanup will run on next sync.');
+        return 0;
+      }
       console.error('Error cleaning up expired blocks:', error);
       throw error;
     }
@@ -352,6 +387,16 @@ class IPBlockingService {
         topBlockedEmails: topBlockedEmails || []
       };
     } catch (error) {
+      if (error.code === '42P01') {
+        console.warn('IP blocklist table not yet initialized. Returning empty statistics.');
+        return {
+          activeBlocksCount: 0,
+          totalBlocksCount: 0,
+          underageAttemptsCount: 0,
+          mostRecentBlock: null,
+          topBlockedEmails: []
+        };
+      }
       console.error('Error getting block statistics:', error);
       throw error;
     }

@@ -604,6 +604,58 @@ db.init()
       syncModelsInOrder(dbModels.sequelize, dbModels, logger).then(async () => {
         logger.info('✓ Sequelize models synchronized successfully');
         
+        // Initialize IP blocklist table (critical for auth flows)
+        try {
+          logger.info('Initializing IP blocklist table...');
+          const { Pool } = require('pg');
+          const pool = new Pool({
+            connectionString: process.env.DATABASE_URL || 
+              `postgres://${process.env.DB_USER || 'postgres'}:${process.env.DB_PASSWORD || 'postgres'}@${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 5432}/${process.env.DB_NAME || 'linkup_dating'}`,
+            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+          });
+
+          const client = await pool.connect();
+          try {
+            // Create table if not exists
+            await client.query(`
+              CREATE TABLE IF NOT EXISTS "ip_blocklist" (
+                "id" SERIAL PRIMARY KEY,
+                "ip_address" VARCHAR(45) NOT NULL,
+                "reason" VARCHAR(255) DEFAULT 'underage_attempt',
+                "block_duration_hours" INTEGER DEFAULT 2,
+                "blocked_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                "expires_at" TIMESTAMP NOT NULL,
+                "attempted_email" VARCHAR(255),
+                "attempted_age" INTEGER,
+                "attempt_count" INTEGER DEFAULT 1,
+                "is_active" BOOLEAN DEFAULT true,
+                "removed_at" TIMESTAMP,
+                "removed_by_admin_id" INTEGER,
+                "created_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                "updated_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE("ip_address")
+              );
+            `);
+
+            // Create indexes
+            await client.query(`
+              CREATE INDEX IF NOT EXISTS "idx_ip_blocklist_ip_active_expires" 
+                ON "ip_blocklist" ("ip_address", "is_active", "expires_at");
+            `);
+
+            logger.info('✓ IP blocklist table initialized');
+          } finally {
+            await client.end();
+            await pool.end();
+          }
+        } catch (err) {
+          logger.warn('Failed to initialize IP blocklist table', {
+            message: err.message,
+            code: err.code
+          });
+          // Don't fail startup if IP blocklist init fails
+        }
+
         // Initialize default admin settings for IP blocking and age verification
         try {
           const AdminSettingsService = require('./services/adminSettingsService');
