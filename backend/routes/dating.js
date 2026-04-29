@@ -5787,7 +5787,7 @@ router.post('/interactions/superlike', authenticateToken, async (req, res) => {
 });
 
 // 30. GET DAILY LIMITS
-router.get('/daily-limits', async (req, res) => {
+router.get('/daily-limits', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limits = await getDailyLimitSnapshot(userId);
