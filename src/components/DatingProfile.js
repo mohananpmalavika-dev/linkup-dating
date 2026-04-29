@@ -15,6 +15,7 @@ import MomentsUpload from './MomentsUpload';
 import useMoments from '../hooks/useMoments';
 import useAnalytics from '../hooks/useAnalytics';
 import useVideoProfile from '../hooks/useVideoProfile';
+import useEventDetails from '../hooks/useEventDetails';
 import datingProfileService from '../services/datingProfileService';
 import {
   buildLocalIdentityPack,
@@ -142,6 +143,9 @@ const DatingProfile = ({ onLogout }) => {
 
   // Video Profile
   const { hasVideoProfile, videoDuration, authenticationStatus, isAuthenticated, authenticationScore, fetchVideoProfile, uploadVideo: uploadVideoIntro, deleteVideo: deleteVideoIntro, recheckFraud: recheckVideoFraud } = useVideoProfile();
+
+  // Event Details
+  const { hasUpcomingEvents, nextEvent, totalUpcomingEvents, totalEventAttendees, averageEventRating, fetchUpcomingEvents } = useEventDetails();
   
   const navigate = useNavigate();
   
@@ -308,6 +312,7 @@ const DatingProfile = ({ onLogout }) => {
     fetchMyVideos();
     fetchMoments();
     fetchVideoProfile();
+    fetchUpcomingEvents();
   }, []);
 
   const handleSaveProfile = async () => {
@@ -872,6 +877,57 @@ const DatingProfile = ({ onLogout }) => {
           <div className="profile-section">
             <DailyChallengesWidget />
           </div>
+
+          {/* Upcoming Events Preview */}
+          {hasUpcomingEvents && (
+            <div className="profile-section">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3>📅 Upcoming Events</h3>
+                <button 
+                  className="btn btn-sm btn-secondary"
+                  onClick={() => navigate('/events')}
+                  style={{ fontSize: '12px' }}
+                >
+                  View All
+                </button>
+              </div>
+              
+              {nextEvent && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div className="event-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px', borderLeft: '4px solid #667eea' }}>
+                    <div style={{ marginBottom: '4px' }}>
+                      <strong>{nextEvent.name}</strong>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                      📅 {nextEvent.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                      📍 {nextEvent.location}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      👥 {nextEvent.attendees} attending • ⭐ {nextEvent.rating}
+                    </div>
+                  </div>
+                  
+                  {totalUpcomingEvents > 1 && (
+                    <div className="event-card" style={{ padding: '12px', background: '#f5f5f5', borderRadius: '8px' }}>
+                      <div style={{ fontSize: '13px', color: '#667eea', fontWeight: '600' }}>
+                        +{totalUpcomingEvents - 1} more events coming up
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              <button 
+                onClick={() => navigate('/events')}
+                className="btn btn-primary"
+                style={{ width: '100%', marginTop: '12px' }}
+              >
+                🎉 Explore Events
+              </button>
+            </div>
+          )}
 
           {/* Boost Button */}
           <div className="profile-section">
