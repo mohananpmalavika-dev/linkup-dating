@@ -2470,7 +2470,7 @@ router.post('/set-admin', async (req, res) => {
 // GOOGLE/FIREBASE SIGNUP
 router.post('/google-signup', async (req, res) => {
   try {
-    const { idToken, firebaseUid, email, displayName, photoURL, phone } = req.body;
+    const { idToken, firebaseUid, email, displayName, photoURL, phone, ageVerification } = req.body;
     const normalizedEmail = normalizeRecipient(email);
     const normalizedPhone = normalizePhoneNumber(phone);
     const clientIP = getClientIP(req);
@@ -2483,6 +2483,10 @@ router.post('/google-signup', async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
+    if (!ageVerification) {
+      return res.status(400).json({ error: 'Date of birth verification is required' });
+    }
+
     // Verify Firebase ID token
     const firebaseConfig = require('../config/firebase');
     const tokenVerification = await firebaseConfig.verifyFirebaseIdToken(idToken);
@@ -2493,6 +2497,22 @@ router.post('/google-signup', async (req, res) => {
         code: 'INVALID_FIREBASE_TOKEN'
       });
     }
+
+    // Validate age verification - collected from first screen
+    const ageValidation = validateAgeVerification(ageVerification);
+    if (!ageValidation.valid) {
+      return res.status(400).json({
+        error: ageValidation.errors[0] || 'Invalid date of birth'
+      });
+    }
+
+    if (!ageValidation.isOver18) {
+      return res.status(403).json({
+        error: 'You must be at least 18 years old to use LinkUp'
+      });
+    }
+
+    const verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
 
     // Sync admin privileges if needed
     await syncAdminPrivilegesForEmail(normalizedEmail);
@@ -2531,13 +2551,18 @@ router.post('/google-signup', async (req, res) => {
 
       user = createUserResult.rows[0];
 
-      // Create empty dating profile
+      // Store age verification if provided
+      if (ageVerification) {
+        await storeAgeVerification(db, user.id, ageVerification);
+      }
+
+      // Create dating profile with age
       const firstName = displayName || email.split('@')[0];
       await db.query(
-        `INSERT INTO dating_profiles (user_id, first_name, profile_completion_percent, last_active, created_at)
-         VALUES ($1, $2, $3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `INSERT INTO dating_profiles (user_id, first_name, age, profile_completion_percent, last_active, created_at)
+         VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (user_id) DO NOTHING`,
-        [user.id, firstName, 15]
+        [user.id, firstName, verifiedAge, 15]
       );
 
       // Create user preferences
