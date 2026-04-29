@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import AccountSettings from './AccountSettings';
 import { VideoIntroUploader } from './VideoIntroUploader';
 import { VideoAuthenticationResult } from './VideoAuthenticationResult';
+import CouponRedemption from './CouponRedemption';
 import datingProfileService from '../services/datingProfileService';
 import {
   buildLocalIdentityPack,
@@ -83,6 +84,7 @@ const DatingProfile = ({ onLogout }) => {
     emailEnabled: false
   });
   const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showCoupon, setShowCoupon] = useState(false);
 
   // Phase 3: Photo verification
   const [verificationStatus, setVerificationStatus] = useState('none');
@@ -2133,6 +2135,9 @@ const DatingProfile = ({ onLogout }) => {
             <button onClick={() => setEditing(true)} className="btn-edit">
               Edit Profile
             </button>
+            <button onClick={() => setShowCoupon(true)} className="btn-save">
+              🎁 Redeem Coupon
+            </button>
             <button onClick={() => setShowAccountSettings(true)} className="btn-save">
               Account Settings
             </button>
@@ -2143,6 +2148,15 @@ const DatingProfile = ({ onLogout }) => {
               Log Out
             </button>
           </div>
+
+          <CouponRedemption
+            isOpen={showCoupon}
+            onClose={() => setShowCoupon(false)}
+            onRedemptionSuccess={() => {
+              setShowCoupon(false);
+              loadProfile();
+            }}
+          />
         </div>
       )}
     </div>
