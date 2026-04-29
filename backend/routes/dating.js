@@ -4520,10 +4520,12 @@ router.get('/new-profiles', authenticateToken, async (req, res) => {
 // 8. LIKE PROFILE
 // 9. PASS PROFILE
 router.post('/interactions/pass', authenticateToken, async (req, res) => {
+  let fromUserId;
+  let userId;
   try {
-    const fromUserId = req.user.id;
+    fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
-    const userId = normalizeInteger(toUserId || targetUserId);
+    userId = normalizeInteger(toUserId || targetUserId);
 
     console.log(`[PASS] Starting pass request from user ${fromUserId} to user ${userId}`);
 
@@ -5149,9 +5151,11 @@ router.post('/funnel/events', async (req, res) => {
 
 // 17. FAVORITE A PROFILE
 router.post('/favorites', async (req, res) => {
+  let userId;
+  let favoriteUserId;
   try {
-    const userId = req.user.id;
-    const favoriteUserId = normalizeInteger(req.body.favoriteUserId || req.body.userId);
+    userId = req.user.id;
+    favoriteUserId = normalizeInteger(req.body.favoriteUserId || req.body.userId);
 
     if (!favoriteUserId) {
       return res.status(400).json({ error: 'Favorite user ID is required' });
@@ -5647,10 +5651,12 @@ router.put('/preferences', async (req, res) => {
 
 // 29. SUPERLIKE PROFILE
 router.post('/interactions/superlike', authenticateToken, async (req, res) => {
+  let fromUserId;
+  let userId;
   try {
-    const fromUserId = req.user.id;
+    fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
-    const userId = normalizeInteger(toUserId || targetUserId);
+    userId = normalizeInteger(toUserId || targetUserId);
     const requestMetadata = getRequestMetadata(req);
 
     if (!userId) {
@@ -6071,8 +6077,9 @@ router.get('/top-picks', async (req, res) => {
 
 // 33. REWIND PASS (Undo last pass)
 router.post('/interactions/rewind', async (req, res) => {
+  let userId;
   try {
-    const userId = req.user.id;
+    userId = req.user.id;
     const requestMetadata = getRequestMetadata(req);
 
     // Check daily rewind limit
@@ -8591,8 +8598,9 @@ router.get('/daily-limits', async (req, res) => {
 
 // 9c. REWIND LAST INTERACTION
 router.post('/interactions/rewind', async (req, res) => {
+  let userId;
   try {
-    const userId = req.user.id;
+    userId = req.user.id;
     const { profileUserId } = req.body; // Optional: specific profile to rewind
 
     // Get subscription access to check premium status
@@ -8720,9 +8728,11 @@ router.post('/interactions/rewind', async (req, res) => {
 
 // 22. BLOCK USER
 router.post('/block-user/:userId', async (req, res) => {
+  let blockingUserId;
+  let blockedUserId;
   try {
-    const blockingUserId = req.user.id;
-    const blockedUserId = normalizeInteger(req.params.userId);
+    blockingUserId = req.user.id;
+    blockedUserId = normalizeInteger(req.params.userId);
     const { reason } = req.body;
 
     if (!blockedUserId) {
@@ -8760,9 +8770,11 @@ router.post('/block-user/:userId', async (req, res) => {
 
 // 22b. UNBLOCK USER
 router.post('/unblock-user/:userId', async (req, res) => {
+  let blockingUserId;
+  let blockedUserId;
   try {
-    const blockingUserId = req.user.id;
-    const blockedUserId = normalizeInteger(req.params.userId);
+    blockingUserId = req.user.id;
+    blockedUserId = normalizeInteger(req.params.userId);
 
     if (!blockedUserId) {
       return res.status(400).json({ error: 'Invalid user ID' });
