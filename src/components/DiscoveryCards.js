@@ -506,19 +506,26 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     }
 
     try {
-      const data = await datingProfileService.getDiscoveryQueue(cursor ? { cursor, limit: 20 } : { limit: 20 });
-      const newProfiles = data.profiles || [];
+      // Use searchProfiles with no filters to get all accounts
+      const data = await datingProfileService.searchProfiles({});
+      const newProfiles = Array.isArray(data.profiles) ? data.profiles : [];
 
       if (cursor) {
+        // For now, searchProfiles doesn't support cursor pagination like other endpoints
+        // In a future update, you could implement cursor support in the backend
         setProfiles((currentProfiles) => [...currentProfiles, ...newProfiles]);
       } else {
         setProfiles(newProfiles);
         setCurrentIndex(0);
       }
 
-      setNoMoreProfiles(!data.hasMore && newProfiles.length === 0);
-      setNextCursor(data.nextCursor || null);
+      setNoMoreProfiles(newProfiles.length === 0);
+      setNextCursor(null);
       setDiscoveryMode('allAccounts');
+      
+      if (newProfiles.length > 0) {
+        showFeedback('success', `Found ${newProfiles.length} profiles`);
+      }
     } catch (loadError) {
       setError('Failed to load all profiles.');
       console.error(loadError);
@@ -723,13 +730,13 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
     setNoMoreProfiles(true);
 
-    if (nextCursor && !loadMoreTriggered.current) {
+    // Only load more with cursor pagination for modes that support it
+    if (nextCursor && !loadMoreTriggered.current && discoveryMode !== 'allAccounts') {
       loadMoreTriggered.current = true;
 
       if (discoveryMode === 'smartQueue') loadSmartQueue(nextCursor);
       else if (discoveryMode === 'trending') loadTrending(nextCursor);
       else if (discoveryMode === 'newProfiles') loadNewProfiles(nextCursor);
-      else if (discoveryMode === 'allAccounts') loadAllProfiles(nextCursor);
       else if (discoveryMode === 'regular') loadProfiles(appliedFilters, nextCursor);
     }
   };
