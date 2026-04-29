@@ -4527,8 +4527,8 @@ router.post('/interactions/pass', authenticateToken, async (req, res) => {
     }
 
     const passInsertResult = await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
-       VALUES ($1, $2, 'pass')
+      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type, created_at)
+       VALUES ($1, $2, 'pass', CURRENT_TIMESTAMP)
        ON CONFLICT (from_user_id, to_user_id, interaction_type) DO NOTHING
        RETURNING id`,
       [fromUserId, userId]
@@ -5652,8 +5652,8 @@ router.post('/interactions/superlike', authenticateToken, async (req, res) => {
     }
 
     const superlikeInsertResult = await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
-       VALUES ($1, $2, 'superlike')
+      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type, created_at)
+       VALUES ($1, $2, 'superlike', CURRENT_TIMESTAMP)
        ON CONFLICT DO NOTHING
        RETURNING id`,
       [fromUserId, userId]
@@ -5797,8 +5797,8 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
     }
 
     const likeInsertResult = await db.query(
-      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type)
-       VALUES ($1, $2, 'like')
+      `INSERT INTO interactions (from_user_id, to_user_id, interaction_type, created_at)
+       VALUES ($1, $2, 'like', CURRENT_TIMESTAMP)
        ON CONFLICT DO NOTHING
        RETURNING id`,
       [fromUserId, userId]
