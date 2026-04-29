@@ -436,10 +436,7 @@ const Login = ({
         email: gmailUser.email,
         displayName: gmailUser.displayName,
         photoURL: gmailUser.photoURL,
-        phone: null,
-        ageVerification: {
-          dateOfBirth: new Date(new Date().getFullYear() - 21, 0, 1).toISOString()
-        }
+        phone: null
       });
 
       if (!response.data?.success || !response.data?.token) {
