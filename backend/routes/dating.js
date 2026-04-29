@@ -5545,9 +5545,10 @@ router.put('/preferences', async (req, res) => {
          gender_preferences, relationship_goals, interests,
          height_range_min, height_range_max, body_types,
          show_my_profile, allow_messages, notifications_enabled,
-         deal_breakers, preference_flexibility, compatibility_answers, learning_profile
+         deal_breakers, preference_flexibility, compatibility_answers, learning_profile,
+         created_at, updated_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15::jsonb, $16::jsonb, $17::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        ON CONFLICT (user_id) DO UPDATE
        SET age_range_min = EXCLUDED.age_range_min,
            age_range_max = EXCLUDED.age_range_max,
