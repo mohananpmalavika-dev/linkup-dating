@@ -506,7 +506,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     }
 
     try {
-      const data = await datingProfileService.getDiscoveryProfiles(cursor ? { cursor, limit: 20 } : { limit: 20 });
+      const data = await datingProfileService.getDiscoveryQueue(cursor ? { cursor, limit: 20 } : { limit: 20 });
       const newProfiles = data.profiles || [];
 
       if (cursor) {
