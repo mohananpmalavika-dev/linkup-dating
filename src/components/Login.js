@@ -415,54 +415,58 @@ const Login = ({
 
   const handleGmailSignIn = async () => {
     clearMessages();
-
-    if (!trimmedIdentifier) {
-      setError("Please enter your Gmail address");
-      return;
-    }
-
-    if (!validateEmail(trimmedIdentifier)) {
-      setError("Please enter a valid email address");
-      return;
-    }
-
     setLoading(true);
 
     try {
-      // Step 1: Check if email exists in our system
-      const checkResponse = await axios.get(`${API_BASE_URL}/auth/auth-methods`, {
-        params: { identifier: trimmedIdentifier }
+      // Step 1: Sign in with Google using Firebase popup
+      const gmailResult = await signInWithGmail();
+
+      if (!gmailResult.success) {
+        setError(gmailResult.error || "Failed to sign in with Gmail");
+        return;
+      }
+
+      const { user: gmailUser, idToken } = gmailResult;
+
+      // Step 2: Send to backend for verification and account creation/login
+      const response = await axios.post(`${API_BASE_URL}/auth/google-signup`, {
+        idToken,
+        firebaseUid: gmailUser.uid,
+        email: gmailUser.email,
+        displayName: gmailUser.displayName,
+        photoURL: gmailUser.photoURL,
+        phone: null,
+        ageVerification: {
+          dateOfBirth: new Date(new Date().getFullYear() - 21, 0, 1).toISOString()
+        }
       });
 
-      if (checkResponse.data?.exists) {
-        // Email already registered - proceed with OTP login
-        setOtpChannel("email");
-        setSuccess("Email found! Now send OTP to verify login.");
-        
-        // Automatically trigger OTP send
-        setTimeout(() => {
-          handleSendOtp({ preventDefault: () => {} });
-        }, 500);
-      } else {
-        // New email - set for signup flow
-        setSuccess("New email! Please complete the signup process.");
-        
-        // Redirect to signup or create account
-        // For now, we'll trigger OTP flow which will handle new account creation
-        setOtpChannel("email");
-        setTimeout(() => {
-          handleSendOtp({ preventDefault: () => {} });
-        }, 500);
+      if (!response.data?.success || !response.data?.token) {
+        setError(response.data?.error || "Failed to sign in with Gmail");
+        return;
       }
+
+      // Store Gmail as preferred login method
+      try {
+        localStorage.setItem("linkup_preferred_login_method", "gmail");
+      } catch {}
+
+      setSuccess("Signed in with Gmail successfully!");
+      
+      completeLogin(
+        response.data.user,
+        response.data.token,
+        gmailUser.email
+      );
     } catch (gmailError) {
-      console.error('Gmail check error:', gmailError);
+      console.error('Gmail sign-in error:', gmailError);
       if (!gmailError.response) {
         setError("Backend is not running. Please start the API server and try again.");
       } else {
         setError(
           gmailError.response.data?.error ||
             gmailError.response.data?.message ||
-            "Failed to check Gmail. Please try again."
+            "Failed to sign in with Gmail. Please try again."
         );
       }
     } finally {
@@ -675,7 +679,7 @@ const Login = ({
     : loginMethod === "mpin"
       ? "Login with MPIN"
       : loginMethod === "gmail"
-        ? "Sign in with Gmail"
+        ? "Sign in with Google"
         : isFirebaseStep
           ? "Verify your phone"
           : otpSent
@@ -687,7 +691,7 @@ const Login = ({
     : loginMethod === "mpin"
       ? "Enter your email or phone number and MPIN to sign in."
       : loginMethod === "gmail"
-        ? "Enter your Gmail address and we'll check if it's already registered or sign you up."
+        ? "Quick and secure login using your Google account."
         : isFirebaseStep
           ? "Enter the one-time password sent to your phone via SMS."
           : otpSent
@@ -963,25 +967,9 @@ const Login = ({
 
           {loginMethod === "gmail" && !isUsernameStep ? (
             <div className="form-group">
-              <label htmlFor="identifier">
-                <span>Gmail Address</span>
-                {renderFieldVoiceActions("identifier", trimmedIdentifier || "Gmail address", (value) => {
-                  setIdentifier(value);
-                  clearMessages();
-                })}
-              </label>
-              <input
-                type="email"
-                id="identifier"
-                placeholder="Enter your Gmail address"
-                value={identifier}
-                onChange={(event) => {
-                  setIdentifier(event.target.value);
-                  clearMessages();
-                }}
-                className="form-input"
-                autoComplete="email"
-              />
+              <p className="gmail-description">
+                Click the button below to sign in with your Gmail account. A Google login popup will appear.
+              </p>
             </div>
           ) : null}
 
@@ -1033,7 +1021,7 @@ const Login = ({
                 : loginMethod === "mpin"
                   ? loading ? "Logging in..." : "Login with MPIN"
                   : loginMethod === "gmail"
-                    ? loading ? "Checking Gmail..." : "Sign in with Gmail"
+                    ? loading ? "Opening Google..." : "Sign in with Google"
                     : isFirebaseStep
                       ? loading ? "Verifying..." : "Verify SMS OTP"
                       : otpSent
