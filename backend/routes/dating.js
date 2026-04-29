@@ -6059,7 +6059,7 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
 });
 
 // 32. GET TOP PICKS (Most Compatible Profiles) — using smart discovery query
-router.get('/top-picks', async (req, res) => {
+router.get('/top-picks', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
@@ -10473,75 +10473,6 @@ router.post('/filter-presets/:presetId/apply', async (req, res) => {
 });
 
 // 32. GET TOP PICKS (AI/ML Enhanced Matching)
-router.get('/top-picks', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const limit = Math.min(normalizeInteger(req.query.limit) || 10, 30);
-
-    // Get current user profile and preferences
-    const currentResult = await db.query(
-      `SELECT dp.*, row_to_json(up) as preferences
-       FROM dating_profiles dp
-       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
-       WHERE dp.user_id = $1`,
-      [userId]
-    );
-
-    if (currentResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Complete your profile first' });
-    }
-
-    const currentProfile = normalizeProfileRow(currentResult.rows[0]);
-    const currentPreferences = normalizePreferenceRow(currentResult.rows[0].preferences);
-
-    // Get top matches based on multiple factors
-    const result = await db.query(
-      `SELECT dp.*, 
-              row_to_json(up) as preferences,
-              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
-               FROM profile_photos WHERE user_id = dp.user_id) as photos
-       FROM dating_profiles dp
-       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
-       WHERE dp.user_id != $1
-         AND dp.is_active = true
-         AND NOT EXISTS (SELECT 1 FROM interactions i WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id) OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id))
-         AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id) OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id))
-       ORDER BY dp.profile_verified DESC, dp.profile_completion_percent DESC
-       LIMIT $2`,
-      [userId, limit]
-    );
-
-    const profiles = result.rows
-      .map(profileRow => {
-        const normalizedProfile = normalizeProfileRow(profileRow);
-        const compatibility = buildCompatibilitySuggestion({
-          currentProfile,
-          currentPreferences,
-          candidateProfile: normalizedProfile,
-          candidatePreferences: profileRow.preferences
-        });
-
-        if (compatibility.isExcluded) return null;
-
-        return {
-          ...normalizedProfile,
-          ...compatibility,
-          isPick: true
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.compatibilityScore - a.compatibilityScore)
-      .slice(0, limit);
-
-    res.json({
-      topPicks: profiles,
-      message: `${profiles.length} top picks selected for you based on compatibility`
-    });
-  } catch (err) {
-    console.error('Get top picks error:', err);
-    res.status(500).json({ error: 'Failed to get top picks' });
-  }
-});
 
 // 33. GET SUPERLIKES RECEIVED
 router.get('/superlikes-received', async (req, res) => {
