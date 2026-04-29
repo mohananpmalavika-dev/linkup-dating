@@ -23,6 +23,7 @@ const DISCOVERY_HUB_TABS = [
   { key: 'topPicks', label: 'Top Picks' },
   { key: 'trending', label: 'Trending' },
   { key: 'newProfiles', label: 'New' },
+  { key: 'allAccounts', label: 'All Accounts' },
   { key: 'presets', label: 'Presets' }
 ];
 const PRESET_NAME_SUGGESTIONS = ['Nearby', 'Serious', 'Creative', 'Weekend vibe'];
@@ -163,6 +164,11 @@ const getModeSummary = (tabKey, presetCount, activeFilterCount) => {
       return {
         title: 'New',
         subtitle: 'Fresh arrivals so you can meet people before the crowd does.'
+      };
+    case 'allAccounts':
+      return {
+        title: 'All Accounts',
+        subtitle: 'Browse every profile in the community without any filters.'
       };
     case 'presets':
       return {
@@ -488,6 +494,40 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     }
   };
 
+  const loadAllProfiles = async (cursor = null) => {
+    if (cursor) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setError('');
+      setProfiles([]);
+      setCurrentIndex(0);
+      loadMoreTriggered.current = false;
+    }
+
+    try {
+      const data = await datingProfileService.getDiscoveryProfiles(cursor ? { cursor, limit: 20 } : { limit: 20 });
+      const newProfiles = data.profiles || [];
+
+      if (cursor) {
+        setProfiles((currentProfiles) => [...currentProfiles, ...newProfiles]);
+      } else {
+        setProfiles(newProfiles);
+        setCurrentIndex(0);
+      }
+
+      setNoMoreProfiles(!data.hasMore && newProfiles.length === 0);
+      setNextCursor(data.nextCursor || null);
+      setDiscoveryMode('allAccounts');
+    } catch (loadError) {
+      setError('Failed to load all profiles.');
+      console.error(loadError);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
   const handleRewind = async () => {
     if (remainingRewinds <= 0) {
       return;
@@ -538,6 +578,11 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
     if (tabKey === 'newProfiles') {
       loadNewProfiles();
+      return;
+    }
+
+    if (tabKey === 'allAccounts') {
+      loadAllProfiles();
     }
   };
 
@@ -684,6 +729,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       if (discoveryMode === 'smartQueue') loadSmartQueue(nextCursor);
       else if (discoveryMode === 'trending') loadTrending(nextCursor);
       else if (discoveryMode === 'newProfiles') loadNewProfiles(nextCursor);
+      else if (discoveryMode === 'allAccounts') loadAllProfiles(nextCursor);
       else if (discoveryMode === 'regular') loadProfiles(appliedFilters, nextCursor);
     }
   };
@@ -697,6 +743,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     else if (discoveryMode === 'trending') loadTrending();
     else if (discoveryMode === 'newProfiles') loadNewProfiles();
     else if (discoveryMode === 'topPicks') loadTopPicks();
+    else if (discoveryMode === 'allAccounts') loadAllProfiles();
     else loadProfiles(appliedFilters);
   };
 
