@@ -3215,14 +3215,14 @@ router.post('/profiles', authenticateToken, async (req, res) => {
          location_country, bio, relationship_goals, interests, height,
          occupation, education, body_type, ethnicity, religion, community_preference,
          languages, conversation_style, smoking, drinking, has_kids, wants_kids,
-         profile_completion_percent, last_active
+         profile_completion_percent, created_at, updated_at, last_active
        )
        VALUES (
          $1, $2, $3, $4, $5, $6,
          $7, $8, $9, $10, $11,
          $12, $13, $14, $15, $16, $17,
          $18, $19, $20, $21, $22, $23,
-         $24, $25, $26, $27, $28, CURRENT_TIMESTAMP
+         $24, $25, $26, $27, $28, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
        )
        ON CONFLICT (user_id) DO UPDATE
        SET first_name = EXCLUDED.first_name,
