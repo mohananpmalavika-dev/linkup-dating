@@ -201,6 +201,10 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [remainingLikes, setRemainingLikes] = useState(50);
   const [remainingSuperlikes, setRemainingSuperlikes] = useState(1);
   const [remainingRewinds, setRemainingRewinds] = useState(3);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponLikesCredits, setCouponLikesCredits] = useState(0);
+  const [couponSuperlikeCredits, setCouponSuperlikeCredits] = useState(0);
   const [discoveryMode, setDiscoveryMode] = useState('smartQueue');
   const [activeHubTab, setActiveHubTab] = useState('smartQueue');
   const [subscription, setSubscription] = useState(null);
@@ -322,6 +326,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       setRemainingLikes(limitsData.remainingLikes ?? 50);
       setRemainingSuperlikes(limitsData.remainingSuperlikes ?? 1);
       setRemainingRewinds(limitsData.remainingRewinds ?? 3);
+      setCouponLikesCredits(limitsData.couponLikesCredits ?? 0);
+      setCouponSuperlikeCredits(limitsData.couponSuperlikeCredits ?? 0);
       setSubscription(subscriptionData);
     } catch (loadError) {
       console.error(loadError);

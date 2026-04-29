@@ -1946,4 +1946,237 @@ router.get('/actions-log', async (req, res) => {
   }
 });
 
+// ============ DAILY LIMITS & COUPON MANAGEMENT ============
+
+// Get current daily limits settings
+router.get('/daily-limits/settings', requireAdmin, async (req, res) => {
+  try {
+    const limitKeys = [
+      'daily_like_limit_free',
+      'daily_like_limit_premium',
+      'daily_like_limit_gold',
+      'daily_superlike_limit_free',
+      'daily_superlike_limit_premium',
+      'daily_superlike_limit_gold'
+    ];
+
+    const results = await Promise.all(
+      limitKeys.map(key => 
+        db.query('SELECT * FROM admin_settings WHERE setting_key = $1', [key])
+      )
+    );
+
+    const settings = {};
+    limitKeys.forEach((key, index) => {
+      settings[key] = results[index].rows[0]?.setting_value || null;
+    });
+
+    res.json(settings);
+  } catch (err) {
+    console.error('Get daily limits error:', err);
+    res.status(500).json({ error: 'Failed to fetch daily limits settings' });
+  }
+});
+
+// Update daily limits
+router.post('/daily-limits/settings', requireAdmin, async (req, res) => {
+  const { likeLimitFree, likeLimitPremium, likeLimitGold, superlikeLimitFree, superlikeLimitPremium, superlikeLimitGold } = req.body;
+  
+  try {
+    const updates = [
+      { key: 'daily_like_limit_free', value: likeLimitFree },
+      { key: 'daily_like_limit_premium', value: likeLimitPremium },
+      { key: 'daily_like_limit_gold', value: likeLimitGold },
+      { key: 'daily_superlike_limit_free', value: superlikeLimitFree },
+      { key: 'daily_superlike_limit_premium', value: superlikeLimitPremium },
+      { key: 'daily_superlike_limit_gold', value: superlikeLimitGold }
+    ];
+
+    await Promise.all(
+      updates.map(({ key, value }) =>
+        db.query(
+          `INSERT INTO admin_settings (setting_key, setting_value, setting_type, updated_by_admin_id, category)
+           VALUES ($1, $2, 'integer', $3, 'daily_limits')
+           ON CONFLICT (setting_key) DO UPDATE SET setting_value = $2, updated_by_admin_id = $3`,
+          [key, String(value), req.user.id]
+        )
+      )
+    );
+
+    await recordAdminAction(db, {
+      adminId: req.user.id,
+      actionType: 'update_daily_limits',
+      description: `Updated daily limits`,
+      metadata: { likeLimitFree, likeLimitPremium, likeLimitGold, superlikeLimitFree, superlikeLimitPremium, superlikeLimitGold }
+    });
+
+    res.json({ message: 'Daily limits updated successfully' });
+  } catch (err) {
+    console.error('Update daily limits error:', err);
+    res.status(500).json({ error: 'Failed to update daily limits' });
+  }
+});
+
+// Create coupon
+router.post('/coupons', requireAdmin, async (req, res) => {
+  const { code, couponType, likesValue, superlikesValue, maxRedemptions, expiryDate, description, minUserLevel, targetUserIds } = req.body;
+
+  try {
+    if (!code || !couponType) {
+      return res.status(400).json({ error: 'Code and coupon type are required' });
+    }
+
+    const upperCode = code.toUpperCase();
+    const existingResult = await db.query('SELECT id FROM coupons WHERE code = $1', [upperCode]);
+    if (existingResult.rows.length > 0) {
+      return res.status(400).json({ error: 'Coupon code already exists' });
+    }
+
+    const result = await db.query(
+      `INSERT INTO coupons (code, coupon_type, likes_value, superlikes_value, max_redemptions, expiry_date, description, created_by_admin_id, min_user_level, target_user_ids)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [upperCode, couponType, likesValue || 0, superlikesValue || 0, maxRedemptions || null, expiryDate || null, description, req.user.id, minUserLevel || 0, targetUserIds || null]
+    );
+
+    await recordAdminAction(db, {
+      adminId: req.user.id,
+      actionType: 'create_coupon',
+      description: `Created coupon ${upperCode}`,
+      metadata: { couponCode: upperCode, couponType, likesValue, superlikesValue }
+    });
+
+    res.json({ message: 'Coupon created successfully', coupon: result.rows[0] });
+  } catch (err) {
+    console.error('Create coupon error:', err);
+    res.status(500).json({ error: 'Failed to create coupon' });
+  }
+});
+
+// Get all coupons
+router.get('/coupons', requireAdmin, async (req, res) => {
+  const { page = 1, limit = 20, isActive } = req.query;
+  const offset = (Math.max(1, parseInt(page, 10)) - 1) * Math.max(1, parseInt(limit, 10));
+
+  try {
+    let query = 'SELECT * FROM coupons';
+    const params = [];
+
+    if (isActive !== undefined) {
+      query += ` WHERE is_active = $1`;
+      params.push(isActive === 'true');
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT $' + (params.length + 1) + ' OFFSET $' + (params.length + 2);
+    params.push(Math.max(1, parseInt(limit, 10)), offset);
+
+    const result = await db.query(query, params);
+    const countResult = await db.query(
+      `SELECT COUNT(*) as count FROM coupons ${isActive !== undefined ? 'WHERE is_active = $1' : ''}`,
+      isActive !== undefined ? [isActive === 'true'] : []
+    );
+
+    res.json({
+      coupons: result.rows,
+      total: parseInt(countResult.rows[0].count, 10),
+      page: Math.max(1, parseInt(page, 10)),
+      limit: Math.max(1, parseInt(limit, 10))
+    });
+  } catch (err) {
+    console.error('Get coupons error:', err);
+    res.status(500).json({ error: 'Failed to fetch coupons' });
+  }
+});
+
+// Update coupon
+router.put('/coupons/:couponId', requireAdmin, async (req, res) => {
+  const { couponId } = req.params;
+  const { isActive, maxRedemptions, expiryDate, description } = req.body;
+
+  try {
+    const couponIdInt = parseInt(couponId, 10);
+    const result = await db.query(
+      `UPDATE coupons 
+       SET is_active = COALESCE($2, is_active),
+           max_redemptions = COALESCE($3, max_redemptions),
+           expiry_date = COALESCE($4::timestamp, expiry_date),
+           description = COALESCE($5, description)
+       WHERE id = $1
+       RETURNING *`,
+      [couponIdInt, isActive, maxRedemptions, expiryDate, description]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Coupon not found' });
+    }
+
+    await recordAdminAction(db, {
+      adminId: req.user.id,
+      actionType: 'update_coupon',
+      description: `Updated coupon ${result.rows[0].code}`,
+      metadata: { couponId: couponIdInt }
+    });
+
+    res.json({ message: 'Coupon updated successfully', coupon: result.rows[0] });
+  } catch (err) {
+    console.error('Update coupon error:', err);
+    res.status(500).json({ error: 'Failed to update coupon' });
+  }
+});
+
+// Delete coupon
+router.delete('/coupons/:couponId', requireAdmin, async (req, res) => {
+  const { couponId } = req.params;
+
+  try {
+    const couponIdInt = parseInt(couponId, 10);
+    const couponResult = await db.query('SELECT code FROM coupons WHERE id = $1', [couponIdInt]);
+    
+    if (couponResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Coupon not found' });
+    }
+
+    const couponCode = couponResult.rows[0].code;
+
+    // Delete related usages first
+    await db.query('DELETE FROM coupon_usages WHERE coupon_id = $1', [couponIdInt]);
+    // Then delete coupon
+    await db.query('DELETE FROM coupons WHERE id = $1', [couponIdInt]);
+
+    await recordAdminAction(db, {
+      adminId: req.user.id,
+      actionType: 'delete_coupon',
+      description: `Deleted coupon ${couponCode}`,
+      metadata: { couponId: couponIdInt }
+    });
+
+    res.json({ message: 'Coupon deleted successfully' });
+  } catch (err) {
+    console.error('Delete coupon error:', err);
+    res.status(500).json({ error: 'Failed to delete coupon' });
+  }
+});
+
+// Get coupon usage analytics
+router.get('/coupons/:couponId/usage', requireAdmin, async (req, res) => {
+  const { couponId } = req.params;
+
+  try {
+    const couponIdInt = parseInt(couponId, 10);
+    const result = await db.query(
+      `SELECT cu.*, u.first_name, u.email
+       FROM coupon_usages cu
+       JOIN users u ON cu.user_id = u.id
+       WHERE cu.coupon_id = $1
+       ORDER BY cu.redeemed_at DESC`,
+      [couponIdInt]
+    );
+
+    res.json({ usages: result.rows, total: result.rows.length });
+  } catch (err) {
+    console.error('Get coupon usage error:', err);
+    res.status(500).json({ error: 'Failed to fetch coupon usage' });
+  }
+});
+
 module.exports = router;

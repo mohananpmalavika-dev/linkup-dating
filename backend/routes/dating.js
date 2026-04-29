@@ -297,9 +297,63 @@ const getSubscriptionSnapshotForUser = async (userId) => {
   };
 };
 
+// Get dynamic daily limits from admin settings
+const getConfiguredDailyLimits = async () => {
+  try {
+    const settings = await Promise.all([
+      db.query('SELECT setting_value FROM admin_settings WHERE setting_key = $1', ['daily_like_limit_free']),
+      db.query('SELECT setting_value FROM admin_settings WHERE setting_key = $1', ['daily_like_limit_premium']),
+      db.query('SELECT setting_value FROM admin_settings WHERE setting_key = $1', ['daily_like_limit_gold']),
+      db.query('SELECT setting_value FROM admin_settings WHERE setting_key = $1', ['daily_superlike_limit_free']),
+      db.query('SELECT setting_value FROM admin_settings WHERE setting_key = $1', ['daily_superlike_limit_premium']),
+      db.query('SELECT setting_value FROM admin_settings WHERE setting_key = $1', ['daily_superlike_limit_gold'])
+    ]);
+
+    return {
+      likeLimitFree: parseInt(settings[0].rows[0]?.setting_value || '50', 10),
+      likeLimitPremium: parseInt(settings[1].rows[0]?.setting_value || '250', 10),
+      likeLimitGold: parseInt(settings[2].rows[0]?.setting_value || '500', 10),
+      superlikeLimitFree: parseInt(settings[3].rows[0]?.setting_value || '1', 10),
+      superlikeLimitPremium: parseInt(settings[4].rows[0]?.setting_value || '5', 10),
+      superlikeLimitGold: parseInt(settings[5].rows[0]?.setting_value || '10', 10)
+    };
+  } catch (error) {
+    console.error('Error getting configured daily limits:', error);
+    // Return defaults if settings not found
+    return {
+      likeLimitFree: 50,
+      likeLimitPremium: 250,
+      likeLimitGold: 500,
+      superlikeLimitFree: 1,
+      superlikeLimitPremium: 5,
+      superlikeLimitGold: 10
+    };
+  }
+};
+
+// Get coupon credits for a user
+const getUserCouponCredits = async (userId) => {
+  try {
+    const result = await db.query(
+      `SELECT COALESCE(SUM(likes_granted), 0) as total_likes, COALESCE(SUM(superlikes_granted), 0) as total_superlikes
+       FROM coupon_usages
+       WHERE user_id = $1`,
+      [userId]
+    );
+    const row = result.rows[0] || {};
+    return {
+      couponLikesCredits: parseInt(row.total_likes, 10) || 0,
+      couponSuperlikeCredits: parseInt(row.total_superlikes, 10) || 0
+    };
+  } catch (error) {
+    console.error('Error getting user coupon credits:', error);
+    return { couponLikesCredits: 0, couponSuperlikeCredits: 0 };
+  }
+};
+
 const getDailyLimitSnapshot = async (userId) => {
   const today = new Date().toISOString().split('T')[0];
-  const [analyticsResult, subscriptionAccess, rewardBalance] = await Promise.all([
+  const [analyticsResult, subscriptionAccess, rewardBalance, configuredLimits, couponCredits] = await Promise.all([
     optionalQuery(
       `SELECT likes_sent, superlikes_sent, rewinds_sent, boosts_used
        FROM user_analytics
@@ -308,7 +362,9 @@ const getDailyLimitSnapshot = async (userId) => {
       []
     ),
     getSubscriptionAccessForUser(userId),
-    getRewardBalanceForUser(userId)
+    getRewardBalanceForUser(userId),
+    getConfiguredDailyLimits(),
+    getUserCouponCredits(userId)
   ]);
 
   const analyticsRow = analyticsResult.rows[0] || {};
@@ -317,11 +373,22 @@ const getDailyLimitSnapshot = async (userId) => {
   const rewindsSent = countRowValue(analyticsRow.rewinds_sent);
   const boostsUsedToday = countRowValue(analyticsRow.boosts_used);
 
-  const likeLimit = 50;
-  const superlikeLimit = subscriptionAccess.isGold ? 10 : subscriptionAccess.isPremium ? 5 : 1;
+  // Determine base limits based on subscription
+  let likeLimit = configuredLimits.likeLimitFree;
+  let superlikeLimit = configuredLimits.superlikeLimitFree;
+  
+  if (subscriptionAccess.isGold) {
+    likeLimit = configuredLimits.likeLimitGold;
+    superlikeLimit = configuredLimits.superlikeLimitGold;
+  } else if (subscriptionAccess.isPremium) {
+    likeLimit = configuredLimits.likeLimitPremium;
+    superlikeLimit = configuredLimits.superlikeLimitPremium;
+  }
+
   const rewindLimit = 3;
   const boostLimit = subscriptionAccess.isGold ? 5 : subscriptionAccess.isPremium ? 1 : 0;
   const remainingBaseSuperlikes = Math.max(0, superlikeLimit - superlikesSent);
+  const remainingBaseLikes = Math.max(0, likeLimit - likesSent);
   const remainingBaseBoosts = Math.max(0, boostLimit - boostsUsedToday);
 
   return {
@@ -333,14 +400,16 @@ const getDailyLimitSnapshot = async (userId) => {
     superlikesSent,
     rewindsSent,
     boostsUsedToday,
-    remainingLikes: Math.max(0, likeLimit - likesSent),
-    remainingSuperlikes: remainingBaseSuperlikes + rewardBalance.superlikeCredits,
+    remainingLikes: remainingBaseLikes + couponCredits.couponLikesCredits + rewardBalance.boostCredits,
+    remainingSuperlikes: remainingBaseSuperlikes + couponCredits.couponSuperlikeCredits + rewardBalance.superlikeCredits,
     remainingRewinds: Math.max(0, rewindLimit - rewindsSent),
     remainingBaseBoosts,
     remainingBoostCredits: rewardBalance.boostCredits,
     remainingBoosts: remainingBaseBoosts + rewardBalance.boostCredits,
     rewardSuperlikeCredits: rewardBalance.superlikeCredits,
     rewardBoostCredits: rewardBalance.boostCredits,
+    couponLikesCredits: couponCredits.couponLikesCredits,
+    couponSuperlikeCredits: couponCredits.couponSuperlikeCredits,
     resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     rewardBalance,
     subscriptionAccess
@@ -5811,6 +5880,8 @@ router.get('/daily-limits', authenticateToken, async (req, res) => {
       remainingBoostCredits: limits.remainingBoostCredits,
       rewardSuperlikeCredits: limits.rewardSuperlikeCredits,
       rewardBoostCredits: limits.rewardBoostCredits,
+      couponLikesCredits: limits.couponLikesCredits,
+      couponSuperlikeCredits: limits.couponSuperlikeCredits,
       resetsAt: limits.resetsAt
     });
   } catch (err) {
@@ -16935,6 +17006,121 @@ router.delete('/status-preferences/:matchId', authenticateToken, async (req, res
   } catch (error) {
     console.error('Error deleting status preference:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============ COUPON REDEMPTION ============
+
+// Redeem a coupon code
+router.post('/redeem-coupon', authenticateToken, async (req, res) => {
+  const { couponCode } = req.body;
+  const userId = req.user.id;
+
+  try {
+    if (!couponCode || !couponCode.trim()) {
+      return res.status(400).json({ error: 'Coupon code is required' });
+    }
+
+    const upperCode = couponCode.toUpperCase().trim();
+
+    // Get coupon details
+    const couponResult = await db.query(
+      `SELECT * FROM coupons WHERE code = $1`,
+      [upperCode]
+    );
+
+    if (couponResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Invalid coupon code' });
+    }
+
+    const coupon = couponResult.rows[0];
+
+    // Validate coupon
+    if (!coupon.is_active) {
+      return res.status(400).json({ error: 'This coupon is no longer active' });
+    }
+
+    if (coupon.start_date && new Date(coupon.start_date) > new Date()) {
+      return res.status(400).json({ error: 'This coupon is not yet available' });
+    }
+
+    if (coupon.expiry_date && new Date(coupon.expiry_date) < new Date()) {
+      return res.status(400).json({ error: 'This coupon has expired' });
+    }
+
+    if (coupon.max_redemptions && coupon.current_redemptions >= coupon.max_redemptions) {
+      return res.status(400).json({ error: 'This coupon has reached its redemption limit' });
+    }
+
+    // Check if user has already redeemed this coupon
+    const existingUsageResult = await db.query(
+      `SELECT id FROM coupon_usages WHERE coupon_id = $1 AND user_id = $2`,
+      [coupon.id, userId]
+    );
+
+    if (existingUsageResult.rows.length > 0) {
+      return res.status(400).json({ error: 'You have already redeemed this coupon' });
+    }
+
+    // Check target users if specified
+    if (coupon.target_user_ids) {
+      const targetIds = coupon.target_user_ids.split(',').map(id => parseInt(id.trim(), 10));
+      if (!targetIds.includes(userId)) {
+        return res.status(403).json({ error: 'This coupon is not available for your account' });
+      }
+    }
+
+    // Check minimum user level if specified
+    if (coupon.min_user_level > 0) {
+      const userResult = await db.query(
+        `SELECT user_level FROM users WHERE id = $1`,
+        [userId]
+      );
+      const userLevel = userResult.rows[0]?.user_level || 0;
+      if (userLevel < coupon.min_user_level) {
+        return res.status(403).json({ error: `Minimum user level ${coupon.min_user_level} required for this coupon` });
+      }
+    }
+
+    // Record coupon usage
+    const usageResult = await db.query(
+      `INSERT INTO coupon_usages (coupon_id, user_id, likes_granted, superlikes_granted, ip_address, user_agent)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [
+        coupon.id,
+        userId,
+        coupon.likes_value || 0,
+        coupon.superlikes_value || 0,
+        req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
+        req.headers['user-agent'] || null
+      ]
+    );
+
+    // Update coupon redemption count
+    await db.query(
+      `UPDATE coupons SET current_redemptions = current_redemptions + 1 WHERE id = $1`,
+      [coupon.id]
+    );
+
+    // Get updated daily limits with coupon credits
+    const updatedLimits = await getDailyLimitSnapshot(userId);
+
+    res.json({
+      message: 'Coupon redeemed successfully!',
+      usage: usageResult.rows[0],
+      likesGranted: coupon.likes_value || 0,
+      superlikesGranted: coupon.superlikes_value || 0,
+      updatedLimits: {
+        remainingLikes: updatedLimits.remainingLikes,
+        remainingSuperlikes: updatedLimits.remainingSuperlikes,
+        couponLikesCredits: updatedLimits.couponLikesCredits,
+        couponSuperlikeCredits: updatedLimits.couponSuperlikeCredits
+      }
+    });
+  } catch (err) {
+    console.error('Error redeeming coupon:', err);
+    res.status(500).json({ error: 'Failed to redeem coupon' });
   }
 });
 
