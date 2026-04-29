@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from '../router';
 import AccountSettings from './AccountSettings';
 import { VideoIntroUploader } from './VideoIntroUploader';
 import { VideoAuthenticationResult } from './VideoAuthenticationResult';
@@ -115,6 +116,7 @@ const DatingProfile = ({ onLogout }) => {
   const [showVideoIntroUploader, setShowVideoIntroUploader] = useState(false);
   const [videoAuthResult, setVideoAuthResult] = useState(null);
   const [videoAuthLoading, setVideoAuthLoading] = useState(false);
+  const navigate = useNavigate();
 
   const completionChecklist = [
     {
@@ -2130,6 +2132,24 @@ const DatingProfile = ({ onLogout }) => {
               <p className="profile-inline-error">{error}</p>
             </div>
           ) : null}
+
+          {/* Quick Links Section */}
+          <div className="profile-section">
+            <div className="section-header-row">
+              <div>
+                <h3>Quick Links</h3>
+                <p>Access all your tools and features in one place.</p>
+              </div>
+            </div>
+            <div className="profile-actions">
+              <button onClick={() => navigate('/achievements')} className="btn-save">🏆 Achievements</button>
+              <button onClick={() => navigate('/streaks')} className="btn-save">🔥 Streaks</button>
+              <button onClick={() => navigate('/referrals')} className="btn-save">🎁 Referrals</button>
+              <button onClick={() => navigate('/date-safety')} className="btn-save">🛡️ Safety Kit</button>
+              <button onClick={() => navigate('/profile-reset')} className="btn-save">🔄 Profile Reset</button>
+              <button onClick={() => navigate('/photo-ab-testing')} className="btn-save">📸 Photo A/B Test</button>
+            </div>
+          </div>
 
           <div className="profile-actions">
             <button onClick={() => setEditing(true)} className="btn-edit">

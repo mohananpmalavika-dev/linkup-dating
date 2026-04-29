@@ -1246,9 +1246,14 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
                 <h2>{currentProfile.firstName}</h2>
                 <span className="age">{currentProfile.age}</span>
               </div>
-              {currentProfile.profileVerified ? (
-                <div className="verified-badge" title="Verified Profile">V</div>
-              ) : null}
+              <div className="badge-row">
+                {currentProfile.profileVerified ? (
+                  <div className="verified-badge" title="Verified Profile">V</div>
+                ) : null}
+                {currentProfile.videoAuthenticationStatus === 'verified' || currentProfile.videoAuthenticationStatus === 'approved' ? (
+                  <div className="video-verified-badge" title="Video Verified">🎥</div>
+                ) : null}
+              </div>
             </div>
 
             <div className="location">

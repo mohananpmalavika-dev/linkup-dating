@@ -628,6 +628,12 @@
   opacity: 0.88;
 }
 
+.badge-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .verified-badge {
   width: 34px;
   height: 34px;
@@ -639,6 +645,19 @@
   justify-content: center;
   font-weight: 800;
   font-size: 13px;
+}
+
+.video-verified-badge {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 100%);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 4px 12px rgba(236, 72, 153, 0.35);
 }
 
 .location,
