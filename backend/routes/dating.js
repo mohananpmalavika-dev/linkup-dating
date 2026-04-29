@@ -5718,8 +5718,8 @@ router.post('/interactions/superlike', authenticateToken, async (req, res) => {
     }
 
     await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, superlikes_sent)
-       VALUES ($1, $2, 1)
+      `INSERT INTO user_analytics (user_id, activity_date, superlikes_sent, created_at)
+       VALUES ($1, $2, 1, NOW())
        ON CONFLICT (user_id, activity_date) DO UPDATE
        SET superlikes_sent = user_analytics.superlikes_sent + 1`,
       [fromUserId, today]
@@ -5895,8 +5895,8 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
 
     try {
       await db.query(
-        `INSERT INTO user_analytics (user_id, activity_date, likes_sent)
-         VALUES ($1, $2, 1)
+        `INSERT INTO user_analytics (user_id, activity_date, likes_sent, created_at)
+         VALUES ($1, $2, 1, NOW())
          ON CONFLICT (user_id, activity_date) DO UPDATE
          SET likes_sent = user_analytics.likes_sent + 1`,
         [fromUserId, today]
@@ -6125,8 +6125,8 @@ router.post('/interactions/rewind', async (req, res) => {
 
     // Update rewind count
     await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent)
-       VALUES ($1, $2, 1)
+      `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent, created_at)
+       VALUES ($1, $2, 1, NOW())
        ON CONFLICT (user_id, activity_date) DO UPDATE
        SET rewinds_sent = user_analytics.rewinds_sent + 1`,
       [userId, today]
@@ -6885,8 +6885,8 @@ router.post('/profiles/me/boost', async (req, res) => {
 
     // Record boost
     await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, boosts_used)
-       VALUES ($1, $2, 1)
+      `INSERT INTO user_analytics (user_id, activity_date, boosts_used, created_at)
+       VALUES ($1, $2, 1, NOW())
        ON CONFLICT (user_id, activity_date) DO UPDATE
        SET boosts_used = user_analytics.boosts_used + 1`,
       [userId, new Date().toISOString().split('T')[0]]
@@ -8513,15 +8513,15 @@ const checkAndCreateMutualMatch = async (userId1, userId2) => {
       // Track in analytics
       const today = new Date().toISOString().split('T')[0];
       await db.query(
-        `INSERT INTO user_analytics (user_id, activity_date, matches_made)
-         VALUES ($1, $2::date, 1)
+        `INSERT INTO user_analytics (user_id, activity_date, matches_made, created_at)
+         VALUES ($1, $2::date, 1, NOW())
          ON CONFLICT (user_id, activity_date) DO UPDATE
          SET matches_made = user_analytics.matches_made + 1`,
         [userId1, today]
       );
       await db.query(
-        `INSERT INTO user_analytics (user_id, activity_date, matches_made)
-         VALUES ($1, $2::date, 1)
+        `INSERT INTO user_analytics (user_id, activity_date, matches_made, created_at)
+         VALUES ($1, $2::date, 1, NOW())
          ON CONFLICT (user_id, activity_date) DO UPDATE
          SET matches_made = user_analytics.matches_made + 1`,
         [userId2, today]
@@ -8700,8 +8700,8 @@ router.post('/interactions/rewind', async (req, res) => {
 
     // Update analytics
     await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent)
-       VALUES ($1, $2::date, 1)
+      `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent, created_at)
+       VALUES ($1, $2::date, 1, NOW())
        ON CONFLICT (user_id, activity_date) DO UPDATE
        SET rewinds_sent = user_analytics.rewinds_sent + 1`,
       [userId, today]
@@ -8943,8 +8943,8 @@ router.post('/profile-views/:userId', async (req, res) => {
     // Update analytics
     const today = new Date().toISOString().split('T')[0];
     await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, profiles_viewed)
-       VALUES ($1, $2::date, 1)
+      `INSERT INTO user_analytics (user_id, activity_date, profiles_viewed, created_at)
+       VALUES ($1, $2::date, 1, NOW())
        ON CONFLICT (user_id, activity_date) DO UPDATE
        SET profiles_viewed = user_analytics.profiles_viewed + 1`,
       [viewerUserId, today]
@@ -16078,8 +16078,8 @@ router.post('/rewind/restore/:profileId', authenticateToken, async (req, res) =>
     // Track analytics
     try {
       await db.query(
-        `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent)
-         VALUES ($1, $2, 1)
+        `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent, created_at)
+         VALUES ($1, $2, 1, NOW())
          ON CONFLICT (user_id, activity_date) DO UPDATE
          SET rewinds_sent = user_analytics.rewinds_sent + 1`,
         [userId, today]
@@ -16146,8 +16146,8 @@ router.post('/rewind/record-pass', authenticateToken, async (req, res) => {
     try {
       const today = new Date().toISOString().split('T')[0];
       await db.query(
-        `INSERT INTO user_analytics (user_id, activity_date, profiles_viewed)
-         VALUES ($1, $2, 1)
+        `INSERT INTO user_analytics (user_id, activity_date, profiles_viewed, created_at)
+         VALUES ($1, $2, 1, NOW())
          ON CONFLICT (user_id, activity_date) DO UPDATE
          SET profiles_viewed = user_analytics.profiles_viewed + 1`,
         [userId, today]
