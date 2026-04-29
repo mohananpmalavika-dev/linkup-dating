@@ -3119,7 +3119,7 @@ const enrichMatchesWithJourney = async (currentUserId, matches = []) => {
 };
 
 // 1. CREATE PROFILE (Signup Step 2 & 3)
-router.post('/profiles', async (req, res) => {
+router.post('/profiles', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const {
@@ -3288,7 +3288,7 @@ router.post('/profiles', async (req, res) => {
 });
 
 // 2. GET MY PROFILE
-router.get('/profiles/me', async (req, res) => {
+router.get('/profiles/me', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await db.query(
@@ -3350,7 +3350,7 @@ router.get('/profiles/:userId', async (req, res) => {
 });
 
 // 4. UPDATE PROFILE
-router.put('/profiles/me', async (req, res) => {
+router.put('/profiles/me', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const {
@@ -3500,7 +3500,7 @@ router.put('/profiles/me', async (req, res) => {
 });
 
 // 5. UPLOAD PROFILE PHOTOS
-router.post('/profiles/me/photos', async (req, res) => {
+router.post('/profiles/me/photos', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const photos = await collectPhotosFromRequest(req);
@@ -3601,7 +3601,7 @@ router.post('/profiles/me/photos', async (req, res) => {
 });
 
 // 6. SEARCH PROFILES
-router.post('/search', async (req, res) => {
+router.post('/search', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const {
@@ -3948,7 +3948,7 @@ const buildDiscoveryQuery = ({
 };
 
 // 7. GET DISCOVERY PROFILES (For swipe interface) — with DB-level filtering and cursor pagination
-router.get('/discovery', async (req, res) => {
+router.get('/discovery', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const mode = req.query.mode || 'detail'; // 'detail' or 'quick_view'
@@ -4096,7 +4096,7 @@ router.get('/discovery', async (req, res) => {
 });
 
 // 7b. GET SMART DISCOVERY QUEUE (Personalized multi-factor ranking) — cursor pagination
-router.get('/discovery-queue', async (req, res) => {
+router.get('/discovery-queue', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || CURSOR_PAGE_SIZE, 30);
@@ -4339,7 +4339,7 @@ router.get('/discovery-queue', async (req, res) => {
 });
 
 // 7c. GET TRENDING PROFILES — cursor pagination + caching
-router.get('/trending', async (req, res) => {
+router.get('/trending', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || CURSOR_PAGE_SIZE, 30);
@@ -4429,7 +4429,7 @@ router.get('/trending', async (req, res) => {
 });
 
 // 7d. GET NEW PROFILES — cursor pagination + caching
-router.get('/new-profiles', async (req, res) => {
+router.get('/new-profiles', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || CURSOR_PAGE_SIZE, 30);
@@ -4499,7 +4499,7 @@ router.get('/new-profiles', async (req, res) => {
 
 // 8. LIKE PROFILE
 // 9. PASS PROFILE
-router.post('/interactions/pass', async (req, res) => {
+router.post('/interactions/pass', authenticateToken, async (req, res) => {
   try {
     const fromUserId = req.user.id;
     const { toUserId, targetUserId } = req.body;
@@ -4535,7 +4535,7 @@ router.post('/interactions/pass', async (req, res) => {
 });
 
 // 10. GET MATCHES
-router.get('/matches', async (req, res) => {
+router.get('/matches', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Number.parseInt(req.query.limit, 10) || 20;
@@ -4684,7 +4684,7 @@ router.get('/matches/by-id/:matchId', async (req, res) => {
   }
 });
 
-router.patch('/matches/:matchId/state', async (req, res) => {
+router.patch('/matches/:matchId/state', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const matchId = normalizeInteger(req.params.matchId);
@@ -4817,7 +4817,7 @@ router.post('/matches/:matchId/unmatch', async (req, res) => {
 });
 
 // 13. GET LIKES RECEIVED
-router.get('/interactions/likes', async (req, res) => {
+router.get('/interactions/likes', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = req.query.limit || 20;
@@ -4843,7 +4843,7 @@ router.get('/interactions/likes', async (req, res) => {
 });
 
 // 13b. ALIAS - GET LIKES RECEIVED (alternate endpoint)
-router.get('/likes-received', async (req, res) => {
+router.get('/likes-received', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = req.query.limit || 20;
@@ -4869,7 +4869,7 @@ router.get('/likes-received', async (req, res) => {
 });
 
 // 14. GET INTERACTION HISTORY
-router.get('/interactions/history', async (req, res) => {
+router.get('/interactions/history', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = req.query.limit || 100;
@@ -4890,7 +4890,7 @@ router.get('/interactions/history', async (req, res) => {
 });
 
 // 14b. ALIAS - GET INTERACTION HISTORY (alternate endpoint)
-router.get('/interaction-history', async (req, res) => {
+router.get('/interaction-history', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = req.query.limit || 100;

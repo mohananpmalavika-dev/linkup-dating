@@ -3,6 +3,15 @@ import axios from "axios";
 
 jest.mock("axios");
 
+const mockAxiosInstance = {
+  interceptors: {
+    request: { use: jest.fn() },
+    response: { use: jest.fn() },
+  },
+};
+
+axios.create.mockReturnValue(mockAxiosInstance);
+
 const mockSocket = {
   on: jest.fn(),
   emit: jest.fn(),
