@@ -137,8 +137,7 @@ const DatingProfile = ({ onLogout }) => {
   const [showMomentsUpload, setShowMomentsUpload] = useState(false);
   const { userMoments, stats: momentsStats, loading: momentsLoading, fetchMoments, uploadMoment } = useMoments();
 
-  // Analytics Dashboard
-  const [showAnalytics, setShowAnalytics] = useState(false);
+// Analytics Dashboard
   const { personalStats, profilePerformance, matchRatePercentage, profileViews, likesReceived, recommendationCount, fetchAnalytics } = useAnalytics();
 
   // Video Profile
