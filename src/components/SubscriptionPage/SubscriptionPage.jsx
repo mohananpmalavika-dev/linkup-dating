@@ -46,9 +46,9 @@ const SubscriptionPage = ({ user, onSubscriptionChange }) => {
 
   const fetchReceipts = async () => {
     try {
-      const response = await axios.get('/payments/receipts', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });piClient.get('/payments/receipts'atch (err) {
+      const response = await apiClient.get('/payments/receipts');
+      setReceipts(response.data.receipts || []);
+    } catch (err) {
       console.error('Failed to fetch receipts:', err);
     }
   };
@@ -65,10 +65,9 @@ const SubscriptionPage = ({ user, onSubscriptionChange }) => {
 
     try {
       setLoading(true);
-      const response = await axios.post(
+      const response = await apiClient.post(
         '/payments/cancel-subscription',
-        {},
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        {}
       );
 
       if (response.data.success) {
@@ -294,14 +293,13 @@ const CheckoutModal = ({ plan, onClose, onSuccess }) => {
 
     try {
       // Step 1: Create order
-      const orderResponse = await axios.post(
+      const orderResponse = await apiClient.post(
         '/payments/create-order',
         {
           planId: plan.id,
           planName: plan.name,
           amount: plan.price
-        },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+        }
       );
 
       const { orderId, keyId } = orderResponse.data;
@@ -317,7 +315,7 @@ const CheckoutModal = ({ plan, onClose, onSuccess }) => {
         handler: async (response) => {
           // Step 3: Verify payment
           try {
-            const verifyResponse = await axios.post(
+            const verifyResponse = await apiClient.post(
               '/payments/verify',
               {
                 orderId: orderId,
@@ -325,8 +323,7 @@ const CheckoutModal = ({ plan, onClose, onSuccess }) => {
                 signature: response.razorpay_signature,
                 planId: plan.id,
                 amount: plan.price
-              },
-              { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+              }
             );
 
             if (verifyResponse.data.success) {
