@@ -29,15 +29,26 @@ const chatroomService = {
   // Create a new chatroom
   createChatroom: async (name, description = '', isPublic = true, maxMembers = 100) => {
     try {
+      console.log('createChatroom called with:', { name, description, isPublic, maxMembers });
+      const token = localStorage.getItem('token');
+      console.log('Token available:', !!token);
+      
       const response = await axios.post(`${API_URL}`, {
         name,
         description,
         isPublic,
         maxMembers
+      }, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
+      console.log('createChatroom response:', response.data);
       return response.data;
     } catch (error) {
-      throw error.response?.data?.error || 'Failed to create chatroom';
+      console.error('createChatroom error response:', error.response);
+      console.error('createChatroom error:', error);
+      throw error.response?.data?.error || error.message || 'Failed to create chatroom';
     }
   },
 

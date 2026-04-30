@@ -79,53 +79,88 @@ router.get('/:chatroomId', async (req, res) => {
 
 // CREATE CHATROOM (authenticated users only)
 router.post('/', async (req, res) => {
+  let client;
   try {
     const userId = req.user?.id;
+    console.log('CREATE CHATROOM - Request received with user:', userId);
+    console.log('CREATE CHATROOM - req.user:', req.user);
+    
     if (!userId) {
       console.warn('CREATE CHATROOM - No user ID in request');
-      return res.status(401).json({ error: 'Unauthorized' });
+      console.warn('CREATE CHATROOM - Auth header:', req.headers['authorization']);
+      return res.status(401).json({ error: 'Unauthorized: No user ID' });
     }
 
     const { name, description, isPublic, maxMembers } = req.body;
+    console.log('CREATE CHATROOM - Body received:', { name, description, isPublic, maxMembers });
 
-    if (!name) {
-      console.warn('CREATE CHATROOM - No name provided');
+    if (!name || !name.trim()) {
+      console.warn('CREATE CHATROOM - No name or empty name provided');
       return res.status(400).json({ error: 'Chatroom name required' });
     }
 
-    console.log('CREATE CHATROOM - Attempting to create:', { userId, name, isPublic });
+    console.log('CREATE CHATROOM - Attempting to create:', { userId, name, isPublic, maxMembers });
 
+    // Start a transaction
     const result = await db.query(
       `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [userId, name, description || '', isPublic !== false, maxMembers || 100]
+      [userId, name.trim(), description?.trim() || '', isPublic !== false, maxMembers || 100]
     );
+
+    if (!result.rows || result.rows.length === 0) {
+      console.error('CREATE CHATROOM - No rows returned from INSERT');
+      return res.status(500).json({ error: 'Failed to create chatroom' });
+    }
 
     const chatroomId = result.rows[0].id;
     console.log('CREATE CHATROOM - Created with ID:', chatroomId);
 
     // Add creator as first member
-    await db.query(
+    const memberResult = await db.query(
       `INSERT INTO chatroom_members (chatroom_id, user_id)
-       VALUES ($1, $2)`,
+       VALUES ($1, $2)
+       RETURNING *`,
       [chatroomId, userId]
     );
+
+    if (!memberResult.rows || memberResult.rows.length === 0) {
+      console.error('CREATE CHATROOM - Failed to add creator as member');
+      // Still return success since chatroom was created
+    }
 
     console.log('CREATE CHATROOM - Success, user added as member');
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Create chatroom error:', err);
-    console.error('Error details:', {
+    console.error('Create chatroom error stack:', err.stack);
+    console.error('Create chatroom error details:', {
       code: err.code,
       message: err.message,
       detail: err.detail,
       table: err.table,
-      column: err.column
+      column: err.column,
+      severity: err.severity,
+      position: err.position
     });
+
+    // More specific error messages
+    let errorMessage = 'Failed to create chatroom';
+    if (err.code === '23505') {
+      errorMessage = 'Chatroom name already exists';
+    } else if (err.code === '23502') {
+      errorMessage = 'Missing required fields';
+    } else if (err.code === '23503') {
+      errorMessage = 'User not found';
+    } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+      errorMessage = 'Database connection failed';
+    }
+
     res.status(500).json({ 
-      error: 'Failed to create chatroom',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      code: process.env.NODE_ENV === 'development' ? err.code : undefined
     });
   }
 });

@@ -41,25 +41,48 @@ const ChatRooms = ({ onSelectChatroom, onBack }) => {
   }, [loadChatrooms]);
 
   const handleCreateChatroom = async () => {
-    if (!newChatroomName.trim()) {
+    // Trim whitespace
+    const trimmedName = newChatroomName.trim();
+    const trimmedDesc = newChatroomDesc.trim();
+
+    if (!trimmedName) {
       setError('Chatroom name required');
       return;
     }
 
+    if (trimmedName.length < 3) {
+      setError('Chatroom name must be at least 3 characters');
+      return;
+    }
+
     try {
+      console.log('handleCreateChatroom - Creating chatroom:', {
+        name: trimmedName,
+        description: trimmedDesc
+      });
+
+      setLoading(true);
       const newRoom = await chatroomService.createChatroom(
-        newChatroomName,
-        newChatroomDesc,
+        trimmedName,
+        trimmedDesc,
         true,
         100
       );
+
+      console.log('handleCreateChatroom - Success:', newRoom);
       setChatrooms((currentChatrooms) => [newRoom, ...currentChatrooms]);
       setNewChatroomName('');
       setNewChatroomDesc('');
       setShowCreateModal(false);
+      setError('');
     } catch (createError) {
-      setError('Failed to create chatroom');
-      console.error(createError);
+      console.error('handleCreateChatroom - Error:', createError);
+      const errorMsg = typeof createError === 'string' 
+        ? createError 
+        : createError?.message || 'Failed to create chatroom';
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
     }
   };
 
