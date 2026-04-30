@@ -737,13 +737,18 @@ const AppContent = () => {
   };
 
   const handleStartVideoVerification = () => {
-    // Navigate to video verification page with intent to verify
-    navigate('/video-verification-call', {
-      state: {
-        verificationMode: true,
-        returnPath: location.pathname
-      }
-    });
+    try {
+      // Navigate to video verification page with intent to verify
+      console.log('Starting video verification, current location:', location.pathname);
+      navigate('/video-verification-call', {
+        state: {
+          verificationMode: true,
+          returnPath: location.pathname
+        }
+      });
+    } catch (error) {
+      console.error('Error starting video verification:', error);
+    }
   };
 
   const handleNavigationChange = async (page) => {

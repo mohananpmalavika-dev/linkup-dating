@@ -26,6 +26,13 @@ const VideoVerificationCall = () => {
 
   const RECORDING_DURATION = 5000; // 5 seconds for verification
 
+  useEffect(() => {
+    console.log('VideoVerificationCall component mounted', {
+      pathname: location.pathname,
+      state: location.state
+    });
+  }, [location]);
+
   // Start camera stream
   const startCamera = async () => {
     try {
