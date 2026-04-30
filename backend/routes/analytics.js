@@ -1,12 +1,13 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken } = require('../middleware/auth');
 const DatingAnalyticsService = require('../services/datingAnalyticsService');
 
 /**
  * GET /api/analytics/personal-stats
  * Get user's personal match rate and performance stats
  */
-router.get('/personal-stats', async (req, res) => {
+router.get('/personal-stats', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await DatingAnalyticsService.getPersonalStats(userId);
@@ -26,7 +27,7 @@ router.get('/personal-stats', async (req, res) => {
  * GET /api/analytics/profile-performance
  * Get profile performance vs industry average
  */
-router.get('/profile-performance', async (req, res) => {
+router.get('/profile-performance', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await DatingAnalyticsService.getProfilePerformance(userId);
@@ -46,7 +47,7 @@ router.get('/profile-performance', async (req, res) => {
  * GET /api/analytics/monthly-report
  * Get monthly report with trends (query: year, month)
  */
-router.get('/monthly-report', async (req, res) => {
+router.get('/monthly-report', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const year = req.query.year || new Date().getFullYear();
@@ -69,7 +70,7 @@ router.get('/monthly-report', async (req, res) => {
  * GET /api/analytics/recommendations
  * Get personalized recommendations
  */
-router.get('/recommendations', async (req, res) => {
+router.get('/recommendations', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await DatingAnalyticsService.getRecommendations(userId);
@@ -89,7 +90,7 @@ router.get('/recommendations', async (req, res) => {
  * GET /api/analytics/profile-comparison
  * Get profile comparison with benchmarks
  */
-router.get('/profile-comparison', async (req, res) => {
+router.get('/profile-comparison', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await DatingAnalyticsService.getProfileComparison(userId);
@@ -109,7 +110,7 @@ router.get('/profile-comparison', async (req, res) => {
  * GET /api/analytics/dashboard
  * Get complete analytics dashboard (combines personal stats, performance, and recommendations)
  */
-router.get('/dashboard', async (req, res) => {
+router.get('/dashboard', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     
