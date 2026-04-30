@@ -48,6 +48,7 @@ const dateSafetyRoutes = require('./routes/dateSafety');
 const icebreakerVideoRoutes = require('./routes/icebreakerVideos');
 const momentsRoutes = require('./routes/moments');
 const videoInsightsRoutes = require('./routes/videoInsights');
+const paymentsRoutes = require('./routes/payments');
 const { authenticateToken } = require('./middleware/auth');
 const { checkIPBlock } = require('./middleware/ipBlocking');
 
@@ -545,6 +546,7 @@ app.use('/api/calling/market', authenticateToken, callMarketRoutes);
 app.use('/api/calling/wallet', authenticateToken, callWalletRoutes);
 app.use('/api/moments', momentsRoutes);
 app.use('/api/video-insights', videoInsightsRoutes);
+app.use('/api/payments', authenticateToken, paymentsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
