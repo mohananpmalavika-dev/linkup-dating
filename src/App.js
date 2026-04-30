@@ -50,6 +50,7 @@ import IntroductionsWidget from './components/IntroductionsWidget';
 import StatusPreferenceManager from './components/StatusPreferenceManager';
 import SubscriptionPage from './components/SubscriptionPage/SubscriptionPage';
 import FeatureHub from './components/FeatureHub';
+import CallingDashboard from './components/CallingDashboard';
 import DailyChallengesModal from './components/DailyChallengesModal';
 import BoostPurchasePanel from './components/BoostPurchasePanel';
 import StreakLeaderboard from './components/StreakLeaderboard';
@@ -1125,7 +1126,8 @@ const AppContent = () => {
             <Route path="photo-ab-testing" element={<PhotoABTestDashboard />} />
             <Route path="photo-ab-test" element={<PhotoABTestDashboard />} />
             <Route path="subscription" element={<SubscriptionPage />} />
-            <Route path="more" element={<FeatureHub />} />
+<Route path="more" element={<FeatureHub />} />
+            <Route path="call" element={<CallingDashboard />} />
             <Route path="*" element={<Navigate to={DEFAULT_AUTHENTICATED_ROUTE} replace />} />
           </Route>
         </Routes>

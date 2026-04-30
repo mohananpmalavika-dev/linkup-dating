@@ -10,6 +10,7 @@ const TAB_ITEMS = [
   { id: 'bans', label: 'Bans' },
   { id: 'appeals', label: 'Appeals' },
   { id: 'analytics', label: 'Analytics' },
+  { id: 'calling', label: 'Calling' },
   { id: 'actions', label: 'Actions Log' }
 ];
 
@@ -54,6 +55,15 @@ const defaultManualFlagForm = {
   severity: 'medium',
   title: '',
   reason: ''
+};
+
+const defaultCallingSettings = {
+  voiceRatePerMinute: 5,
+  videoRatePerMinute: 10,
+  earnerPayoutPercent: 70,
+  minPayoutAmount: 500,
+  minCreditsPurchase: 50,
+  callingEnabled: true
 };
 
 const formatTimestamp = (value) => {
@@ -121,7 +131,8 @@ const AdminDashboard = ({ onLogout }) => {
   const [analytics, setAnalytics] = useState(defaultAnalytics);
   const [actionsLog, setActionsLog] = useState([]);
   const [reviewSearch, setReviewSearch] = useState('');
-  const [manualFlagForm, setManualFlagForm] = useState(defaultManualFlagForm);
+const [manualFlagForm, setManualFlagForm] = useState(defaultManualFlagForm);
+  const [callingSettings, setCallingSettings] = useState(defaultCallingSettings);
 
   const loadReviewDetail = async (userId) => {
     if (!userId) {
@@ -1080,7 +1091,7 @@ const AdminDashboard = ({ onLogout }) => {
     </div>
   );
 
-  const renderAnalytics = () => (
+const renderAnalytics = () => (
     <div className="admin-stack">
       <section className="analytics-section">
         <h2>Moderation Analytics</h2>
@@ -1159,6 +1170,156 @@ const AdminDashboard = ({ onLogout }) => {
     </div>
   );
 
+  const handleCallingSettingChange = (key, value) => {
+    setCallingSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleCallingSettingSave = async () => {
+    setBusyActionId('calling-save');
+    try {
+      // In production, call API to save settings
+      // await adminService.saveCallingSettings(callingSettings);
+      alert('Calling settings saved!');
+    } catch (error) {
+      setError('Failed to save calling settings');
+    } finally {
+      setBusyActionId('');
+    }
+  };
+
+  const renderCalling = () => (
+    <section className="panel-card">
+      <div className="panel-header">
+        <div>
+          <h2>FRND Calling Settings</h2>
+          <p>Configure paid calling rates and payout settings.</p>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h3>Global Settings</h3>
+        <div className="form-grid">
+          <label>
+            Enable Calling
+            <select
+              className="admin-input"
+              value={callingSettings.callingEnabled}
+              onChange={(e) => handleCallingSettingChange('callingEnabled', e.target.value === 'true')}
+            >
+              <option value={true}>Enabled</option>
+              <option value={false}>Disabled</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h3>Call Rates (per minute)</h3>
+        <div className="form-grid">
+          <label>
+            Voice Call Rate (₹)
+            <input
+              type="number"
+              className="admin-input"
+              value={callingSettings.voiceRatePerMinute}
+              onChange={(e) => handleCallingSettingChange('voiceRatePerMinute', parseFloat(e.target.value) || 0)}
+              min="1"
+              max="100"
+            />
+          </label>
+          <label>
+            Video Call Rate (₹)
+            <input
+              type="number"
+              className="admin-input"
+              value={callingSettings.videoRatePerMinute}
+              onChange={(e) => handleCallingSettingChange('videoRatePerMinute', parseFloat(e.target.value) || 0)}
+              min="1"
+              max="200"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h3>Earner Payout Settings</h3>
+        <div className="form-grid">
+          <label>
+            Earner Payout (%)
+            <input
+              type="number"
+              className="admin-input"
+              value={callingSettings.earnerPayoutPercent}
+              onChange={(e) => handleCallingSettingChange('earnerPayoutPercent', parseFloat(e.target.value) || 0)}
+              min="0"
+              max="100"
+            />
+            <span className="input-hint">Platform keeps {100 - callingSettings.earnerPayoutPercent}%</span>
+          </label>
+          <label>
+            Minimum Payout (₹)
+            <input
+              type="number"
+              className="admin-input"
+              value={callingSettings.minPayoutAmount}
+              onChange={(e) => handleCallingSettingChange('minPayoutAmount', parseFloat(e.target.value) || 0)}
+              min="100"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h3>Credit Packages</h3>
+        <div className="form-grid">
+          <label>
+            Minimum Credits Purchase (₹)
+            <input
+              type="number"
+              className="admin-input"
+              value={callingSettings.minCreditsPurchase}
+              onChange={(e) => handleCallingSettingChange('minCreditsPurchase', parseFloat(e.target.value) || 0)}
+              min="10"
+            />
+          </label>
+        </div>
+        <div className="package-list">
+          <div className="package-item">
+            <strong>Starter</strong>
+            <span>₹50 = 50 credits</span>
+          </div>
+          <div className="package-item">
+            <strong>Basic</strong>
+            <span>₹95 = 100 credits (+5 bonus)</span>
+          </div>
+          <div className="package-item">
+            <strong>Popular</strong>
+            <span>₹225 = 250 credits (+25 bonus)</span>
+          </div>
+          <div className="package-item">
+            <strong>Pro</strong>
+            <span>₹425 = 500 credits (+75 bonus)</span>
+          </div>
+          <div className="package-item">
+            <strong>Premium</strong>
+            <span>₹800 = 1000 credits (+200 bonus)</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="quick-action-row">
+        <button 
+          type="button" 
+          className="btn-investigate"
+          onClick={handleCallingSettingSave}
+          disabled={busyActionId === 'calling-save'}
+        >
+          Save Settings
+        </button>
+      </div>
+    </section>
+  );
+
   const renderActionsLog = () => (
     <section className="panel-card">
       <div className="panel-header">
@@ -1197,7 +1358,7 @@ const AdminDashboard = ({ onLogout }) => {
     </section>
   );
 
-  const renderActiveTab = () => {
+const renderActiveTab = () => {
     switch (activeTab) {
       case 'queue':
         return renderQueue();
@@ -1211,6 +1372,8 @@ const AdminDashboard = ({ onLogout }) => {
         return renderAppeals();
       case 'analytics':
         return renderAnalytics();
+      case 'calling':
+        return renderCalling();
       case 'actions':
         return renderActionsLog();
       case 'overview':
