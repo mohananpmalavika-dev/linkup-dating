@@ -62,6 +62,38 @@ router.get('/feed', async (req, res) => {
 });
 
 /**
+ * GET /api/moments/my-moments
+ * Get user's own active moments (24hr window)
+ * MUST come before /:momentId routes to avoid being caught by param matching
+ */
+router.get('/my-moments', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await momentService.getUserMoments(userId);
+
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/moments/stats
+ * Get moments feed statistics (FOMO metrics)
+ * MUST come before /:momentId routes to avoid being caught by param matching
+ */
+router.get('/stats', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await momentService.getMomentsStats(userId);
+
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/moments/:momentId/view
  * Record that current user viewed a moment
  */
@@ -90,36 +122,6 @@ router.get('/:momentId/viewers', async (req, res) => {
     const result = await momentService.getMomentViewers(momentId, userId);
 
     return res.status(result.success ? 200 : 403).json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/moments/my-moments
- * Get user's own active moments (24hr window)
- */
-router.get('/my-moments', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const result = await momentService.getUserMoments(userId);
-
-    return res.status(result.success ? 200 : 400).json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/moments/stats
- * Get moments feed statistics (FOMO metrics)
- */
-router.get('/stats', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const result = await momentService.getMomentsStats(userId);
-
-    return res.status(result.success ? 200 : 400).json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

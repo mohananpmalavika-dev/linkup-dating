@@ -12288,54 +12288,6 @@ router.post('/verify/run-fraud-check', async (req, res) => {
   }
 });
 
-// 88. GET PROFILE TRUST SCORE (view own or another user's trust score)
-router.get('/profile-trust-score/:targetUserId', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const targetUserId = parseInt(req.params.targetUserId);
-
-    // Can only view own score, or if viewing another's (future feature)
-    if (userId !== targetUserId) {
-      return res.status(403).json({ error: 'Can only view your own trust score' });
-    }
-
-    const result = await db.query(
-      `SELECT 
-        overall_trust_score,
-        fraud_risk_level,
-        is_verified_photo,
-        is_verified_email,
-        is_verified_phone,
-        red_flags
-       FROM profile_verification_scores
-       WHERE user_id = $1`,
-      [targetUserId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Trust score not available' });
-    }
-
-    const score = result.rows[0];
-
-    res.json({
-      trustScore: {
-        overallScore: score.overall_trust_score,
-        riskLevel: score.fraud_risk_level,
-        verifications: {
-          photoVerified: score.is_verified_photo,
-          emailVerified: score.is_verified_email,
-          phoneVerified: score.is_verified_phone
-        },
-        redFlags: score.red_flags || []
-      }
-    });
-  } catch (err) {
-    console.error('Get profile trust score error:', err);
-    res.status(500).json({ error: 'Failed to fetch trust score' });
-  }
-});
-
 // 89. REPORT HARASSMENT (safety flag with multiple categories)
 router.post('/conversations/report-harassment/:matchId', async (req, res) => {
   try {
