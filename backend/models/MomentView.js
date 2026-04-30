@@ -1,28 +1,27 @@
 const { DataTypes } = require('sequelize');
-const { v4: uuidv4 } = require('uuid');
 
 module.exports = (sequelize) => {
   const MomentView = sequelize.define(
     'MomentView',
     {
       id: {
-        type: DataTypes.UUID,
-        defaultValue: () => uuidv4(),
+        type: DataTypes.INTEGER,
         primaryKey: true,
+        autoIncrement: true
       },
       moment_id: {
-        type: DataTypes.UUID,
+        type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Moments',
+          model: 'moments',
           key: 'id',
         },
       },
       viewer_user_id: {
-        type: DataTypes.UUID,
+        type: DataTypes.INTEGER,
         allowNull: false,
         references: {
-          model: 'Users',
+          model: 'users',
           key: 'id',
         },
       },
