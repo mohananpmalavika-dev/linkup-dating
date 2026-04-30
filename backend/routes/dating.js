@@ -6422,7 +6422,7 @@ const DAILY_PROMPTS = [
   }
 ];
 
-router.get('/daily-prompts', async (req, res) => {
+router.get('/daily-prompts', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -6510,7 +6510,7 @@ router.delete('/daily-prompts/:promptId/answer', async (req, res) => {
 });
 
 // 37. GET USER ANSWERED PROMPTS (for profile display)
-router.get('/profiles/me/prompts', async (req, res) => {
+router.get('/profiles/me/prompts', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -7730,7 +7730,7 @@ router.post('/profiles/:userId/view', async (req, res) => {
 });
 
 // 54. GET PROFILE ANALYTICS (for own profile)
-router.get('/profiles/me/analytics', async (req, res) => {
+router.get('/profiles/me/analytics', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
