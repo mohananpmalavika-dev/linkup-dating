@@ -539,6 +539,7 @@ app.use('/api/catfish-detection', authenticateToken, catfishDetectionRoutes);
 app.use('/api/video-verification', authenticateToken, videoVerificationRoutes);
 app.use('/api/date-safety', authenticateToken, dateSafetyRoutes);
 app.use('/api/icebreaker-videos', authenticateToken, icebreakerVideoRoutes);
+app.use('/api/profile-reset', profileResetRoutes);
 app.use('/api/moments', momentsRoutes);
 app.use('/api/video-insights', videoInsightsRoutes);
 
