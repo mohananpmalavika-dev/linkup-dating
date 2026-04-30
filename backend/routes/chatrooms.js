@@ -122,12 +122,22 @@ router.post('/', async (req, res) => {
 
     console.log('CREATE CHATROOM - Attempting to create:', { userId, name: trimmedName, isPublic, maxMembers });
 
+    // Validate inputs before sending to DB
+    const insertParams = [userId, trimmedName, trimmedDesc, isPublic !== false, maxMembers || 100];
+    console.log('CREATE CHATROOM - Insert params:', {
+      userId,
+      name: trimmedName,
+      description: trimmedDesc,
+      isPublic: isPublic !== false,
+      maxMembers: maxMembers || 100
+    });
+
     // Insert with explicit error handling
     const result = await db.query(
       `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [userId, trimmedName, trimmedDesc, isPublic !== false, maxMembers || 100]
+      insertParams
     );
 
     if (!result.rows || result.rows.length === 0) {
@@ -156,14 +166,17 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error('Create chatroom error:', err);
     console.error('Create chatroom error stack:', err.stack);
-    console.error('Create chatroom error details:', {
+    console.error('Create chatroom error full:', err);
+    console.error('Create chatroom SQL error details:', {
       code: err.code,
       message: err.message,
       detail: err.detail,
       table: err.table,
       column: err.column,
       severity: err.severity,
-      position: err.position
+      position: err.position,
+      length: err.length,
+      routine: err.routine
     });
 
     // More specific error messages
@@ -175,11 +188,17 @@ router.post('/', async (req, res) => {
       statusCode = 409;
     } else if (err.code === '23502') {
       // Extract which field caused the NOT NULL violation
-      const columnMatch = err.detail?.match(/column "(\w+)"/);
-      const failedColumn = columnMatch ? columnMatch[1] : 'unknown field';
+      // PostgreSQL format can vary - try multiple patterns
+      let failedColumn = 'unknown field';
+      if (err.detail) {
+        // Try to extract from different PostgreSQL error message formats
+        const match1 = err.detail.match(/column "(\w+)"/i);
+        const match2 = err.detail.match(/Failing row contains.*?NULL/);
+        failedColumn = match1?.[1] || 'unknown field';
+      }
       errorMessage = `Missing required field: ${failedColumn}`;
       statusCode = 400;
-      console.error('NOT NULL violation on column:', failedColumn);
+      console.error('NOT NULL violation on column:', failedColumn, 'Full detail:', err.detail);
     } else if (err.code === '23503') {
       errorMessage = 'User not found or invalid user ID';
       statusCode = 400;
