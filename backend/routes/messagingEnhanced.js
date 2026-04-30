@@ -497,4 +497,77 @@ router.post('/disappearing', async (req, res) => {
   }
 });
 
+// ============================================
+// CHATROOM ENDPOINTS (for group messaging)
+// ============================================
+
+// POST /messaging/chatrooms - Create a new chatroom
+router.post('/chatrooms', async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      console.warn('CREATE CHATROOM - No user ID in request');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const { name, description, isPublic, maxMembers, initialMembers, tags, settings } = req.body;
+
+    if (!name || !name.trim()) {
+      console.warn('CREATE CHATROOM - No name provided');
+      return res.status(400).json({ error: 'Chatroom name is required' });
+    }
+
+    console.log('CREATE CHATROOM - Creating with:', { userId, name, isPublic, maxMembers });
+
+    const result = await db.query(
+      `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING *`,
+      [userId, name.trim(), description || '', isPublic !== false, maxMembers || 100]
+    );
+
+    const chatroomId = result.rows[0].id;
+    console.log('CREATE CHATROOM - Created with ID:', chatroomId);
+
+    // Add creator as first member
+    await db.query(
+      `INSERT INTO chatroom_members (chatroom_id, user_id)
+       VALUES ($1, $2)`,
+      [chatroomId, userId]
+    );
+
+    // Add initial members if provided
+    if (Array.isArray(initialMembers) && initialMembers.length > 0) {
+      for (const memberId of initialMembers) {
+        try {
+          await db.query(
+            `INSERT INTO chatroom_members (chatroom_id, user_id)
+             VALUES ($1, $2)
+             ON CONFLICT DO NOTHING`,
+            [chatroomId, memberId]
+          );
+        } catch (memberError) {
+          console.warn(`Failed to add member ${memberId}:`, memberError.message);
+        }
+      }
+    }
+
+    console.log('CREATE CHATROOM - Success');
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Create chatroom error:', err);
+    console.error('Error details:', {
+      code: err.code,
+      message: err.message,
+      detail: err.detail,
+      table: err.table,
+      column: err.column
+    });
+    res.status(500).json({ 
+      error: 'Failed to create chatroom',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  }
+});
+
 module.exports = router;

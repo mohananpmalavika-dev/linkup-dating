@@ -82,14 +82,18 @@ router.post('/', async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
+      console.warn('CREATE CHATROOM - No user ID in request');
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
     const { name, description, isPublic, maxMembers } = req.body;
 
     if (!name) {
+      console.warn('CREATE CHATROOM - No name provided');
       return res.status(400).json({ error: 'Chatroom name required' });
     }
+
+    console.log('CREATE CHATROOM - Attempting to create:', { userId, name, isPublic });
 
     const result = await db.query(
       `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members)
@@ -99,6 +103,7 @@ router.post('/', async (req, res) => {
     );
 
     const chatroomId = result.rows[0].id;
+    console.log('CREATE CHATROOM - Created with ID:', chatroomId);
 
     // Add creator as first member
     await db.query(
@@ -107,10 +112,21 @@ router.post('/', async (req, res) => {
       [chatroomId, userId]
     );
 
+    console.log('CREATE CHATROOM - Success, user added as member');
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Create chatroom error:', err);
-    res.status(500).json({ error: 'Failed to create chatroom' });
+    console.error('Error details:', {
+      code: err.code,
+      message: err.message,
+      detail: err.detail,
+      table: err.table,
+      column: err.column
+    });
+    res.status(500).json({ 
+      error: 'Failed to create chatroom',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 

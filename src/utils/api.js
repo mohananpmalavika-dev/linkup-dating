@@ -5,6 +5,29 @@ const DEFAULT_API_BASE_URL = "http://localhost:5000/api";
 
 const stripTrailingSlashes = (value = "") => String(value || "").trim().replace(/\/+$/, "");
 
+// API call function for services (similar to AppContext.apiCall but for non-React contexts)
+export const apiCall = async (endpoint, method = "GET", data = null) => {
+  const normalizedMethod = String(method || "GET").toUpperCase();
+  const authToken = getStoredAuthToken();
+  
+  const config = {
+    method: normalizedMethod,
+    url: `${API_BASE_URL}${endpoint}`,
+    headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+  };
+
+  if (data !== null && data !== undefined) {
+    if (normalizedMethod === "GET") {
+      config.params = data;
+    } else {
+      config.data = data;
+    }
+  }
+
+  const response = await axios(config);
+  return response.data;
+};
+
 // Auto-detect backend URL for production if not explicitly set
 const getDefaultProductionUrl = () => {
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
