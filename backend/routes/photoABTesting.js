@@ -38,29 +38,10 @@ router.post('/', authenticateToken, async (req, res) => {
 });
 
 /**
- * GET /api/photo-ab-testing/:testId
- * Get test details with current metrics
- */
-router.get('/:testId', authenticateToken, async (req, res) => {
-  try {
-    const { testId } = req.params;
-    const userId = req.user.id;
-
-    const test = await photoABTestService.getTestDetails(parseInt(testId), userId);
-    
-    res.json({
-      success: true,
-      test
-    });
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
-
-/**
  * GET /api/photo-ab-testing/user/all
  * Get all tests for the user with filters
  * Query: status?, limit?, offset?
+ * MUST come BEFORE /:testId to avoid matching 'user' as testId
  */
 router.get('/user/all', authenticateToken, async (req, res) => {
   try {
@@ -78,6 +59,26 @@ router.get('/user/all', authenticateToken, async (req, res) => {
       success: true,
       tests,
       count: tests.length
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/photo-ab-testing/:testId
+ * Get test details with current metrics
+ */
+router.get('/:testId', authenticateToken, async (req, res) => {
+  try {
+    const { testId } = req.params;
+    const userId = req.user.id;
+
+    const test = await photoABTestService.getTestDetails(parseInt(testId), userId);
+    
+    res.json({
+      success: true,
+      test
     });
   } catch (error) {
     res.status(400).json({ error: error.message });
