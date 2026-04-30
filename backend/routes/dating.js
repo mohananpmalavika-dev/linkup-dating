@@ -15831,7 +15831,7 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
       include: [
         {
           model: dbModels.User,
-          as: 'profile_user',
+          as: 'profileUser',
           attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
           include: [
             {
@@ -15841,7 +15841,7 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
             },
             {
               model: dbModels.ProfilePhoto,
-              as: 'profilePhotos',
+              as: 'photos',
               attributes: ['id', 'photo_url', 'position'],
               limit: 1,
               order: [['position', 'ASC']]
@@ -15862,16 +15862,16 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
       passReason: decision.pass_reason,
       passReasonLabel: rewindService.getReasonLabel(decision.pass_reason),
       passReasonIcon: rewindService.getReasonIcon(decision.pass_reason),
-      profile: decision.profile_user ? {
-        id: decision.profile_user.id,
-        firstName: decision.profile_user.firstName,
-        age: decision.profile_user.age,
-        bio: decision.profile_user.bio,
-        verified: decision.profile_user.profileVerified,
-        interests: decision.profile_user.datingProfile?.interests || [],
-        goals: decision.profile_user.datingProfile?.relationshipGoals,
-        location: decision.profile_user.datingProfile?.location,
-        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
+      profile: decision.profileUser ? {
+        id: decision.profileUser.id,
+        firstName: decision.profileUser.firstName,
+        age: decision.profileUser.age,
+        bio: decision.profileUser.bio,
+        verified: decision.profileUser.profileVerified,
+        interests: decision.profileUser.datingProfile?.interests || [],
+        goals: decision.profileUser.datingProfile?.relationshipGoals,
+        location: decision.profileUser.datingProfile?.location,
+        photoUrl: decision.profileUser.photos?.[0]?.photo_url
       } : null
     }));
     
@@ -15924,7 +15924,7 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
       include: [
         {
           model: dbModels.User,
-          as: 'profile_user',
+          as: 'profileUser',
           attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
           include: [
             {
@@ -15934,7 +15934,7 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
             },
             {
               model: dbModels.ProfilePhoto,
-              as: 'profilePhotos',
+              as: 'photos',
               attributes: ['id', 'photo_url', 'position'],
               limit: 1,
               order: [['position', 'ASC']]
@@ -15951,16 +15951,16 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
       profileId: decision.profile_user_id,
       passedAt: decision.decision_timestamp,
       reason: decision.pass_reason || 'other',
-      profile: decision.profile_user ? {
-        id: decision.profile_user.id,
-        firstName: decision.profile_user.firstName,
-        age: decision.profile_user.age,
-        bio: decision.profile_user.bio,
-        verified: decision.profile_user.profileVerified,
-        interests: decision.profile_user.datingProfile?.interests || [],
-        goals: decision.profile_user.datingProfile?.relationshipGoals,
-        location: decision.profile_user.datingProfile?.location,
-        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
+      profile: decision.profileUser ? {
+        id: decision.profileUser.id,
+        firstName: decision.profileUser.firstName,
+        age: decision.profileUser.age,
+        bio: decision.profileUser.bio,
+        verified: decision.profileUser.profileVerified,
+        interests: decision.profileUser.datingProfile?.interests || [],
+        goals: decision.profileUser.datingProfile?.relationshipGoals,
+        location: decision.profileUser.datingProfile?.location,
+        photoUrl: decision.profileUser.photos?.[0]?.photo_url
       } : null
     }));
     
