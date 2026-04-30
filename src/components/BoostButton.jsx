@@ -4,11 +4,13 @@
  */
 
 import React, { useState } from 'react';
+import { useNavigate } from '../router';
 import useBoosts from '../hooks/useBoosts';
 import BoostPurchasePanel from './BoostPurchasePanel';
 import './BoostButton.css';
 
 const BoostButton = ({ onBoostActivated, compact = false }) => {
+  const navigate = useNavigate();
   const [showPanel, setShowPanel] = useState(false);
   const { activeBoosts, canUseBoosts } = useBoosts();
 
@@ -16,7 +18,11 @@ const BoostButton = ({ onBoostActivated, compact = false }) => {
 
   if (!canUseBoosts) {
     return (
-      <button className="boost-btn upgrade-btn" title="Upgrade to premium to use boosts">
+      <button 
+        className="boost-btn upgrade-btn" 
+        title="Upgrade to premium to use boosts"
+        onClick={() => navigate('/subscription')}
+      >
         <span className="boost-icon">📈</span>
         <span className="boost-text">Upgrade</span>
       </button>
