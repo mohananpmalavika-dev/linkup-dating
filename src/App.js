@@ -751,6 +751,9 @@ const AppContent = () => {
           }
         });
         break;
+      case 'call':
+        navigate('/call');
+        break;
       case 'social':
         navigate('/social');
         break;
