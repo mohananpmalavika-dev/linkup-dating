@@ -46,12 +46,17 @@ const ChatRooms = ({ onSelectChatroom, onBack }) => {
     const trimmedDesc = newChatroomDesc.trim();
 
     if (!trimmedName) {
-      setError('Chatroom name required');
+      setError('Chatroom name is required');
       return;
     }
 
-    if (trimmedName.length < 3) {
-      setError('Chatroom name must be at least 3 characters');
+    if (trimmedName.length < 1) {
+      setError('Chatroom name cannot be empty');
+      return;
+    }
+
+    if (trimmedName.length > 255) {
+      setError('Chatroom name must be less than 255 characters');
       return;
     }
 
@@ -61,6 +66,7 @@ const ChatRooms = ({ onSelectChatroom, onBack }) => {
         description: trimmedDesc
       });
 
+      setError('');
       setLoading(true);
       const newRoom = await chatroomService.createChatroom(
         trimmedName,

@@ -33,14 +33,23 @@ const chatroomService = {
       const token = localStorage.getItem('token');
       console.log('Token available:', !!token);
       
+      if (!token) {
+        throw new Error('Authentication token not found. Please log in again.');
+      }
+
+      if (!name || !name.trim()) {
+        throw new Error('Chatroom name is required');
+      }
+      
       const response = await axios.post(`${API_URL}`, {
-        name,
-        description,
+        name: name.trim(),
+        description: description.trim(),
         isPublic,
         maxMembers
       }, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
       console.log('createChatroom response:', response.data);
@@ -48,7 +57,22 @@ const chatroomService = {
     } catch (error) {
       console.error('createChatroom error response:', error.response);
       console.error('createChatroom error:', error);
-      throw error.response?.data?.error || error.message || 'Failed to create chatroom';
+      
+      // Provide more detailed error message
+      let errorMsg = 'Failed to create chatroom';
+      if (error.response?.status === 401) {
+        errorMsg = 'Authentication failed. Please log in again.';
+      } else if (error.response?.status === 400) {
+        errorMsg = error.response.data?.error || 'Invalid chatroom details';
+      } else if (error.response?.status === 409) {
+        errorMsg = 'A chatroom with this name already exists';
+      } else if (error.response?.data?.error) {
+        errorMsg = error.response.data.error;
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+      
+      throw errorMsg;
     }
   },
 

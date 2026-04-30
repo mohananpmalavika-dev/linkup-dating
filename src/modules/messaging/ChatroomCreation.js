@@ -87,8 +87,15 @@ const ChatroomCreation = ({
   };
 
   const handleCreateChatroom = async () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    
+    if (!trimmedName) {
       setError('Chatroom name is required');
+      return;
+    }
+
+    if (trimmedName.length > 255) {
+      setError('Chatroom name must be less than 255 characters');
       return;
     }
 
@@ -106,7 +113,7 @@ const ChatroomCreation = ({
       const parsedMaxMembers = Number.parseInt(maxMembers, 10);
 
       const response = await apiCall('/messaging/chatrooms', 'POST', {
-        name: name.trim(),
+        name: trimmedName,
         description: description.trim(),
         isPublic: !isPrivate,
         tags: tagArray,

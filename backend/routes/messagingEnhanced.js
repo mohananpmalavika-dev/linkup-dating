@@ -504,27 +504,46 @@ router.post('/disappearing', async (req, res) => {
 // POST /messaging/chatrooms - Create a new chatroom
 router.post('/chatrooms', async (req, res) => {
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      console.warn('CREATE CHATROOM - No user ID in request');
-      return res.status(401).json({ error: 'Unauthorized' });
+    // Validate user authentication
+    if (!req.user) {
+      console.warn('CREATE CHATROOM - No req.user object');
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const userId = req.user?.id || req.user?.userId;
+    if (!userId || typeof userId !== 'number') {
+      console.warn('CREATE CHATROOM - Invalid user ID:', { userId, type: typeof userId });
+      return res.status(401).json({ 
+        error: 'Invalid user authentication',
+        details: 'User ID is missing or invalid'
+      });
     }
 
     const { name, description, isPublic, maxMembers, initialMembers, tags, settings } = req.body;
 
-    if (!name || !name.trim()) {
-      console.warn('CREATE CHATROOM - No name provided');
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      console.warn('CREATE CHATROOM - Invalid name provided:', name);
       return res.status(400).json({ error: 'Chatroom name is required' });
     }
 
-    console.log('CREATE CHATROOM - Creating with:', { userId, name, isPublic, maxMembers });
+    const trimmedName = name.trim();
+    if (trimmedName.length < 1 || trimmedName.length > 255) {
+      return res.status(400).json({ error: 'Chatroom name must be between 1 and 255 characters' });
+    }
+
+    console.log('CREATE CHATROOM - Creating with:', { userId, name: trimmedName, isPublic, maxMembers });
 
     const result = await db.query(
       `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [userId, name.trim(), description || '', isPublic !== false, maxMembers || 100]
+      [userId, trimmedName, description?.trim() || '', isPublic !== false, maxMembers || 100]
     );
+
+    if (!result.rows || result.rows.length === 0) {
+      console.error('CREATE CHATROOM - No rows returned from INSERT');
+      return res.status(500).json({ error: 'Failed to create chatroom' });
+    }
 
     const chatroomId = result.rows[0].id;
     console.log('CREATE CHATROOM - Created with ID:', chatroomId);
@@ -563,9 +582,33 @@ router.post('/chatrooms', async (req, res) => {
       table: err.table,
       column: err.column
     });
-    res.status(500).json({ 
-      error: 'Failed to create chatroom',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+
+    // More specific error messages
+    let errorMessage = 'Failed to create chatroom';
+    let statusCode = 500;
+
+    if (err.code === '23505') {
+      errorMessage = 'Chatroom name already exists';
+      statusCode = 409;
+    } else if (err.code === '23502') {
+      // Extract which field caused the NOT NULL violation
+      const columnMatch = err.detail?.match(/column "(\w+)"/);
+      const failedColumn = columnMatch ? columnMatch[1] : 'unknown field';
+      errorMessage = `Missing required field: ${failedColumn}`;
+      statusCode = 400;
+      console.error('NOT NULL violation on column:', failedColumn);
+    } else if (err.code === '23503') {
+      errorMessage = 'User not found or invalid user ID';
+      statusCode = 400;
+    } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+      errorMessage = 'Database connection failed';
+      statusCode = 503;
+    }
+
+    res.status(statusCode).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      code: process.env.NODE_ENV === 'development' ? err.code : undefined
     });
   }
 });

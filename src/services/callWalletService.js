@@ -4,7 +4,7 @@
 
 import { apiCall } from '../utils/api';
 
-const BASE_URL = '/api/calling/wallet';
+const BASE_URL = '/calling/wallet';
 
 const callWalletService = {
   // Get wallet balance
