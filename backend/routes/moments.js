@@ -24,8 +24,15 @@ router.post('/upload', upload.single('photo'), async (req, res) => {
     const userId = req.user.id;
 
     if (req.file) {
-      photoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-      photoKey = photoKey || `moments/${Date.now()}-${req.file.originalname}`;
+      // Generate a storage key for the file
+      photoKey = photoKey || `moments/${userId}/${Date.now()}-${req.file.originalname}`;
+      
+      // Create a mock S3 URL (or use actual S3 upload when configured)
+      // For now, generate a URL pattern that can be resolved later
+      photoUrl = `https://linkup-storage.s3.amazonaws.com/${photoKey}`;
+      
+      // TODO: Actually upload req.file.buffer to S3 using the photoKey
+      // For now, we store a reference that can be resolved later
     }
 
     if (!photoUrl) {
