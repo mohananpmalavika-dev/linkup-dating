@@ -221,6 +221,26 @@ class LeaderboardService {
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
+      // Special case for "global" - aggregate all cities
+      if (city.toLowerCase() === 'global') {
+        const result = await db.query(
+          `SELECT 
+            l.rank, l.score, u.id, dp.first_name, dp.age, dp.location_city,
+            (SELECT COUNT(*) FROM profile_photos WHERE user_id = u.id LIMIT 1) as photo_count
+           FROM leaderboards l
+           JOIN users u ON u.id = l.user_id
+           JOIN dating_profiles dp ON dp.user_id = u.id
+           WHERE l.leaderboard_type = 'most_active_city'
+           AND l.month = $1
+           AND l.year = $2
+           ORDER BY l.rank ASC
+           LIMIT $3`,
+          [month, year, limit]
+        );
+
+        return result.rows;
+      }
+
       const result = await db.query(
         `SELECT 
           l.rank, l.score, u.id, dp.first_name, dp.age, dp.location_city,
@@ -362,6 +382,44 @@ class LeaderboardService {
       return result.rows;
     } catch (error) {
       console.error('Error getting user leaderboard positions:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get all distinct cities
+   */
+  static async getCities() {
+    try {
+      const result = await db.query(
+        `SELECT DISTINCT location_city as city 
+         FROM dating_profiles 
+         WHERE location_city IS NOT NULL 
+         ORDER BY location_city ASC`
+      );
+
+      return result.rows.map(row => row.city).filter(city => city && city.trim());
+    } catch (error) {
+      console.error('Error getting cities:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get all distinct interests
+   */
+  static async getInterests() {
+    try {
+      const result = await db.query(
+        `SELECT DISTINCT unnest(interests) as interest 
+         FROM dating_profiles 
+         WHERE interests IS NOT NULL AND array_length(interests, 1) > 0
+         ORDER BY interest ASC`
+      );
+
+      return result.rows.map(row => row.interest).filter(interest => interest && interest.trim());
+    } catch (error) {
+      console.error('Error getting interests:', error);
       return [];
     }
   }

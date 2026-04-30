@@ -506,6 +506,7 @@ app.use('/api/auth', authLimiter, ageVerificationRoutes);
 app.use('/api/auth/send-otp', otpLimiter); // Override with stricter OTP limit
 app.use('/api/achievements', achievementsRoutes);
 app.use('/api/leaderboards', achievementsRoutes);
+app.use('/api/filters', achievementsRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/app-data', appDataRoutes);

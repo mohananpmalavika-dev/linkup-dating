@@ -89,6 +89,54 @@ router.get('/definitions', async (req, res) => {
 });
 
 // ============================================================================
+// FILTER DATA ROUTES (for leaderboard filters)
+// ============================================================================
+
+/**
+ * GET /api/filters
+ * Get available cities and interests for leaderboard filtering
+ */
+router.get('/', async (req, res) => {
+  try {
+    const [cities, interests] = await Promise.all([
+      LeaderboardService.getCities(),
+      LeaderboardService.getInterests()
+    ]);
+
+    res.json({
+      success: true,
+      cities,
+      interests
+    });
+  } catch (error) {
+    console.error('Error getting filter options:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/leaderboards/filters
+ * Get available cities and interests for leaderboard filtering
+ */
+router.get('/filters', async (req, res) => {
+  try {
+    const [cities, interests] = await Promise.all([
+      LeaderboardService.getCities(),
+      LeaderboardService.getInterests()
+    ]);
+
+    res.json({
+      success: true,
+      cities,
+      interests
+    });
+  } catch (error) {
+    console.error('Error getting filter options:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
 // LEADERBOARD ROUTES
 // ============================================================================
 
