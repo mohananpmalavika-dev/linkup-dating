@@ -958,25 +958,28 @@ router.get('/hub', async (req, res) => {
     const referralQualityEvaluations = await syncReferralQualityBonuses(userId);
     const referralQualitySummary = buildReferralQualitySummary(referralQualityEvaluations);
 
-    const [
-      acceptedFriends,
-      pendingIncoming,
-      pendingOutgoing,
-      introductionsRaw,
-      rewardBalance,
-      socialIntegrations,
-      referral,
-      communityRooms,
-      totalFriends,
-      totalPendingIncoming,
-      totalPendingOutgoing,
-      totalIntroductions,
-      referralStats
-    ] = await Promise.all([
-      getFriendList(userId, 'accepted', 'all', 6, 0),
-      getFriendList(userId, 'pending', 'incoming', 6, 0),
-      getFriendList(userId, 'pending', 'outgoing', 3, 0),
-      db.sequelize.query(
+    const transaction = await db.sequelize.transaction();
+
+    try {
+      const [
+        acceptedFriends,
+        pendingIncoming,
+        pendingOutgoing,
+        introductionsRaw,
+        rewardBalance,
+        socialIntegrations,
+        referral,
+        communityRooms,
+        totalFriends,
+        totalPendingIncoming,
+        totalPendingOutgoing,
+        totalIntroductions,
+        referralStats
+      ] = await Promise.all([
+        getFriendList(userId, 'accepted', 'all', 6, 0),
+        getFriendList(userId, 'pending', 'incoming', 6, 0),
+        getFriendList(userId, 'pending', 'outgoing', 3, 0),
+        db.sequelize.query(
         `SELECT
            fr.id,
            fr.referred_user_id,
@@ -1014,10 +1017,11 @@ router.get('/hub', async (req, res) => {
           type: QueryTypes.SELECT
         }
       ),
-      ensureRewardBalance(userId),
+      ensureRewardBalance(userId, transaction),
       db.SocialIntegration.findAll({
         where: { userId },
-        order: [['createdAt', 'ASC']]
+        order: [['createdAt', 'ASC']],
+        transaction
       }),
       getOrCreateActiveReferral(userId),
       getCommunityRooms(userId),
@@ -1025,24 +1029,28 @@ router.get('/hub', async (req, res) => {
         where: {
           status: 'accepted',
           [Op.or]: [{ userId1: userId }, { userId2: userId }]
-        }
+        },
+        transaction
       }),
       db.FriendRelationship.count({
         where: {
           status: 'pending',
           [Op.or]: [{ userId1: userId }, { userId2: userId }],
           requestSentBy: { [Op.ne]: userId }
-        }
+        },
+        transaction
       }),
       db.FriendRelationship.count({
         where: {
           status: 'pending',
           [Op.or]: [{ userId1: userId }, { userId2: userId }],
           requestSentBy: userId
-        }
+        },
+        transaction
       }),
       db.FriendReferral.count({
-        where: { recipient_user_id: userId }
+        where: { recipient_user_id: userId },
+        transaction
       }),
       db.sequelize.query(
         `SELECT
@@ -1054,10 +1062,13 @@ router.get('/hub', async (req, res) => {
          WHERE referrer_user_id = :userId`,
         {
           replacements: { userId },
-          type: QueryTypes.SELECT
+          type: QueryTypes.SELECT,
+          transaction
         }
       )
     ]);
+
+    await transaction.commit();
 
     const activeReferral = typeof referral?.get === 'function' ? referral.get({ plain: true }) : referral;
     const serializedIntegrations = socialIntegrations.map((integration) =>
@@ -1071,37 +1082,41 @@ router.get('/hub', async (req, res) => {
     );
     const stats = referralStats[0] || {};
 
-    return res.json({
-      summary: {
-        totalFriends,
-        totalPendingIncoming,
-        totalPendingOutgoing,
-        totalIntroductions,
-        connectedSocialAccounts: serializedIntegrations.length
-      },
-      rewardWallet: serializeRewardBalance(rewardBalance),
-      referral: {
-        id: activeReferral.id,
-        code: activeReferral.referralCode,
-        link: activeReferral.referralLink,
-        status: activeReferral.status,
-        ...serializeReferralProgram(activeReferral.reward),
-        expiresAt: activeReferral.expiresAt,
-        stats: {
-          totalReferrals: Number(stats.total_referrals || 0) || 0,
-          completed: Number(stats.completed || 0) || 0,
-          pending: Number(stats.pending || 0) || 0,
-          expired: Number(stats.expired || 0) || 0
+      return res.json({
+        summary: {
+          totalFriends,
+          totalPendingIncoming,
+          totalPendingOutgoing,
+          totalIntroductions,
+          connectedSocialAccounts: serializedIntegrations.length
         },
-        qualityMetrics: referralQualitySummary
-      },
-      friends: acceptedFriends.map((row) => serializeFriendRow(row, userId)),
-      pendingRequests: pendingIncoming.map((row) => serializeFriendRow(row, userId)),
-      outgoingRequests: pendingOutgoing.map((row) => serializeFriendRow(row, userId)),
-      introductions: introductionsRaw.map(serializeReferralIntroduction),
-      socialIntegrations: serializedIntegrations,
-      communityRooms
-    });
+        rewardWallet: serializeRewardBalance(rewardBalance),
+        referral: {
+          id: activeReferral.id,
+          code: activeReferral.referralCode,
+          link: activeReferral.referralLink,
+          status: activeReferral.status,
+          ...serializeReferralProgram(activeReferral.reward),
+          expiresAt: activeReferral.expiresAt,
+          stats: {
+            totalReferrals: Number(stats.total_referrals || 0) || 0,
+            completed: Number(stats.completed || 0) || 0,
+            pending: Number(stats.pending || 0) || 0,
+            expired: Number(stats.expired || 0) || 0
+          },
+          qualityMetrics: referralQualitySummary
+        },
+        friends: acceptedFriends.map((row) => serializeFriendRow(row, userId)),
+        pendingRequests: pendingIncoming.map((row) => serializeFriendRow(row, userId)),
+        outgoingRequests: pendingOutgoing.map((row) => serializeFriendRow(row, userId)),
+        introductions: introductionsRaw.map(serializeReferralIntroduction),
+        socialIntegrations: serializedIntegrations,
+        communityRooms
+      });
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   } catch (error) {
     console.error('Get social hub error:', error);
     res.status(500).json({ error: 'Failed to load social hub' });
