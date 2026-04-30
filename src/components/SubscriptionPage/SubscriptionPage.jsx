@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import apiClient from '../../services/apiClient';
 import './SubscriptionPage.css';
 
 /**
@@ -23,7 +23,7 @@ const SubscriptionPage = ({ user, onSubscriptionChange }) => {
 
   const fetchPlans = async () => {
     try {
-      const response = await axios.get('/payments/plans');
+      const response = await apiClient.get('/payments/plans');
       setPlans(response.data.plans || []);
     } catch (err) {
       setError('Failed to load plans');
@@ -33,9 +33,7 @@ const SubscriptionPage = ({ user, onSubscriptionChange }) => {
 
   const fetchCurrentSubscription = async () => {
     try {
-      const response = await axios.get('/payments/subscription', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
+      const response = await apiClient.get('/payments/subscription');
       if (response.data.active) {
         setCurrentSubscription(response.data.subscription);
       }
@@ -50,9 +48,7 @@ const SubscriptionPage = ({ user, onSubscriptionChange }) => {
     try {
       const response = await axios.get('/payments/receipts', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      setReceipts(response.data.receipts || []);
-    } catch (err) {
+      });piClient.get('/payments/receipts'atch (err) {
       console.error('Failed to fetch receipts:', err);
     }
   };
