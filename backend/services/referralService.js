@@ -296,7 +296,7 @@ class ReferralService {
    */
   static async getReferralStats(userId) {
     try {
-      // Get all referrals by this user
+      // Get all referrals by this user (without complex includes that can cause errors)
       const referralsCreated = await Referral.findAll({
         where: { referrer_user_id: userId },
         attributes: ['id', 'referral_code', 'status', 'referred_user_id', 'completed_at', 'created_at'],
@@ -309,13 +309,37 @@ class ReferralService {
               {
                 model: DatingProfile,
                 as: 'datingProfile',
-                attributes: ['profile_photo_url', 'bio', 'age']
+                attributes: ['bio', 'age'],
+                required: false
               }
-            ]
+            ],
+            required: false
           }
         ],
-        order: [['created_at', 'DESC']]
+        order: [['created_at', 'DESC']],
+        subQuery: false
       });
+
+      // Fetch photos separately to avoid issues with nested limits
+      const ProfilePhoto = require('../models').ProfilePhoto;
+      const referredUserIds = referralsCreated
+        .map(r => r.referred_user_id)
+        .filter(Boolean);
+      
+      let photosMap = {};
+      if (referredUserIds.length > 0) {
+        const photos = await ProfilePhoto.findAll({
+          where: { user_id: referredUserIds },
+          attributes: ['user_id', 'photoUrl', 'position'],
+          order: [['position', 'ASC']]
+        });
+        // Map first photo for each user
+        photos.forEach(photo => {
+          if (!photosMap[photo.user_id]) {
+            photosMap[photo.user_id] = photo.photoUrl;
+          }
+        });
+      }
 
       // Get rewards earned from referrals
       const rewardsEarned = await ReferralReward.findAll({
@@ -345,7 +369,7 @@ class ReferralService {
             email: r.referredUser.email,
             joinedAt: r.created_at,
             completedAt: r.completed_at,
-            photo: r.referredUser.datingProfile?.profile_photo_url,
+            photo: photosMap[r.referredUser.id] || null,
             age: r.referredUser.datingProfile?.age
           }))
       };
