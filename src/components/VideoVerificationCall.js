@@ -125,6 +125,7 @@ const VideoVerificationCall = () => {
     }
 
     setIsRecording(false);
+    setStatus('ready'); // Update status so submit button appears
   };
 
   // Submit video for verification
@@ -212,7 +213,8 @@ const VideoVerificationCall = () => {
 
         <h2>Video Verification</h2>
         <p className="instruction">
-          {status === 'ready' && 'Click Start to begin recording. Look directly at the camera for 5 seconds.'}
+          {status === 'ready' && recordedChunks.length === 0 && 'Click Start to begin recording. Look directly at the camera for 5 seconds.'}
+          {status === 'ready' && recordedChunks.length > 0 && 'Recording complete! Click Submit for Verification to verify your video.'}
           {status === 'recording' && `Recording... ${Math.round(recordingTime / 1000)}s`}
           {status === 'processing' && 'Processing your video for verification...'}
           {status === 'error' && 'An error occurred. Please try again.'}
