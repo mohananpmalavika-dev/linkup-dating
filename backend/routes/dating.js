@@ -352,68 +352,114 @@ const getUserCouponCredits = async (userId) => {
 };
 
 const getDailyLimitSnapshot = async (userId) => {
-  const today = new Date().toISOString().split('T')[0];
-  const [analyticsResult, subscriptionAccess, rewardBalance, configuredLimits, couponCredits] = await Promise.all([
-    optionalQuery(
-      `SELECT likes_sent, superlikes_sent, rewinds_sent, boosts_used
-       FROM user_analytics
-       WHERE user_id = $1 AND activity_date = $2`,
-      [userId, today],
-      []
-    ),
-    getSubscriptionAccessForUser(userId),
-    getRewardBalanceForUser(userId),
-    getConfiguredDailyLimits(),
-    getUserCouponCredits(userId)
-  ]);
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const [analyticsResult, subscriptionAccess, rewardBalance, configuredLimits, couponCredits] = await Promise.all([
+      optionalQuery(
+        `SELECT likes_sent, superlikes_sent, rewinds_sent, boosts_used
+         FROM user_analytics
+         WHERE user_id = $1 AND activity_date = $2`,
+        [userId, today],
+        []
+      ),
+      getSubscriptionAccessForUser(userId).catch(() => ({
+        plan: 'free',
+        isPremium: false,
+        isGold: false
+      })),
+      getRewardBalanceForUser(userId).catch(() => ({
+        model: null,
+        boostCredits: 0,
+        superlikeCredits: 0
+      })),
+      getConfiguredDailyLimits().catch(() => ({
+        likeLimitFree: 50,
+        likeLimitPremium: 250,
+        likeLimitGold: 500,
+        superlikeLimitFree: 1,
+        superlikeLimitPremium: 5,
+        superlikeLimitGold: 10
+      })),
+      getUserCouponCredits(userId).catch(() => ({
+        couponLikesCredits: 0,
+        couponSuperlikeCredits: 0
+      }))
+    ]);
 
-  const analyticsRow = analyticsResult.rows[0] || {};
-  const likesSent = countRowValue(analyticsRow.likes_sent);
-  const superlikesSent = countRowValue(analyticsRow.superlikes_sent);
-  const rewindsSent = countRowValue(analyticsRow.rewinds_sent);
-  const boostsUsedToday = countRowValue(analyticsRow.boosts_used);
+    const analyticsRow = analyticsResult.rows[0] || {};
+    const likesSent = countRowValue(analyticsRow.likes_sent);
+    const superlikesSent = countRowValue(analyticsRow.superlikes_sent);
+    const rewindsSent = countRowValue(analyticsRow.rewinds_sent);
+    const boostsUsedToday = countRowValue(analyticsRow.boosts_used);
 
-  // Determine base limits based on subscription
-  let likeLimit = configuredLimits.likeLimitFree;
-  let superlikeLimit = configuredLimits.superlikeLimitFree;
-  
-  if (subscriptionAccess.isGold) {
-    likeLimit = configuredLimits.likeLimitGold;
-    superlikeLimit = configuredLimits.superlikeLimitGold;
-  } else if (subscriptionAccess.isPremium) {
-    likeLimit = configuredLimits.likeLimitPremium;
-    superlikeLimit = configuredLimits.superlikeLimitPremium;
+    // Determine base limits based on subscription
+    let likeLimit = configuredLimits.likeLimitFree;
+    let superlikeLimit = configuredLimits.superlikeLimitFree;
+    
+    if (subscriptionAccess.isGold) {
+      likeLimit = configuredLimits.likeLimitGold;
+      superlikeLimit = configuredLimits.superlikeLimitGold;
+    } else if (subscriptionAccess.isPremium) {
+      likeLimit = configuredLimits.likeLimitPremium;
+      superlikeLimit = configuredLimits.superlikeLimitPremium;
+    }
+
+    const rewindLimit = 3;
+    const boostLimit = subscriptionAccess.isGold ? 5 : subscriptionAccess.isPremium ? 1 : 0;
+    const remainingBaseSuperlikes = Math.max(0, superlikeLimit - superlikesSent);
+    const remainingBaseLikes = Math.max(0, likeLimit - likesSent);
+    const remainingBaseBoosts = Math.max(0, boostLimit - boostsUsedToday);
+
+    return {
+      likeLimit,
+      superlikeLimit,
+      rewindLimit,
+      boostLimit,
+      likesSent,
+      superlikesSent,
+      rewindsSent,
+      boostsUsedToday,
+      remainingLikes: remainingBaseLikes + couponCredits.couponLikesCredits + rewardBalance.superlikeCredits,
+      remainingSuperlikes: remainingBaseSuperlikes + couponCredits.couponSuperlikeCredits + rewardBalance.superlikeCredits,
+      remainingRewinds: Math.max(0, rewindLimit - rewindsSent),
+      remainingBaseBoosts,
+      remainingBoostCredits: rewardBalance.boostCredits,
+      remainingBoosts: remainingBaseBoosts + rewardBalance.boostCredits,
+      rewardSuperlikeCredits: rewardBalance.superlikeCredits,
+      rewardBoostCredits: rewardBalance.boostCredits,
+      couponLikesCredits: couponCredits.couponLikesCredits,
+      couponSuperlikeCredits: couponCredits.couponSuperlikeCredits,
+      resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      rewardBalance,
+      subscriptionAccess
+    };
+  } catch (error) {
+    console.error('Error getting daily limit snapshot:', error);
+    // Return safe defaults to prevent cascade failures
+    return {
+      likeLimit: 50,
+      superlikeLimit: 1,
+      rewindLimit: 3,
+      boostLimit: 0,
+      likesSent: 0,
+      superlikesSent: 0,
+      rewindsSent: 0,
+      boostsUsedToday: 0,
+      remainingLikes: 50,
+      remainingSuperlikes: 1,
+      remainingRewinds: 3,
+      remainingBaseBoosts: 0,
+      remainingBoostCredits: 0,
+      remainingBoosts: 0,
+      rewardSuperlikeCredits: 0,
+      rewardBoostCredits: 0,
+      couponLikesCredits: 0,
+      couponSuperlikeCredits: 0,
+      resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      rewardBalance: { model: null, boostCredits: 0, superlikeCredits: 0 },
+      subscriptionAccess: { plan: 'free', isPremium: false, isGold: false }
+    };
   }
-
-  const rewindLimit = 3;
-  const boostLimit = subscriptionAccess.isGold ? 5 : subscriptionAccess.isPremium ? 1 : 0;
-  const remainingBaseSuperlikes = Math.max(0, superlikeLimit - superlikesSent);
-  const remainingBaseLikes = Math.max(0, likeLimit - likesSent);
-  const remainingBaseBoosts = Math.max(0, boostLimit - boostsUsedToday);
-
-  return {
-    likeLimit,
-    superlikeLimit,
-    rewindLimit,
-    boostLimit,
-    likesSent,
-    superlikesSent,
-    rewindsSent,
-    boostsUsedToday,
-    remainingLikes: remainingBaseLikes + couponCredits.couponLikesCredits + rewardBalance.boostCredits,
-    remainingSuperlikes: remainingBaseSuperlikes + couponCredits.couponSuperlikeCredits + rewardBalance.superlikeCredits,
-    remainingRewinds: Math.max(0, rewindLimit - rewindsSent),
-    remainingBaseBoosts,
-    remainingBoostCredits: rewardBalance.boostCredits,
-    remainingBoosts: remainingBaseBoosts + rewardBalance.boostCredits,
-    rewardSuperlikeCredits: rewardBalance.superlikeCredits,
-    rewardBoostCredits: rewardBalance.boostCredits,
-    couponLikesCredits: couponCredits.couponLikesCredits,
-    couponSuperlikeCredits: couponCredits.couponSuperlikeCredits,
-    resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    rewardBalance,
-    subscriptionAccess
-  };
 };
 
 const getLatestBoostRecordForUser = async (userId, { activeOnly = false } = {}) => {
@@ -5820,15 +5866,18 @@ router.post('/interactions/superlike', authenticateToken, async (req, res) => {
       spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
       spamFraudService.refreshSystemMetrics();
 
+      // Get updated limits after superlike
+      const updatedLimits = await getDailyLimitSnapshot(fromUserId);
+
       return res.json({
         message: 'Super Like Match!',
         isMatch: true,
         match: persistedMatch,
         superlike: true,
         usedRewardCredit,
-        remainingSuperlikes: Math.max(0, limits.remainingSuperlikes - 1),
-        rewardCreditsRemaining: rewardBalance.superlikeCredits,
-        couponSuperlikeCredits: limits.couponSuperlikeCredits
+        remainingSuperlikes: updatedLimits.remainingSuperlikes,
+        rewardCreditsRemaining: updatedLimits.rewardSuperlikeCredits,
+        couponSuperlikeCredits: updatedLimits.couponSuperlikeCredits
       });
     }
 
@@ -5840,7 +5889,7 @@ router.post('/interactions/superlike', authenticateToken, async (req, res) => {
       isMatch: false,
       superlike: true,
       usedRewardCredit,
-      remainingSuperlikes: Math.max(0, updatedLimits.remainingSuperlikes - 1),
+      remainingSuperlikes: updatedLimits.remainingSuperlikes,
       rewardCreditsRemaining: updatedLimits.rewardSuperlikeCredits,
       couponSuperlikeCredits: updatedLimits.couponSuperlikeCredits
     });
