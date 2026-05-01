@@ -120,6 +120,16 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Chatroom name must be between 1 and 255 characters' });
     }
 
+    // Validate userId is a valid number
+    if (!userId || typeof userId !== 'number') {
+      console.error('CREATE CHATROOM - userId validation failed:', { userId, type: typeof userId, userObj: req.user });
+      return res.status(401).json({ 
+        error: 'Authentication failed - invalid user ID',
+        userId,
+        userKeys: Object.keys(req.user || {})
+      });
+    }
+
     console.log('CREATE CHATROOM - Attempting to create:', { userId, name: trimmedName, isPublic, maxMembers });
 
     // Validate inputs before sending to DB
@@ -129,7 +139,8 @@ router.post('/', async (req, res) => {
       name: trimmedName,
       description: trimmedDesc,
       isPublic: isPublic !== false,
-      maxMembers: maxMembers || 100
+      maxMembers: maxMembers || 100,
+      paramTypes: [typeof userId, typeof trimmedName, typeof trimmedDesc, typeof (isPublic !== false), typeof (maxMembers || 100)]
     });
 
     // Insert with explicit error handling
@@ -188,15 +199,25 @@ router.post('/', async (req, res) => {
       statusCode = 409;
     } else if (err.code === '23502') {
       // Extract which field caused the NOT NULL violation
-      // PostgreSQL format can vary - try multiple patterns
+      // PostgreSQL error detail format: "Failing row contains (id, created_by_user_id, name, ...)."
       let failedColumn = 'unknown field';
       if (err.detail) {
-        // Try to extract from different PostgreSQL error message formats
-        const match1 = err.detail.match(/column "(\w+)"/i);
-        const match2 = err.detail.match(/Failing row contains.*?NULL/);
-        failedColumn = match1?.[1] || 'unknown field';
+        // Try multiple extraction patterns
+        const columnMatch = err.detail.match(/column "([^"]+)"/i);
+        if (columnMatch) {
+          failedColumn = columnMatch[1];
+        } else {
+          // Log the actual error detail for debugging
+          console.error('CREATE CHATROOM - Could not parse column from detail:', err.detail);
+          failedColumn = 'unknown field (check logs)';
+        }
       }
       errorMessage = `Missing required field: ${failedColumn}`;
+      console.error('CREATE CHATROOM - NOT NULL constraint violation:', {
+        failedColumn,
+        detail: err.detail,
+        hint: err.hint
+      });
       statusCode = 400;
       console.error('NOT NULL violation on column:', failedColumn, 'Full detail:', err.detail);
     } else if (err.code === '23503') {
