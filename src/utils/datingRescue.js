@@ -68,9 +68,11 @@ const toProposalDate = (proposal) => {
 };
 
 export const hasActiveDatePlan = (match = {}, now = Date.now()) => {
-  const pendingProposal = match.journey?.pendingProposal;
+  const journey = match?.journey || {};
+  const pendingProposal = journey.pendingProposal;
+  const pendingProposalStatus = String(pendingProposal?.status || '').toLowerCase();
   if (
-    pendingProposal?.status === 'pending' ||
+    pendingProposalStatus === 'pending' ||
     pendingProposal?.isReceived ||
     pendingProposal?.isSent ||
     pendingProposal?.is_received ||
@@ -79,7 +81,7 @@ export const hasActiveDatePlan = (match = {}, now = Date.now()) => {
     return true;
   }
 
-  const acceptedProposal = match.journey?.latestAcceptedProposal;
+  const acceptedProposal = journey.latestAcceptedProposal;
   const acceptedProposalStatus = String(acceptedProposal?.status || '').toLowerCase();
   const acceptedProposalDate = toProposalDate(acceptedProposal);
   if (
