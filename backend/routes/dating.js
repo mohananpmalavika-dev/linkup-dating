@@ -17142,7 +17142,7 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
 
     // Update coupon redemption count
     await db.query(
-      `UPDATE coupons SET current_redemptions = current_redemptions + 1 WHERE id = $1`,
+      `UPDATE coupons SET current_redemptions = COALESCE(current_redemptions, 0) + 1 WHERE id = $1`,
       [coupon.id]
     );
 

@@ -1,61 +1,36 @@
 /**
- * Seed script to add "dhanya" coupon code for 100 call credits
+ * Seed or update the DHANYA coupon code for 100 reusable call credits.
+ *
  * Run: node backend/scripts/seed-dhanya-coupon.js
  */
 
 require('dotenv').config();
 const db = require('../config/database');
 
+const DHANYA_COUPON_CODE = 'DHANYA';
+const DHANYA_CALL_CREDITS = 100;
+
+const getCreatorUserId = async (client) => {
+  const adminResult = await client.query(
+    'SELECT id FROM users WHERE is_admin = true ORDER BY id LIMIT 1'
+  );
+
+  if (adminResult.rows.length > 0) {
+    return adminResult.rows[0].id;
+  }
+
+  const userResult = await client.query('SELECT id FROM users ORDER BY id LIMIT 1');
+  return userResult.rows[0]?.id || 1;
+};
+
 const seedCoupon = async () => {
   let client;
 
   try {
-    console.log('🔌 Connecting to database...');
+    console.log('Connecting to database...');
     client = await db.pool.connect();
 
-    // Check if coupon already exists
-    const existingResult = await client.query(
-      `SELECT id FROM coupons WHERE code = $1`,
-      ['DHANYA']
-    );
-
-    if (existingResult.rows.length > 0) {
-      const result = await client.query(
-        `UPDATE coupons
-         SET coupon_type = $2,
-             likes_value = 0,
-             superlikes_value = 0,
-             call_credits_value = 100,
-             max_redemptions = NULL,
-             expiry_date = NULL,
-             is_active = true,
-             min_user_level = 0,
-             target_user_ids = NULL,
-             updated_at = NOW()
-         WHERE id = $1
-         RETURNING id, code, call_credits_value`,
-        [existingResult.rows[0].id, 'callcredits']
-      );
-
-      console.log('Updated "DHANYA" coupon reusable no-expiry settings.');
-      console.log('   ID:', result.rows[0].id);
-      console.log('   Code:', result.rows[0].code);
-      console.log('   Call Credits:', result.rows[0].call_credits_value);
-      console.log('✓ Coupon "DHANYA" already exists with ID:', existingResult.rows[0].id);
-      return;
-    }
-
-    // Get first admin user or create a seed admin ID
-    const adminResult = await client.query(
-      `SELECT id FROM users WHERE is_admin = true LIMIT 1`
-    );
-
-    let adminId = 1; // Default to 1 if no admin exists
-    if (adminResult.rows.length > 0) {
-      adminId = adminResult.rows[0].id;
-    }
-
-    // Insert the dhanya coupon
+    const creatorUserId = await getCreatorUserId(client);
     const result = await client.query(
       `INSERT INTO coupons (
         code,
@@ -74,35 +49,39 @@ const seedCoupon = async () => {
         target_user_ids,
         created_at,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-      RETURNING id, code, call_credits_value, created_at`,
+      ) VALUES ($1, $2, 0, 0, $3, NULL, 0, NULL, NOW(), true, $4, $5, 0, NULL, NOW(), NOW())
+      ON CONFLICT (code) DO UPDATE
+      SET coupon_type = EXCLUDED.coupon_type,
+          likes_value = 0,
+          superlikes_value = 0,
+          call_credits_value = EXCLUDED.call_credits_value,
+          max_redemptions = NULL,
+          expiry_date = NULL,
+          is_active = true,
+          min_user_level = 0,
+          target_user_ids = NULL,
+          updated_at = NOW()
+      RETURNING id, code, coupon_type, call_credits_value, max_redemptions, expiry_date, is_active`,
       [
-        'DHANYA',                          // code
-        'callcredits',                     // coupon_type
-        0,                                 // likes_value
-        0,                                 // superlikes_value
-        100,                               // call_credits_value - 100 call credits
-        null,                              // max_redemptions - unlimited
-        0,                                 // current_redemptions
-        null,                              // expiry_date - never expires
-        new Date(),                        // start_date - now
-        true,                              // is_active
-        'Special coupon code for 100 call credits',  // description
-        adminId,                           // created_by_admin_id
-        0,                                 // min_user_level
-        null,                              // target_user_ids - available to everyone
-        new Date(),                        // created_at
-        new Date()                         // updated_at
+        DHANYA_COUPON_CODE,
+        'callcredits',
+        DHANYA_CALL_CREDITS,
+        'Special reusable coupon code for 100 call credits',
+        creatorUserId
       ]
     );
 
-    console.log('✅ Successfully created "DHANYA" coupon!');
-    console.log('   ID:', result.rows[0].id);
-    console.log('   Code:', result.rows[0].code);
-    console.log('   Call Credits:', result.rows[0].call_credits_value);
-    console.log('   Created:', result.rows[0].created_at);
+    const coupon = result.rows[0];
+    console.log('DHANYA coupon seeded successfully.');
+    console.log('   ID:', coupon.id);
+    console.log('   Code:', coupon.code);
+    console.log('   Type:', coupon.coupon_type);
+    console.log('   Call Credits:', coupon.call_credits_value);
+    console.log('   Max Redemptions:', coupon.max_redemptions || 'Unlimited');
+    console.log('   Expiry:', coupon.expiry_date || 'Never');
+    console.log('   Active:', coupon.is_active);
   } catch (error) {
-    console.error('❌ Error seeding coupon:', error.message);
+    console.error('Error seeding DHANYA coupon:', error.message);
     process.exit(1);
   } finally {
     if (client) {
@@ -112,5 +91,4 @@ const seedCoupon = async () => {
   }
 };
 
-// Run the seed
 seedCoupon();
