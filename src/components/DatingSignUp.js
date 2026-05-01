@@ -1545,38 +1545,6 @@ setError('That looks like a phone number. Please use your email (like yourname@e
           </form>
         )}
 
-        {/* Step 2: Set Username */}
-        {false && step === 2 && (
-          <form className="signup-step" onSubmit={handleSetUsername}>
-            <h2>Choose Your Username</h2>
-            <div className="form-group">
-              <label>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => handleUsernameChange(e.target.value)}
-                placeholder="Choose a unique username"
-                disabled={loading}
-              />
-              {usernameStatus === 'checking' && (
-                <p className="helper-text" style={{ color: '#FF9500' }}>Checking availability...</p>
-              )}
-              {usernameStatus === 'available' && (
-                <p className="helper-text" style={{ color: '#4CAF50' }}>✓ Username is available</p>
-              )}
-              {usernameStatus === 'taken' && (
-                <p className="helper-text" style={{ color: '#F44336' }}>✗ {usernameError}</p>
-              )}
-              {usernameError && usernameStatus !== 'taken' && (
-                <p className="helper-text" style={{ color: '#F44336' }}>{usernameError}</p>
-              )}
-            </div>
-            <button type="submit" className="btn-submit" disabled={loading || usernameStatus !== 'available'}>
-              {loading ? 'Setting Username...' : 'Continue'}
-            </button>
-          </form>
-        )}
-
         {/* Step 3: Profile Info */}
         {step === 3 && (
           <div className="signup-step">
