@@ -23,7 +23,6 @@ const BoostButton = ({ onBoostActivated, compact = false }) => {
         title="Upgrade to premium to use boosts"
         onClick={() => navigate('/subscription')}
       >
-        <span className="boost-icon">📈</span>
         <span className="boost-text">Upgrade</span>
       </button>
     );
@@ -37,7 +36,7 @@ const BoostButton = ({ onBoostActivated, compact = false }) => {
           onClick={() => setShowPanel(true)}
           title={hasActiveBoost ? 'Boost active!' : 'Boost your profile'}
         >
-          <span className="boost-icon">📈</span>
+          <span className="boost-text">{hasActiveBoost ? 'Boost on' : 'Boost'}</span>
           {hasActiveBoost && <span className="active-indicator"></span>}
         </button>
 
@@ -61,16 +60,15 @@ const BoostButton = ({ onBoostActivated, compact = false }) => {
         className={`boost-btn full-btn ${hasActiveBoost ? 'active' : ''}`}
         onClick={() => setShowPanel(true)}
       >
-        <span className="boost-icon">📈</span>
         <div className="boost-btn-content">
           <span className="boost-title">
-            {hasActiveBoost ? '🚀 Boost Active!' : 'Boost Your Profile'}
+            {hasActiveBoost ? 'Boost active' : 'Boost your profile'}
           </span>
           <span className="boost-subtitle">
             {hasActiveBoost ? `${activeBoosts.length} active boost(s)` : 'Get 3x-10x visibility'}
           </span>
         </div>
-        <span className="boost-arrow">→</span>
+        <span className="boost-arrow">Next</span>
       </button>
 
       {showPanel && (

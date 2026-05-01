@@ -22,11 +22,11 @@ const BODY_TYPE_OPTIONS = ['Slim', 'Average', 'Athletic', 'Curvy', 'Muscular', '
 const INTEREST_OPTIONS = ['Travel', 'Fitness', 'Music', 'Art', 'Cooking', 'Gaming', 'Sports', 'Hiking', 'Photography', 'Reading', 'Movies', 'Yoga'];
 const DISCOVERY_HUB_TABS = [
   { key: 'smartQueue', label: 'For You' },
-  { key: 'topPicks', label: 'Top Picks' },
-  { key: 'trending', label: 'Trending' },
-  { key: 'newProfiles', label: 'New' },
-  { key: 'allAccounts', label: 'All Accounts' },
-  { key: 'presets', label: 'Presets' }
+  { key: 'topPicks', label: 'Best Matches' },
+  { key: 'trending', label: 'Popular' },
+  { key: 'newProfiles', label: 'New People' },
+  { key: 'allAccounts', label: 'All' },
+  { key: 'presets', label: 'Saved Filters' }
 ];
 const PRESET_NAME_SUGGESTIONS = ['Nearby', 'Serious', 'Creative', 'Weekend vibe'];
 const SCORE_BREAKDOWN_META = {
@@ -150,42 +150,59 @@ const buildRecommendationReasons = (profile) => {
   return reasons.filter((reason, index, list) => reason && list.indexOf(reason) === index).slice(0, 4);
 };
 
+const buildLocationLabel = (profile) => {
+  if (!profile) {
+    return 'Location not shared';
+  }
+
+  const place = [profile.location?.city, profile.location?.state].filter(Boolean).join(', ');
+  const distance = profile.distanceKm !== undefined && profile.distanceKm !== null
+    ? `${profile.distanceKm} km away`
+    : '';
+
+  if (place && distance) {
+    return `${place} - ${distance}`;
+  }
+
+  return place || distance || 'Location not shared';
+};
+
 const getModeSummary = (tabKey, presetCount, activeFilterCount) => {
   switch (tabKey) {
     case 'topPicks':
       return {
-        title: 'Top Picks',
-        subtitle: 'Highest-confidence profiles based on your compatibility data.'
+        title: 'Best Matches',
+        subtitle: 'Profiles that look like a strong fit.'
       };
     case 'trending':
       return {
-        title: 'Trending',
-        subtitle: 'Popular profiles getting strong engagement right now.'
+        title: 'Popular',
+        subtitle: 'People who are getting more attention right now.'
       };
     case 'newProfiles':
       return {
-        title: 'New',
-        subtitle: 'Fresh arrivals so you can meet people before the crowd does.'
+        title: 'New People',
+        subtitle: 'Recently joined profiles.'
       };
     case 'allAccounts':
       return {
-        title: 'All Accounts',
-        subtitle: 'Browse every profile in the community without any filters.'
+        title: 'All Profiles',
+        subtitle: 'Browse more people without extra sorting.'
       };
     case 'presets':
       return {
-        title: 'Presets',
+        title: 'Saved Filters',
         subtitle: presetCount > 0
-          ? `You have ${presetCount} saved filter preset${presetCount === 1 ? '' : 's'} ready to reapply.`
-          : 'Save your favorite discovery setups for one-tap reuse.'
+          ? `${presetCount} saved filter set${presetCount === 1 ? '' : 's'} ready.`
+          : 'Save filters you use often.'
       };
     case 'smartQueue':
     default:
       return {
         title: 'For You',
         subtitle: activeFilterCount > 0
-          ? 'Your active filters are shaping this stack right now.'
-          : 'A tailored mix balancing compatibility, freshness, and activity.'
+          ? 'Using your current filters.'
+          : 'A simple mix of nearby, active, and compatible profiles.'
       };
   }
 };
@@ -203,14 +220,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [remainingLikes, setRemainingLikes] = useState(50);
   const [remainingSuperlikes, setRemainingSuperlikes] = useState(1);
   const [remainingRewinds, setRemainingRewinds] = useState(3);
-  const [couponCode, setCouponCode] = useState('');
-  const [couponLoading, setCouponLoading] = useState(false);
-  const [couponLikesCredits, setCouponLikesCredits] = useState(0);
-  const [couponSuperlikeCredits, setCouponSuperlikeCredits] = useState(0);
   const [discoveryMode, setDiscoveryMode] = useState('smartQueue');
   const [activeHubTab, setActiveHubTab] = useState('smartQueue');
-  const [subscription, setSubscription] = useState(null);
-  const [boosting, setBoosting] = useState(false);
   const [nextCursor, setNextCursor] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
@@ -220,8 +231,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [savingPreset, setSavingPreset] = useState(false);
   const [feedback, setFeedback] = useState(null);
   const [quickViewActive, setQuickViewActive] = useState(false);
-  const { isActive: quickViewIsActive, startQuickView } = useQuickViewMode(profiles);
-  const { activeBoosts, refetch: refetchBoosts } = useBoosts();
+  const { startQuickView } = useQuickViewMode(profiles);
+  const { refetch: refetchBoosts } = useBoosts();
   const loadMoreTriggered = useRef(false);
   const feedbackTimeoutRef = useRef(null);
 
@@ -321,33 +332,13 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
   const loadDailyLimits = async () => {
     try {
-      const [limitsData, subscriptionData] = await Promise.all([
-        datingProfileService.getDailyLimits().catch(() => ({})),
-        datingProfileService.getMySubscription().catch(() => ({ plan: 'free', isPremium: false }))
-      ]);
+      const limitsData = await datingProfileService.getDailyLimits().catch(() => ({}));
 
       setRemainingLikes(limitsData.remainingLikes ?? 50);
       setRemainingSuperlikes(limitsData.remainingSuperlikes ?? 1);
       setRemainingRewinds(limitsData.remainingRewinds ?? 3);
-      setCouponLikesCredits(limitsData.couponLikesCredits ?? 0);
-      setCouponSuperlikeCredits(limitsData.couponSuperlikeCredits ?? 0);
-      setSubscription(subscriptionData);
     } catch (loadError) {
       console.error(loadError);
-    }
-  };
-
-  const handleBoost = async () => {
-    setBoosting(true);
-    setError('');
-
-    try {
-      const response = await datingProfileService.boostProfile();
-      showFeedback('success', response.message || 'Your profile is boosted.');
-    } catch (boostError) {
-      showFeedback('error', boostError || 'Boost requires Premium');
-    } finally {
-      setBoosting(false);
     }
   };
 
@@ -384,7 +375,6 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     }
 
     try {
-      // Use the new AI-powered smart suggestions endpoint for 70%+ compatibility matches
       const data = await datingProfileService.getSmartSuggestions(
         cursor ? { cursor, limit: 20 } : { limit: 20 }
       );
@@ -401,15 +391,13 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       setNextCursor(data.nextCursor || null);
       setDiscoveryMode('smartQueue');
 
-      // Show feedback message about AI suggestions
       if (!cursor && newProfiles.length > 0) {
         showFeedback(
           'success',
-          `Found ${newProfiles.length} AI-matched profiles (70%+ compatibility)`
+          `Found ${newProfiles.length} profiles for you.`
         );
       }
     } catch (loadError) {
-      // Fallback to regular discovery queue if smart suggestions fail
       console.warn('Smart suggestions failed, falling back to regular queue:', loadError);
       try {
         const data = await datingProfileService.getDiscoveryQueue(cursor ? { cursor, limit: 20 } : { limit: 20 });
@@ -515,13 +503,10 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     }
 
     try {
-      // Use searchProfiles with showAll flag to bypass visibility filters
       const data = await datingProfileService.searchProfiles({ showAll: true });
       const newProfiles = Array.isArray(data.profiles) ? data.profiles : [];
 
       if (cursor) {
-        // For now, searchProfiles doesn't support cursor pagination like other endpoints
-        // In a future update, you could implement cursor support in the backend
         setProfiles((currentProfiles) => [...currentProfiles, ...newProfiles]);
       } else {
         setProfiles(newProfiles);
@@ -560,7 +545,6 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
         showFeedback('success', 'Your last pass is back in the stack.');
       }
     } catch (rewindError) {
-      // Check if the error is "no passes to rewind"
       const errorMessage = typeof rewindError === 'string' ? rewindError : 'Failed to rewind your last pass.';
       if (errorMessage.includes('No passes')) {
         showFeedback('info', 'You haven\'t passed on any profiles recently to rewind.');
@@ -621,7 +605,6 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
     try {
       const response = await datingProfileService.likeProfile(profile.userId);
-      // Use backend response to update remaining likes count
       if (response.remainingLikes !== undefined) {
         setRemainingLikes(response.remainingLikes);
       } else {
@@ -650,7 +633,6 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
     try {
       const response = await datingProfileService.superlikeProfile(profile.userId);
-      // Use backend response to update remaining superlikes count
       if (response.remainingSuperlikes !== undefined) {
         setRemainingSuperlikes(response.remainingSuperlikes);
       } else {
@@ -700,7 +682,6 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const handleQuickViewLike = useCallback(async (profile) => {
     try {
       const response = await datingProfileService.likeProfile(profile.id);
-      // Use backend response to update remaining likes count
       if (response.remainingLikes !== undefined) {
         setRemainingLikes(response.remainingLikes);
       } else {
@@ -826,7 +807,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     };
 
     setAppliedFilters(nextFilters);
-    setActiveHubTab('presets');
+    setActiveHubTab('smartQueue');
     setShowFilters(false);
     setNextCursor(null);
     loadMoreTriggered.current = false;
@@ -924,6 +905,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const scoreBreakdown = currentProfile?.scoreBreakdown;
   const activityHint = getActivityHint(currentProfile?.lastActive);
   const recommendationReasons = buildRecommendationReasons(currentProfile);
+  const visibleRecommendationReasons = recommendationReasons.slice(0, 3);
+  const locationLabel = buildLocationLabel(currentProfile);
   const scoreBreakdownRows = Object.entries(scoreBreakdown || {})
     .filter(([, value]) => Number.isFinite(Number(value)))
     .map(([key, value]) => ({
@@ -938,8 +921,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     <form className="filter-panel" onSubmit={handleApplyFilters}>
       <div className="filter-panel-header">
         <div>
-          <h3>Discovery preferences</h3>
-          <p>Refine who shows up in your stack, then save your best combinations.</p>
+          <h3>Set your preferences</h3>
+          <p>Age, distance, interests, and relationship goals.</p>
         </div>
         <button type="button" className="btn-filter-close" onClick={() => setShowFilters(false)}>
           Close
@@ -1021,8 +1004,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
       <div className="preset-save-row">
         <div className="preset-save-copy">
-          <strong>Save this setup</strong>
-          <span>Great for one-tap moods like Nearby, Serious, or Weekend vibe.</span>
+          <strong>Save these filters</strong>
+          <span>Use this set again later.</span>
         </div>
         <div className="preset-save-form">
           <input
@@ -1056,8 +1039,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     <div className="preset-panel">
       <div className="preset-panel-header">
         <div>
-          <h3>Saved presets</h3>
-          <p>Quick-apply the setups that match your current dating mood.</p>
+          <h3>Saved filters</h3>
+          <p>Your favorite search choices.</p>
         </div>
         <button type="button" className="btn-filter-close" onClick={() => setShowFilters((current) => !current)}>
           {showFilters ? 'Hide filters' : 'Edit filters'}
@@ -1087,7 +1070,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
         </div>
       ) : (
         <p className="preset-empty-state">
-          No saved presets yet. Open filters, tune your stack, and save a favorite configuration.
+          No saved filters yet.
         </p>
       )}
     </div>
@@ -1097,9 +1080,9 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     <>
       <div className="discovery-hub">
         <div className="discovery-hub-copy">
-          <span className="discovery-hub-label">Discovery Hub</span>
-          <h2>Switch modes with intention</h2>
-          <p>Move between personalized suggestions, social momentum, and your saved filter moods.</p>
+          <span className="discovery-hub-label">Discover</span>
+          <h2>Meet someone new</h2>
+          <p>Simple profiles, clear choices, no rush.</p>
         </div>
         <div className="discovery-hub-tabs">
           {DISCOVERY_HUB_TABS.map((tab) => (
@@ -1124,9 +1107,9 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
             type="button" 
             className="btn-quick-view"
             onClick={handleQuickViewStart}
-            title="Ultra-fast profile browsing"
+            title="Browse faster"
           >
-            ⚡ Quick View
+            Quick view
           </button>
           {filterPresets.length > 0 && activeHubTab !== 'presets' ? (
             <div className="quick-preset-row">
@@ -1144,10 +1127,10 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
           ) : null}
         </div>
 
-        <div className="daily-limits">
-          <span title="Remaining likes">Likes {remainingLikes}</span>
-          <span title="Remaining superlikes">Stars {remainingSuperlikes}</span>
-          <span title="Remaining rewinds">Rewinds {remainingRewinds}</span>
+        <div className="daily-limits" aria-label="Daily actions left">
+          <span title="Remaining likes"><strong>{remainingLikes}</strong> Likes</span>
+          <span title="Remaining stars"><strong>{remainingSuperlikes}</strong> Stars</span>
+          <span title="Remaining undo actions"><strong>{remainingRewinds}</strong> Undo</span>
           <BoostButton 
             onBoostActivated={() => {
               showFeedback('success', 'Boost activated! Your profile is now getting more visibility.');
@@ -1164,7 +1147,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       </div>
 
       {feedback ? (
-        <div className={`discovery-feedback ${feedback.type === 'error' ? 'error' : 'success'}`}>
+        <div className={`discovery-feedback ${feedback.type || 'success'}`}>
           {feedback.message}
         </div>
       ) : null}
@@ -1194,21 +1177,21 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
         {renderDiscoveryControls()}
         <div className="empty-state">
           <h2>
-            {activeHubTab === 'trending' ? 'No Trending Profiles' :
-             activeHubTab === 'newProfiles' ? 'No New Profiles' :
-             activeHubTab === 'topPicks' ? 'No Top Picks Yet' :
+            {activeHubTab === 'trending' ? 'No Popular Profiles' :
+             activeHubTab === 'newProfiles' ? 'No New People Yet' :
+             activeHubTab === 'topPicks' ? 'No Best Matches Yet' :
              'No More Profiles'}
           </h2>
           <p>
             {activeFilterCount > 0
-              ? 'No profiles match your current preferences just yet.'
+              ? 'No profiles match your current preferences right now.'
               : activeHubTab === 'trending'
-                ? 'No profiles are trending yet. Check back soon as more users join and engage!'
+                ? 'Popular profiles will appear here soon.'
                 : activeHubTab === 'newProfiles'
-                  ? 'No new profiles this week. We will show you recently active profiles instead.'
+                  ? 'New profiles will appear here soon.'
                   : activeHubTab === 'topPicks'
-                    ? 'We are still learning your preferences. Check back soon for personalized top picks!'
-                    : "You've reviewed all available profiles for this mode."}
+                    ? 'We are still learning your preferences.'
+                    : 'You have reviewed the available profiles.'}
           </p>
           {loadingMore ? (
             <div className="spinner small"></div>
@@ -1267,42 +1250,39 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
               </div>
               <div className="badge-row">
                 {currentProfile.profileVerified ? (
-                  <div className="verified-badge" title="Verified Profile">V</div>
+                  <div className="verified-badge" title="Verified Profile">Verified</div>
                 ) : null}
                 {currentProfile.videoAuthenticationStatus === 'verified' || currentProfile.videoAuthenticationStatus === 'approved' ? (
-                  <div className="video-verified-badge" title="Video Verified">🎥</div>
+                  <div className="video-verified-badge" title="Video Verified">Video</div>
                 ) : null}
               </div>
             </div>
 
-            <div className="location">
-              {currentProfile.location?.city}, {currentProfile.location?.state}
-              {currentProfile.distanceKm !== undefined && currentProfile.distanceKm !== null
-                ? ` | ${currentProfile.distanceKm} km`
-                : ''}
+            <div className="photo-badges">
+              <div className="location">{locationLabel}</div>
+              {activityHint ? (
+                <div className={`activity-pill ${activityHint.tone}`}>
+                  {activityHint.label}
+                </div>
+              ) : null}
             </div>
-
-            {activityHint ? (
-              <div className={`activity-pill ${activityHint.tone}`}>
-                {activityHint.label}
-              </div>
-            ) : null}
           </div>
 
           <div className="profile-info">
             {currentProfile.compatibilityScore ? (
               <div className="profile-meta-row">
                 <div className="compatibility-panel compact">
-                  <div
+                  <button
+                    type="button"
                     className="compatibility-badge"
                     onClick={() => setShowScoreBreakdown((current) => !current)}
-                    style={{ cursor: scoreBreakdown ? 'pointer' : 'default' }}
+                    disabled={!scoreBreakdown}
                   >
-                    Compatibility {currentProfile.compatibilityScore}%
+                    Match {currentProfile.compatibilityScore}%
                     {scoreBreakdown ? (
-                      <span className="score-toggle">{showScoreBreakdown ? ' ^' : ' v'}</span>
+                      <span className="score-toggle">{showScoreBreakdown ? 'Hide details' : 'Details'}</span>
                     ) : null}
-                  </div>
+                  </button>
 
                   {showScoreBreakdown && scoreBreakdown ? (
                     <div className="score-breakdown">
@@ -1328,42 +1308,18 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
               </div>
             ) : null}
 
-            {recommendationReasons.length > 0 ? (
+            {visibleRecommendationReasons.length > 0 ? (
               <div className="recommendation-panel">
-                <p className="recommendation-label">Why You Might Like Them</p>
+                <p className="recommendation-label">Good to know</p>
                 <div className="compatibility-reasons">
-                  {recommendationReasons.map((reason) => (
+                  {visibleRecommendationReasons.map((reason) => (
                     <span key={reason} className="compatibility-reason">{reason}</span>
                   ))}
                 </div>
 
-                {currentProfile.compatibilityFactors ? (
-                  <div className="compatibility-factors-breakdown">
-                    <p className="factors-label">Compatibility Breakdown:</p>
-                    <div className="factors-grid">
-                      {Object.entries(currentProfile.compatibilityFactors).map(([key, factor]) => (
-                        <div key={key} className="factor-item">
-                          <div className="factor-label">{factor.label}</div>
-                          <div className="factor-bar">
-                            <div
-                              className="factor-fill"
-                              style={{
-                                width: `${Math.min(factor.score, 100)}%`,
-                                backgroundColor:
-                                  factor.score >= 80 ? '#4CAF50' : factor.score >= 60 ? '#FFC107' : '#FF6B6B'
-                              }}
-                            />
-                          </div>
-                          <div className="factor-score">{Math.round(factor.score)}%</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
                 {currentProfile.icebreakers?.[0] ? (
                   <div className="icebreaker-suggestion">
-                    <p className="icebreaker-label">💬 Suggested Opener:</p>
+                    <p className="icebreaker-label">Suggested opener</p>
                     <p className="compatibility-opener">{currentProfile.icebreakers[0]}</p>
                   </div>
                 ) : null}
@@ -1425,10 +1381,10 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       </div>
 
       <div className="action-buttons">
-        <button onClick={handlePass} className="btn-action btn-pass" title="Not interested" aria-label="Pass">Pass</button>
+        <button onClick={handlePass} className="btn-action btn-pass" title="Skip this profile" aria-label="Skip">Skip</button>
         <button onClick={handleRewind} className="btn-action btn-rewind" title="Undo last pass" aria-label="Rewind" disabled={remainingRewinds <= 0}>Undo</button>
-        <button onClick={() => onProfileView?.(currentProfile)} className="btn-action btn-view" title="View full profile" aria-label="View Profile">View</button>
-        <button onClick={handleSuperlike} className="btn-action btn-superlike" title="Superlike" aria-label="Superlike" disabled={remainingSuperlikes <= 0}>Star</button>
+        <button onClick={() => onProfileView?.(currentProfile)} className="btn-action btn-view" title="Open full profile" aria-label="Open profile">Profile</button>
+        <button onClick={handleSuperlike} className="btn-action btn-superlike" title="Send a star" aria-label="Send a star" disabled={remainingSuperlikes <= 0}>Star</button>
         <button onClick={handleLike} className="btn-action btn-like" title="Like this profile" aria-label="Like" disabled={remainingLikes <= 0}>Like</button>
       </div>
 
