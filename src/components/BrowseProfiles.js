@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import '../styles/BrowseProfiles.css';
 import datingProfileService from '../services/datingProfileService';
 import { isValidPincode } from '../utils/ecommerceHelpers';
-import { buildLocalIdentityPack, buildTrustSummary } from '../utils/datingPhaseTwo';
+import { buildTrustSummary } from '../utils/datingPhaseTwo';
 import {
   formatProfileLocation,
   getDistrictOptionsForRegion,
@@ -65,11 +65,55 @@ const parseIntegerOrFallback = (value, fallbackValue) => {
 const truncateText = (value, limit = 60) => {
   const normalizedValue = String(value || '').trim();
   if (!normalizedValue) {
-    return 'No bio yet.';
+    return '';
   }
   return normalizedValue.length > limit
     ? `${normalizedValue.slice(0, limit).trimEnd()}...`
     : normalizedValue;
+};
+
+const titleCaseValue = (value) =>
+  String(value || '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const getProfileName = (profile) => {
+  const name = String(profile?.firstName || 'Member').trim();
+  return profile?.age ? `${name}, ${profile.age}` : name;
+};
+
+const getDistanceLabel = (profile) => {
+  if (!profile?.distanceKm) {
+    return '';
+  }
+
+  return `${profile.distanceKm} km away`;
+};
+
+const getTrustLabel = (level) => {
+  switch (level) {
+    case 'trusted':
+      return 'Verified';
+    case 'strong':
+      return 'Trusted';
+    case 'pending':
+      return 'Checking';
+    case 'basic':
+      return 'Basic info';
+    default:
+      return 'New';
+  }
+};
+
+const getGoalLabel = (profile) => {
+  const goals = profile?.relationshipGoals || profile?.relationshipGoal || profile?.relationship_goals;
+  if (Array.isArray(goals)) {
+    return goals.slice(0, 2).map(titleCaseValue).join(', ');
+  }
+
+  return titleCaseValue(goals);
 };
 
 const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
@@ -252,22 +296,28 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
     <div className="browse-container">
       <div className="browse-header">
         <div>
-          <h1>Browse Profiles</h1>
-          <p className="browse-subtitle">Search by age, goals, interests, and tighter Kerala locality signals.</p>
+          <h1>Browse</h1>
+          <p className="browse-subtitle">Find people by age, place, interests, and goals.</p>
         </div>
         <button
           type="button"
-          className="btn-filter-toggle"
+          className="browse-filter-toggle"
           onClick={() => setShowFilters((currentValue) => !currentValue)}
         >
-          Filters
+          {showFilters ? 'Close filters' : 'Filters'}
         </button>
       </div>
 
+      <div className="browse-result-summary" aria-live="polite">
+        {loading
+          ? 'Searching...'
+          : `${profiles.length} profile${profiles.length === 1 ? '' : 's'} found`}
+      </div>
+
       {showFilters && (
-        <div className="filters-panel">
+        <div className="browse-filters-panel">
           <div className="filter-group">
-            <label>Age Range</label>
+            <label>Age</label>
             <div className="range-inputs">
               <input
                 type="number"
@@ -300,7 +350,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label>Distance (km)</label>
+            <label>Distance</label>
             <div className="range-slider-container">
               <input
                 type="range"
@@ -331,7 +381,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label>Height Range (cm)</label>
+            <label>Height</label>
             <div className="range-inputs">
               <input
                 type="number"
@@ -364,7 +414,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label>Relationship Goals</label>
+            <label>Looking for</label>
             <div className="checkbox-group">
               {relationshipGoalOptions.map((goal) => (
                 <label key={goal.value} className="checkbox-label">
@@ -380,7 +430,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label>Body Types</label>
+            <label>Body type</label>
             <div className="checkbox-group">
               {bodyTypeOptions.map((type) => (
                 <label key={type} className="checkbox-label">
@@ -428,7 +478,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label htmlFor="conversation-style-filter">Conversation Style</label>
+            <label htmlFor="conversation-style-filter">Conversation style</label>
             <select
               id="conversation-style-filter"
               value={filters.conversationStyle}
@@ -449,7 +499,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label htmlFor="city-filter">City Match</label>
+            <label htmlFor="city-filter">City</label>
             <input
               id="city-filter"
               type="text"
@@ -497,7 +547,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label htmlFor="locality-filter">Locality Or Neighborhood</label>
+            <label htmlFor="locality-filter">Locality or neighborhood</label>
             <input
               id="locality-filter"
               type="text"
@@ -531,7 +581,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label htmlFor="kerala-region-filter">Kerala Region</label>
+            <label htmlFor="kerala-region-filter">Kerala region</label>
             <select
               id="kerala-region-filter"
               value={filters.keralaRegion}
@@ -563,7 +613,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </div>
 
           <div className="filter-group">
-            <label htmlFor="community-filter">Community Or Culture</label>
+            <label htmlFor="community-filter">Community or culture</label>
             <input
               id="community-filter"
               type="text"
@@ -593,12 +643,12 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
           </label>
 
           <p className="filter-hint">
-            Premium filters now include district, locality, pincode, Kerala-region targeting, and verified-only discovery.
+            Tip: choose only what matters most. Fewer filters usually show more people.
           </p>
 
           <div className="filters-actions">
             <button type="button" className="btn-apply" onClick={handleApplyFilters}>
-              Apply Filters
+              Show profiles
             </button>
             <button type="button" className="btn-reset" onClick={handleResetFilters}>
               Reset
@@ -608,35 +658,35 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       )}
 
       {searchHistory.length > 0 ? (
-        <div className="filters-panel">
+        <section className="browse-recent-panel" aria-label="Recent searches">
           <div className="section-header-row">
             <div>
-              <label>Recent Searches</label>
-              <p className="filter-hint">Reuse the filters that worked for you last time.</p>
+              <h2>Recent searches</h2>
+              <p className="filter-hint">Tap one to search again.</p>
             </div>
             <button type="button" className="btn-reset" onClick={handleClearSearchHistory}>
               Clear
             </button>
           </div>
           <div className="search-history-list">
-            {searchHistory.map((entry) => (
+            {searchHistory.slice(0, 3).map((entry) => (
               <button
                 type="button"
                 key={entry.id}
                 className="search-history-item"
                 onClick={() => handleApplyHistoryEntry(entry)}
               >
-                <strong>{entry.source === 'browse_search' ? 'Browse search' : 'Discovery'}</strong>
-                <span>{entry.resultCount} results &bull; {new Date(entry.createdAt).toLocaleString()}</span>
+                <strong>{entry.source === 'browse_search' ? 'Browse' : 'Discover'}</strong>
+                <span>{entry.resultCount ?? 0} profiles</span>
               </button>
             ))}
           </div>
-        </div>
+        </section>
       ) : null}
 
       {loading && (
         <div className="loading-container">
-          <div className="spinner"></div>
+          <div className="browse-spinner"></div>
           <p>Searching profiles...</p>
         </div>
       )}
@@ -651,57 +701,46 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
       {!loading && !error && profiles.length > 0 && (
         <div className="profiles-grid">
           {profiles.map((profile) => {
-            const identityPack = buildLocalIdentityPack(profile);
             const trustSummary = buildTrustSummary({ profile });
             const locationLabel = formatProfileLocation(profile.location);
+            const distanceLabel = getDistanceLabel(profile);
+            const bioPreview = truncateText(profile.bio, 90);
+            const goalLabel = getGoalLabel(profile);
 
             return (
               <div key={profile.userId} className="profile-card-grid">
                 <button
                   type="button"
-                  className="profile-image profile-image-button"
+                  className="browse-profile-photo"
                   onClick={() => onProfileSelect?.(profile)}
+                  aria-label={`View ${profile.firstName || 'profile'}`}
                   style={{
                     backgroundImage: profile.photos?.[0]
                       ? `url(${profile.photos[0]})`
-                      : 'linear-gradient(135deg, #667eea, #764ba2)'
+                      : 'linear-gradient(135deg, #dbeafe, #ccfbf1)'
                   }}
                 >
                   {profile.profileVerified ? (
-                    <div className="verified-badge">Verified</div>
+                    <span className="browse-verified-badge">Verified</span>
                   ) : null}
                   {profile.compatibilityScore ? (
-                    <div className="compatibility-badge-browse">{profile.compatibilityScore}%</div>
+                    <span className="compatibility-badge-browse">{profile.compatibilityScore}% match</span>
                   ) : null}
                 </button>
 
                 <div className="profile-card-info">
-                  <h3>{profile.firstName}, {profile.age}</h3>
-                  <p className="location">
-                    {locationLabel || 'Location unavailable'}
-                    {profile.distanceKm ? ` · ${profile.distanceKm} km` : ''}
+                  <h3>{getProfileName(profile)}</h3>
+                  <p className="browse-profile-location">
+                    {[locationLabel || 'Location not shared', distanceLabel].filter(Boolean).join(' - ')}
                   </p>
-                  <p className="bio-preview">{truncateText(profile.bio)}</p>
+                  {bioPreview ? (
+                    <p className="bio-preview">{bioPreview}</p>
+                  ) : null}
 
                   <div className="browse-phase-two-badges">
-                    {identityPack.cityVibe ? (
-                      <span className="browse-mini-pill city">{identityPack.cityVibe}</span>
-                    ) : null}
-                    {identityPack.culturalBadges.slice(0, 1).map((badge) => (
-                      <span key={badge.label} className={`browse-mini-pill ${badge.tone}`}>
-                        {badge.label}
-                      </span>
-                    ))}
+                    {goalLabel ? <span className="browse-mini-pill">{goalLabel}</span> : null}
                     <span className={`browse-mini-pill trust ${trustSummary.level}`}>
-                      {trustSummary.level === 'trusted'
-                        ? 'High trust'
-                        : trustSummary.level === 'strong'
-                          ? 'Strong trust'
-                          : trustSummary.level === 'pending'
-                            ? 'Verification pending'
-                            : trustSummary.level === 'basic'
-                              ? 'Basic trust'
-                              : 'New profile'}
+                      {getTrustLabel(trustSummary.level)}
                     </span>
                   </div>
 
@@ -713,26 +752,20 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
                     </div>
                   ) : null}
 
-                  {identityPack.localDateSuggestions?.[0] ? (
-                    <p className="bio-preview browse-local-date-hint">
-                      Local date idea: {identityPack.localDateSuggestions[0].title}
-                    </p>
-                  ) : null}
-
                   <div className="card-actions">
                     <button
                       type="button"
                       className="btn-view-profile"
                       onClick={() => onProfileSelect?.(profile)}
                     >
-                      View Profile
+                      View
                     </button>
                     <button
                       type="button"
-                      className="btn-view-profile"
+                      className="btn-save-profile"
                       onClick={() => handleToggleFavorite(profile)}
                     >
-                      {favoriteUserIds.has(String(profile.userId)) ? 'Unfavorite' : 'Favorite'}
+                      {favoriteUserIds.has(String(profile.userId)) ? 'Saved' : 'Save'}
                     </button>
                     <button
                       type="button"
@@ -752,8 +785,8 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
 
       {!loading && !error && profiles.length === 0 && (
         <div className="no-profiles">
-          <p>No profiles found. Try adjusting your filters.</p>
-          <button type="button" onClick={() => setShowFilters(true)}>Adjust Filters</button>
+          <p>No profiles found. Try fewer filters.</p>
+          <button type="button" onClick={() => setShowFilters(true)}>Edit filters</button>
         </div>
       )}
     </div>
