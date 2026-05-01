@@ -174,7 +174,7 @@ const init = async () => {
     `);
 
       // Create interactions table (likes/passes)
-      await client.query(`
+await client.query(`
       CREATE TABLE IF NOT EXISTS interactions (
         id SERIAL PRIMARY KEY,
         from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -182,7 +182,7 @@ const init = async () => {
         interaction_type VARCHAR(50),
         is_mutual BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(from_user_id, to_user_id, interaction_type)
+        CONSTRAINT unique_interactions_user_pair_type UNIQUE(from_user_id, to_user_id, interaction_type)
       );
     `);
 
