@@ -655,10 +655,14 @@
 
 .login-simple-logo {
   display: block;
-  height: 76px;
+  height: 92px;
   margin: 0 auto 0.75rem;
-  object-fit: contain;
-  width: 76px;
+  object-fit: cover;
+  object-position: center;
+  width: min(100%, 168px);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
 }
 
 .login-simple-kicker {

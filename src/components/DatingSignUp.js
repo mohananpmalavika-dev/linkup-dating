@@ -926,6 +926,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
             </button>
           </div>
         )}
+        <img src="/datinghub-logo.png" alt="DatingHub" className="signup-brand-logo" />
         <h1>Create your profile</h1>
         <p className="signup-positioning">A few simple details to start meeting real people.</p>
 

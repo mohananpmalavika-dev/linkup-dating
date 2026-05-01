@@ -13,7 +13,7 @@ const LaunchPage = ({ language, onLanguageChange, onSelectRegistrationType }) =>
   return (
     <main className="launch-page" dir={direction}>
       <section className="launch-card">
-        <img src="/logo.svg" alt="DatingHub" className="launch-logo" />
+        <img src="/datinghub-logo.png" alt="DatingHub" className="launch-logo" />
         <p className="launch-brand">{launch.brand}</p>
         <h1>{launch.title}</h1>
         <p className="launch-promise">{launch.promise || "Real matches, safe dates, better conversations."}</p>

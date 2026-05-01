@@ -19,10 +19,14 @@
 }
 
 .launch-logo {
-  width: 84px;
-  height: 84px;
+  width: min(100%, 320px);
+  height: 168px;
   margin-bottom: 1rem;
-  object-fit: contain;
+  object-fit: cover;
+  object-position: center;
+  border: 1px solid #eadfd6;
+  border-radius: 8px;
+  box-shadow: 0 14px 32px rgba(31, 41, 55, 0.16);
 }
 
 .launch-brand {
@@ -204,8 +208,8 @@
   }
 
   .launch-logo {
-    width: 72px;
-    height: 72px;
+    width: 100%;
+    height: 138px;
   }
 }
 

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import PublicLegalNotice from './PublicLegalNotice';
 import { signInWithGmail } from '../firebase';
+import '../styles/Login.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -302,7 +303,7 @@ const LoginFresh = ({ language = 'en', onBackToLaunch, onLoginSuccess, onSignUpC
         )}
 
         <div className="login-header">
-          <img src="/logo.svg" alt="DatingHub" className="login-logo" />
+          <img src="/datinghub-logo.png" alt="DatingHub" className="login-logo" />
           <h1>DatingHub</h1>
           <p className="login-subtitle">Sign in to continue</p>
         </div>

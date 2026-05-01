@@ -683,7 +683,7 @@ const Login = ({
         </div>
 
         <header className="login-fresh-header login-simple-header">
-          <img src="/logo.svg" alt="DatingHub" className="login-simple-logo" />
+          <img src="/datinghub-logo.png" alt="DatingHub" className="login-simple-logo" />
           <p className="login-simple-kicker">Welcome to DatingHub</p>
           <h1>Login</h1>
           <p>Use your mobile number. We will send a 6 digit SMS code.</p>

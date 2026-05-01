@@ -26,6 +26,18 @@
   margin-bottom: 16px;
 }
 
+.signup-brand-logo {
+  display: block;
+  width: min(100%, 184px);
+  height: 96px;
+  margin: 0 0 18px;
+  border: 1px solid #d9e1ec;
+  border-radius: 8px;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.14);
+  object-fit: cover;
+  object-position: center;
+}
+
 .signup-card h1 {
   margin: 0 0 8px;
   font-size: 30px;
