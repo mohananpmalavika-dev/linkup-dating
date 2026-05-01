@@ -6,7 +6,22 @@
 const express = require('express');
 const router = express.Router();
 const streakService = require('../services/streakService');
+const db = require('../config/database');
+const MessageReactionService = require('../services/messageReactionService');
 const { authenticateToken } = require('../middleware/auth');
+
+const getMatchForUser = async (matchId, userId) => {
+  const result = await db.query(
+    `SELECT user_id_1, user_id_2
+     FROM matches
+     WHERE id = $1
+       AND (user_id_1 = $2 OR user_id_2 = $2)
+     LIMIT 1`,
+    [matchId, userId]
+  );
+
+  return result.rows[0] || null;
+};
 
 /**
  * Get streak info for a specific match
@@ -130,6 +145,74 @@ router.get('/milestones/:days', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve milestones'
+    });
+  }
+});
+
+/**
+ * Legacy compatibility: GET /api/matches/:matchId/streak
+ */
+router.get('/:matchId/streak', authenticateToken, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const match = await getMatchForUser(matchId, req.user.id);
+
+    if (!match) {
+      return res.status(404).json({ success: false, error: 'Match not found' });
+    }
+
+    const streak = await streakService.getStreakInfo(matchId, req.user.id);
+
+    res.json({
+      success: true,
+      streak: streak || {
+        active: false,
+        streakDays: 0,
+        isActive: false,
+        engagementScore: 0,
+        totalMessages: 0,
+        totalReactions: 0
+      }
+    });
+  } catch (error) {
+    console.error('Error getting legacy match streak:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve streak info'
+    });
+  }
+});
+
+/**
+ * Legacy compatibility: GET /api/matches/:matchId/engagement-score
+ */
+router.get('/:matchId/engagement-score', authenticateToken, async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const match = await getMatchForUser(matchId, req.user.id);
+
+    if (!match) {
+      return res.status(404).json({ success: false, error: 'Match not found' });
+    }
+
+    const engagementScore = await MessageReactionService.calculateEngagementScore(
+      matchId,
+      match.user_id_1,
+      match.user_id_2
+    );
+    const streak = await streakService.getStreakInfo(matchId, req.user.id);
+
+    res.json({
+      success: true,
+      engagementScore,
+      totalReactions: streak?.totalReactions || 0,
+      totalMessages: streak?.totalMessages || 0
+    });
+  } catch (error) {
+    console.error('Error getting legacy engagement score:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve engagement score'
     });
   }
 });

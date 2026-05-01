@@ -381,41 +381,21 @@ const DatingMessaging = ({
     }
   }, [activeMatchId, currentUserId, notifyConversationActivity]);
 
-  // Fetch streak and engagement score data
-  const loadStreakData = useCallback(async () => {
-    if (!activeMatchId) {
+  useEffect(() => {
+    if (!activeMatchId || !currentStreak) {
+      setStreakDays(0);
+      setStreakActive(false);
+      setEngagementScore(0);
+      setTotalReactions(0);
       return;
     }
 
-    try {
-      // Fetch streak information
-      const streakResponse = await fetch(`/api/matches/${activeMatchId}/streak`);
-      if (streakResponse.ok) {
-        const streakData = await streakResponse.json();
-        if (streakData.success && streakData.streak) {
-          setStreakDays(streakData.streak.streakDays || 0);
-          setStreakActive(streakData.streak.isActive !== false);
-        }
-      }
-
-      // Fetch engagement score
-      const scoreResponse = await fetch(`/api/matches/${activeMatchId}/engagement-score`);
-      if (scoreResponse.ok) {
-        const scoreData = await scoreResponse.json();
-        if (scoreData.success) {
-          setEngagementScore(scoreData.engagementScore || 0);
-          setTotalReactions(scoreData.totalReactions || 0);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading streak data:', error);
-    }
-  }, [activeMatchId]);
-
-  // Load streak data when match changes
-  useEffect(() => {
-    loadStreakData();
-  }, [activeMatchId, loadStreakData]);
+    const nextStreakDays = Number(currentStreak.streakDays || 0);
+    setStreakDays(nextStreakDays);
+    setStreakActive(Boolean(currentStreak.isActive ?? currentStreak.active ?? nextStreakDays > 0));
+    setEngagementScore(Number(currentStreak.engagementScore || 0));
+    setTotalReactions(Number(currentStreak.totalReactions || 0));
+  }, [activeMatchId, currentStreak]);
 
   useEffect(() => () => {
     if (statusTimeoutRef.current) {

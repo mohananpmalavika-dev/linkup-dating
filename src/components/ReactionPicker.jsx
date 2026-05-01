@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import './ReactionPicker.css';
+import { buildApiUrl } from '../utils/api';
 
 const ReactionPicker = ({ 
   messageId, 
@@ -23,7 +24,7 @@ const ReactionPicker = ({
     // Fetch available reactions
     const fetchReactions = async () => {
       try {
-        const response = await fetch('/api/reactions/emoji-list');
+        const response = await fetch(buildApiUrl('/reactions/emoji-list'));
         const data = await response.json();
         if (data.success) {
           setAllReactions(data.emojis);

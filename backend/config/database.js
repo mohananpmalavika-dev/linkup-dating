@@ -243,6 +243,53 @@ const init = async () => {
     `);
 
       await client.query(`
+      CREATE TABLE IF NOT EXISTS message_streak_trackers (
+        id SERIAL PRIMARY KEY,
+        user_id_1 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id_2 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        match_id INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+        streak_days INTEGER DEFAULT 1,
+        is_active BOOLEAN DEFAULT TRUE,
+        streak_start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        last_message_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        streak_broken_date TIMESTAMP,
+        milestone_3_days BOOLEAN DEFAULT FALSE,
+        milestone_7_days BOOLEAN DEFAULT FALSE,
+        milestone_30_days BOOLEAN DEFAULT FALSE,
+        total_messages INTEGER DEFAULT 0,
+        total_reactions INTEGER DEFAULT 0,
+        engagement_score FLOAT DEFAULT 0,
+        notification_sent BOOLEAN DEFAULT FALSE,
+        last_notification_date TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id_1, user_id_2, match_id)
+      );
+    `);
+
+      await client.query(`
+      ALTER TABLE message_streak_trackers
+      ADD COLUMN IF NOT EXISTS user_id_1 INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS user_id_2 INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS streak_days INTEGER DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS streak_start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS last_message_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS streak_broken_date TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS milestone_3_days BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS milestone_7_days BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS milestone_30_days BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS total_messages INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS total_reactions INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS engagement_score FLOAT DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS notification_sent BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS last_notification_date TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
       CREATE TABLE IF NOT EXISTS message_templates (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -532,6 +579,12 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_message_attachments_type ON message_attachments(attachment_type);
       CREATE INDEX IF NOT EXISTS idx_message_reactions_message_id ON message_reactions(message_id);
       CREATE INDEX IF NOT EXISTS idx_message_reactions_user_id ON message_reactions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_message_streak_trackers_pair_match ON message_streak_trackers(user_id_1, user_id_2, match_id);
+      CREATE INDEX IF NOT EXISTS idx_message_streak_trackers_match_id ON message_streak_trackers(match_id);
+      CREATE INDEX IF NOT EXISTS idx_message_streak_trackers_user_1 ON message_streak_trackers(user_id_1);
+      CREATE INDEX IF NOT EXISTS idx_message_streak_trackers_user_2 ON message_streak_trackers(user_id_2);
+      CREATE INDEX IF NOT EXISTS idx_message_streak_trackers_active ON message_streak_trackers(is_active);
+      CREATE INDEX IF NOT EXISTS idx_message_streak_trackers_days ON message_streak_trackers(streak_days DESC);
       CREATE INDEX IF NOT EXISTS idx_message_templates_user_id ON message_templates(user_id);
       CREATE INDEX IF NOT EXISTS idx_message_templates_pinned ON message_templates(user_id, is_pinned);
       CREATE INDEX IF NOT EXISTS idx_encryption_keys_match_id ON encryption_keys(match_id);
