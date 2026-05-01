@@ -254,6 +254,12 @@ const CallDashboard = () => {
     }
   };
 
+  const handleRedemptionSuccess = async (redemptionData) => {
+    setShowCouponModal(false);
+    await loadBalance();
+    showNotice(`✓ Coupon redeemed! ${redemptionData.creditsGranted || 0} credits added to your account.`, 'success');
+  };
+
   return (
     <div className="calling-dashboard">
       <div className="calling-header">
@@ -279,13 +285,23 @@ const CallDashboard = () => {
             <span className="balance-amount">{balance} credits</span>
           )}
         </div>
-        <button
-          className="btn-reload"
-          onClick={() => document.getElementById('credits-section')?.scrollIntoView({ behavior: 'smooth' })}
-          type="button"
-        >
-          Add Credits
-        </button>
+        <div className="balance-actions">
+          <button
+            className="btn-reload"
+            onClick={() => document.getElementById('credits-section')?.scrollIntoView({ behavior: 'smooth' })}
+            type="button"
+          >
+            Add Credits
+          </button>
+          <button
+            className="btn-coupon"
+            onClick={() => setShowCouponModal(true)}
+            type="button"
+            title="Redeem a coupon code for credits"
+          >
+            Redeem Coupon
+          </button>
+        </div>
       </div>
 
       <section className="availability-section">
@@ -448,6 +464,12 @@ const CallDashboard = () => {
           <p>Credits are checked for a 5 minute estimate and settled after the call.</p>
         </div>
       </section>
+
+      <CouponRedemption
+        isOpen={showCouponModal}
+        onClose={() => setShowCouponModal(false)}
+        onRedemptionSuccess={handleRedemptionSuccess}
+      />
     </div>
   );
 };

@@ -77,7 +77,7 @@ const CouponRedemption = ({ onRedemptionSuccess, isOpen, onClose }) => {
 
         <div className="modal-header">
           <h2>Redeem Coupon Code</h2>
-          <p>Get extra likes and superlikes</p>
+          <p>Get extra likes, superlikes, or call credits</p>
         </div>
 
         {success && redemptionDetails ? (
@@ -96,6 +96,12 @@ const CouponRedemption = ({ onRedemptionSuccess, isOpen, onClose }) => {
                 <div className="credit-item">
                   <span className="label">Superlikes Granted</span>
                   <span className="value">+{redemptionDetails.superlikesGranted}</span>
+                </div>
+              )}
+              {redemptionDetails.creditsGranted > 0 && (
+                <div className="credit-item">
+                  <span className="label">Call Credits Granted</span>
+                  <span className="value">+{redemptionDetails.creditsGranted}</span>
                 </div>
               )}
             </div>

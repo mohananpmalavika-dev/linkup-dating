@@ -301,7 +301,7 @@ const updateSettingsSnapshot = async (videoDateId, settingsPatch = {}) => {
 
   await db.query(
     `UPDATE video_dates
-     SET settings_snapshot = COALESCE(settings_snapshot, '{}'::jsonb) || $2::jsonb
+     SET settings_snapshot = COALESCE(settings_snapshot::jsonb, '{}'::jsonb) || $2::jsonb
      WHERE id = $1`,
     [videoDateId, JSON.stringify(normalizedPatch)]
   );
@@ -1027,9 +1027,9 @@ router.post('/:videoDateId/feedback', async (req, res) => {
     await db.query(
       `UPDATE video_dates
        SET settings_snapshot = jsonb_set(
-         COALESCE(settings_snapshot, '{}'::jsonb),
+         COALESCE(settings_snapshot::jsonb, '{}'::jsonb),
          '{privateFeedback}',
-         COALESCE(settings_snapshot->'privateFeedback', '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb),
+         COALESCE(settings_snapshot::jsonb->'privateFeedback', '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb),
          true
        )
        WHERE id = $1`,

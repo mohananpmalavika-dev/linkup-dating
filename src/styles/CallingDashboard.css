@@ -81,12 +81,19 @@
   gap: 14px;
   margin-bottom: 14px;
   padding: 16px;
+  flex-wrap: wrap;
 }
 
 .balance-info {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.balance-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .balance-label {
@@ -104,6 +111,7 @@
 
 .btn-reload,
 .btn-refresh,
+.btn-coupon,
 .availability-toggle,
 .btn-buy-package,
 .btn-call-action {
@@ -114,7 +122,8 @@
 }
 
 .btn-reload,
-.btn-refresh {
+.btn-refresh,
+.btn-coupon {
   min-height: 38px;
   border: 1px solid var(--dh-logo-ink, #102030);
   background: var(--dh-logo-ink, #102030);
@@ -123,7 +132,8 @@
 }
 
 .btn-reload:hover,
-.btn-refresh:hover {
+.btn-refresh:hover,
+.btn-coupon:hover {
   background: #1d4ed8;
   border-color: #1d4ed8;
 }

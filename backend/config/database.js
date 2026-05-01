@@ -725,14 +725,23 @@ const init = async () => {
     // Migration: enrich video call sessions with scheduling, consent, reminders, and QA metadata
     await client.query(`
       ALTER TABLE video_dates
+      ADD COLUMN IF NOT EXISTS match_id INTEGER REFERENCES matches(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS user_id_1 INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS user_id_2 INTEGER REFERENCES users(id) ON DELETE CASCADE,
       ADD COLUMN IF NOT EXISTS session_type VARCHAR(30) DEFAULT 'instant',
       ADD COLUMN IF NOT EXISTS scheduled_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS title VARCHAR(255),
       ADD COLUMN IF NOT EXISTS note TEXT,
+      ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS reminder_minutes INTEGER DEFAULT 15,
       ADD COLUMN IF NOT EXISTS reminder_sent_user_1_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS reminder_sent_user_2_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS started_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS answered_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS ended_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'scheduled',
+      ADD COLUMN IF NOT EXISTS room_id VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS duration_seconds INTEGER,
       ADD COLUMN IF NOT EXISTS user_1_joined_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS user_2_joined_at TIMESTAMP,
       ADD COLUMN IF NOT EXISTS user_1_left_at TIMESTAMP,
@@ -749,7 +758,161 @@ const init = async () => {
       ADD COLUMN IF NOT EXISTS screen_share_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
       ADD COLUMN IF NOT EXISTS virtual_background_user_1 VARCHAR(50) DEFAULT 'none',
       ADD COLUMN IF NOT EXISTS virtual_background_user_2 VARCHAR(50) DEFAULT 'none',
-      ADD COLUMN IF NOT EXISTS settings_snapshot JSONB DEFAULT '{}';
+      ADD COLUMN IF NOT EXISTS settings_snapshot JSONB DEFAULT '{}',
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'video_dates' AND column_name = 'settings_snapshot'
+            AND udt_name <> 'jsonb'
+        ) THEN
+          ALTER TABLE video_dates
+          ALTER COLUMN settings_snapshot TYPE JSONB
+          USING COALESCE(settings_snapshot::jsonb, '{}'::jsonb);
+        END IF;
+      END $$;
+    `);
+
+    await client.query(`
+      ALTER TABLE video_dates
+      ALTER COLUMN session_type SET DEFAULT 'instant',
+      ALTER COLUMN reminder_minutes SET DEFAULT 15,
+      ALTER COLUMN status SET DEFAULT 'scheduled',
+      ALTER COLUMN no_show_status SET DEFAULT 'pending',
+      ALTER COLUMN call_quality_preset SET DEFAULT 'balanced',
+      ALTER COLUMN recording_requested SET DEFAULT FALSE,
+      ALTER COLUMN recording_consented_user_1 SET DEFAULT FALSE,
+      ALTER COLUMN recording_consented_user_2 SET DEFAULT FALSE,
+      ALTER COLUMN recording_enabled SET DEFAULT FALSE,
+      ALTER COLUMN screen_share_enabled SET DEFAULT FALSE,
+      ALTER COLUMN virtual_background_user_1 SET DEFAULT 'none',
+      ALTER COLUMN virtual_background_user_2 SET DEFAULT 'none',
+      ALTER COLUMN settings_snapshot SET DEFAULT '{}',
+      ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP,
+      ALTER COLUMN scheduled_by_user_id DROP NOT NULL,
+      ALTER COLUMN title DROP NOT NULL,
+      ALTER COLUMN note DROP NOT NULL,
+      ALTER COLUMN scheduled_at DROP NOT NULL,
+      ALTER COLUMN started_at DROP NOT NULL,
+      ALTER COLUMN answered_at DROP NOT NULL,
+      ALTER COLUMN ended_at DROP NOT NULL,
+      ALTER COLUMN room_id DROP NOT NULL,
+      ALTER COLUMN duration_seconds DROP NOT NULL,
+      ALTER COLUMN recording_requested_by DROP NOT NULL,
+      ALTER COLUMN screen_share_user_id DROP NOT NULL;
+    `);
+
+    await client.query(`
+      UPDATE video_dates
+      SET session_type = COALESCE(session_type, 'instant'),
+          reminder_minutes = COALESCE(reminder_minutes, 15),
+          status = COALESCE(status, 'scheduled'),
+          no_show_status = COALESCE(no_show_status, 'pending'),
+          call_quality_preset = COALESCE(call_quality_preset, 'balanced'),
+          recording_requested = COALESCE(recording_requested, FALSE),
+          recording_consented_user_1 = COALESCE(recording_consented_user_1, FALSE),
+          recording_consented_user_2 = COALESCE(recording_consented_user_2, FALSE),
+          recording_enabled = COALESCE(recording_enabled, FALSE),
+          screen_share_enabled = COALESCE(screen_share_enabled, FALSE),
+          virtual_background_user_1 = COALESCE(virtual_background_user_1, 'none'),
+          virtual_background_user_2 = COALESCE(virtual_background_user_2, 'none'),
+          settings_snapshot = COALESCE(settings_snapshot, '{}'::jsonb),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+      WHERE session_type IS NULL
+         OR reminder_minutes IS NULL
+         OR status IS NULL
+         OR no_show_status IS NULL
+         OR call_quality_preset IS NULL
+         OR recording_requested IS NULL
+         OR recording_consented_user_1 IS NULL
+         OR recording_consented_user_2 IS NULL
+         OR recording_enabled IS NULL
+         OR screen_share_enabled IS NULL
+         OR virtual_background_user_1 IS NULL
+         OR virtual_background_user_2 IS NULL
+         OR settings_snapshot IS NULL
+         OR created_at IS NULL;
+    `);
+
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'video_dates' AND column_name = 'initiator_id'
+        ) THEN
+          UPDATE video_dates
+          SET scheduled_by_user_id = COALESCE(scheduled_by_user_id, initiator_id)
+          WHERE scheduled_by_user_id IS NULL;
+
+          ALTER TABLE video_dates ALTER COLUMN initiator_id DROP NOT NULL;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'video_dates' AND column_name = 'start_time'
+        ) THEN
+          UPDATE video_dates
+          SET scheduled_at = COALESCE(scheduled_at, start_time)
+          WHERE scheduled_at IS NULL;
+
+          ALTER TABLE video_dates ALTER COLUMN start_time DROP NOT NULL;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'video_dates' AND column_name = 'proposed_time'
+        ) THEN
+          UPDATE video_dates
+          SET scheduled_at = COALESCE(scheduled_at, proposed_time)
+          WHERE scheduled_at IS NULL;
+
+          ALTER TABLE video_dates ALTER COLUMN proposed_time DROP NOT NULL;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'video_dates' AND column_name = 'duration_minutes'
+        ) THEN
+          UPDATE video_dates
+          SET duration_seconds = COALESCE(duration_seconds, duration_minutes * 60)
+          WHERE duration_seconds IS NULL;
+
+          ALTER TABLE video_dates ALTER COLUMN duration_minutes DROP NOT NULL;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'video_dates' AND column_name = 'actual_duration_minutes'
+        ) THEN
+          ALTER TABLE video_dates ALTER COLUMN actual_duration_minutes DROP NOT NULL;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'video_dates' AND column_name = 'quality_rating'
+        ) THEN
+          ALTER TABLE video_dates ALTER COLUMN quality_rating DROP NOT NULL;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'video_dates' AND column_name = 'would_meet_in_person'
+        ) THEN
+          ALTER TABLE video_dates ALTER COLUMN would_meet_in_person DROP NOT NULL;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'video_dates' AND column_name = 'feedback'
+        ) THEN
+          ALTER TABLE video_dates ALTER COLUMN feedback DROP NOT NULL;
+        END IF;
+      END $$;
     `);
 
     await client.query(`

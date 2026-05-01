@@ -17036,6 +17036,34 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       }
     }
 
+    // Handle call credits if this is a call credits coupon
+    const callCreditsValue = coupon.call_credits_value || 0;
+    if (callCreditsValue > 0) {
+      // Get or create call wallet
+      const walletResult = await db.query(
+        `SELECT * FROM call_credits WHERE user_id = $1`,
+        [userId]
+      );
+
+      if (walletResult.rows.length === 0) {
+        // Create new wallet
+        await db.query(
+          `INSERT INTO call_credits (user_id, credits_balance, total_purchased, created_at, updated_at)
+           VALUES ($1, $2, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          [userId, callCreditsValue]
+        );
+      } else {
+        // Update existing wallet
+        const currentBalance = walletResult.rows[0].credits_balance || 0;
+        await db.query(
+          `UPDATE call_credits
+           SET credits_balance = credits_balance + $1, updated_at = CURRENT_TIMESTAMP
+           WHERE user_id = $2`,
+          [callCreditsValue, userId]
+        );
+      }
+    }
+
     // Record coupon usage
     const usageResult = await db.query(
       `INSERT INTO coupon_usages (coupon_id, user_id, likes_granted, superlikes_granted, ip_address, user_agent)
@@ -17065,6 +17093,7 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       usage: usageResult.rows[0],
       likesGranted: coupon.likes_value || 0,
       superlikesGranted: coupon.superlikes_value || 0,
+      creditsGranted: callCreditsValue,
       updatedLimits: {
         remainingLikes: updatedLimits.remainingLikes,
         remainingSuperlikes: updatedLimits.remainingSuperlikes,
