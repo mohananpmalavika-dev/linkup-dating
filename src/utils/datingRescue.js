@@ -53,6 +53,10 @@ const hasConversation = (match = {}, messages = []) =>
 const getJourneyProgress = (match = {}) => Number(match.journey?.progressCount || 0);
 
 const toProposalDate = (proposal = {}) => {
+  if (!proposal) {
+    return null;
+  }
+
   const proposedDate = proposal.proposedDate;
   if (!proposedDate) {
     return null;
