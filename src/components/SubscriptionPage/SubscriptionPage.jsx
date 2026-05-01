@@ -161,7 +161,7 @@ const SubscriptionPage = ({ user, onSubscriptionChange }) => {
   return (
     <div className="subscription-container">
       <div className="subscription-header">
-        <h1>LinkUp Premium</h1>
+        <h1>DatingHub Premium</h1>
         <p className="subtitle">Unlock unlimited dating possibilities</p>
       </div>
 
@@ -293,7 +293,7 @@ const SubscriptionPage = ({ user, onSubscriptionChange }) => {
             setProrationInfo(null);
             setDiscountCode('');
             setAppliedDiscount(null);
-            alert('🎉 Subscription activated! Welcome to LinkUp Premium.');
+            alert('🎉 Subscription activated! Welcome to DatingHub Premium.');
             loadSubscriptionData();
             if (onSubscriptionChange) {
               onSubscriptionChange(true);
@@ -422,7 +422,7 @@ const CheckoutModal = ({ plan, currentSubscription, prorationInfo, discountCode,
         key: keyId,
         amount: Math.round(finalAmount * 100), // in paise
         currency: 'INR',
-        name: 'LinkUp Premium',
+        name: 'DatingHub Premium',
         description: `${plan.name} Subscription${appliedDiscount ? ` (Discount Applied)` : ''}`,
         order_id: orderId,
         handler: async (response) => {

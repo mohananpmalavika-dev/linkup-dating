@@ -533,7 +533,7 @@ const AppContent = () => {
       if (document.hidden && notificationService.getPermissionStatus().canNotify) {
         notificationService.notify({
           title: `New message from ${payload?.fromUserName || 'your match'}`,
-          body: payload?.message || 'Open LinkUp to reply.',
+          body: payload?.message || 'Open DatingHub to reply.',
           tag: `dating-message-${payload?.matchId || 'inbox'}`,
           requireInteraction: false
         });
@@ -545,7 +545,7 @@ const AppContent = () => {
 
       if (document.hidden && notificationService.getPermissionStatus().canNotify) {
         notificationService.notify({
-          title: 'New match on LinkUp',
+          title: 'New match on DatingHub',
           body: 'Someone liked you back. Open the app to start chatting.',
           tag: 'dating-match',
           requireInteraction: false
@@ -816,7 +816,7 @@ const AppContent = () => {
     return (
       <div className="app-loading">
         <div className="spinner"></div>
-        <p>LinkUp Dating Loading...</p>
+        <p>DatingHub Loading...</p>
       </div>
     );
   }

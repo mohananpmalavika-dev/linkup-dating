@@ -1,8 +1,8 @@
 {
-  "name": "linkup-dating",
+  "name": "datinghub",
   "version": "2.0.0",
   "private": true,
-  "description": "LinkUp Dating - Modern Dating App with Swipe, Matching & Video Dating",
+  "description": "DatingHub - Modern Dating App with Swipe, Matching & Video Dating",
   "homepage": "./",
   "dependencies": {
     "@capacitor/core": "^5.6.0",

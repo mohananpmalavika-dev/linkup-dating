@@ -25,7 +25,7 @@ const buildReferralProfileContext = (referral) => ({
 });
 
 const getFriendDisplayName = (friend) =>
-  friend.firstName || friend.first_name || friend.displayName || friend.email || 'LinkUp friend';
+  friend.firstName || friend.first_name || friend.displayName || friend.email || 'DatingHub friend';
 
 const SocialHub = ({
   onMatchCreated,
@@ -189,7 +189,7 @@ const SocialHub = ({
           </button>
           <button type="button" className="social-action-card" onClick={() => setShowReferralModal(true)}>
             <strong>Invite</strong>
-            <span>Share LinkUp</span>
+            <span>Share DatingHub</span>
           </button>
         </section>
 
@@ -215,7 +215,7 @@ const SocialHub = ({
                         <div className="social-avatar">{displayName?.charAt(0)?.toUpperCase() || '?'}</div>
                         <div>
                           <strong>{displayName}</strong>
-                          <span>{friend.locationCity || friend.location_city || 'On LinkUp'}</span>
+                          <span>{friend.locationCity || friend.location_city || 'On DatingHub'}</span>
                         </div>
                       </div>
                       <div className="social-actions">
@@ -249,7 +249,7 @@ const SocialHub = ({
             <div className="social-card-header">
               <div>
                 <h2>Your Friends</h2>
-                <p>People you already know on LinkUp.</p>
+                <p>People you already know on DatingHub.</p>
               </div>
               <button type="button" className="social-link-button" onClick={() => setShowFriendsList(true)}>
                 See All
@@ -268,7 +268,7 @@ const SocialHub = ({
                         <div className="social-avatar social-avatar-accent">{displayName?.charAt(0)?.toUpperCase() || '?'}</div>
                         <div>
                           <strong>{displayName}</strong>
-                          <span>{friend.locationCity || friend.location_city || 'On LinkUp'}</span>
+                          <span>{friend.locationCity || friend.location_city || 'On DatingHub'}</span>
                         </div>
                       </div>
                       <button

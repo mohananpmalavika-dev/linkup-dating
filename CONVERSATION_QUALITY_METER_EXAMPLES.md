@@ -1,6 +1,6 @@
 # Conversation Quality Meter - Integration Examples
 
-Complete code examples for integrating the Conversation Quality Meter into your LinkUp messaging interface.
+Complete code examples for integrating the Conversation Quality Meter into your DatingHub messaging interface.
 
 ---
 

@@ -1,5 +1,5 @@
 /**
- * Sentry Configuration for LinkUp
+ * Sentry Configuration for DatingHub
  * Error tracking and crash reporting
  * 
  * Setup: https://sentry.io

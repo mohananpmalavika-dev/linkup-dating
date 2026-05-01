@@ -1,7 +1,7 @@
 # EventDetail Component Integration Guide
 
 ## Overview
-The EventDetail component provides a complete UI for viewing event details, RSVPing to events, and rating past events. It integrates with the LinkUp backend to provide comprehensive event management functionality.
+The EventDetail component provides a complete UI for viewing event details, RSVPing to events, and rating past events. It integrates with the DatingHub backend to provide comprehensive event management functionality.
 
 ## Features
 
@@ -401,4 +401,4 @@ The component handles common errors gracefully:
 
 ## Support & Contribution
 
-For issues or feature requests, please refer to the LinkUp development guide.
+For issues or feature requests, please refer to the DatingHub development guide.

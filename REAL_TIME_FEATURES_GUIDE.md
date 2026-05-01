@@ -2,7 +2,7 @@
 
 ## Overview
 
-Comprehensive real-time features for the LinkUp dating app with socket.io integration. Includes:
+Comprehensive real-time features for the DatingHub dating app with socket.io integration. Includes:
 
 - **Typing Indicators** - See who's typing across multiple matches
 - **Online/Offline Status** - Real-time presence with last active timestamps

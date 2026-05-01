@@ -1,4 +1,4 @@
-# LinkUp Dating Module - Functional Improvements
+# DatingHub Module - Functional Improvements
 
 **Last Updated:** April 27, 2026  
 **Analysis Scope:** Front-end & Back-end Dating Features

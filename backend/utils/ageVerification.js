@@ -1,6 +1,6 @@
 /**
  * Age Verification Utility
- * Enforces 18+ requirement for LinkUp dating app
+ * Enforces 18+ requirement for DatingHub dating app
  * Supports multiple verification methods (DOB, ID verification, etc.)
  */
 
@@ -66,7 +66,7 @@ const validateAgeVerification = (ageVerification, userId) => {
     } else if (!isValidDOB(dateOfBirth)) {
       errors.push('Invalid date of birth provided');
     } else if (!isOldEnough(dateOfBirth, 18)) {
-      errors.push('You must be at least 18 years old to use LinkUp');
+      errors.push('You must be at least 18 years old to use DatingHub');
     }
   }
   

@@ -1,15 +1,15 @@
-# PRIVACY POLICY - LinkUp Dating App
+# PRIVACY POLICY - DatingHub App
 
 **Last Updated:** April 28, 2026  
 **Effective Date:** May 1, 2026  
-**Data Protection Officer:** dpo@linkupapp.com  
+**Data Protection Officer:** dpo@datinghub.app  
 **Jurisdiction:** India (DPDPA 2023 compliant), EU (GDPR compliant)
 
 ---
 
 ## 1. INTRODUCTION
 
-LinkUp ("we," "us," "our," or "Company") respects your privacy. This Privacy Policy explains:
+DatingHub ("we," "us," "our," or "Company") respects your privacy. This Privacy Policy explains:
 - What personal data we collect
 - How we use it
 - Your rights
@@ -17,8 +17,8 @@ LinkUp ("we," "us," "our," or "Company") respects your privacy. This Privacy Pol
 - How to contact us
 
 This Privacy Policy applies to:
-- LinkUp mobile app (iOS/Android)
-- LinkUp website (linkupapp.com)
+- DatingHub mobile app (iOS/Android)
+- DatingHub website (datinghub.app)
 - Linked services and APIs
 
 ---
@@ -330,7 +330,7 @@ EU users have all rights above plus:
 3. Verify identity with OTP
 4. Submit request
 5. Receive response within specified timeframe
-6. For complex requests, email: privacy@linkupapp.com
+6. For complex requests, email: privacy@datinghub.app
 
 ---
 
@@ -376,11 +376,11 @@ All international transfers use SCCs (for EU users) as approved by EU and UK aut
 
 ## 10. CHILDREN & MINORS
 
-LinkUp is **NOT available to users under 18.**
+DatingHub is **NOT available to users under 18.**
 - Age verification mandatory at signup
 - We do not knowingly collect data from minors
 - If we discover a minor using the platform, we delete their data immediately
-- Parents/guardians can request deletion via privacy@linkupapp.com
+- Parents/guardians can request deletion via privacy@datinghub.app
 - Compliant with COPPA (US) and India age verification laws
 
 ---
@@ -397,15 +397,15 @@ LinkUp is **NOT available to users under 18.**
 ## 12. CONTACT US
 
 **For Privacy Questions:**
-- Email: privacy@linkupapp.com
-- Write: LinkUp Privacy Team, Kochi, Kerala, India
+- Email: privacy@datinghub.app
+- Write: DatingHub Privacy Team, Kochi, Kerala, India
 
 **For Data Subject Rights Requests:**
 - Go to: Settings → Privacy & Data
-- Or email: dpo@linkupapp.com
+- Or email: dpo@datinghub.app
 
 **For Complaints:**
-- Internal Grievance: grievance@linkupapp.com (Response within 24 hours)
+- Internal Grievance: grievance@datinghub.app (Response within 24 hours)
 - Data Protection Authority: complain@iwidata.gov.in (India DPDPA)
 - GDPR Authority: Your country's DPA (EU users)
 
@@ -416,7 +416,7 @@ LinkUp is **NOT available to users under 18.**
 
 ---
 
-**© 2026 LinkUp Dating. All rights reserved.**
+**© 2026 DatingHub. All rights reserved.**
 - Accounts with minor users are terminated immediately
 - Parents can report minor accounts
 - We cooperate with authorities on child safety
@@ -437,7 +437,7 @@ If we learn a user is a minor, we:
 - Right to delete personal information
 - Right to opt-out of data sales (we don't sell)
 - Right to non-discrimination for exercising rights
-- Request via: privacy@linkupapp.com
+- Request via: privacy@datinghub.app
 
 **Shine the Light (CA Civil Code 1798.83):**
 - We don't share data with third parties for marketing
@@ -460,21 +460,21 @@ Continued use after changes = acceptance of new policy.
 ## 13. CONTACT US
 
 ### Data Protection Officer
-**Email:** dpo@linkupapp.com  
+**Email:** dpo@datinghub.app  
 **Response Time:** 7 business days
 
 ### Privacy Team
-**Email:** privacy@linkupapp.com  
+**Email:** privacy@datinghub.app  
 **Response Time:** 10 business days
 
 ### Grievance Officer (India)
 **Name:** [To be appointed]  
-**Email:** grievance@linkupapp.com  
+**Email:** grievance@datinghub.app  
 **Phone:** +91-XXXXX-XXXXX  
 **Response Time:** 24 hours acknowledgment, 48 hours resolution
 
 ### Postal Address
-LinkUp App  
+DatingHub App  
 Kerala, India  
 (Specific address to be added)
 
@@ -513,4 +513,4 @@ We rely on legitimate interests for:
 **Effective Date:** [Launch Date]  
 **Last Updated:** April 28, 2026
 
-By using LinkUp, you acknowledge that you have read and understood this Privacy Policy.
+By using DatingHub, you acknowledge that you have read and understood this Privacy Policy.

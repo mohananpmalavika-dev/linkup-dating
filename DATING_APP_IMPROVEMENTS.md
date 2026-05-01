@@ -1,4 +1,4 @@
-# LinkUp Dating Module Roadmap
+# DatingHub Module Roadmap
 
 Last reviewed: 2026-04-27
 

@@ -1,7 +1,7 @@
 {
-  "name": "linkup-dating-api",
+  "name": "datinghub-api",
   "version": "1.0.0",
-  "description": "Backend API for LinkUp Dating App",
+  "description": "Backend API for DatingHub App",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

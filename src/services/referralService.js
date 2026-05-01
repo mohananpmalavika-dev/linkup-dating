@@ -11,14 +11,14 @@ const normalizeFriend = (friend = {}) => ({
     [friend.firstName || friend.first_name, friend.lastName || friend.last_name]
       .filter(Boolean)
       .join(' ') ||
-    'LinkUp friend',
+    'DatingHub friend',
   email: friend.email || '',
   phone: friend.phone || friend.phoneNumber || '',
   avatar: friend.avatar || friend.photoUrl || friend.photo_url || 'Friend'
 });
 
 const buildInviteMessage = (referralCode, referralLink) =>
-  `Join me on LinkUp. Use code ${referralCode} or sign up here: ${referralLink}`;
+  `Join me on DatingHub. Use code ${referralCode} or sign up here: ${referralLink}`;
 
 export const referralService = {
   async getMyReferralCode() {
@@ -93,7 +93,7 @@ export const referralService = {
       }
 
       window.location.href = `mailto:${recipients.join(',')}?subject=${encodeURIComponent(
-        'Join me on LinkUp'
+        'Join me on DatingHub'
       )}&body=${encodeURIComponent(message)}`;
 
       return { success: true };
@@ -108,7 +108,7 @@ export const referralService = {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'Join me on LinkUp',
+          title: 'Join me on DatingHub',
           text: message,
           url: link
         });

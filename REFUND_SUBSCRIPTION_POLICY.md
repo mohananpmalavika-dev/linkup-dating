@@ -1,4 +1,4 @@
-# REFUND & SUBSCRIPTION POLICY - LinkUp Dating App
+# REFUND & SUBSCRIPTION POLICY - DatingHub App
 
 **Last Updated:** April 28, 2026  
 **Effective Date:** May 1, 2026  
@@ -70,7 +70,7 @@
 **Step 5:** Confirmation email sent  
 **Step 6:** Refund processed within 5-7 business days
 
-**For older refund requests:** Email support@linkupapp.com with:
+**For older refund requests:** Email support@datinghub.app with:
 - Receipt/Order ID
 - Reason for refund
 - Screenshot of issue
@@ -163,7 +163,7 @@ Currently no trial available. First month charged at full rate.
 
 ### 4.3 Billing Information
 - Your billing cycle starts on date of first charge
-- Statement shows "LinkUp Premium Subscription"
+- Statement shows "DatingHub Premium Subscription"
 - GST 18% included in displayed prices
 - Invoice downloadable from Receipt view
 - Email receipt sent for every transaction
@@ -300,12 +300,12 @@ If account permanently banned:
 
 ### 11.2 Grievance Redressal
 **Step 1: Direct Resolution**
-- Contact: support@linkupapp.com
+- Contact: support@datinghub.app
 - Response: Within 24 hours
 - Resolution: Within 5-7 business days
 
 **Step 2: Escalation**
-- If unresolved, email: grievance@linkupapp.com
+- If unresolved, email: grievance@datinghub.app
 - Include: Order ID, issue description, evidence
 - Response: Within 48 hours
 - Resolution: Within 15 days
@@ -330,13 +330,13 @@ If account permanently banned:
 - Payment processed by: Razorpay Payment Solutions Pvt. Ltd.
 - PCI-DSS Level 1 compliant
 - Encrypted transmission (TLS 1.3)
-- No credit card data stored by LinkUp
+- No credit card data stored by DatingHub
 
 ### 12.2 Your Payment Safety
 - Never call/email asking for payment details
-- Report fraud immediately: fraud@linkupapp.com
+- Report fraud immediately: fraud@datinghub.app
 - Chargeback supported (within issuing bank's policy)
-- Dispute resolution: Contact Razorpay + LinkUp
+- Dispute resolution: Contact Razorpay + DatingHub
 
 ### 12.3 Failed Payment Support
 - Retry payment anytime
@@ -349,35 +349,35 @@ If account permanently banned:
 ## 13. CONTACT US
 
 **For Subscription/Billing:**
-- Email: billing@linkupapp.com
+- Email: billing@datinghub.app
 - In-app: Settings → Subscription → Help
 - Response time: 24 hours
 
 **For Refund Requests:**
 - In-app: Settings → Subscriptions → Request Refund (within 48 hours)
-- Email: refunds@linkupapp.com (for older requests)
+- Email: refunds@datinghub.app (for older requests)
 - Deadline: 48 hours from charge
 
 **For Grievances:**
-- Email: grievance@linkupapp.com
+- Email: grievance@datinghub.app
 - Include: Receipt number, issue, proof of payment
 - Response: Within 48 hours
 
 **For Disputes:**
-- Email: disputes@linkupapp.com
+- Email: disputes@datinghub.app
 - Subject: [Order ID] - Issue Description
 - Response: Within 5 business days
 
 ---
 
-**© 2026 LinkUp Dating. All rights reserved.**
+**© 2026 DatingHub. All rights reserved.**
 
 ---
 
 ## 10. DISPUTE RESOLUTION
 
 ### 10.1 If You Don't Recognize a Charge
-1. Contact support@linkupapp.com within 30 days
+1. Contact support@datinghub.app within 30 days
 2. Provide: Order ID, date, amount
 3. We investigate within 5 business days
 4. Confirm if legitimate or investigate further
@@ -406,7 +406,7 @@ If account permanently banned:
 
 ### 11.3 B2B Billing
 - Corporate accounts available
-- Contact: billing@linkupapp.com for quotes
+- Contact: billing@datinghub.app for quotes
 - Monthly invoicing (not instant payment)
 
 ---
@@ -424,7 +424,7 @@ As per Consumer Protection Act, 2019:
 ### 12.2 Complaint Filing
 **National Consumer Helpline:** 1800-11-4000  
 **Online Portal:** consumercomplaints.nic.in  
-**Email:** grievance@linkupapp.com
+**Email:** grievance@datinghub.app
 
 ---
 
@@ -440,9 +440,9 @@ We may change this policy:
 
 ## 14. CONTACT
 
-**Billing Support:** billing@linkupapp.com  
-**Refund Requests:** refunds@linkupapp.com  
-**Grievances:** grievance@linkupapp.com  
+**Billing Support:** billing@datinghub.app  
+**Refund Requests:** refunds@datinghub.app  
+**Grievances:** grievance@datinghub.app  
 **Response Time:** 24-48 hours
 
 ---
@@ -452,4 +452,4 @@ We may change this policy:
 
 ---
 
-*This refund policy is designed to be fair to both users and LinkUp while complying with Indian Consumer Protection Act, RBI guidelines, and international best practices.*
+*This refund policy is designed to be fair to both users and DatingHub while complying with Indian Consumer Protection Act, RBI guidelines, and international best practices.*

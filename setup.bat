@@ -1,9 +1,9 @@
 @echo off
-REM LinkUp Setup Script for Windows
+REM DatingHub Setup Script for Windows
 
 echo.
 echo ========================================
-echo   LinkUp - Android App Setup
+echo   DatingHub - Android App Setup
 echo ========================================
 echo.
 

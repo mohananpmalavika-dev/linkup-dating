@@ -80,7 +80,7 @@ const AchievementsPage = ({ defaultTab = 'achievements' }) => {
 
           {unlockedAchievements.length === 0 ? (
             <div className="empty-state">
-              <p>No achievements unlocked yet. Keep using LinkUp to earn badges!</p>
+              <p>No achievements unlocked yet. Keep using DatingHub to earn badges!</p>
             </div>
           ) : (
             <div className="achievements-grid">

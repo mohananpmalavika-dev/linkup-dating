@@ -1,4 +1,4 @@
-# 📋 LinkUp Referral Code System - Complete Resource Index
+# 📋 DatingHub Referral Code System - Complete Resource Index
 
 ## 🎯 Quick Access Guide
 
@@ -109,7 +109,7 @@ Example: LINK1A2B3C4D
 
 ### Referral Link Format
 ```
-https://linkup.dating/?referral=LINK1A2B3C4D
+https://datinghub.app/?referral=LINK1A2B3C4D
 ```
 
 ### Rewards Per Referral
@@ -244,7 +244,7 @@ See full troubleshooting in `REFERRAL_CODE_SYSTEM_GUIDE.md`
 ## 🎨 File Structure Overview
 
 ```
-LinkUp/
+DatingHub/
 ├── referral-code-generator.html          ← 🚀 START HERE (Admin Tool)
 ├── REFERRAL_QUICK_START.md               ← ⚡ Quick commands
 ├── REFERRAL_CODE_SYSTEM_GUIDE.md         ← 📖 Full documentation

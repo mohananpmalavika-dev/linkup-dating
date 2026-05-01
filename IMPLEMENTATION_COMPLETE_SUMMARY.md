@@ -391,7 +391,7 @@ All files are thoroughly commented and production-ready.
 
 **Files are located in:**
 ```
-LinkUp/
+DatingHub/
 ├── backend/routes/dpdpaCompliance.js
 ├── backend/routes/regionalFeatures.js
 ├── backend/services/dpdpaComplianceService.js

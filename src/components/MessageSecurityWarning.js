@@ -49,7 +49,7 @@ const MessageSecurityWarning = ({
 
     try {
       await onReport(flag.id, reportReason);
-      alert('Message reported. Thank you for helping keep LinkUp safe!');
+      alert('Message reported. Thank you for helping keep DatingHub safe!');
       setReporting(false);
       setExpanded(false);
       setReportReason('scam');

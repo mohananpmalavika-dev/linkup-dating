@@ -90,7 +90,7 @@ export async function requestNotificationPermission() {
 }
 
 export async function showServiceWorkerNotification({
-  title = "LinkUp",
+  title = "DatingHub",
   body = "",
   tag = "",
   data = {},

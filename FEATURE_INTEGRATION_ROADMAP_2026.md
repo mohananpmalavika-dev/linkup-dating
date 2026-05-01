@@ -1,4 +1,4 @@
-# LinkUp - Feature Integration Roadmap
+# DatingHub - Feature Integration Roadmap
 ## Unlocking ₹22–33 Lakhs Additional Value
 
 **Status:** May 1, 2026  

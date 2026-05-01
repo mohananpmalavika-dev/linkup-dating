@@ -302,8 +302,8 @@ const LoginFresh = ({ language = 'en', onBackToLaunch, onLoginSuccess, onSignUpC
         )}
 
         <div className="login-header">
-          <img src="/logo.svg" alt="LinkUp" className="login-logo" />
-          <h1>LinkUp</h1>
+          <img src="/logo.svg" alt="DatingHub" className="login-logo" />
+          <h1>DatingHub</h1>
           <p className="login-subtitle">Sign in to continue</p>
         </div>
 

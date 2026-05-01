@@ -387,7 +387,7 @@ Components tested for:
 
 ## 📊 Comparison to Market Leaders
 
-| Feature | Tinder | Bumble | LinkUp |
+| Feature | Tinder | Bumble | DatingHub |
 |---------|--------|--------|--------|
 | Referral System | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
 | Friend System | ✗ | ✗ | ⭐⭐⭐ |
@@ -416,5 +416,5 @@ Components tested for:
 
 ---
 
-**Built with ❤️ for LinkUp Dating**  
+**Built with ❤️ for DatingHub**  
 April 27, 2026

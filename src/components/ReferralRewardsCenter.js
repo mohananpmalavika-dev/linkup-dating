@@ -108,7 +108,7 @@ const ReferralRewardsCenter = ({ onClose }) => {
   const getRewardLabel = (type) => {
     if (type === 'premium_days') return 'Days Premium';
     if (type === 'super_likes') return 'Superlikes';
-    if (type === 'coins') return 'LinkUp Coins';
+    if (type === 'coins') return 'DatingHub Coins';
     if (type === 'boost_token') return 'Boost Tokens';
     return 'Reward';
   };

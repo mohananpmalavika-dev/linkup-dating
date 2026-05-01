@@ -166,7 +166,7 @@ test("renders the dating-only launch screen", async () => {
   expect(
     await screen.findByRole("heading", { level: 1, name: /real matches start here/i })
   ).toBeInTheDocument();
-  expect(screen.getByText(/^linkup dating$/i)).toBeInTheDocument();
+  expect(screen.getByText(/^datinghub$/i)).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /sign up/i })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: /login/i })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /register as an entrepreneur/i })).not.toBeInTheDocument();
@@ -205,12 +205,11 @@ test("opens the simplified login flow", async () => {
 
   fireEvent.click(await screen.findByRole("button", { name: /login/i }));
 
-  expect(
-    screen.getByRole("heading", { level: 2, name: /verify your account/i })
-  ).toBeInTheDocument();
-  expect(screen.getByRole("heading", { level: 1, name: /linkup/i })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /send login otp/i })).toBeInTheDocument();
-  expect(screen.getByLabelText(/email address or phone number/i)).toBeInTheDocument();
+  expect(screen.getByRole("img", { name: /datinghub/i })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 1, name: /login/i })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { level: 2, name: /enter mobile number/i })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /send sms code/i })).toBeInTheDocument();
+  expect(screen.getByRole("textbox", { name: /^mobile number$/i })).toBeInTheDocument();
   expect(screen.queryByRole("group", { name: /business categories/i })).not.toBeInTheDocument();
   expect(screen.queryByText(/seller dashboard/i)).not.toBeInTheDocument();
 });

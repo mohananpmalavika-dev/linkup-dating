@@ -1,8 +1,8 @@
-# LinkUp Android Build - Ready for Production
+# DatingHub Android Build - Ready for Production
 
 ## ✅ BUILD COMPLETION STATUS
 
-Your LinkUp Android project is **fully prepared** and ready for APK building!
+Your DatingHub Android project is **fully prepared** and ready for APK building!
 
 ### What's Been Completed:
 
@@ -20,7 +20,7 @@ Your LinkUp Android project is **fully prepared** and ready for APK building!
 ## 🎯 PROJECT STRUCTURE
 
 ```
-C:\Users\Dhanya\LinkUp/
+C:\Users\Dhanya\DatingHub/
 ├── src/                          # React source code
 │   ├── components/               # UI components
 │   │   ├── Login.js
@@ -64,10 +64,10 @@ C:\Users\Dhanya\LinkUp/
 
 #### Step 1: Open Android Project
 ```bash
-cd C:\Users\Dhanya\LinkUp
+cd C:\Users\Dhanya\DatingHub
 npx cap open android
 ```
-This opens Android Studio with the LinkUp Android project.
+This opens Android Studio with the DatingHub Android project.
 
 #### Step 2: Build APK in Android Studio
 1. Wait for project to sync and load (takes 2-3 minutes)
@@ -90,7 +90,7 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 #### Debug Build (for testing)
 ```bash
-cd C:\Users\Dhanya\LinkUp\android
+cd C:\Users\Dhanya\DatingHub\android
 ./gradlew assembleDebug
 
 # Output: app/build/outputs/apk/debug/app-debug.apk (ready in 2-3 minutes)
@@ -99,7 +99,7 @@ cd C:\Users\Dhanya\LinkUp\android
 #### Release Build (for Play Store)
 ```bash
 # First, create signing key (one time only)
-cd C:\Users\Dhanya\LinkUp\android\app
+cd C:\Users\Dhanya\DatingHub\android\app
 
 keytool -genkey -v -keystore linkup-release-key.jks ^
   -keyalg RSA -keysize 2048 -validity 10000 -alias linkup-key
@@ -107,7 +107,7 @@ keytool -genkey -v -keystore linkup-release-key.jks ^
 # You'll be prompted for passwords and details
 
 # Then build release APK
-cd C:\Users\Dhanya\LinkUp\android
+cd C:\Users\Dhanya\DatingHub\android
 ./gradlew assembleRelease
 
 # Output: app/build/outputs/apk/release/app-release.apk
@@ -131,19 +131,19 @@ emulator -avd Pixel_6_API_34
 ### Install Debug APK
 ```bash
 # On emulator or connected device
-adb install -r C:\Users\Dhanya\LinkUp\android\app\build\outputs\apk\debug\app-debug.apk
+adb install -r C:\Users\Dhanya\DatingHub\android\app\build\outputs\apk\debug\app-debug.apk
 
 # Or on Windows, drag & drop to Android Studio emulator window
 ```
 
 ### Launch App
 ```bash
-adb shell am start -n com.linkup.messaging/.MainActivity
+adb shell am start -n com.datinghub.app/.MainActivity
 ```
 
 ### View Logs
 ```bash
-adb logcat -s LinkUp:V
+adb logcat -s DatingHub:V
 ```
 
 ---
@@ -152,7 +152,7 @@ adb logcat -s LinkUp:V
 
 ### Generate Keystore (Do Once)
 ```bash
-cd C:\Users\Dhanya\LinkUp\android\app
+cd C:\Users\Dhanya\DatingHub\android\app
 
 keytool -genkey -v -keystore linkup-release-key.jks ^
   -keyalg RSA ^
@@ -166,8 +166,8 @@ keytool -genkey -v -keystore linkup-release-key.jks ^
 Keystore password: [YOUR_PASSWORD]
 Key password: [YOUR_PASSWORD]
 First and last name: Dhanya
-Organizational unit: LinkUp
-Organization: LinkUp
+Organizational unit: DatingHub
+Organization: DatingHub
 City or Locality: [Your City]
 State or Province: [Your State]
 Country Code: IN (or your country)
@@ -177,7 +177,7 @@ Country Code: IN (or your country)
 
 ### Build Release APK with Signing
 ```bash
-cd C:\Users\Dhanya\LinkUp\android
+cd C:\Users\Dhanya\DatingHub\android
 
 ./gradlew assembleRelease \
   -Pandroid.injected.signing.store.file=app/linkup-release-key.jks \
@@ -213,7 +213,7 @@ cd C:\Users\Dhanya\LinkUp\android
 Edit `android/app/src/main/res/values/strings.xml`:
 ```xml
 <resources>
-    <string name="app_name">LinkUp</string>
+    <string name="app_name">DatingHub</string>
 </resources>
 ```
 
@@ -227,7 +227,7 @@ Edit `android/app/src/main/res/values/strings.xml`:
 Edit `android/app/build.gradle`:
 ```gradle
 defaultConfig {
-    applicationId "com.linkup.messaging"  // Change this
+    applicationId "com.datinghub.app"  // Change this
 }
 ```
 
@@ -236,8 +236,8 @@ defaultConfig {
 ## ⚙️ BUILD CONFIGURATION
 
 ### Current Settings
-- **App ID:** `com.linkup.messaging`
-- **App Name:** `LinkUp`
+- **App ID:** `com.datinghub.app`
+- **App Name:** `DatingHub`
 - **Min SDK:** API 21
 - **Target SDK:** API 34
 - **Build Tool:** Gradle
@@ -249,7 +249,7 @@ android {
     compileSdkVersion 34
     
     defaultConfig {
-        applicationId "com.linkup.messaging"
+        applicationId "com.datinghub.app"
         minSdkVersion 21
         targetSdkVersion 34
         versionCode 1
@@ -264,14 +264,14 @@ android {
 
 ### Build Debug APK (for testing)
 ```bash
-cd C:\Users\Dhanya\LinkUp\android
+cd C:\Users\Dhanya\DatingHub\android
 ./gradlew assembleDebug
 ```
 **Output:** `app/build/outputs/apk/debug/app-debug.apk`
 
 ### Build Release APK (for Play Store)
 ```bash
-cd C:\Users\Dhanya\LinkUp\android
+cd C:\Users\Dhanya\DatingHub\android
 ./gradlew assembleRelease
 ```
 **Output:** `app/build/outputs/apk/release/app-release.apk`
@@ -379,7 +379,7 @@ gradlew wrapper  # Use gradle wrapper instead
 ### APK Installation Fails
 ```bash
 # Clear existing app
-adb uninstall com.linkup.messaging
+adb uninstall com.datinghub.app
 
 # Then reinstall
 adb install -r app/build/outputs/apk/debug/app-debug.apk
@@ -434,9 +434,9 @@ adb logcat > logcat.txt
 
 **Status:** ✅ Ready for APK Building
 
-**Location:** `C:\Users\Dhanya\LinkUp`
+**Location:** `C:\Users\Dhanya\DatingHub`
 
-**Project:** LinkUp v1.0.0
+**Project:** DatingHub v1.0.0
 
 **Build Date:** April 26, 2026
 

@@ -1,13 +1,13 @@
-# LinkUp Dating App - Complete System Overview
+# DatingHub App - Complete System Overview
 
 **Session Date:** April 27, 2026  
-**Project:** LinkUp - Modern Dating App with Real-time Messaging & Video Calling
+**Project:** DatingHub - Modern Dating App with Real-time Messaging & Video Calling
 
 ---
 
 ## 🎯 Project Summary
 
-**LinkUp** is a full-stack dating application built with:
+**DatingHub** is a full-stack dating application built with:
 - **Frontend:** React + Capacitor (for Android/iOS)
 - **Backend:** Node.js + Express + Sequelize
 - **Database:** PostgreSQL
@@ -67,7 +67,7 @@
 ## 🗂️ Project Structure
 
 ```
-LinkUp/
+DatingHub/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
@@ -597,7 +597,7 @@ Messaging (Root Container)
 
 ## 🎉 Summary
 
-**LinkUp** is a **full-featured dating application** with:
+**DatingHub** is a **full-featured dating application** with:
 
 1. **Discovery** - Swipe-based profile discovery with smart recommendations
 2. **Matching** - Real-time matching system with unmatch capability

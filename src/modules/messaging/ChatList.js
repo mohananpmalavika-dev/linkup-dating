@@ -102,7 +102,7 @@ const ChatList = ({
     <div className="chat-list-container">
       <div className="chat-list-header">
         <div className="chat-list-header-copy">
-          <h2>LinkUp</h2>
+          <h2>DatingHub</h2>
           <p className="chat-list-subtitle">Private chats, voice notes, and quick replies</p>
         </div>
         <button className="btn-new-chat" onClick={onNewChat} title="Start new chat" type="button">

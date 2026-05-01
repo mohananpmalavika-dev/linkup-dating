@@ -45,12 +45,12 @@ const generateReferralCode = () =>
   crypto.randomBytes(REFERRAL_CODE_LENGTH / 2).toString('hex').toUpperCase();
 
 const generateReferralLink = (referralCode) => {
-  const baseUrl = process.env.APP_BASE_URL || 'https://linkup-dating.com';
+  const baseUrl = process.env.APP_BASE_URL || 'https://datinghub.app';
   return `${baseUrl}/signup?ref=${referralCode}`;
 };
 
 const buildDisplayName = (row = {}) =>
-  row.first_name || row.firstName || row.username || row.email || 'LinkUp member';
+  row.first_name || row.firstName || row.username || row.email || 'DatingHub member';
 
 const normalizeRewardPayload = (reward = {}) => ({
   boostCredits: Number(reward.boostCredits ?? reward.boost_credits ?? REFERRAL_REWARD_TEMPLATE.boostCredits) || 0,
@@ -371,7 +371,7 @@ const buildCommunityRoomDefinitions = (profile = {}, preferenceFlexibility = {})
       warmUpPrompt: 'Share one green flag and one first-date boundary that matters to you.',
       audioPrompt:
         engagementLoopSettings.audioPromptsEnabled
-          ? 'Optional audio prompt: record the kind of connection you hope to build on LinkUp.'
+          ? 'Optional audio prompt: record the kind of connection you hope to build on DatingHub.'
           : null
     },
     {
@@ -1300,7 +1300,7 @@ router.post('/referral/complete', async (req, res) => {
       userNotificationService.createNotification(referral.referrerUserId, {
         type: 'referral_reward',
         title: 'Referral invite activated',
-        body: 'Your invite joined LinkUp. Your quality bonus will unlock once they become an activated dater.',
+        body: 'Your invite joined DatingHub. Your quality bonus will unlock once they become an activated dater.',
         metadata: {
           starterReward,
           qualityBonus: referralProgram.qualityBonus,

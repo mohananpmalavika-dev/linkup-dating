@@ -236,7 +236,7 @@ All endpoints verified in backend - production-ready.
 
 ## Integration Pattern
 
-This feature demonstrates the LinkUp wiring standard:
+This feature demonstrates the DatingHub wiring standard:
 ```
 1. ✅ Search & locate all components
 2. ✅ Import to parent components (2 locations)

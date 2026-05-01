@@ -1,4 +1,4 @@
-# LinkUp - PHASE 2: Testing & Deployment
+# DatingHub - PHASE 2: Testing & Deployment
 
 ## 🎯 Overview
 
@@ -315,7 +315,7 @@ Based on MISSING_FEATURES_REPORT.md, integrate the most critical missing feature
   git push heroku main
   
   # Option B: Your own server
-  ssh user@staging.linkup.com
+  ssh user@staging.datinghub.app
   cd /var/www/linkup
   git pull origin main
   npm install
@@ -379,7 +379,7 @@ Based on MISSING_FEATURES_REPORT.md, integrate the most critical missing feature
   - [ ] Complete account setup
   
 - [ ] **7.2 Create app listing**
-  - [ ] App name: "LinkUp - Dating & Connections"
+  - [ ] App name: "DatingHub - Dating & Connections"
   - [ ] App category: Social
   - [ ] Content rating: 17+ (for dating features)
   

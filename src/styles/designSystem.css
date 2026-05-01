@@ -1,5 +1,5 @@
 /* ============================================================
-   LinkUp Premium Design System
+   DatingHub Premium Design System
    Target: Kerala Launch — May 1, 2026
    ============================================================ */
 
@@ -8,7 +8,7 @@
 
 /* ── CSS Custom Properties (Design Tokens) ── */
 :root {
-  /* Primary Gradient (Signature LinkUp Purple) */
+  /* Primary Gradient (Signature DatingHub Purple) */
   --lu-primary-start: #667eea;
   --lu-primary-end: #764ba2;
   --lu-primary-gradient: linear-gradient(135deg, var(--lu-primary-start) 0%, var(--lu-primary-end) 100%);

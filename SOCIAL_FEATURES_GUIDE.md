@@ -1,7 +1,7 @@
 # 🎉 Social Features - Implementation Complete
 
 ## Overview
-Comprehensive social features module for LinkUp Dating app including referral system, friend management, social media integration, and group chats.
+Comprehensive social features module for DatingHub app including referral system, friend management, social media integration, and group chats.
 
 ---
 

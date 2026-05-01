@@ -1,8 +1,8 @@
-# 📱 LinkUp Referral Code System - Complete Setup Summary
+# 📱 DatingHub Referral Code System - Complete Setup Summary
 
 ## 🎉 Implementation Status: ✅ COMPLETE
 
-All components for a fully functional referral code system have been implemented and integrated into LinkUp.
+All components for a fully functional referral code system have been implemented and integrated into DatingHub.
 
 ---
 
@@ -330,7 +330,7 @@ You'll know it's working when:
 
 - ✅ Admin tool shows "100% coverage" (or 98%+)
 - ✅ Users see their referral code in profile
-- ✅ Referral link works: `https://linkup.dating/?referral=LINK123ABC`
+- ✅ Referral link works: `https://datinghub.app/?referral=LINK123ABC`
 - ✅ New user gets 7 premium days after signup with code
 - ✅ Original referrer appears on leaderboard
 - ✅ Both users can claim rewards

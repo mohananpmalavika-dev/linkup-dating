@@ -1,8 +1,8 @@
-# 🚀 LinkUp - Google Play Store Publication Checklist
+# 🚀 DatingHub - Google Play Store Publication Checklist
 
 **Target Release Date:** Tomorrow (May 1, 2026)  
-**App Package ID:** `com.linkup.dating`  
-**App Name:** LinkUp
+**App Package ID:** `com.datinghub.app`  
+**App Name:** DatingHub
 
 ---
 
@@ -44,7 +44,7 @@
 #### Step 1: Generate Signing Keystore (If Not Done)
 ```bash
 # Navigate to Android project
-cd C:\Users\Dhanya\LinkUp\android
+cd C:\Users\Dhanya\DatingHub\android
 
 # Generate keystore (do this ONCE and save safely)
 keytool -genkey -v -keystore release-key.keystore -keyalg RSA -keysize 2048 -validity 10000 -alias linkup
@@ -52,9 +52,9 @@ keytool -genkey -v -keystore release-key.keystore -keyalg RSA -keysize 2048 -val
 # Follow prompts:
 # - Key alias: linkup
 # - Password: (create strong password, save it!)
-# - First/Last name: LinkUp
-# - Organizational Unit: LinkUp
-# - Organization: LinkUp
+# - First/Last name: DatingHub
+# - Organizational Unit: DatingHub
+# - Organization: DatingHub
 # - City: [Your City]
 # - State: [Your State]
 # - Country: [Your Country Code - e.g., US]
@@ -81,7 +81,7 @@ Edit `capacitor.config.json`:
 #### Step 3: Build Release APK/AAB
 ```bash
 # Navigate to project root
-cd C:\Users\Dhanya\LinkUp
+cd C:\Users\Dhanya\DatingHub
 
 # Sync web build
 npx cap sync
@@ -110,7 +110,7 @@ cd android
 1. **Go to**: https://play.google.com/console
 2. **Click**: "Create app"
 3. **Fill in**:
-   - App name: `LinkUp`
+   - App name: `DatingHub`
    - Default language: English
    - App type: Applications
    - Category: **Dating** ⭐
@@ -120,7 +120,7 @@ cd android
 
 - [ ] **App Title** (50 chars max)
   ```
-  LinkUp - Meet Your Match
+  DatingHub - Meet Your Match
   ```
 
 - [ ] **Short Description** (80 chars max)
@@ -130,7 +130,7 @@ cd android
 
 - [ ] **Full Description** (4000 chars)
   ```
-  LinkUp is a premium dating app designed to help you find meaningful connections.
+  DatingHub is a premium dating app designed to help you find meaningful connections.
   
   Features:
   - Real-time messaging and chat
@@ -206,7 +206,7 @@ cd android
 #### Privacy Policy
 - [ ] **Add Privacy Policy URL**
   - Set a public HTTPS URL
-  - Example: `https://linkup.com/privacy`
+  - Example: `https://datinghub.app/privacy`
   - Must be accessible and kept up-to-date
 
 ---
@@ -264,7 +264,7 @@ cd android
 
 #### Step 2: Fill Release Notes
 ```
-LinkUp v1.0 - Initial Release
+DatingHub v1.0 - Initial Release
 
 Features:
 - Real-time messaging
@@ -314,7 +314,7 @@ After you submit for review:
 
 ## 🎯 DATING APP SPECIFIC REQUIREMENTS
 
-Since LinkUp is a dating app, extra scrutiny applies:
+Since DatingHub is a dating app, extra scrutiny applies:
 
 ### ✅ Must Have:
 - [ ] Age verification (18+ only)
@@ -429,4 +429,4 @@ Before publishing:
 
 ---
 
-**Good Luck! 🎊 Your LinkUp app will soon be available to millions!**
+**Good Luck! 🎊 Your DatingHub app will soon be available to millions!**

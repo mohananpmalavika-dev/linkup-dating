@@ -59,7 +59,7 @@ curl http://localhost:5000/social/referral/me \
 {
   "id": 1,
   "code": "ABC123DEF456",
-  "link": "https://linkup-dating.com/signup?ref=ABC123DEF456",
+  "link": "https://datinghub.app/signup?ref=ABC123DEF456",
   "status": "pending"
 }
 ```

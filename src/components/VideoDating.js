@@ -1153,7 +1153,7 @@ const VideoDating = ({
         if (recordingShouldDownloadRef.current && blob.size > 0) {
           downloadBlob(
             blob,
-            `linkup-video-call-${currentVideoDateIdRef.current || Date.now()}.webm`
+            `datinghub-video-call-${currentVideoDateIdRef.current || Date.now()}.webm`
           );
           setRecordingMessage('Recording saved to your device.');
         } else {

@@ -265,7 +265,7 @@
 ## File Organization
 
 ```
-LinkUp/
+DatingHub/
 ├── backend/
 │   ├── models/
 │   │   ├── FriendReferral.js ✅ (NEW - 65 LOC)

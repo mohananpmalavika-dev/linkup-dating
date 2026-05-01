@@ -2,7 +2,7 @@
 
 ## 🎉 Implementation Complete ✅
 
-Successfully built a comprehensive real-time **Conversation Quality Meter** for LinkUp that analyzes conversation depth, provides AI-powered suggestions, and shows how conversations compare to others on the platform.
+Successfully built a comprehensive real-time **Conversation Quality Meter** for DatingHub that analyzes conversation depth, provides AI-powered suggestions, and shows how conversations compare to others on the platform.
 
 ---
 

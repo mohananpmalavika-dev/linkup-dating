@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers everything needed to sign your Android APK/AAB and submit LinkUp to Google Play Store for publication.
+This guide covers everything needed to sign your Android APK/AAB and submit DatingHub to Google Play Store for publication.
 
 ---
 
@@ -52,29 +52,29 @@ This creates a cryptographic key for signing your APK/AAB.
 
 **Windows (PowerShell)**:
 ```powershell
-$keystorePath = "C:\Users\YourUsername\LinkUp\linkup-release.keystore"
+$keystorePath = "C:\Users\YourUsername\DatingHub\linkup-release.keystore"
 
 keytool -genkey -v -keystore $keystorePath `
   -keyalg RSA -keysize 2048 -validity 10000 `
   -alias linkup-release -storepass your_store_password `
   -keypass your_key_password `
-  -dname "CN=YourName,O=LinkUp,L=Kochi,ST=Kerala,C=IN"
+  -dname "CN=YourName,O=DatingHub,L=Kochi,ST=Kerala,C=IN"
 ```
 
 **Mac/Linux**:
 ```bash
-keytool -genkey -v -keystore ~/LinkUp/linkup-release.keystore \
+keytool -genkey -v -keystore ~/DatingHub/linkup-release.keystore \
   -keyalg RSA -keysize 2048 -validity 10000 \
   -alias linkup-release -storepass your_store_password \
   -keypass your_key_password \
-  -dname "CN=YourName,O=LinkUp,L=Kochi,ST=Kerala,C=IN"
+  -dname "CN=YourName,O=DatingHub,L=Kochi,ST=Kerala,C=IN"
 ```
 
 ### Parameters Explained
 
 | Parameter | Meaning | Example |
 |-----------|---------|---------|
-| `-keystore` | File path to save key | `~/LinkUp/linkup-release.keystore` |
+| `-keystore` | File path to save key | `~/DatingHub/linkup-release.keystore` |
 | `-keyalg` | Algorithm (RSA recommended) | `RSA` |
 | `-keysize` | Key size in bits | `2048` |
 | `-validity` | Days key is valid | `10000` (27 years) |
@@ -89,8 +89,8 @@ keytool -genkey -v -keystore ~/LinkUp/linkup-release.keystore \
 
 ```bash
 # Save to secure location
-# Windows: C:\Users\YourUsername\LinkUp\linkup-release.keystore
-# Mac: ~/LinkUp/linkup-release.keystore
+# Windows: C:\Users\YourUsername\DatingHub\linkup-release.keystore
+# Mac: ~/DatingHub/linkup-release.keystore
 
 # Also save passwords securely (password manager)
 # Keystore password: _______________
@@ -134,7 +134,7 @@ android {
             
             // Build options
             manifestPlaceholders = [
-                appLabel: "LinkUp",
+                appLabel: "DatingHub",
                 enableSentryBeforeSend: "true"
             ]
         }
@@ -254,7 +254,7 @@ You'll need this for services like Google Sign-In:
 
 ```bash
 # Get SHA-1 of your signing key
-keytool -list -v -keystore ~/LinkUp/linkup-release.keystore -alias linkup-release
+keytool -list -v -keystore ~/DatingHub/linkup-release.keystore -alias linkup-release
 ```
 
 Look for:
@@ -271,7 +271,7 @@ SHA1: AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01
 In **Google Play Console**:
 1. Click "Create app"
 2. Fill in:
-   - **App name**: LinkUp
+   - **App name**: DatingHub
    - **Default language**: English
    - **App or game**: App
    - **Category**: Dating
@@ -280,17 +280,17 @@ In **Google Play Console**:
 
 ### 2. Set Up App
 
-### Dashboard → All apps → LinkUp
+### Dashboard → All apps → DatingHub
 
 #### App details
 
-- **App name**: LinkUp
+- **App name**: DatingHub
 - **Short description** (80 chars):
   "Meet and connect with amazing people around you through real-time messaging."
 - **Full description** (4000 chars):
 
 ```
-LinkUp is a vibrant dating and social platform designed to help you meet 
+DatingHub is a vibrant dating and social platform designed to help you meet 
 and connect with people around you. Features include:
 
 ✨ Real-Time Messaging
@@ -365,7 +365,7 @@ Screenshot 3: "Find your match"
 
 Click "Fill out questionnaire":
 
-1. **Email address**: developer@linkup.io
+1. **Email address**: developer@datinghub.app
 2. **App category**: Dating
 3. Questions (answer honestly):
    - Violence: No
@@ -384,8 +384,8 @@ Click "Fill out questionnaire":
 **Dashboard** → **Setup** → **App details**
 
 - **Privacy policy**: [Your privacy policy URL]
-- **Email address**: support@linkup.io
-- **Website**: https://www.linkup.io
+- **Email address**: support@datinghub.app
+- **Website**: https://www.datinghub.app
 - **Target audience**:
   - Age: 18-65+
   - Gender: Everyone
@@ -419,7 +419,7 @@ Click "Fill out questionnaire":
    ```
    Version 1.0.0 - Launch
 
-   🎉 LinkUp is officially live!
+   🎉 DatingHub is officially live!
    
    ✨ Features:
    - Real-time messaging
@@ -428,7 +428,7 @@ Click "Fill out questionnaire":
    - Group chat rooms
    - Voice & video calls
 
-   This is version 1.0.0. We're excited to have you on LinkUp!
+   This is version 1.0.0. We're excited to have you on DatingHub!
    ```
 
 4. **Test release** (optional):
@@ -574,10 +574,10 @@ Fix: Various bugs
 **Solution**:
 ```bash
 # Verify keystore path is correct
-# Check file exists at: ~/LinkUp/linkup-release.keystore
+# Check file exists at: ~/DatingHub/linkup-release.keystore
 
 # Regenerate if lost:
-keytool -list -keystore ~/LinkUp/linkup-release.keystore
+keytool -list -keystore ~/DatingHub/linkup-release.keystore
 ```
 
 ### Build Fails: "Invalid keystore format"
@@ -585,7 +585,7 @@ keytool -list -keystore ~/LinkUp/linkup-release.keystore
 **Solution**:
 ```bash
 # Verify keystore integrity
-keytool -list -v -keystore ~/LinkUp/linkup-release.keystore
+keytool -list -v -keystore ~/DatingHub/linkup-release.keystore
 
 # If corrupted, regenerate keystore (lose ability to update app!)
 ```

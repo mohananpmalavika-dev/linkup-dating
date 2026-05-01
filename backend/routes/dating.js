@@ -10540,7 +10540,7 @@ router.get('/export-data', async (req, res) => {
     };
 
     // Generate filename
-    const filename = `linkup-data-${userId}-${Date.now()}.json`;
+    const filename = `datinghub-data-${userId}-${Date.now()}.json`;
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

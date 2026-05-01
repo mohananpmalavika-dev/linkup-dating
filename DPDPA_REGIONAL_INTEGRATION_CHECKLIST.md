@@ -1,6 +1,6 @@
 # DPDPA & Regional Features - Integration Checklist
 
-**Project:** LinkUp Kerala Dating App  
+**Project:** DatingHub Kerala Dating App  
 **Feature Set:** DPDPA Compliance + Regional Features  
 **Status:** 🟢 Ready for Integration  
 **Created:** April 30, 2026
@@ -459,6 +459,6 @@ After integration, you should have:
 
 **Generated:** April 30, 2026  
 **By:** GitHub Copilot  
-**For:** LinkUp Dating App - Kerala Launch  
+**For:** DatingHub App - Kerala Launch  
 **Compliance:** DPDPA, RBI, Play Store, GST
 

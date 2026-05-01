@@ -249,7 +249,7 @@ const SOSAlert = ({ currentUser = null }) => {
     try {
       await dateSafetyService.updateLocation(activeSessionId, position.latitude, position.longitude);
     } catch (error) {
-      setErrorMessage(error.message || 'Location was captured, but LinkUp could not update it.');
+      setErrorMessage(error.message || 'Location was captured, but DatingHub could not update it.');
     }
   };
 
@@ -265,7 +265,7 @@ const SOSAlert = ({ currentUser = null }) => {
     }
 
     if (!selectedContactId) {
-      throw new Error('In-app SOS needs a LinkUp trusted contact. You can still call or text your saved trusted number.');
+      throw new Error('In-app SOS needs a DatingHub trusted contact. You can still call or text your saved trusted number.');
     }
 
     const response = await dateSafetyService.startSession(
@@ -275,12 +275,12 @@ const SOSAlert = ({ currentUser = null }) => {
     );
 
     if (!response?.success) {
-      throw new Error(response?.error || 'Unable to start a LinkUp safety session.');
+      throw new Error(response?.error || 'Unable to start a DatingHub safety session.');
     }
 
     const nextSessionId = getSessionIdFromResponse(response);
     if (!nextSessionId) {
-      throw new Error('LinkUp did not return a session ID.');
+      throw new Error('DatingHub did not return a session ID.');
     }
 
     setSessionId(nextSessionId);
@@ -336,14 +336,14 @@ const SOSAlert = ({ currentUser = null }) => {
       const location = locationSnapshot || await captureLocation(sessionId || null);
       const nextMapsUrl = buildMapsUrl(locationSnapshot || location);
       const shareText = [
-        'LinkUp safety update',
+        'DatingHub safety update',
         `Area: ${keralaContextLabel}`,
         nextMapsUrl ? `Location: ${nextMapsUrl}` : 'Location could not be attached.',
       ].filter(Boolean).join('\n');
 
       if (typeof navigator !== 'undefined' && navigator.share) {
         await navigator.share({
-          title: 'LinkUp safety update',
+          title: 'DatingHub safety update',
           text: shareText,
           url: nextMapsUrl || undefined,
         });
@@ -411,7 +411,7 @@ const SOSAlert = ({ currentUser = null }) => {
   const handleActivateSos = async () => {
     const confirmed = typeof window === 'undefined'
       ? true
-      : window.confirm('Activate LinkUp SOS now? Your location will be shared with your LinkUp trusted contact.');
+      : window.confirm('Activate DatingHub SOS now? Your location will be shared with your DatingHub trusted contact.');
 
     if (!confirmed) {
       return;
@@ -431,14 +431,14 @@ const SOSAlert = ({ currentUser = null }) => {
       );
 
       if (!response?.success) {
-        throw new Error(response?.error || 'LinkUp could not activate SOS.');
+        throw new Error(response?.error || 'DatingHub could not activate SOS.');
       }
 
       const emergencyNumber = response?.sos?.emergencyNumber || '112';
       setSessionStatus('emergency');
       setStatusMessage(`SOS activated. Call ${emergencyNumber} if you can stay on the line safely.`);
     } catch (error) {
-      setErrorMessage(error.message || 'LinkUp could not activate SOS.');
+      setErrorMessage(error.message || 'DatingHub could not activate SOS.');
     } finally {
       setActionLoading('');
     }
@@ -532,7 +532,7 @@ const SOSAlert = ({ currentUser = null }) => {
               onClick={handleActivateSos}
               disabled={actionLoading === 'activate-sos'}
             >
-              {actionLoading === 'activate-sos' ? 'Activating...' : 'Activate LinkUp SOS'}
+              {actionLoading === 'activate-sos' ? 'Activating...' : 'Activate DatingHub SOS'}
             </button>
           </div>
 
@@ -542,7 +542,7 @@ const SOSAlert = ({ currentUser = null }) => {
               <strong>{savedTrustedNumber ? `${savedTrustedNumber.name} (${savedTrustedNumber.phone})` : 'Not added yet'}</strong>
             </div>
             <div>
-              <span>LinkUp contact</span>
+              <span>DatingHub contact</span>
               <strong>
                 {loadingContacts
                   ? 'Loading...'
@@ -647,15 +647,15 @@ const SOSAlert = ({ currentUser = null }) => {
 
         <section className="sos-panel">
           <div className="sos-panel-heading">
-            <p>LinkUp SOS</p>
+            <p>DatingHub SOS</p>
             <h2>In-App Trusted Contact</h2>
           </div>
 
           {loadingContacts ? (
-            <div className="sos-empty-state">Loading LinkUp trusted contacts...</div>
+            <div className="sos-empty-state">Loading DatingHub trusted contacts...</div>
           ) : trustedContacts.length > 0 ? (
             <label className="sos-field">
-              <span>Choose contact for LinkUp SOS</span>
+              <span>Choose contact for DatingHub SOS</span>
               <select
                 value={selectedContactId}
                 onChange={(event) => setSelectedContactId(event.target.value)}
@@ -669,7 +669,7 @@ const SOSAlert = ({ currentUser = null }) => {
             </label>
           ) : (
             <div className="sos-empty-state">
-              No LinkUp trusted contact is connected yet. Your saved phone number and emergency calls still work here.
+              No DatingHub trusted contact is connected yet. Your saved phone number and emergency calls still work here.
             </div>
           )}
 
@@ -678,7 +678,7 @@ const SOSAlert = ({ currentUser = null }) => {
             <p>
               {sessionId
                 ? `Started ${formatDateTime(sessionStartedAt)}.`
-                : 'LinkUp SOS starts a safety session automatically when you activate it.'}
+                : 'DatingHub SOS starts a safety session automatically when you activate it.'}
             </p>
           </div>
         </section>

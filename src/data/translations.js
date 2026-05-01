@@ -9,20 +9,20 @@ const translations = {
         "Safe and verified dating community",
       ],
       messages: [
-        "LinkUp Dating - Modern dating made simple",
+        "DatingHub - Modern dating made simple",
         "Discover meaningful connections",
         "Video dating, messaging, and safe matching",
       ],
     },
     launch: {
-      brand: "LinkUp Dating",
+      brand: "DatingHub",
       title: "Real Matches Start Here",
       promise: "Real matches, safe dates, better conversations.",
       intro:
-        "LinkUp Dating helps you move from profile to first message to real plans with more clarity, safer date tools, and stronger conversation prompts.",
+        "DatingHub helps you move from profile to first message to real plans with more clarity, safer date tools, and stronger conversation prompts.",
       languageLabel: "Language",
       login: "Login",
-      loginHelp: "Sign in to your LinkUp account with your email address or phone number.",
+      loginHelp: "Sign in to your DatingHub account with your email address or phone number.",
       user: "Sign Up",
       userHelp: "Build your profile, get better matches, and start safer conversations.",
       highlights: [
@@ -35,7 +35,7 @@ const translations = {
       featuresLabel: "Features",
       featuresTitle: "Everything you need for modern dating",
       features: [
-        ["LinkUp", "Message your matches, share moments, and build meaningful connections."],
+        ["DatingHub", "Message your matches, share moments, and build meaningful connections."],
         ["Discovery", "Discover profiles based on your preferences and location."],
         ["Video Dating", "Video call your matches and get to know them better."],
       ],
@@ -48,7 +48,7 @@ const translations = {
       login: "Login",
       entrepreneurSubtitle: "Grow your dating reach with verified email",
       loginSubtitle: "Sign in with your email address or phone number",
-      userSubtitle: "Join LinkUp Dating with verified email",
+      userSubtitle: "Join DatingHub with verified email",
       chooseAnother: "Choose another option",
       footer: "Your login is verified by a server-issued OTP.",
     },
@@ -63,7 +63,7 @@ const translations = {
     modules: {
       dashboard: "Dashboard",
       ecommerce: "GlobeMart",
-      messaging: "LinkUp",
+      messaging: "DatingHub",
       classifieds: "TradePost",
       realestate: "HomeSphere",
       fooddelivery: "Feastly",
@@ -82,7 +82,7 @@ const translations = {
       businessAccess: "Business access",
     },
     dashboard: {
-      welcomeTitle: "Welcome to LinkUp Dating!",
+      welcomeTitle: "Welcome to DatingHub!",
       welcomeDescription: "Modern dating platform for meaningful connections, video dating, and safe matching",
       itemsInCart: "Items in Cart",
       ordersPlaced: "Orders Placed",
@@ -143,13 +143,13 @@ const translations = {
       ],
     },
     launch: {
-      brand: "LinkUp Dating",
+      brand: "DatingHub",
       title: "ആധുനിക ഡേറ്റിംഗ് ലളിതമാക്കി",
       intro:
-        "LinkUp Dating എന്നത് അർത്ഥവത്തായ ബന്ധങ്ങൾ കണ്ടെത്താൻ സഹായിക്കുന്ന ഒരു ആധുനിക ഡേറ്റിംഗ് പ്ലാറ്റ്ഫോം ആണ്.",
+        "DatingHub എന്നത് അർത്ഥവത്തായ ബന്ധങ്ങൾ കണ്ടെത്താൻ സഹായിക്കുന്ന ഒരു ആധുനിക ഡേറ്റിംഗ് പ്ലാറ്റ്ഫോം ആണ്.",
       languageLabel: "ഭാഷ",
       login: "ലോഗിൻ",
-      loginHelp: "നിങ്ങളുടെ LinkUp അക്കൗണ്ടിലേക്ക് പ്രവേശിക്കുക.",
+      loginHelp: "നിങ്ങളുടെ DatingHub അക്കൗണ്ടിലേക്ക് പ്രവേശിക്കുക.",
       user: "സൈൻ അപ് ചെയ്യുക",
       userHelp: "നിങ്ങളുടെ ഡേറ്റിംഗ് പ്രൊഫൈൽ സൃഷ്ടിക്കുക.",
       entrepreneur: "സംരംഭകനായി രജിസ്റ്റർ ചെയ്യുക",
@@ -157,7 +157,7 @@ const translations = {
       featuresLabel: "ഫീച്ചറുകൾ",
       featuresTitle: "ആധുനിക ഡേറ്റിംഗിനുള്ളതായ എല്ലാം",
       features: [
-        ["LinkUp", "നിങ്ങളുടെ മാച്ചുകളുമായി സന്ദേശിക്കുക."],
+        ["DatingHub", "നിങ്ങളുടെ മാച്ചുകളുമായി സന്ദേശിക്കുക."],
         ["Discovery", "നിങ്ങളുടെ മുൻഗണനകൾ അനുസരിച്ച് പ്രൊഫൈലുകൾ കണ്ടെത്തുക."],
         ["Video Dating", "നിങ്ങളുടെ മാച്ചുകളുമായി വിഡിയോ കോൾ ചെയ്യുക."],
       ],
@@ -170,7 +170,7 @@ const translations = {
       login: "ലോഗിൻ",
       entrepreneurSubtitle: "വെരിഫൈ ചെയ്ത ഇമെയിലോടെ കേരളത്തിൽ നിന്ന് ആഗോള വിപണിയിലേക്ക് വളരൂ",
       loginSubtitle: "നിങ്ങളുടെ അക്കൗണ്ടിലേക്ക് സൈൻ ഇൻ ചെയ്യുക",
-      userSubtitle: "LinkUp Dating-ൽ ചേരുക",
+      userSubtitle: "DatingHub-ൽ ചേരുക",
       chooseAnother: "മറ്റൊരു ഓപ്ഷൻ തിരഞ്ഞെടുക്കുക",
       footer: "സർവർ നൽകുന്ന OTP ഉപയോഗിച്ച് നിങ്ങളുടെ ലോഗിൻ വെരിഫൈ ചെയ്യുന്നു.",
     },
@@ -193,13 +193,13 @@ const translations = {
       ],
     },
     launch: {
-      brand: "LinkUp Dating",
+      brand: "DatingHub",
       title: "आधुनिक डेटिंग आसान बनाई गई",
       intro:
-        "LinkUp Dating एक आधुनिक डेटिंग प्लेटफॉर्म है जो आपको सार्थक संबंध खोजने में मदद करता है।",
+        "DatingHub एक आधुनिक डेटिंग प्लेटफॉर्म है जो आपको सार्थक संबंध खोजने में मदद करता है।",
       languageLabel: "भाषा",
       login: "लॉगिन",
-      loginHelp: "अपने LinkUp खाते में साइन इन करें।",
+      loginHelp: "अपने DatingHub खाते में साइन इन करें।",
       user: "साइन अप करें",
       userHelp: "अपनी डेटिंग प्रोफ़ाइल बनाएं और अपना मैच खोजें।",
       entrepreneur: "Entrepreneur के रूप में Register करें",
@@ -207,7 +207,7 @@ const translations = {
       featuresLabel: "Features",
       featuresTitle: "आधुनिक डेटिंग के लिए सब कुछ",
       features: [
-        ["LinkUp", "अपने मैचेज को संदेश भेजें और संबंध बनाएं।"],
+        ["DatingHub", "अपने मैचेज को संदेश भेजें और संबंध बनाएं।"],
         ["Discovery", "अपनी पसंद के अनुसार प्रोफ़ाइलें खोजें।"],
         ["Video Dating", "अपने मैचेज के साथ वीडियो कॉल करें।"],
       ],
@@ -220,7 +220,7 @@ const translations = {
       login: "Login",
       entrepreneurSubtitle: "अपनी डेटिंग पहुंच को सत्यापित ईमेल के साथ बढ़ाएं",
       loginSubtitle: "Verified email के साथ साइन इन करें",
-      userSubtitle: "LinkUp Dating में शामिल हों",
+      userSubtitle: "DatingHub में शामिल हों",
       chooseAnother: "दूसरा option चुनें",
       footer: "आपका login server-issued OTP से verify होता है.",
     },
@@ -235,19 +235,19 @@ const translations = {
         "مجتمع تواعد آمن وموثق",
       ],
       messages: [
-        "LinkUp Dating - التواعد الحديث الميسر",
+        "DatingHub - التواعد الحديث الميسر",
         "اكتشف اتصالات معنى",
         "تواعد فيديو، مراسلة، ومطابقة آمنة",
       ],
     },
     launch: {
-      brand: "LinkUp Dating",
+      brand: "DatingHub",
       title: "التواعد الحديث الميسر",
       intro:
-        "LinkUp Dating هي منصة تواعد حديثة مصممة لمساعدتك في العثور على اتصالات معنى.",
+        "DatingHub هي منصة تواعد حديثة مصممة لمساعدتك في العثور على اتصالات معنى.",
       languageLabel: "اللغة",
       login: "تسجيل الدخول",
-      loginHelp: "سجل الدخول إلى حساب LinkUp ببريد موثق.",
+      loginHelp: "سجل الدخول إلى حساب DatingHub ببريد موثق.",
       user: "إنشاء حساب",
       userHelp: "أنشئ ملف تعريف تواعد واعثر على مطابقتك.",
       entrepreneur: "التسجيل كرائد أعمال",
@@ -255,7 +255,7 @@ const translations = {
       featuresLabel: "الميزات",
       featuresTitle: "كل ما تحتاجه للتواعد الحديث",
       features: [
-        ["LinkUp", "راسل مطابقاتك وشارك اللحظات وبناء علاقات معنى."],
+        ["DatingHub", "راسل مطابقاتك وشارك اللحظات وبناء علاقات معنى."],
         ["Discovery", "اكتشف الملفات بناء على تفضيلاتك."],
         ["Video Dating", "تواصل بالفيديو مع مطابقاتك."],
       ],
@@ -268,7 +268,7 @@ const translations = {
       login: "تسجيل الدخول",
       entrepreneurSubtitle: "وسع نطاق التواعد ببريد موثق",
       loginSubtitle: "سجل الدخول ببريد إلكتروني موثق",
-      userSubtitle: "انضم إلى LinkUp Dating ببريد موثق",
+      userSubtitle: "انضم إلى DatingHub ببريد موثق",
       chooseAnother: "اختر خيارا آخر",
       footer: "يتم توثيق تسجيل الدخول عبر رمز OTP صادر من الخادم.",
     },
@@ -289,8 +289,8 @@ translations.en.public = {
   signupNotice:
     "By creating an account, you agree to the Terms and acknowledge the Privacy Policy. Grievance and support contacts are public, including guidance for ID verification, location sharing, and camera or microphone features.",
   resourceNavLabel: "Public legal and support resources",
-  openLinkUp: "Open LinkUp",
-  publicPageAudience: "Public page for LinkUp Dating users and reviewers",
+  openDatingHub: "Open DatingHub",
+  publicPageAudience: "Public page for DatingHub users and reviewers",
 };
 
 translations.ml = {
@@ -298,15 +298,15 @@ translations.ml = {
   languageName: "മലയാളം",
   launch: {
     ...translations.ml?.launch,
-    brand: "LinkUp Dating",
+    brand: "DatingHub",
     title: "യഥാർത്ഥ ബന്ധങ്ങൾ ഇവിടെ തുടങ്ങുന്നു",
     promise: "യഥാർത്ഥ മാച്ചുകൾ, സുരക്ഷിതമായ ഡേറ്റുകൾ, കൂടുതൽ നല്ല സംഭാഷണങ്ങൾ.",
     intro:
-      "LinkUp Dating നിങ്ങളുടെ പ്രൊഫൈലിൽ നിന്ന് ആദ്യ സന്ദേശത്തിലേക്കും പിന്നീട് യഥാർത്ഥ കൂടിക്കാഴ്ചകളിലേക്കും കൂടുതൽ വ്യക്തതയോടും സുരക്ഷാ സഹായങ്ങളോടും കൂടി എത്തിക്കാൻ സഹായിക്കുന്നു.",
+      "DatingHub നിങ്ങളുടെ പ്രൊഫൈലിൽ നിന്ന് ആദ്യ സന്ദേശത്തിലേക്കും പിന്നീട് യഥാർത്ഥ കൂടിക്കാഴ്ചകളിലേക്കും കൂടുതൽ വ്യക്തതയോടും സുരക്ഷാ സഹായങ്ങളോടും കൂടി എത്തിക്കാൻ സഹായിക്കുന്നു.",
     languageLabel: "ഭാഷ",
     languageHelper: "തുടരുന്നതിനുമുമ്പ് English അല്ലെങ്കിൽ മലയാളം തിരഞ്ഞെടുക്കൂ.",
     login: "ലോഗിൻ",
-    loginHelp: "സ്ഥിരീകരിച്ച ഇമെയിൽ ഉപയോഗിച്ച് നിങ്ങളുടെ LinkUp അക്കൗണ്ടിലേക്ക് പ്രവേശിക്കൂ.",
+    loginHelp: "സ്ഥിരീകരിച്ച ഇമെയിൽ ഉപയോഗിച്ച് നിങ്ങളുടെ DatingHub അക്കൗണ്ടിലേക്ക് പ്രവേശിക്കൂ.",
     user: "സൈൻ അപ്പ്",
     userHelp: "നിങ്ങളുടെ പ്രൊഫൈൽ തയ്യാറാക്കി കൂടുതൽ അനുയോജ്യമായ മാച്ചുകൾ കണ്ടെത്തൂ.",
     highlights: ["യഥാർത്ഥ മാച്ചുകൾ", "സുരക്ഷിതമായ ഡേറ്റുകൾ", "നല്ല സംഭാഷണങ്ങൾ"],
@@ -314,8 +314,8 @@ translations.ml = {
   login: {
     ...translations.ml?.login,
     welcomeBack: "വീണ്ടും സ്വാഗതം",
-    loginSubtitle: "LinkUp-ലേക്ക് പ്രവേശിക്കാൻ സ്ഥിരീകരിച്ച ഇമെയിൽ ഉപയോഗിക്കൂ.",
-    userSubtitle: "സ്ഥിരീകരിച്ച ഇമെയിൽ ഉപയോഗിച്ച് LinkUp Dating-ലേക്ക് ചേരൂ.",
+    loginSubtitle: "DatingHub-ലേക്ക് പ്രവേശിക്കാൻ സ്ഥിരീകരിച്ച ഇമെയിൽ ഉപയോഗിക്കൂ.",
+    userSubtitle: "സ്ഥിരീകരിച്ച ഇമെയിൽ ഉപയോഗിച്ച് DatingHub-ലേക്ക് ചേരൂ.",
     footer: "സെർവർ നൽകുന്ന OTP ഉപയോഗിച്ചാണ് നിങ്ങളുടെ ലോഗിൻ സ്ഥിരീകരിക്കുന്നത്.",
   },
   public: {
@@ -327,8 +327,8 @@ translations.ml = {
     signupNotice:
       "അക്കൗണ്ട് സൃഷ്ടിക്കുന്നതിലൂടെ നിങ്ങൾ നിബന്ധനകൾ അംഗീകരിക്കുകയും സ്വകാര്യതാ നയം വായിച്ചതായി സമ്മതിക്കുകയും ചെയ്യുന്നു. പരാതി-സഹായ ചാനലുകളും ഐഡി സ്ഥിരീകരണം, ലൊക്കേഷൻ പങ്കിടൽ, ക്യാമറ, മൈക്രോഫോൺ സവിശേഷതകളെക്കുറിച്ചുള്ള മാർഗ്ഗനിർദ്ദേശങ്ങളും പൊതുവായി ലഭ്യമാണ്.",
     resourceNavLabel: "പൊതു നിയമ, സുരക്ഷ, സഹായ സ്രോതസ്സുകൾ",
-    openLinkUp: "LinkUp തുറക്കുക",
-    publicPageAudience: "LinkUp Dating ഉപയോക്താക്കളും വിലയിരുത്തുന്നവരും ഉപയോഗിക്കുന്ന പൊതുപേജ്",
+    openDatingHub: "DatingHub തുറക്കുക",
+    publicPageAudience: "DatingHub ഉപയോക്താക്കളും വിലയിരുത്തുന്നവരും ഉപയോഗിക്കുന്ന പൊതുപേജ്",
   },
 };
 

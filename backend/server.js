@@ -492,7 +492,7 @@ app.use((req, res, next) => {
 // Root route
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'LinkUp Dating API Backend',
+    message: 'DatingHub API Backend',
     version: '1.0.0',
     status: 'running',
     endpoints: {

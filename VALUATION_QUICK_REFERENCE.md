@@ -1,4 +1,4 @@
-# LinkUp Project Valuation — QUICK REFERENCE (2026)
+# DatingHub Project Valuation — QUICK REFERENCE (2026)
 
 ## 💰 VALUATION AT A GLANCE
 
@@ -78,7 +78,7 @@
 
 ### vs. Competitors
 
-| Factor | LinkUp | Arike | FRND | Tinder |
+| Factor | DatingHub | Arike | FRND | Tinder |
 |--------|--------|-------|------|--------|
 | **Code Quality** | 9/10 | 5/10 | 4/10 | 10/10 |
 | **Safety Features** | 9/10 | 3/10 | 1/10 | 7/10 |
@@ -93,7 +93,7 @@
 
 ## 💡 INVESTMENT THESIS
 
-**Why LinkUp is Valuable:**
+**Why DatingHub is Valuable:**
 
 1. **Huge TAM (Total Addressable Market):** 50M+ Indian dating app users; Kerala dating = ₹100+ Crore market
 2. **Superior Safety:** Only app with Video ID + Catfish AI + Date Safety Kit (pre-integration)
@@ -183,7 +183,7 @@
 
 ## 🏆 FINAL WORD
 
-**LinkUp is currently a ₹28–42 Lakh asset that could be worth ₹50–75 Lakhs in 4–6 months with focused execution.**
+**DatingHub is currently a ₹28–42 Lakh asset that could be worth ₹50–75 Lakhs in 4–6 months with focused execution.**
 
 The biggest opportunity is **integration** — you've built all the pieces, now wire them together. That single effort unlocks ₹9.3 Lakhs in immediate value and positions you for series funding.
 

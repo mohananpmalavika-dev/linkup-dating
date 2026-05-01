@@ -98,7 +98,7 @@ curl https://linkup-backend.onrender.com/
 
 # Should return:
 # {
-#   "message": "LinkUp Dating API Backend",
+#   "message": "DatingHub API Backend",
 #   "version": "1.0.0",
 #   "status": "running",
 #   ...

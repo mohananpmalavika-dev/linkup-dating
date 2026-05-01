@@ -302,7 +302,7 @@ Breakdown:
 ### Referral Link Format
 
 ```
-https://linkup.dating/?referral=LINK123a1b2c3d4e5f6g7h
+https://datinghub.app/?referral=LINK123a1b2c3d4e5f6g7h
 
 Query params:
 - referral: The unique code

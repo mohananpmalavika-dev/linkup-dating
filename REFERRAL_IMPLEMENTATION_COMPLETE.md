@@ -43,7 +43,7 @@ Already implemented at `/src/services/referralService.js`:
 
 ### Option A: Use Admin HTML Tool (Easiest)
 1. Open `/referral-code-generator.html` in your browser
-2. Log in as an admin user on your LinkUp app
+2. Log in as an admin user on your DatingHub app
 3. Click **"Generate Codes for All Users"**
 4. Watch the progress and results
 
@@ -108,7 +108,7 @@ POST /api/admin/referrals/regenerate/:id - Regenerate for one user
 
 3. **When sharing:**
    - Copy code: `LINK1ABC123`
-   - Share referral link: `https://linkup.dating/?referral=LINK1ABC123`
+   - Share referral link: `https://datinghub.app/?referral=LINK1ABC123`
    - Or send full message with benefits info
 
 4. **When friend joins with code:**

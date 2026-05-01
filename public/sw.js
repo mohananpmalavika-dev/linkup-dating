@@ -7,10 +7,10 @@ self.addEventListener('activate', (event) => {
 });
 
 const buildNotificationPayload = (payload = {}) => {
-  const title = payload.title || 'LinkUp';
+  const title = payload.title || 'DatingHub';
   const options = {
     body: payload.options?.body || '',
-    tag: payload.options?.tag || 'linkup-notification',
+    tag: payload.options?.tag || 'datinghub-notification',
     data: payload.options?.data || {},
     icon: payload.options?.icon || '/icon-192.png',
     badge: payload.options?.badge || '/icon-192.png',
@@ -40,7 +40,7 @@ self.addEventListener('push', (event) => {
       return event.data.json();
     } catch (error) {
       return {
-        title: 'LinkUp',
+        title: 'DatingHub',
         options: {
           body: event.data.text(),
         },

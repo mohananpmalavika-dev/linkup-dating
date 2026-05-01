@@ -1,10 +1,10 @@
-# LinkUp Android Build - Quick Start
+# DatingHub Android Build - Quick Start
 
 ## 5-Minute Setup
 
 ### Step 1: Install Dependencies
 ```bash
-cd C:\Users\Dhanya\LinkUp
+cd C:\Users\Dhanya\DatingHub
 npm install
 ```
 
@@ -34,7 +34,7 @@ Then in Android Studio: **Build → Build APK(s)**
 ## All Commands at Once
 
 ```bash
-cd C:\Users\Dhanya\LinkUp
+cd C:\Users\Dhanya\DatingHub
 npm install
 npm run build
 npx cap add android
@@ -65,13 +65,13 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 
 ### Run App
 ```bash
-adb shell am start -n com.linkup.messaging/.MainActivity
+adb shell am start -n com.datinghub.app/.MainActivity
 ```
 
 ---
 
 ## Project Location
-`C:\Users\Dhanya\LinkUp`
+`C:\Users\Dhanya\DatingHub`
 
 ---
 

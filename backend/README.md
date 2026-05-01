@@ -1,4 +1,4 @@
-# LinkUp Dating App - Backend API
+# DatingHub App - Backend API
 
 Complete Node.js + Express backend with PostgreSQL database and real-time WebSocket support.
 

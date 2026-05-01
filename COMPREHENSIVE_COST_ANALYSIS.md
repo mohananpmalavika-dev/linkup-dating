@@ -1,4 +1,4 @@
-# LinkUp Dating App - COMPREHENSIVE COST ANALYSIS
+# DatingHub App - COMPREHENSIVE COST ANALYSIS
 **Date:** April 30, 2026
 
 ---
@@ -174,7 +174,7 @@ TOTAL ANNUAL (Current):               ₹84,000–210,000
 
 | Expense | Cost Range | Status | Notes |
 |---------|-----------|--------|-------|
-| **Domain Registration** | ₹500–1,000/year | ✅ Done | linkup.app or similar |
+| **Domain Registration** | ₹500–1,000/year | ✅ Done | datinghub.app or similar |
 | **SSL Certificate** | ₹0 (Let's Encrypt) | ✅ Done | Free auto-renewal |
 | **Hosting Setup & Migration** | ₹5,000–15,000 | ✅ Done | One-time deployment |
 | **Firebase Project Setup** | ₹0 | ✅ Done | Free tier |
@@ -182,7 +182,7 @@ TOTAL ANNUAL (Current):               ₹84,000–210,000
 | **Legal/Privacy Documentation** | ₹10,000–25,000 | ✅ Done | T&C, Privacy policy |
 | **App Store Listing (iOS)** | ₹1,200 (99 USD) | 🔄 Pending | Annual developer fee |
 | **Google Play Store (Android)** | ₹2,000 (25 USD) | ✅ Done | One-time registration |
-| **Custom Domain Email (GSuite)** | ₹6,000–12,000/year | Optional | team@linkup.com |
+| **Custom Domain Email (GSuite)** | ₹6,000–12,000/year | Optional | team@datinghub.app |
 | **Content Creator Moderation Tools** | ₹5,000–10,000 | Optional | For user-generated content |
 
 **Total One-time Setup:** ₹30,000–65,000 (mostly complete)

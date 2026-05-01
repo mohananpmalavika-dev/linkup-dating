@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Conversation Quality Meter is a real-time analysis feature that helps users gauge the depth and quality of their conversations, provides AI-powered suggestions for deeper connections, and shows how their conversations compare to other users on LinkUp.
+The Conversation Quality Meter is a real-time analysis feature that helps users gauge the depth and quality of their conversations, provides AI-powered suggestions for deeper connections, and shows how their conversations compare to other users on DatingHub.
 
 ## Key Features
 

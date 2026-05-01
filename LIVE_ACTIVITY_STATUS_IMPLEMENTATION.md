@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the complete implementation of Live Activity Status Enhancements for LinkUp, including:
+This document describes the complete implementation of Live Activity Status Enhancements for DatingHub, including:
 - "Currently browsing" → "Last active 2 minutes ago" display
 - "On a video call" → "Video dating" badge
 - Opt-in/out of detailed status sharing per match (privacy controls)

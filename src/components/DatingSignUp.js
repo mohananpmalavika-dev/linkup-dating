@@ -487,7 +487,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
 
   const getUsernameBase = () => {
     const emailName = email.split('@')[0];
-    const preferred = formData.firstName || verifiedUser?.name || emailName || 'linkup';
+    const preferred = formData.firstName || verifiedUser?.name || emailName || 'datinghub';
     const cleaned = String(preferred)
       .trim()
       .toLowerCase()
@@ -1553,7 +1553,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
             <div className="intent-capture-card">
               <strong>Intent snapshot</strong>
               <span>
-                LinkUp now learns not just what you want, but how you want early dating to feel:
+                DatingHub now learns not just what you want, but how you want early dating to feel:
                 direct, warm, low-pressure, and safe.
               </span>
             </div>
@@ -1687,7 +1687,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
               </div>
             </div>
             <small className="helper-text">
-              District, locality, pincode, and Kerala region help LinkUp make tighter Kochi,
+              District, locality, pincode, and Kerala region help DatingHub make tighter Kochi,
               Trivandrum, and Calicut-area matches.
             </small>
             <div className="form-group">

@@ -185,7 +185,7 @@ The backend provides daily challenges including:
 
 ## Integration Pattern
 
-This feature follows the standard LinkUp wiring pattern:
+This feature follows the standard DatingHub wiring pattern:
 ```
 1. Search for components ✓
 2. Import component to parent ✓

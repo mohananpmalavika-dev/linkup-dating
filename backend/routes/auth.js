@@ -205,7 +205,7 @@ const maskRecipient = (value = '') => {
 };
 
 const buildDisplayNameFromEmail = (email = '') => {
-  const localPart = normalizeRecipient(email).split('@')[0] || 'linkup-user';
+  const localPart = normalizeRecipient(email).split('@')[0] || 'datinghub-user';
   const words = localPart
     .replace(/[._-]+/g, ' ')
     .split(' ')
@@ -213,7 +213,7 @@ const buildDisplayNameFromEmail = (email = '') => {
     .filter(Boolean);
 
   if (words.length === 0) {
-    return 'LinkUp User';
+    return 'DatingHub User';
   }
 
   return words
@@ -351,7 +351,7 @@ const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerificatio
   }
 
   if (!ageValidation.isOver18) {
-    throw createHttpError(403, 'You must be at least 18 years old to use LinkUp');
+    throw createHttpError(403, 'You must be at least 18 years old to use DatingHub');
   }
 
   const fallbackName = buildDisplayNameFromEmail(normalizedEmail);
@@ -672,7 +672,7 @@ if (password !== confirmPassword) {
 
     if (!ageValidation.isOver18) {
       return res.status(403).json({
-        error: 'You must be at least 18 years old to use LinkUp',
+        error: 'You must be at least 18 years old to use DatingHub',
         code: 'UNDERAGE_USER'
       });
     }
@@ -1305,7 +1305,7 @@ router.post('/send-otp', async (req, res) => {
 
       if (!ageValidation.isOver18) {
         return res.status(403).json({
-          error: 'You must be at least 18 years old to use LinkUp',
+          error: 'You must be at least 18 years old to use DatingHub',
           code: 'UNDERAGE_USER'
         });
       }
@@ -1452,16 +1452,16 @@ router.post('/send-otp', async (req, res) => {
         transporter.sendMail({
           from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
           to: deliveryTarget,
-          subject: 'Your LinkUp OTP Code',
+          subject: 'Your DatingHub OTP Code',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>LinkUp - Email Verification</h2>
+              <h2>DatingHub - Email Verification</h2>
               <p>Your One-Time Password (OTP) is:</p>
               <h1 style="color: #6366f1; letter-spacing: 2px; text-align: center;">${otp}</h1>
               <p>This OTP will expire in 10 minutes.</p>
               <p>If you didn't request this code, please ignore this email.</p>
               <hr />
-              <p style="color: #666; font-size: 12px;">LinkUp Dating - Your Perfect Match Awaits</p>
+              <p style="color: #666; font-size: 12px;">DatingHub - Your Perfect Match Awaits</p>
             </div>
           `
         }),
@@ -1719,10 +1719,10 @@ router.post('/request-password-reset', async (req, res) => {
         await transporter.sendMail({
           from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
           to: normalizedEmail,
-          subject: 'Your LinkUp password reset code',
+          subject: 'Your DatingHub password reset code',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>LinkUp password reset</h2>
+              <h2>DatingHub password reset</h2>
               <p>Use this code to reset your password:</p>
               <h1 style="letter-spacing: 2px; text-align: center;">${resetCode}</h1>
               <p>This code expires in 15 minutes.</p>
@@ -2335,7 +2335,7 @@ router.post('/firebase-verify-phone', async (req, res) => {
 
       if (!ageValidation.isOver18) {
         return res.status(403).json({
-          error: 'You must be at least 18 years old to use LinkUp',
+          error: 'You must be at least 18 years old to use DatingHub',
           code: 'UNDERAGE_USER'
         });
       }
@@ -2553,7 +2553,7 @@ if (!tokenVerification.success) {
 
       if (!ageValidation.isOver18) {
         return res.status(403).json({
-          error: 'You must be at least 18 years old to use LinkUp',
+          error: 'You must be at least 18 years old to use DatingHub',
           code: 'UNDERAGE_USER'
         });
       }
@@ -2572,7 +2572,7 @@ if (!tokenVerification.success) {
 
         if (!ageValidation.isOver18) {
           return res.status(403).json({
-            error: 'You must be at least 18 years old to use LinkUp',
+            error: 'You must be at least 18 years old to use DatingHub',
             code: 'UNDERAGE_USER'
           });
         }
@@ -2679,7 +2679,7 @@ if (!tokenVerification.success) {
     if (err.message?.includes('age') || err.code === 'UNDERAGE_USER') {
       return res.status(403).json({
         success: false,
-        error: 'You must be at least 18 years old to use LinkUp',
+        error: 'You must be at least 18 years old to use DatingHub',
         code: 'UNDERAGE_USER'
       });
     }

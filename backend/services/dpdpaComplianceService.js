@@ -264,7 +264,7 @@ class DPDPAComplianceService {
       await transporter.sendMail({
         from: process.env.EMAIL_USER,
         to: user.email,
-        subject: 'LinkUp - Account Deletion Request Confirmed',
+        subject: 'DatingHub - Account Deletion Request Confirmed',
         html: `
           <h2>Account Deletion Confirmed</h2>
           <p>Hi ${user.first_name},</p>
@@ -281,7 +281,7 @@ class DPDPAComplianceService {
           
           <p><a href="${cancelUrl}">Click here to cancel deletion</a></p>
           
-          <p>Questions? Contact us at support@linkup.app</p>
+          <p>Questions? Contact us at support@datinghub.app</p>
         `,
       });
     } catch (error) {

@@ -134,7 +134,7 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
       <div className="age-gate-card simple-age-card">
         <div className="age-gate-header">
           <h1>Confirm your age</h1>
-          <p className="age-gate-subtitle">LinkUp is for adults 18 and older.</p>
+          <p className="age-gate-subtitle">DatingHub is for adults 18 and older.</p>
         </div>
 
         <div className="age-gate-step">
@@ -189,8 +189,8 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
     <div className="age-gate-container">
       <div className="age-gate-card">
         <div className="age-gate-header">
-          <h1>LinkUp Age Verification</h1>
-          <p className="age-gate-subtitle">You must be 18+ to use LinkUp</p>
+          <h1>DatingHub Age Verification</h1>
+          <p className="age-gate-subtitle">You must be 18+ to use DatingHub</p>
         </div>
 
         {/* Step 1: Choose Verification Method */}
@@ -297,7 +297,7 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
               <div className="success-icon">✅</div>
               <h2>Age Verification Successful!</h2>
               <p className="confirmation-text">
-                You have verified that you are {ageBracket} years old and meet the 18+ requirement to use LinkUp.
+                You have verified that you are {ageBracket} years old and meet the 18+ requirement to use DatingHub.
               </p>
 
               <div className="confirmation-details">
@@ -330,7 +330,7 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
             </button>
 
             <p className="confirmation-footer">
-              By continuing, you agree to LinkUp's Terms of Service and Privacy Policy
+              By continuing, you agree to DatingHub's Terms of Service and Privacy Policy
             </p>
           </div>
         )}
@@ -345,7 +345,7 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
       <div className="safety-info">
         <h3>Why Age Verification?</h3>
         <ul>
-          <li>LinkUp is designed for adults 18 and older</li>
+          <li>DatingHub is designed for adults 18 and older</li>
           <li>Age verification protects minors from inappropriate content</li>
           <li>Your date of birth is encrypted and never shared</li>
           <li>Falsifying age information may result in permanent ban</li>

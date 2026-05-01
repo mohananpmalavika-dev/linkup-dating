@@ -1,4 +1,4 @@
-# 🎉 LinkUp Dating App - Full Stack Complete!
+# 🎉 DatingHub App - Full Stack Complete!
 
 Your **production-ready dating application** is now 100% built and ready to deploy!
 
@@ -128,7 +128,7 @@ npm start
 ## 📁 Project Structure
 
 ```
-LinkUp/
+DatingHub/
 ├── src/                          # Frontend React app
 │   ├── components/               # 8 dating components
 │   ├── services/

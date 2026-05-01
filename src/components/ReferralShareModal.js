@@ -46,7 +46,7 @@ const ReferralShareModal = ({ onClose }) => {
 
   const handleShare = async () => {
     const message = [
-      'Join me on LinkUp Dating.',
+      'Join me on DatingHub.',
       `Use my code ${referralInfo?.code}.`,
       `You get ${starterReward.premiumTrialDays || 0} premium days, ${starterReward.superlikeCredits || 0} extra superlikes, and ${starterReward.boostCredits || 0} boost credit once you finish signup.`,
       `I unlock an extra quality bonus after you complete your profile and start dating intentionally.`
@@ -56,7 +56,7 @@ const ReferralShareModal = ({ onClose }) => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'Join me on LinkUp',
+          title: 'Join me on DatingHub',
           text: message,
           url
         });
@@ -104,7 +104,7 @@ const ReferralShareModal = ({ onClose }) => {
               Copy
             </button>
           </div>
-          <p className="code-desc">Share this code or your full invite link with someone new to LinkUp.</p>
+          <p className="code-desc">Share this code or your full invite link with someone new to DatingHub.</p>
         </div>
 
         <div className="stats-grid">
@@ -212,7 +212,7 @@ const ReferralShareModal = ({ onClose }) => {
         <div className="info-section">
           <h4>How It Works</h4>
           <ul>
-            <li>Share your code or invite link with someone new to LinkUp.</li>
+            <li>Share your code or invite link with someone new to DatingHub.</li>
             <li>They sign up and complete profile creation with your code applied.</li>
             <li>They get the starter reward right away to help them begin well.</li>
             <li>You unlock the quality bonus after they complete their profile and become an activated dater.</li>

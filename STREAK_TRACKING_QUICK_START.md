@@ -2,7 +2,7 @@
 
 ## 🚀 What's New
 
-The LinkUp dating app now includes **Streak Tracking** - a gamification system that drives daily engagement through:
+The DatingHub dating app now includes **Streak Tracking** - a gamification system that drives daily engagement through:
 - 🔥 Flame counter progression (3/7/30/100 day milestones)
 - 🏆 Achievement badges
 - ⏰ FOMO notifications (streak at risk alerts)

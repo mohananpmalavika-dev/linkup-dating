@@ -1,6 +1,6 @@
 /**
  * Razorpay Payment Service
- * Handles all payment processing for LinkUp premium subscriptions
+ * Handles all payment processing for DatingHub premium subscriptions
  * Supports: order creation, payment verification, webhooks, refunds
  */
 

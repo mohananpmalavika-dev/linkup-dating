@@ -155,13 +155,13 @@ const ReferralDashboard = ({ onOpenShareModal, onOpenRedeemModal }) => {
               </button>
               <button
                 className="btn-share whatsapp"
-                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join LinkUp! ${stats.referralLink}`)}`, '_blank')}
+                onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Join DatingHub! ${stats.referralLink}`)}`, '_blank')}
               >
                 💬 Share on WhatsApp
               </button>
               <button
                 className="btn-share twitter"
-                onClick={() => window.open(`https://twitter.com/intent/tweet?text=Join LinkUp! ${encodeURIComponent(stats.referralLink)}`)}
+                onClick={() => window.open(`https://twitter.com/intent/tweet?text=Join DatingHub! ${encodeURIComponent(stats.referralLink)}`)}
               >
                 𝕏 Share on X
               </button>

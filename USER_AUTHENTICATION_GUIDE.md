@@ -1,8 +1,8 @@
-# LinkUp - User Authentication & Registration Guide
+# DatingHub - User Authentication & Registration Guide
 
 ## Overview
 
-LinkUp includes a complete user authentication system with:
+DatingHub includes a complete user authentication system with:
 - ✅ User Registration (Sign Up)
 - ✅ User Login
 - ✅ Profile Setup with avatar
@@ -419,7 +419,7 @@ app.listen(PORT, () => {
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      LinkUp App Start                        │
+│                      DatingHub App Start                        │
 └────────────┬────────────────────────────────────────────────┘
              │
              ├─→ [Has Auth Token?]
@@ -517,7 +517,7 @@ curl -X GET http://localhost:5000/auth/profile \
 
 ## Frontend Integration
 
-The signup/login pages are automatically integrated into LinkUp:
+The signup/login pages are automatically integrated into DatingHub:
 
 1. **App starts** → Checks for auth token
 2. **No token** → Shows Login page

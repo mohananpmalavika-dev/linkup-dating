@@ -342,7 +342,7 @@ App (Root)
 
 🎉 **Priority 1 Task Complete: All 39 routes are now wired into the React frontend!**
 
-The LinkUp dating app now has comprehensive routing with:
+The DatingHub dating app now has comprehensive routing with:
 - **49 total routes** (8 public + 2 admin + 39 dating)
 - **30+ components** integrated and accessible
 - **Full feature navigation** to all backend capabilities

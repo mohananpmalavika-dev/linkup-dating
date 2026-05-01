@@ -147,14 +147,14 @@ class AdminSettingsService {
         },
         {
           key: 'app_name',
-          value: 'LinkUp Dating',
+          value: 'DatingHub',
           type: 'string',
           category: 'general',
           description: 'Application name'
         },
         {
           key: 'support_email',
-          value: 'support@linkup.dating',
+          value: 'support@datinghub.app',
           type: 'string',
           category: 'general',
           description: 'Support email address'

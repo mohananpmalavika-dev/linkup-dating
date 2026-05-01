@@ -46,7 +46,7 @@ const normalizeAuthenticatedUser = (userRecord, emailAddress) => {
   if (adminSession) {
     return {
       ...userRecord,
-      name: userRecord?.name || "LinkUp Admin",
+      name: userRecord?.name || "DatingHub Admin",
       email: userRecord?.email || emailAddress,
       avatar: userRecord?.avatar || "A",
       role: "admin",
@@ -683,8 +683,8 @@ const Login = ({
         </div>
 
         <header className="login-fresh-header login-simple-header">
-          <img src="/logo.svg" alt="LinkUp" className="login-simple-logo" />
-          <p className="login-simple-kicker">Welcome to LinkUp</p>
+          <img src="/logo.svg" alt="DatingHub" className="login-simple-logo" />
+          <p className="login-simple-kicker">Welcome to DatingHub</p>
           <h1>Login</h1>
           <p>Use your mobile number. We will send a 6 digit SMS code.</p>
         </header>
@@ -958,7 +958,7 @@ const Login = ({
 
                 <div className="login-fresh-form-group">
                   <h2 id="username-login-title" className="login-fresh-section-title">Choose a username</h2>
-                  <p className="login-fresh-section-desc">This is shown on your LinkUp profile.</p>
+                  <p className="login-fresh-section-desc">This is shown on your DatingHub profile.</p>
                 </div>
 
                 <div className="login-fresh-form-group">
@@ -1018,7 +1018,7 @@ const Login = ({
 
         <footer className="login-fresh-bottom login-simple-bottom">
           <p className="login-fresh-bottom-text">
-            New to LinkUp?{" "}
+            New to DatingHub?{" "}
             {onSignUpClick ? (
               <button
                 type="button"

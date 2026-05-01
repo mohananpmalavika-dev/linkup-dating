@@ -2,7 +2,7 @@
 
 ## 🛡️ Overview
 
-**Catfish Prevention AI** is LinkUp's real-time threat detection system that automatically scans messages for red flags indicating potential scams, money requests, or catfishing attempts.
+**Catfish Prevention AI** is DatingHub's real-time threat detection system that automatically scans messages for red flags indicating potential scams, money requests, or catfishing attempts.
 
 **Key Features:**
 - ⚠️ **Real-time Scanning** - Messages are automatically scanned as they arrive
@@ -278,11 +278,11 @@ Confidence: This is probably genuine conversation
 **If you need help:**
 1. Check your Security Alerts dashboard
 2. Review Safety Tips section
-3. Report any issues to: support@linkup.app
+3. Report any issues to: support@datinghub.app
 
 **If you've been scammed:**
 1. Block the user immediately
-2. Report to LinkUp moderation team
+2. Report to DatingHub moderation team
 3. Save all conversation evidence
 4. Consider reporting to law enforcement (for major fraud)
 
@@ -301,6 +301,6 @@ Confidence: This is probably genuine conversation
 
 ---
 
-**Catfish Prevention AI keeps LinkUp safe! 🛡️**
+**Catfish Prevention AI keeps DatingHub safe! 🛡️**
 
 Report suspicious behavior. Protect yourself. Find genuine connections.

@@ -51,7 +51,7 @@ const normalizeCaller = (user) => {
   return {
     ...user,
     userId: getUserId(user),
-    name: user.name || user.firstName || 'LinkUp user',
+    name: user.name || user.firstName || 'DatingHub user',
     age: user.age,
     location: user.location,
     bio: user.bio || 'Available for a friendly call.',

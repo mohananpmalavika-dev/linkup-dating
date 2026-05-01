@@ -2,7 +2,7 @@
 
 ## 📋 Complete Integration Walkthrough
 
-This guide walks you through integrating Photo A/B Testing into your LinkUp dating app.
+This guide walks you through integrating Photo A/B Testing into your DatingHub dating app.
 
 ---
 

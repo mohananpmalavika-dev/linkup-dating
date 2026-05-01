@@ -1,6 +1,6 @@
 {
-  "name": "LinkUp - Kerala Dating",
-  "short_name": "LinkUp",
+  "name": "DatingHub - Kerala Dating",
+  "short_name": "DatingHub",
   "description": "Kerala's trusted dating, events & local services platform",
   "start_url": "./",
   "display": "standalone",

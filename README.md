@@ -1,4 +1,4 @@
-# LinkUp Dating - Kerala Dating, Events & Local Services
+# DatingHub - Kerala Dating, Events & Local Services
 
 A full-featured React-based dating application with swipe discovery, advanced profile search, real-time messaging, and video dating capabilities.
 
@@ -46,7 +46,7 @@ A full-featured React-based dating application with swipe discovery, advanced pr
 
 ### Installation
 ```bash
-cd c:\Users\Dhanya\LinkUp
+cd c:\Users\Dhanya\DatingHub
 npm install
 ```
 
@@ -228,7 +228,7 @@ For issues or questions:
 
 ---
 
-**LinkUp Dating** - Match, meet, and discover trusted local services across Kerala.
+**DatingHub** - Match, meet, and discover trusted local services across Kerala.
 
 ✅ **Rich Media**
 - Send text, images, and files
@@ -313,8 +313,8 @@ RAZORPAY_KEY_SECRET=your_razorpay_key_secret
 Edit `capacitor.config.json`:
 ```json
 {
-  "appId": "com.linkup.dating",
-  "appName": "LinkUp",
+  "appId": "com.datinghub.app",
+  "appName": "DatingHub",
   "webDir": "build"
 }
 ```
@@ -384,7 +384,7 @@ cd android
 
 ## License
 
-Proprietary - LinkUp
+Proprietary - DatingHub
 
 ---
 
@@ -392,4 +392,4 @@ Proprietary - LinkUp
 
 For detailed Android build instructions, see [ANDROID_BUILD_GUIDE.md](./ANDROID_BUILD_GUIDE.md)
 
-**Project Location:** `C:\Users\Dhanya\LinkUp`
+**Project Location:** `C:\Users\Dhanya\DatingHub`

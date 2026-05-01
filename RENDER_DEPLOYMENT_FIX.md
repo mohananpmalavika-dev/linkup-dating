@@ -52,7 +52,7 @@ After updating environment variables:
    - Wait for both services to complete successfully
 
 3. **Test the Application**:
-   - Visit `https://linkup-dating.onrender.com`
+   - Visit `https://datinghub.onrender.com`
    - Try signing up with an email
    - Check that OTP email is received
 
@@ -98,7 +98,7 @@ This means:
 
 ```yaml
 Frontend Service: linkup-frontend
-  - URL: https://linkup-dating.onrender.com
+  - URL: https://datinghub.onrender.com
   - API URL: https://linkup-backend.onrender.com/api
 
 Backend Service: linkup-backend

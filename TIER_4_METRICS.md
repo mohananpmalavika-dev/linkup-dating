@@ -241,7 +241,7 @@ Premium Safety Tier:
 
 ### vs. Competitors
 
-| Feature | LinkUp (Tier 4) | Competitor A | Competitor B |
+| Feature | DatingHub (Tier 4) | Competitor A | Competitor B |
 |---------|-----------------|--------------|--------------|
 | AI Fraud Detection | ✅ | ❌ | Basic |
 | User Reports System | ✅ Enhanced | ✅ Basic | ❌ |
@@ -312,8 +312,8 @@ The safety tips feature serves as:
 
 - Online dating market size: $3.2B globally
 - Safety/verification services: $800M subset
-- Potential LinkUp share: 2-5%
-- **TAM for LinkUp**: $16-40M
+- Potential DatingHub share: 2-5%
+- **TAM for DatingHub**: $16-40M
 
 ---
 

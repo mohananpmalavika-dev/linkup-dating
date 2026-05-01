@@ -276,7 +276,7 @@ class RegionalFeaturesService {
   getLocalizedMessages(languageCode) {
     const messages = {
       en: {
-        welcome: 'Welcome to LinkUp',
+        welcome: 'Welcome to DatingHub',
         selectDistrict: 'Select your district',
         selectLanguage: 'Select your preferred language',
         accountDeleted: 'Your account has been deleted',

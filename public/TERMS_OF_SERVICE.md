@@ -1,4 +1,4 @@
-# TERMS OF SERVICE - LinkUp Dating App
+# TERMS OF SERVICE - DatingHub App
 
 **Last Updated:** April 28, 2026  
 **Effective Date:** May 1, 2026  
@@ -8,16 +8,16 @@
 
 ## 1. ACCEPTANCE OF TERMS
 
-By downloading, installing, or using the LinkUp mobile application and website (collectively, "Platform"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Platform.
+By downloading, installing, or using the DatingHub mobile application and website (collectively, "Platform"), you agree to be bound by these Terms of Service ("Terms"). If you do not agree to these Terms, do not use the Platform.
 
-**LinkUp is a dating and social networking platform for adults 18 years and older.**
+**DatingHub is a dating and social networking platform for adults 18 years and older.**
 
 ---
 
 ## 2. USER ELIGIBILITY & REGISTRATION
 
 ### 2.1 Age Requirement
-- You must be **at least 18 years old** to use LinkUp
+- You must be **at least 18 years old** to use DatingHub
 - You represent and warrant that you are of legal age
 - We use automated age verification and may request government-issued ID
 - False age claims result in immediate account termination
@@ -30,7 +30,7 @@ By downloading, installing, or using the LinkUp mobile application and website (
 - You agree to notify us immediately of unauthorized access
 
 ### 2.3 Prohibited Users
-You cannot use LinkUp if you:
+You cannot use DatingHub if you:
 - Are a registered sex offender
 - Have been convicted of any crime involving violence, harassment, or exploitation
 - Have been permanently banned from any dating platform
@@ -103,7 +103,7 @@ Your profile and messages must not contain:
 
 ### 4.3 Appeal Process
 - You have 30 days to appeal suspension/ban
-- Send appeal to: appeals@linkupapp.com
+- Send appeal to: appeals@datinghub.app
 - Include your account details and explanation
 - Appeals are reviewed within 5 business days
 - Final decision is binding and non-negotiable
@@ -114,18 +114,18 @@ Your profile and messages must not contain:
 
 ### 5.1 Your Rights
 - You retain all rights to content you upload
-- You grant LinkUp a non-exclusive, royalty-free license to use your content for Platform operations, marketing, and analytics
+- You grant DatingHub a non-exclusive, royalty-free license to use your content for Platform operations, marketing, and analytics
 - You can delete your account and associated content anytime
 
-### 5.2 LinkUp's Intellectual Property
-- All Platform code, design, logos, and trademarks are owned by LinkUp
+### 5.2 DatingHub's Intellectual Property
+- All Platform code, design, logos, and trademarks are owned by DatingHub
 - You may not reproduce, distribute, or modify Platform content without permission
 - Unauthorized scraping or data collection is prohibited
 
 ### 5.3 Photo & Video Usage
 - By uploading photos/videos, you confirm you have rights to them
 - You represent that photos are recent, authentic, and of you (or with consent)
-- LinkUp may use anonymized photos for platform improvement and advertising
+- DatingHub may use anonymized photos for platform improvement and advertising
 - You can opt-out of promotional use in Settings
 
 ---
@@ -200,10 +200,10 @@ You have the right to:
 ## 8. SAFETY & LIABILITY
 
 ### 8.1 First Date Safety
-- LinkUp is NOT responsible for real-world interactions
+- DatingHub is NOT responsible for real-world interactions
 - Use the Safety Kit: share location, set check-ins, SOS button
 - Report unsafe behavior to police immediately
-- LinkUp cannot verify user claims or guarantee compatibility
+- DatingHub cannot verify user claims or guarantee compatibility
 
 ### 8.2 NO WARRANTIES
 THE PLATFORM IS PROVIDED "AS IS" WITHOUT WARRANTIES, EXPRESS OR IMPLIED. WE DISCLAIM:
@@ -214,12 +214,12 @@ THE PLATFORM IS PROVIDED "AS IS" WITHOUT WARRANTIES, EXPRESS OR IMPLIED. WE DISC
 
 ### 8.3 LIMITATION OF LIABILITY
 TO THE FULLEST EXTENT PERMITTED BY LAW:
-- LinkUp is not liable for any indirect, incidental, or consequential damages
+- DatingHub is not liable for any indirect, incidental, or consequential damages
 - Our total liability is limited to the amount you paid in the past 12 months
 - Some jurisdictions don't allow liability limitations
 
 ### 8.4 No Responsibility for User Conduct
-LinkUp is not responsible for:
+DatingHub is not responsible for:
 - Real-world interactions between users
 - User injuries, trauma, or emotional distress
 - Fraud, scams, or financial loss from other users
@@ -244,7 +244,7 @@ LinkUp is not responsible for:
 
 ### 9.3 Escalation Process
 **Before legal action:**
-1. Send notice of dispute to: legal@linkupapp.com
+1. Send notice of dispute to: legal@datinghub.app
 2. Good faith negotiation for 30 days
 3. If unresolved, escalate to arbitration
 4. Legal action only after arbitration exhausted
@@ -258,7 +258,7 @@ LinkUp is not responsible for:
 
 ## 10. MODIFICATIONS TO TERMS
 
-- LinkUp may update these Terms at any time
+- DatingHub may update these Terms at any time
 - Material changes notified 30 days in advance
 - Continued use = acceptance of updated Terms
 - If you disagree, stop using the Platform
@@ -268,8 +268,8 @@ LinkUp is not responsible for:
 ## 11. CONSUMER PROTECTION (India)
 
 **As per Consumer Protection Act, 2019:**
-- Service provider: LinkUp Dating (Kerala-based)
-- Grievance Redressal Officer: grievance@linkupapp.com (Response within 1 month)
+- Service provider: DatingHub (Kerala-based)
+- Grievance Redressal Officer: grievance@datinghub.app (Response within 1 month)
 - Escalation: District Consumer Commission (if unresolved)
 - Consumer has 2 years to file complaint from date of service
 
@@ -278,25 +278,25 @@ LinkUp is not responsible for:
 ## 12. CONTACT US
 
 **For Support:**
-- Email: support@linkupapp.com
+- Email: support@datinghub.app
 - In-app: Help → Contact Support
 - Response time: Within 24 hours
 
 **For Legal Notices:**
-- Email: legal@linkupapp.com
-- Address: LinkUp Dating, Kochi, Kerala, India
+- Email: legal@datinghub.app
+- Address: DatingHub, Kochi, Kerala, India
 
 **For Appeals/Grievances:**
-- Email: appeals@linkupapp.com
+- Email: appeals@datinghub.app
 - Response time: 5 business days
 
 **For Privacy/Data Requests:**
-- Email: privacy@linkupapp.com
+- Email: privacy@datinghub.app
 - See Privacy Policy for details
 
 ---
 
-**© 2026 LinkUp Dating. All rights reserved.**
+**© 2026 DatingHub. All rights reserved.**
 These Terms are governed by the laws of **India**, specifically applicable laws in the user's state of residence.
 
 ### 9.2 Jurisdiction
@@ -304,14 +304,14 @@ These Terms are governed by the laws of **India**, specifically applicable laws 
 - **India Users:** Disputes subject to courts in Kerala/user's state (if resident in India)
 
 ### 9.3 Dispute Process
-1. Contact us: support@linkupapp.com with complaint details
+1. Contact us: support@datinghub.app with complaint details
 2. We respond within 7 business days
 3. If unresolved, escalate to grievance officer
 4. If still unresolved, pursue legal remedies
 
 ### 9.4 Grievance Officer (India)
 **Name:** [To be appointed]  
-**Email:** grievance@linkupapp.com  
+**Email:** grievance@datinghub.app  
 **Response Time:** 24 hours acknowledgment, 48 hours resolution commitment
 
 ---
@@ -325,7 +325,7 @@ These Terms are governed by the laws of **India**, specifically applicable laws 
 - You can cancel before day 30 to reactivate
 
 ### 10.2 Platform Termination
-LinkUp may terminate or suspend your account if:
+DatingHub may terminate or suspend your account if:
 - You violate these Terms
 - Requested by law enforcement
 - Legitimate safety concerns
@@ -347,9 +347,9 @@ Continued use after notice means acceptance. If you don't accept changes, delete
 
 ## 12. CONTACT US
 
-**Support Email:** support@linkupapp.com  
-**Grievance Officer:** grievance@linkupapp.com  
-**Mailing Address:** LinkUp App, Kerala, India  
+**Support Email:** support@datinghub.app  
+**Grievance Officer:** grievance@datinghub.app  
+**Mailing Address:** DatingHub App, Kerala, India  
 **Business Hours:** Monday-Friday, 10 AM - 6 PM IST
 
 ---
@@ -362,7 +362,7 @@ If any provision is found invalid, the remaining provisions remain in effect.
 
 ## 14. ENTIRE AGREEMENT
 
-These Terms, Privacy Policy, and Community Guidelines constitute the entire agreement between you and LinkUp.
+These Terms, Privacy Policy, and Community Guidelines constitute the entire agreement between you and DatingHub.
 
 ---
 

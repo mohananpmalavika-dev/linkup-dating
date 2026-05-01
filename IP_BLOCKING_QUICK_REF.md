@@ -163,7 +163,7 @@ initializeDefaultSettings()                   // Init defaults
 ```json
 {
   "status": 403,
-  "error": "You must be at least 18 years old to use LinkUp",
+  "error": "You must be at least 18 years old to use DatingHub",
   "code": "UNDERAGE_USER",
   "age": 15,
   "message": "Your IP address has been blocked for 2 hours due to underage signup attempt."

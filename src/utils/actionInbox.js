@@ -120,7 +120,7 @@ export const buildActionInboxItems = ({
     subtitle: like.isRevealed
       ? 'Like back to turn this into a real conversation.'
       : 'Like back to see whether this becomes a match.',
-    meta: like.isRevealed ? like.location?.city || 'Nearby on LinkUp' : 'Premium reveal available',
+    meta: like.isRevealed ? like.location?.city || 'Nearby on DatingHub' : 'Premium reveal available',
     primaryLabel: 'Like back',
     secondaryLabel: 'View profile',
     createdAt: like.likedAt,
@@ -133,7 +133,7 @@ export const buildActionInboxItems = ({
     priority: 0,
     title: `${request.firstName} sent a message request`,
     subtitle: request.message || 'A new request is waiting for you.',
-    meta: request.location?.city || 'Nearby on LinkUp',
+    meta: request.location?.city || 'Nearby on DatingHub',
     primaryLabel: 'Accept',
     secondaryLabel: 'Decline',
     createdAt: request.createdAt,

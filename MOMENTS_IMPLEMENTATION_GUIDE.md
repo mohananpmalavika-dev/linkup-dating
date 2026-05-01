@@ -2,7 +2,7 @@
 
 ## Overview
 
-**Moments** is a Snapchat-style ephemeral photo sharing feature for the LinkUp dating app. Users can upload single photos that automatically disappear after 24 hours and are only visible to their current matches.
+**Moments** is a Snapchat-style ephemeral photo sharing feature for the DatingHub dating app. Users can upload single photos that automatically disappear after 24 hours and are only visible to their current matches.
 
 ### Key Features
 

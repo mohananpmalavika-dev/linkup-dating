@@ -180,7 +180,7 @@ export default function ConsentManagementDashboard() {
               <div className="preference-info">
                 <h3>📊 Analytics & Improvements</h3>
                 <p>
-                  Help us improve the app by analyzing how you use LinkUp
+                  Help us improve the app by analyzing how you use DatingHub
                 </p>
               </div>
               <label className="toggle-switch">

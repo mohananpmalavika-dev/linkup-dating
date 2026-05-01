@@ -9,7 +9,7 @@
 The backend now has a root route handler. Push the fix:
 
 ```bash
-cd c:\Users\Dhanya\LinkUp
+cd c:\Users\Dhanya\DatingHub
 
 # Stage changes
 git add .
@@ -114,7 +114,7 @@ curl https://linkup-backend.onrender.com/
 
 # Should return (not "Cannot GET /"):
 {
-  "message": "LinkUp Dating API Backend",
+  "message": "DatingHub API Backend",
   "version": "1.0.0",
   "status": "running"
 }

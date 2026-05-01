@@ -84,7 +84,7 @@ beforeEach(() => {
   });
 });
 
-test('opens the chatrooms workspace from the LinkUp sidebar', async () => {
+test('opens the chatrooms workspace from the DatingHub sidebar', async () => {
   render(<Messaging />);
 
   fireEvent.click(screen.getByRole('button', { name: /chatrooms/i }));
