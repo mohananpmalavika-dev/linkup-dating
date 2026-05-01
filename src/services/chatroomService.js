@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { getStoredAuthToken } from '../utils/auth';
 
 const API_URL = `${API_BASE_URL}/chatrooms`;
 
@@ -19,7 +20,10 @@ const chatroomService = {
   // Get specific chatroom details
   getChatroom: async (chatroomId) => {
     try {
-      const response = await axios.get(`${API_URL}/${chatroomId}`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.get(`${API_URL}/${chatroomId}`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to load chatroom';
@@ -30,10 +34,10 @@ const chatroomService = {
   createChatroom: async (name, description = '', isPublic = true, maxMembers = 100) => {
     try {
       console.log('createChatroom called with:', { name, description, isPublic, maxMembers });
-      const token = localStorage.getItem('token');
-      console.log('Token available:', !!token);
+      const authToken = getStoredAuthToken();
+      console.log('Token available:', !!authToken);
       
-      if (!token) {
+      if (!authToken) {
         throw new Error('Authentication token not found. Please log in again.');
       }
 
@@ -48,7 +52,7 @@ const chatroomService = {
         maxMembers
       }, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         }
       });
@@ -79,7 +83,17 @@ const chatroomService = {
   // Join a chatroom
   joinChatroom: async (chatroomId) => {
     try {
-      const response = await axios.post(`${API_URL}/${chatroomId}/join`);
+      const authToken = getStoredAuthToken();
+      if (!authToken) {
+        throw new Error('Authentication required. Please log in.');
+      }
+
+      const response = await axios.post(`${API_URL}/${chatroomId}/join`, {}, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to join chatroom';
@@ -89,7 +103,17 @@ const chatroomService = {
   // Leave a chatroom
   leaveChatroom: async (chatroomId) => {
     try {
-      const response = await axios.post(`${API_URL}/${chatroomId}/leave`);
+      const authToken = getStoredAuthToken();
+      if (!authToken) {
+        throw new Error('Authentication required. Please log in.');
+      }
+
+      const response = await axios.post(`${API_URL}/${chatroomId}/leave`, {}, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to leave chatroom';
@@ -99,8 +123,10 @@ const chatroomService = {
   // Get chatroom members
   getMembers: async (chatroomId, limit = 50, offset = 0) => {
     try {
+      const authToken = getStoredAuthToken();
       const response = await axios.get(`${API_URL}/${chatroomId}/members`, {
-        params: { limit, offset }
+        params: { limit, offset },
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
       });
       return response.data;
     } catch (error) {
@@ -111,8 +137,10 @@ const chatroomService = {
   // Get messages for a chatroom
   getMessages: async (chatroomId, limit = 50, offset = 0) => {
     try {
+      const authToken = getStoredAuthToken();
       const response = await axios.get(`${API_URL}/${chatroomId}/messages`, {
-        params: { limit, offset }
+        params: { limit, offset },
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
       });
       return response.data;
     } catch (error) {
@@ -123,8 +151,18 @@ const chatroomService = {
   // Send message to chatroom
   sendMessage: async (chatroomId, message) => {
     try {
+      const authToken = getStoredAuthToken();
+      if (!authToken) {
+        throw new Error('Authentication required. Please log in.');
+      }
+
       const response = await axios.post(`${API_URL}/${chatroomId}/messages`, {
         message
+      }, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
       });
       return response.data;
     } catch (error) {
