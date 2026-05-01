@@ -14,7 +14,9 @@ router.get('/', async (req, res) => {
     const userId = req.user?.id || null;
 
     const result = await db.query(
-      `SELECT c.*, 
+      `SELECT 
+       c.id, c.created_by_user_id, c.name, c.description, c.avatar_url, 
+       c.is_public, c.max_members, c.created_at, c.updated_at,
        (SELECT COUNT(*) FROM chatroom_members WHERE chatroom_id = c.id) as member_count,
        dp.first_name, dp.username,
        EXISTS (
@@ -65,7 +67,9 @@ router.get('/:chatroomId', async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT c.*,
+      `SELECT 
+       c.id, c.created_by_user_id, c.name, c.description, c.avatar_url,
+       c.is_public, c.max_members, c.created_at, c.updated_at,
        (SELECT COUNT(*) FROM chatroom_members WHERE chatroom_id = c.id) as member_count,
        dp.first_name, dp.username
        FROM chatrooms c

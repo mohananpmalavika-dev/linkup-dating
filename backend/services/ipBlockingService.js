@@ -3,8 +3,91 @@
  * Manages IP blocklist for underage signup attempts and other violations
  */
 
-const { IPBlocklist, AdminSetting } = require('../models');
-const { Op, sequelize } = require('sequelize');
+const { IPBlocklist, AdminSetting, sequelize } = require('../models');
+const { Op } = require('sequelize');
+
+const MISSING_TABLE_ERROR_CODE = '42P01';
+const INIT_RETRY_COOLDOWN_MS = 60 * 1000;
+
+let ipBlocklistInitPromise = null;
+let lastInitFailureAt = 0;
+let missingTableWarningLogged = false;
+
+const getDatabaseErrorCode = (error) =>
+  error?.code || error?.parent?.code || error?.original?.code || null;
+
+const isMissingIPBlocklistTableError = (error) =>
+  getDatabaseErrorCode(error) === MISSING_TABLE_ERROR_CODE;
+
+const logMissingTableWarning = (label, error) => {
+  if (missingTableWarningLogged) {
+    return;
+  }
+
+  missingTableWarningLogged = true;
+  console.warn(`IP blocklist table is unavailable while trying to ${label}. Attempting to initialize it.`, {
+    code: getDatabaseErrorCode(error),
+    message: error.message
+  });
+};
+
+const ensureIPBlocklistTable = async () => {
+  if (ipBlocklistInitPromise) {
+    return ipBlocklistInitPromise;
+  }
+
+  if (Date.now() - lastInitFailureAt < INIT_RETRY_COOLDOWN_MS) {
+    return false;
+  }
+
+  ipBlocklistInitPromise = IPBlocklist.sync()
+    .then(() => {
+      console.info('IP blocklist table initialized.');
+      missingTableWarningLogged = false;
+      return true;
+    })
+    .catch((error) => {
+      lastInitFailureAt = Date.now();
+      console.warn('Unable to initialize IP blocklist table. IP checks will fail open temporarily.', {
+        code: getDatabaseErrorCode(error),
+        message: error.message
+      });
+      return false;
+    })
+    .finally(() => {
+      ipBlocklistInitPromise = null;
+    });
+
+  return ipBlocklistInitPromise;
+};
+
+const withIPBlocklistRecovery = async (label, operation, fallbackValue) => {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isMissingIPBlocklistTableError(error)) {
+      throw error;
+    }
+
+    logMissingTableWarning(label, error);
+    const initialized = await ensureIPBlocklistTable();
+
+    if (!initialized) {
+      return fallbackValue;
+    }
+
+    try {
+      return await operation();
+    } catch (retryError) {
+      if (isMissingIPBlocklistTableError(retryError)) {
+        logMissingTableWarning(label, retryError);
+        return fallbackValue;
+      }
+
+      throw retryError;
+    }
+  }
+};
 
 class IPBlockingService {
   /**

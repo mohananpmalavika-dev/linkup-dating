@@ -32,6 +32,38 @@ const DEFAULT_ENGAGEMENT_LOOP_SETTINGS = {
   warmUpSpacesEnabled: true,
   datingIntentOnly: true
 };
+const OPTIONAL_SOCIAL_SCHEMA_ERROR_CODES = new Set(['42P01', '42703']);
+
+const getSocialSchemaErrorCode = (error) =>
+  error?.code || error?.parent?.code || error?.original?.code || null;
+
+const isOptionalSocialSchemaError = (error) =>
+  OPTIONAL_SOCIAL_SCHEMA_ERROR_CODES.has(getSocialSchemaErrorCode(error));
+
+const runOptionalSocialHubTask = async (label, task, fallbackValue) => {
+  try {
+    return await task();
+  } catch (error) {
+    if (!isOptionalSocialSchemaError(error)) {
+      throw error;
+    }
+
+    console.warn(`Social hub optional section unavailable: ${label}`, {
+      code: getSocialSchemaErrorCode(error),
+      message: error.message
+    });
+    return fallbackValue;
+  }
+};
+
+const buildFallbackReferral = () => ({
+  id: null,
+  referralCode: null,
+  referralLink: null,
+  status: 'pending',
+  reward: normalizeReferralProgram(),
+  expiresAt: null
+});
 
 const slugify = (value = '') =>
   String(value || '')
@@ -770,6 +802,34 @@ const buildReferralQualitySummary = (evaluations = []) => {
   };
 };
 
+const ensureReferralInviteFields = async (referral) => {
+  if (!referral) {
+    return referral;
+  }
+
+  const updates = {};
+  const currentCode = referral.referralCode || null;
+  const nextCode = currentCode || generateReferralCode();
+
+  if (!currentCode) {
+    updates.referralCode = nextCode;
+  }
+
+  if (!referral.referralLink) {
+    updates.referralLink = generateReferralLink(nextCode);
+  }
+
+  if (!referral.reward) {
+    updates.reward = normalizeReferralProgram();
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await referral.update(updates);
+  }
+
+  return referral;
+};
+
 const getOrCreateActiveReferral = async (userId) => {
   const now = new Date();
 
@@ -808,7 +868,7 @@ const getOrCreateActiveReferral = async (userId) => {
     });
   }
 
-  return referral;
+  return ensureReferralInviteFields(referral);
 };
 
 const getFriendList = async (userId, status = 'accepted', direction = 'all', limit = 50, offset = 0) => {
@@ -955,120 +1015,165 @@ router.get('/hub', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const referralQualityEvaluations = await syncReferralQualityBonuses(userId);
+    const referralQualityEvaluations = await runOptionalSocialHubTask(
+      'referral quality bonuses',
+      () => syncReferralQualityBonuses(userId),
+      []
+    );
     const referralQualitySummary = buildReferralQualitySummary(referralQualityEvaluations);
 
-    const transaction = await db.sequelize.transaction();
-
-    try {
-      const [
-        acceptedFriends,
-        pendingIncoming,
-        pendingOutgoing,
-        introductionsRaw,
-        rewardBalance,
-        socialIntegrations,
-        referral,
-        communityRooms,
-        totalFriends,
-        totalPendingIncoming,
-        totalPendingOutgoing,
-        totalIntroductions,
-        referralStats
-      ] = await Promise.all([
-        getFriendList(userId, 'accepted', 'all', 6, 0),
-        getFriendList(userId, 'pending', 'incoming', 6, 0),
-        getFriendList(userId, 'pending', 'outgoing', 3, 0),
-        db.sequelize.query(
-        `SELECT
-           fr.id,
-           fr.referred_user_id,
-           fr.referral_message,
-           fr.match_result,
-           fr.created_at,
-           fr.accepted_at,
-           COALESCE(referred_dp.first_name, referred_user.email) AS referred_first_name,
-           referred_dp.username AS referred_username,
-           referred_dp.age AS referred_age,
-           referred_dp.location_city AS referred_location_city,
-           referred_photo.photo_url AS referred_photo_url,
-           COALESCE(referrer_dp.first_name, referrer_user.email) AS referrer_first_name
-         FROM friend_referrals fr
-         JOIN users referred_user
-           ON referred_user.id = fr.referred_user_id
-         LEFT JOIN dating_profiles referred_dp
-           ON referred_dp.user_id = fr.referred_user_id
-         LEFT JOIN LATERAL (
-           SELECT photo_url
-           FROM profile_photos
-           WHERE user_id = fr.referred_user_id
-           ORDER BY is_primary DESC, position ASC, uploaded_at ASC
-           LIMIT 1
-         ) referred_photo ON TRUE
-         JOIN users referrer_user
-           ON referrer_user.id = fr.referrer_user_id
-         LEFT JOIN dating_profiles referrer_dp
-           ON referrer_dp.user_id = fr.referrer_user_id
-         WHERE fr.recipient_user_id = :userId
-         ORDER BY fr.created_at DESC, fr.id DESC
-         LIMIT 4`,
-        {
-          replacements: { userId },
-          type: QueryTypes.SELECT
-        }
+    const [
+      acceptedFriends,
+      pendingIncoming,
+      pendingOutgoing,
+      introductionsRaw,
+      rewardBalance,
+      socialIntegrations,
+      referral,
+      communityRooms,
+      totalFriends,
+      totalPendingIncoming,
+      totalPendingOutgoing,
+      totalIntroductions,
+      referralStats
+    ] = await Promise.all([
+      runOptionalSocialHubTask(
+        'accepted friends',
+        () => getFriendList(userId, 'accepted', 'all', 6, 0),
+        []
       ),
-      ensureRewardBalance(userId, transaction),
-      db.SocialIntegration.findAll({
-        where: { userId },
-        order: [['createdAt', 'ASC']],
-        transaction
-      }),
-      getOrCreateActiveReferral(userId),
-      getCommunityRooms(userId),
-      db.FriendRelationship.count({
-        where: {
-          status: 'accepted',
-          [Op.or]: [{ userId1: userId }, { userId2: userId }]
-        },
-        transaction
-      }),
-      db.FriendRelationship.count({
-        where: {
-          status: 'pending',
-          [Op.or]: [{ userId1: userId }, { userId2: userId }],
-          requestSentBy: { [Op.ne]: userId }
-        },
-        transaction
-      }),
-      db.FriendRelationship.count({
-        where: {
-          status: 'pending',
-          [Op.or]: [{ userId1: userId }, { userId2: userId }],
-          requestSentBy: userId
-        },
-        transaction
-      }),
-      db.FriendReferral.count({
-        where: { recipient_user_id: userId },
-        transaction
-      }),
-      db.sequelize.query(
-        `SELECT
-           COUNT(*)::int AS total_referrals,
-           SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)::int AS completed,
-           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END)::int AS pending,
-           SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END)::int AS expired
-         FROM referrals
-         WHERE referrer_user_id = :userId`,
-        {
-          replacements: { userId },
-          type: QueryTypes.SELECT,
-          transaction
-        }
+      runOptionalSocialHubTask(
+        'incoming friend requests',
+        () => getFriendList(userId, 'pending', 'incoming', 6, 0),
+        []
+      ),
+      runOptionalSocialHubTask(
+        'outgoing friend requests',
+        () => getFriendList(userId, 'pending', 'outgoing', 3, 0),
+        []
+      ),
+      runOptionalSocialHubTask(
+        'friend introductions',
+        () => db.sequelize.query(
+          `SELECT
+             fr.id,
+             fr.referred_user_id,
+             fr.referral_message,
+             fr.match_result,
+             fr.created_at,
+             fr.accepted_at,
+             COALESCE(referred_dp.first_name, referred_user.email) AS referred_first_name,
+             referred_dp.username AS referred_username,
+             referred_dp.age AS referred_age,
+             referred_dp.location_city AS referred_location_city,
+             referred_photo.photo_url AS referred_photo_url,
+             COALESCE(referrer_dp.first_name, referrer_user.email) AS referrer_first_name
+           FROM friend_referrals fr
+           JOIN users referred_user
+             ON referred_user.id = fr.referred_user_id
+           LEFT JOIN dating_profiles referred_dp
+             ON referred_dp.user_id = fr.referred_user_id
+           LEFT JOIN LATERAL (
+             SELECT photo_url
+             FROM profile_photos
+             WHERE user_id = fr.referred_user_id
+             ORDER BY is_primary DESC, position ASC, uploaded_at ASC
+             LIMIT 1
+           ) referred_photo ON TRUE
+           JOIN users referrer_user
+             ON referrer_user.id = fr.referrer_user_id
+           LEFT JOIN dating_profiles referrer_dp
+             ON referrer_dp.user_id = fr.referrer_user_id
+           WHERE fr.recipient_user_id = :userId
+           ORDER BY fr.created_at DESC, fr.id DESC
+           LIMIT 4`,
+          {
+            replacements: { userId },
+            type: QueryTypes.SELECT
+          }
+        ),
+        []
+      ),
+      runOptionalSocialHubTask(
+        'reward wallet',
+        () => ensureRewardBalance(userId),
+        { boostCredits: 0, superlikeCredits: 0, premiumDaysAwarded: 0 }
+      ),
+      runOptionalSocialHubTask(
+        'social integrations',
+        () => db.SocialIntegration.findAll({
+          where: { userId },
+          order: [['createdAt', 'ASC']]
+        }),
+        []
+      ),
+      runOptionalSocialHubTask(
+        'active referral',
+        () => getOrCreateActiveReferral(userId),
+        buildFallbackReferral()
+      ),
+      runOptionalSocialHubTask(
+        'community rooms',
+        () => getCommunityRooms(userId),
+        []
+      ),
+      runOptionalSocialHubTask(
+        'accepted friend count',
+        () => db.FriendRelationship.count({
+          where: {
+            status: 'accepted',
+            [Op.or]: [{ userId1: userId }, { userId2: userId }]
+          }
+        }),
+        0
+      ),
+      runOptionalSocialHubTask(
+        'incoming friend request count',
+        () => db.FriendRelationship.count({
+          where: {
+            status: 'pending',
+            [Op.or]: [{ userId1: userId }, { userId2: userId }],
+            requestSentBy: { [Op.ne]: userId }
+          }
+        }),
+        0
+      ),
+      runOptionalSocialHubTask(
+        'outgoing friend request count',
+        () => db.FriendRelationship.count({
+          where: {
+            status: 'pending',
+            [Op.or]: [{ userId1: userId }, { userId2: userId }],
+            requestSentBy: userId
+          }
+        }),
+        0
+      ),
+      runOptionalSocialHubTask(
+        'introduction count',
+        () => db.FriendReferral.count({
+          where: { recipient_user_id: userId }
+        }),
+        0
+      ),
+      runOptionalSocialHubTask(
+        'referral stats',
+        () => db.sequelize.query(
+          `SELECT
+             COUNT(*)::int AS total_referrals,
+             SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)::int AS completed,
+             SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END)::int AS pending,
+             SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END)::int AS expired
+           FROM referrals
+           WHERE referrer_user_id = :userId`,
+          {
+            replacements: { userId },
+            type: QueryTypes.SELECT
+          }
+        ),
+        [{}]
       )
     ]);
-
-    await transaction.commit();
 
     const activeReferral = typeof referral?.get === 'function' ? referral.get({ plain: true }) : referral;
     const serializedIntegrations = socialIntegrations.map((integration) =>
@@ -1082,41 +1187,37 @@ router.get('/hub', async (req, res) => {
     );
     const stats = referralStats[0] || {};
 
-      return res.json({
-        summary: {
-          totalFriends,
-          totalPendingIncoming,
-          totalPendingOutgoing,
-          totalIntroductions,
-          connectedSocialAccounts: serializedIntegrations.length
+    return res.json({
+      summary: {
+        totalFriends,
+        totalPendingIncoming,
+        totalPendingOutgoing,
+        totalIntroductions,
+        connectedSocialAccounts: serializedIntegrations.length
+      },
+      rewardWallet: serializeRewardBalance(rewardBalance),
+      referral: {
+        id: activeReferral.id,
+        code: activeReferral.referralCode,
+        link: activeReferral.referralLink,
+        status: activeReferral.status,
+        ...serializeReferralProgram(activeReferral.reward),
+        expiresAt: activeReferral.expiresAt,
+        stats: {
+          totalReferrals: Number(stats.total_referrals || 0) || 0,
+          completed: Number(stats.completed || 0) || 0,
+          pending: Number(stats.pending || 0) || 0,
+          expired: Number(stats.expired || 0) || 0
         },
-        rewardWallet: serializeRewardBalance(rewardBalance),
-        referral: {
-          id: activeReferral.id,
-          code: activeReferral.referralCode,
-          link: activeReferral.referralLink,
-          status: activeReferral.status,
-          ...serializeReferralProgram(activeReferral.reward),
-          expiresAt: activeReferral.expiresAt,
-          stats: {
-            totalReferrals: Number(stats.total_referrals || 0) || 0,
-            completed: Number(stats.completed || 0) || 0,
-            pending: Number(stats.pending || 0) || 0,
-            expired: Number(stats.expired || 0) || 0
-          },
-          qualityMetrics: referralQualitySummary
-        },
-        friends: acceptedFriends.map((row) => serializeFriendRow(row, userId)),
-        pendingRequests: pendingIncoming.map((row) => serializeFriendRow(row, userId)),
-        outgoingRequests: pendingOutgoing.map((row) => serializeFriendRow(row, userId)),
-        introductions: introductionsRaw.map(serializeReferralIntroduction),
-        socialIntegrations: serializedIntegrations,
-        communityRooms
-      });
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
+        qualityMetrics: referralQualitySummary
+      },
+      friends: acceptedFriends.map((row) => serializeFriendRow(row, userId)),
+      pendingRequests: pendingIncoming.map((row) => serializeFriendRow(row, userId)),
+      outgoingRequests: pendingOutgoing.map((row) => serializeFriendRow(row, userId)),
+      introductions: introductionsRaw.map(serializeReferralIntroduction),
+      socialIntegrations: serializedIntegrations,
+      communityRooms
+    });
   } catch (error) {
     console.error('Get social hub error:', error);
     res.status(500).json({ error: 'Failed to load social hub' });
