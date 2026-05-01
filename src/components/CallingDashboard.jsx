@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import callWalletService from '../services/callWalletService';
+import CouponRedemption from './CouponRedemption';
 import '../styles/CallingDashboard.css';
 
 const ESTIMATED_CALL_MINUTES = 5;
@@ -82,6 +83,7 @@ const CallDashboard = () => {
   const [activeCallAction, setActiveCallAction] = useState(null);
   const [pendingRequest, setPendingRequest] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [showCouponModal, setShowCouponModal] = useState(false);
 
   const normalizedPackages = useMemo(
     () => packages.map(normalizePackage),

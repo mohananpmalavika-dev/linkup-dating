@@ -2,23 +2,34 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 
+const getMessageText = (body = {}) =>
+  String(body.message ?? body.content ?? body.text ?? '').trim();
+
 // GET ALL PUBLIC CHATROOMS
 router.get('/', async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 20;
     const offset = (page - 1) * pageSize;
+    const userId = req.user?.id || null;
 
     const result = await db.query(
       `SELECT c.*, 
        (SELECT COUNT(*) FROM chatroom_members WHERE chatroom_id = c.id) as member_count,
-       dp.first_name, dp.username
+       dp.first_name, dp.username,
+       EXISTS (
+         SELECT 1
+         FROM chatroom_members cm
+         WHERE cm.chatroom_id = c.id
+           AND cm.user_id = $3
+           AND COALESCE(cm.status, 'active') = 'active'
+       ) AS is_member
        FROM chatrooms c
        LEFT JOIN dating_profiles dp ON c.created_by_user_id = dp.user_id
        WHERE c.is_public = true
        ORDER BY c.updated_at DESC
        LIMIT $1 OFFSET $2`,
-      [pageSize, offset]
+      [pageSize, offset, userId]
     );
 
     const countResult = await db.query(
@@ -253,7 +264,20 @@ router.post('/:chatroomId/join', async (req, res) => {
     );
 
     if (memberCheck.rows.length > 0) {
-      return res.status(400).json({ error: 'Already a member' });
+      const existingMember = memberCheck.rows[0];
+
+      if (existingMember.status && existingMember.status !== 'active') {
+        await db.query(
+          `UPDATE chatroom_members
+           SET status = 'active',
+               left_at = NULL,
+               joined_at = COALESCE(joined_at, CURRENT_TIMESTAMP)
+           WHERE chatroom_id = $1 AND user_id = $2`,
+          [chatroomId, userId]
+        );
+      }
+
+      return res.json({ message: 'Already a member', alreadyMember: true });
     }
 
     // Check member limit
@@ -287,7 +311,7 @@ router.post('/:chatroomId/join', async (req, res) => {
     // Update member count
     await db.query(
       `UPDATE chatrooms 
-       SET member_count = member_count + 1
+       SET member_count = COALESCE(member_count, 0) + 1
        WHERE id = $1`,
       [chatroomId]
     );
@@ -382,9 +406,13 @@ router.get('/:chatroomId/messages', async (req, res) => {
     const offset = parseInt(req.query.offset) || 0;
 
     const result = await db.query(
-      `SELECT cm.*, dp.first_name, dp.username, profile_photos.photo_url
+      `SELECT cm.*,
+              COALESCE(NULLIF(dp.first_name, ''), dp.username, SPLIT_PART(u.email, '@', 1), 'Member') AS first_name,
+              dp.username,
+              profile_photos.photo_url
        FROM chatroom_messages cm
-       JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
+       LEFT JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
+       LEFT JOIN users u ON cm.from_user_id = u.id
        LEFT JOIN profile_photos ON cm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
        WHERE cm.chatroom_id = $1
        ORDER BY cm.created_at DESC
@@ -404,7 +432,7 @@ router.post('/:chatroomId/messages', async (req, res) => {
   try {
     const userId = req.user?.id;
     const { chatroomId } = req.params;
-    const { message } = req.body;
+    const message = getMessageText(req.body);
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -412,6 +440,10 @@ router.post('/:chatroomId/messages', async (req, res) => {
 
     if (!message) {
       return res.status(400).json({ error: 'Message required' });
+    }
+
+    if (message.length > 5000) {
+      return res.status(400).json({ error: 'Message cannot exceed 5000 characters' });
     }
 
     // Verify user is a member
@@ -426,8 +458,8 @@ router.post('/:chatroomId/messages', async (req, res) => {
 
     // Insert message
     const result = await db.query(
-      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message)
-       VALUES ($1, $2, $3)
+      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type)
+       VALUES ($1, $2, $3, 'text')
        RETURNING *`,
       [chatroomId, userId, message]
     );
@@ -440,9 +472,13 @@ router.post('/:chatroomId/messages', async (req, res) => {
 
     // Get message details with user info
     const messageResult = await db.query(
-      `SELECT cm.*, dp.first_name, dp.username, profile_photos.photo_url
+      `SELECT cm.*,
+              COALESCE(NULLIF(dp.first_name, ''), dp.username, SPLIT_PART(u.email, '@', 1), 'Member') AS first_name,
+              dp.username,
+              profile_photos.photo_url
        FROM chatroom_messages cm
-       JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
+       LEFT JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
+       LEFT JOIN users u ON cm.from_user_id = u.id
        LEFT JOIN profile_photos ON cm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
        WHERE cm.id = $1`,
       [result.rows[0].id]

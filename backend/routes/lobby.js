@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 
+const getMessageText = (body = {}) =>
+  String(body.message ?? body.content ?? body.text ?? '').trim();
+
 // GET LOBBY MESSAGES
 router.get('/messages', async (req, res) => {
   try {
@@ -9,9 +12,13 @@ router.get('/messages', async (req, res) => {
     const offset = parseInt(req.query.offset) || 0;
 
     const result = await db.query(
-      `SELECT lm.*, dp.first_name, dp.username, profile_photos.photo_url
+      `SELECT lm.*,
+              COALESCE(NULLIF(dp.first_name, ''), dp.username, SPLIT_PART(u.email, '@', 1), 'Member') AS first_name,
+              dp.username,
+              profile_photos.photo_url
        FROM lobby_messages lm
-       JOIN dating_profiles dp ON lm.from_user_id = dp.user_id
+       LEFT JOIN dating_profiles dp ON lm.from_user_id = dp.user_id
+       LEFT JOIN users u ON lm.from_user_id = u.id
        LEFT JOIN profile_photos ON lm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
        ORDER BY lm.created_at DESC
        LIMIT $1 OFFSET $2`,
@@ -29,7 +36,7 @@ router.get('/messages', async (req, res) => {
 router.post('/messages', async (req, res) => {
   try {
     const userId = req.user?.id;
-    const { message } = req.body;
+    const message = getMessageText(req.body);
 
     console.log('LOBBY MESSAGE - Request received:', {
       userId,
@@ -69,32 +76,12 @@ router.post('/messages', async (req, res) => {
       });
     }
 
-    if (typeof message !== 'string') {
-      console.warn('LOBBY MESSAGE - Invalid message type:', typeof message);
-      return res.status(400).json({ 
-        error: 'Message must be a string',
-        code: 'INVALID_MESSAGE_TYPE',
-        received: typeof message
-      });
-    }
-
-    const trimmedMessage = message.trim();
-    if (!trimmedMessage) {
-      console.warn('LOBBY MESSAGE - Message is empty after trim');
-      return res.status(400).json({ 
-        error: 'Message cannot be empty',
-        code: 'EMPTY_MESSAGE',
-        originalLength: message.length,
-        trimmedLength: trimmedMessage.length
-      });
-    }
-
-    if (trimmedMessage.length > 5000) {
-      console.warn('LOBBY MESSAGE - Message too long:', trimmedMessage.length);
+    if (message.length > 5000) {
+      console.warn('LOBBY MESSAGE - Message too long:', message.length);
       return res.status(400).json({ 
         error: 'Message cannot exceed 5000 characters',
         code: 'MESSAGE_TOO_LONG',
-        length: trimmedMessage.length
+        length: message.length
       });
     }
 
@@ -114,10 +101,10 @@ router.post('/messages', async (req, res) => {
 
     // Insert message
     const result = await db.query(
-      `INSERT INTO lobby_messages (from_user_id, message)
-       VALUES ($1, $2)
+      `INSERT INTO lobby_messages (from_user_id, message, message_type)
+       VALUES ($1, $2, 'text')
        RETURNING *`,
-      [userId, trimmedMessage]
+      [userId, message]
     );
 
     if (!result.rows || result.rows.length === 0) {
@@ -127,9 +114,13 @@ router.post('/messages', async (req, res) => {
 
     // Get message details with user info
     const messageResult = await db.query(
-      `SELECT lm.*, dp.first_name, dp.username, profile_photos.photo_url
+      `SELECT lm.*,
+              COALESCE(NULLIF(dp.first_name, ''), dp.username, SPLIT_PART(u.email, '@', 1), 'Member') AS first_name,
+              dp.username,
+              profile_photos.photo_url
        FROM lobby_messages lm
        LEFT JOIN dating_profiles dp ON lm.from_user_id = dp.user_id
+       LEFT JOIN users u ON lm.from_user_id = u.id
        LEFT JOIN profile_photos ON lm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
        WHERE lm.id = $1`,
       [result.rows[0].id]

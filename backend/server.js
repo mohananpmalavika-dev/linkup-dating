@@ -16,6 +16,7 @@ const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
 const messagingEnhancedRoutes = require('./routes/messagingEnhanced');
 const messageReactionRoutes = require('./routes/messageReactions');
+const moderationRoutes = require('./routes/moderation');
 const chatroomsRoutes = require('./routes/chatrooms');
 const lobbyRoutes = require('./routes/lobby');
 const adminRoutes = require('./routes/admin');
@@ -517,6 +518,7 @@ app.use('/api/orders', ordersRoutes);
 app.use('/api/app-data', appDataRoutes);
 app.use('/api/astrology', astrologyRoutes);
 app.use('/api/flashsales', flashsalesRoutes);
+app.use('/api/moderation', moderationRoutes);
 app.use('/api/dating/video-calls', authenticateToken, videoCallRoutes);
 app.use('/api/dating', authenticateToken, datingRoutes);
 app.use('/api/messaging', authenticateToken, messagingRoutes);
@@ -570,6 +572,7 @@ app.use((req, res) => {
       appData: '/api/app-data/public, /api/app-data/classifieds/*, /api/app-data/realestate/*',
       astrology: '/api/astrology/signs, /api/astrology/daily/{sign}, /api/astrology/profile',
       flashsales: '/api/flashsales, /api/flashsales/reserve/bulk',
+      moderation: '/api/moderation/*',
       dating: '/api/dating/* (requires auth)',
       messaging: '/api/messaging/* (requires auth)',
       chatrooms: '/api/chatrooms/* (requires auth)',

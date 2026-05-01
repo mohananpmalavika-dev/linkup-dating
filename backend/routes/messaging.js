@@ -4,6 +4,7 @@ const db = require('../config/database');
 const spamFraudService = require('../services/spamFraudService');
 const userNotificationService = require('../services/userNotificationService');
 const streakService = require('../services/streakService');
+const MISSING_COLUMN_ERROR_CODE = '42703';
 
 const ALLOWED_MESSAGE_REACTIONS = new Set(['❤️', '👍', '😂', '🔥', '👏']);
 
@@ -11,6 +12,95 @@ const getRequestMetadata = (req) => ({
   ipAddress: req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
   userAgent: req.headers['user-agent'] || null
 });
+
+const isMissingColumnError = (error) =>
+  (error?.code || error?.parent?.code || error?.original?.code) === MISSING_COLUMN_ERROR_CODE;
+
+const isMissingMessageTypeColumnError = (error) =>
+  isMissingColumnError(error) && String(error.message || '').includes('message_type');
+
+const insertTextMessage = async (matchId, userId, toUserId, normalizedMessage) => {
+  try {
+    return await db.query(
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, message_type)
+       VALUES ($1, $2, $3, $4, 'text')
+       RETURNING *`,
+      [matchId, userId, toUserId, normalizedMessage]
+    );
+  } catch (error) {
+    if (!isMissingMessageTypeColumnError(error)) {
+      throw error;
+    }
+
+    console.warn('messages.message_type column missing; sending text message without message_type metadata');
+
+    return db.query(
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [matchId, userId, toUserId, normalizedMessage]
+    );
+  }
+};
+
+const insertMediaMessage = async ({
+  matchId,
+  userId,
+  toUserId,
+  mediaType,
+  mediaUrl,
+  duration,
+  messageType
+}) => {
+  try {
+    return await db.query(
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration, message_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [
+        matchId,
+        userId,
+        toUserId,
+        `[${mediaType}]`,
+        mediaType,
+        mediaUrl,
+        duration,
+        messageType
+      ]
+    );
+  } catch (error) {
+    if (!isMissingMessageTypeColumnError(error)) {
+      throw error;
+    }
+
+    console.warn('messages.message_type column missing; sending media message without message_type metadata');
+
+    return db.query(
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [matchId, userId, toUserId, `[${mediaType}]`, mediaType, mediaUrl, duration]
+    );
+  }
+};
+
+const updateMatchMessageSummary = async (matchId) => {
+  try {
+    await db.query(
+      `UPDATE matches
+       SET last_message_at = CURRENT_TIMESTAMP,
+           message_count = COALESCE(message_count, 0) + 1
+       WHERE id = $1`,
+      [matchId]
+    );
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+
+    console.warn('matches message summary columns missing; message was saved without updating match summary');
+  }
+};
 
 const getMatchForUser = async (matchId, userId) => {
   const matchCheck = await db.query(
@@ -185,23 +275,12 @@ router.post('/matches/:matchId/messages', async (req, res) => {
 
     const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : match.user_id_1;
 
-    const result = await db.query(
-      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, message_type)
-       VALUES ($1, $2, $3, $4, 'text')
-       RETURNING *`,
-      [matchId, userId, toUserId, normalizedMessage]
-    );
+    const result = await insertTextMessage(matchId, userId, toUserId, normalizedMessage);
 
-    await db.query(
-      `UPDATE matches
-       SET last_message_at = CURRENT_TIMESTAMP,
-           message_count = message_count + 1
-       WHERE id = $1`,
-      [matchId]
-    );
+    await updateMatchMessageSummary(matchId);
 
     const senderProfile = await db.query(
-      `SELECT COALESCE(NULLIF(first_name, ''), username, 'Someone') AS display_name
+      `SELECT COALESCE(NULLIF(first_name, ''), 'Someone') AS display_name
        FROM dating_profiles
        WHERE user_id = $1
        LIMIT 1`,
@@ -473,32 +552,20 @@ router.post('/matches/:matchId/media', async (req, res) => {
       return res.status(413).json({ error: `Media too large. Max ${mediaType === 'image' ? '5MB' : '10MB'}` });
     }
 
-    const result = await db.query(
-      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration, message_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-      [
-        matchId,
-        userId,
-        toUserId,
-        `[${mediaType}]`,
-        mediaType,
-        mediaUrl,
-        duration,
-        mediaType === 'voice' ? 'audio' : mediaType
-      ]
-    );
+    const result = await insertMediaMessage({
+      matchId,
+      userId,
+      toUserId,
+      mediaType,
+      mediaUrl,
+      duration,
+      messageType: mediaType === 'voice' ? 'audio' : mediaType
+    });
 
-    await db.query(
-      `UPDATE matches
-       SET last_message_at = CURRENT_TIMESTAMP,
-           message_count = message_count + 1
-       WHERE id = $1`,
-      [matchId]
-    );
+    await updateMatchMessageSummary(matchId);
 
     const senderProfile = await db.query(
-      `SELECT COALESCE(NULLIF(first_name, ''), username, 'Someone') AS display_name
+      `SELECT COALESCE(NULLIF(first_name, ''), 'Someone') AS display_name
        FROM dating_profiles
        WHERE user_id = $1
        LIMIT 1`,

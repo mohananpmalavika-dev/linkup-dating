@@ -175,6 +175,19 @@ const init = async () => {
       );
     `);
 
+      await client.query(`
+      ALTER TABLE matches
+      ADD COLUMN IF NOT EXISTS last_message_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS message_count INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      UPDATE matches
+      SET message_count = COALESCE(message_count, 0)
+      WHERE message_count IS NULL;
+    `);
+
       // Create messages table
       await client.query(`
       CREATE TABLE IF NOT EXISTS messages (
@@ -775,6 +788,30 @@ const init = async () => {
     `);
 
     await client.query(`
+      ALTER TABLE chatrooms
+      ADD COLUMN IF NOT EXISTS avatar_url TEXT,
+      ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS max_members INTEGER DEFAULT 100,
+      ADD COLUMN IF NOT EXISTS member_count INTEGER DEFAULT 1,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    await client.query(`
+      UPDATE chatrooms
+      SET is_public = COALESCE(is_public, TRUE),
+          max_members = COALESCE(max_members, 100),
+          member_count = COALESCE(member_count, 1),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE is_public IS NULL
+         OR max_members IS NULL
+         OR member_count IS NULL
+         OR created_at IS NULL
+         OR updated_at IS NULL;
+    `);
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS filter_presets (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -840,6 +877,24 @@ const init = async () => {
       );
     `);
 
+    await client.query(`
+      ALTER TABLE chatroom_members
+      ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS role VARCHAR(30) DEFAULT 'member',
+      ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'active',
+      ADD COLUMN IF NOT EXISTS left_at TIMESTAMP;
+    `);
+
+    await client.query(`
+      UPDATE chatroom_members
+      SET joined_at = COALESCE(joined_at, CURRENT_TIMESTAMP),
+          role = COALESCE(role, 'member'),
+          status = COALESCE(status, 'active')
+      WHERE joined_at IS NULL
+         OR role IS NULL
+         OR status IS NULL;
+    `);
+
     // Create chatroom_messages table
     await client.query(`
       CREATE TABLE IF NOT EXISTS chatroom_messages (
@@ -849,6 +904,65 @@ const init = async () => {
         message TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    await client.query(`
+      ALTER TABLE chatroom_messages
+      ADD COLUMN IF NOT EXISTS chatroom_id INTEGER REFERENCES chatrooms(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS from_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS message TEXT,
+      ADD COLUMN IF NOT EXISTS message_type VARCHAR(50) DEFAULT 'text',
+      ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '[]',
+      ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'chatroom_messages' AND column_name = 'user_id'
+        ) THEN
+          UPDATE chatroom_messages
+          SET from_user_id = COALESCE(from_user_id, user_id)
+          WHERE from_user_id IS NULL;
+
+          ALTER TABLE chatroom_messages ALTER COLUMN user_id DROP NOT NULL;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'chatroom_messages' AND column_name = 'content'
+        ) THEN
+          UPDATE chatroom_messages
+          SET message = COALESCE(message, content)
+          WHERE message IS NULL;
+
+          ALTER TABLE chatroom_messages ALTER COLUMN content DROP NOT NULL;
+        END IF;
+      END $$;
+    `);
+
+    await client.query(`
+      ALTER TABLE chatroom_messages
+      ALTER COLUMN message_type SET DEFAULT 'text',
+      ALTER COLUMN reactions SET DEFAULT '[]',
+      ALTER COLUMN is_edited SET DEFAULT FALSE,
+      ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    await client.query(`
+      UPDATE chatroom_messages
+      SET message_type = COALESCE(message_type, 'text'),
+          reactions = COALESCE(reactions, '[]'),
+          is_edited = COALESCE(is_edited, FALSE),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+      WHERE message_type IS NULL
+         OR reactions IS NULL
+         OR is_edited IS NULL
+         OR created_at IS NULL;
     `);
 
     // Create lobby_messages table for public global chat
@@ -861,13 +975,64 @@ const init = async () => {
       );
     `);
 
+    await client.query(`
+      ALTER TABLE lobby_messages
+      ADD COLUMN IF NOT EXISTS from_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      ADD COLUMN IF NOT EXISTS message TEXT,
+      ADD COLUMN IF NOT EXISTS message_type VARCHAR(50) DEFAULT 'text',
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'lobby_messages' AND column_name = 'user_id'
+        ) THEN
+          UPDATE lobby_messages
+          SET from_user_id = COALESCE(from_user_id, user_id)
+          WHERE from_user_id IS NULL;
+
+          ALTER TABLE lobby_messages ALTER COLUMN user_id DROP NOT NULL;
+        END IF;
+
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'lobby_messages' AND column_name = 'content'
+        ) THEN
+          UPDATE lobby_messages
+          SET message = COALESCE(message, content)
+          WHERE message IS NULL;
+
+          ALTER TABLE lobby_messages ALTER COLUMN content DROP NOT NULL;
+        END IF;
+      END $$;
+    `);
+
+    await client.query(`
+      ALTER TABLE lobby_messages
+      ALTER COLUMN message_type SET DEFAULT 'text',
+      ALTER COLUMN created_at SET DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    await client.query(`
+      UPDATE lobby_messages
+      SET message_type = COALESCE(message_type, 'text'),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+      WHERE message_type IS NULL
+         OR created_at IS NULL;
+    `);
+
     // Create indices for chatroom queries
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_chatroom_members_chatroom_id ON chatroom_members(chatroom_id);
       CREATE INDEX IF NOT EXISTS idx_chatroom_members_user_id ON chatroom_members(user_id);
       CREATE INDEX IF NOT EXISTS idx_chatroom_messages_chatroom_id ON chatroom_messages(chatroom_id);
       CREATE INDEX IF NOT EXISTS idx_chatroom_messages_created_at ON chatroom_messages(created_at);
+      CREATE INDEX IF NOT EXISTS idx_chatroom_messages_message_type ON chatroom_messages(message_type);
       CREATE INDEX IF NOT EXISTS idx_lobby_messages_created_at ON lobby_messages(created_at);
+      CREATE INDEX IF NOT EXISTS idx_lobby_messages_message_type ON lobby_messages(message_type);
     `);
 
     // Create user_blocks table for blocking functionality

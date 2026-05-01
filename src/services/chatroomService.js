@@ -151,13 +151,17 @@ const chatroomService = {
   // Send message to chatroom
   sendMessage: async (chatroomId, message) => {
     try {
+      if (!message || typeof message !== 'string' || !message.trim()) {
+        throw new Error('Message must be a non-empty string');
+      }
+
       const authToken = getStoredAuthToken();
       if (!authToken) {
         throw new Error('Authentication required. Please log in.');
       }
 
       const response = await axios.post(`${API_URL}/${chatroomId}/messages`, {
-        message
+        message: message.trim()
       }, {
         headers: {
           'Authorization': `Bearer ${authToken}`,
