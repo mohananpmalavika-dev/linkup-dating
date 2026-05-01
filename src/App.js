@@ -77,6 +77,7 @@ import {
   storeUserData,
   setPreferredLoginMethod
 } from './utils/auth';
+import './styles/logoTheme.css';
 
 const ADMIN_DASHBOARD_ROUTE = '/admin-dashboard';
 const DEFAULT_AUTHENTICATED_ROUTE = '/discover';
@@ -1104,7 +1105,7 @@ const AppContent = () => {
                 />
               }
             />
-            <Route path="profile" element={<DatingProfile />} />
+            <Route path="profile" element={<DatingProfile onLogout={handleLogout} />} />
             <Route
               path="account-settings"
               element={<AccountSettings onBack={() => navigate('/more')} onLogout={handleLogout} />}

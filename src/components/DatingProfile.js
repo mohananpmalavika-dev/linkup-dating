@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '../router';
 import datingProfileService from '../services/datingProfileService';
-import { clearStoredAuthData } from '../utils/auth';
 import '../styles/DatingProfile.css';
 
 const normalizeInterests = (interests) => (Array.isArray(interests) ? interests : []);
@@ -44,7 +43,7 @@ const hydrateEditData = (profileData) => ({
   relationshipGoals: formatValue(profileData?.relationshipGoals)
 });
 
-const DatingProfile = () => {
+const DatingProfile = ({ onLogout }) => {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [editData, setEditData] = useState(null);
@@ -91,8 +90,9 @@ const DatingProfile = () => {
 
   const handleLogout = () => {
     if (window.confirm('Are you sure you want to logout?')) {
-      clearStoredAuthData();
-      navigate('/', { replace: true });
+      if (typeof onLogout === 'function') {
+        onLogout();
+      }
     }
   };
 
