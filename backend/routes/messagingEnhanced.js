@@ -534,8 +534,8 @@ router.post('/chatrooms', async (req, res) => {
     console.log('CREATE CHATROOM - Creating with:', { userId, name: trimmedName, isPublic, maxMembers });
 
     const result = await db.query(
-      `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members, created_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
        RETURNING *`,
       [userId, trimmedName, description?.trim() || '', isPublic !== false, maxMembers || 100]
     );

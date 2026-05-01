@@ -145,8 +145,8 @@ router.post('/', async (req, res) => {
 
     // Insert with explicit error handling
     const result = await db.query(
-      `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members, created_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
        RETURNING *`,
       insertParams
     );
