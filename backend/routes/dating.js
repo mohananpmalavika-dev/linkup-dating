@@ -17017,11 +17017,45 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       [upperCode]
     );
 
-    if (couponResult.rows.length === 0) {
+    if (couponResult.rows.length === 0 && !isDhanyaCoupon) {
       return res.status(404).json({ error: 'Invalid coupon code' });
     }
 
-    const coupon = couponResult.rows[0];
+    let coupon = couponResult.rows[0];
+    if (!coupon && isDhanyaCoupon) {
+      const createdCouponResult = await db.query(
+        `INSERT INTO coupons (
+          code,
+          coupon_type,
+          likes_value,
+          superlikes_value,
+          max_redemptions,
+          current_redemptions,
+          expiry_date,
+          start_date,
+          is_active,
+          description,
+          created_by_admin_id,
+          min_user_level,
+          target_user_ids,
+          created_at,
+          updated_at
+        ) VALUES ($1, $2, 0, 0, NULL, 0, NULL, CURRENT_TIMESTAMP, true, $3, $4, 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT (code) DO UPDATE
+        SET max_redemptions = NULL,
+            expiry_date = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        RETURNING *`,
+        [
+          DHANYA_COUPON_CODE,
+          'both',
+          'Special reusable coupon code for 100 call credits',
+          userId
+        ]
+      );
+
+      coupon = createdCouponResult.rows[0];
+    }
 
     // Validate coupon
     if (!coupon.is_active) {
