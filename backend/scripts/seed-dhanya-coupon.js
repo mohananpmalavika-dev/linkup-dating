@@ -20,6 +20,27 @@ const seedCoupon = async () => {
     );
 
     if (existingResult.rows.length > 0) {
+      const result = await client.query(
+        `UPDATE coupons
+         SET coupon_type = $2,
+             likes_value = 0,
+             superlikes_value = 0,
+             call_credits_value = 100,
+             max_redemptions = NULL,
+             expiry_date = NULL,
+             is_active = true,
+             min_user_level = 0,
+             target_user_ids = NULL,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, code, call_credits_value`,
+        [existingResult.rows[0].id, 'callcredits']
+      );
+
+      console.log('Updated "DHANYA" coupon reusable no-expiry settings.');
+      console.log('   ID:', result.rows[0].id);
+      console.log('   Code:', result.rows[0].code);
+      console.log('   Call Credits:', result.rows[0].call_credits_value);
       console.log('✓ Coupon "DHANYA" already exists with ID:', existingResult.rows[0].id);
       return;
     }

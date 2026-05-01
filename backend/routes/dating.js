@@ -16995,6 +16995,9 @@ router.delete('/status-preferences/:matchId', authenticateToken, async (req, res
 
 // ============ COUPON REDEMPTION ============
 
+const DHANYA_COUPON_CODE = 'DHANYA';
+const DHANYA_COUPON_CALL_CREDITS = 100;
+
 // Redeem a coupon code
 router.post('/redeem-coupon', authenticateToken, async (req, res) => {
   const { couponCode } = req.body;
@@ -17006,6 +17009,7 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
     }
 
     const upperCode = couponCode.toUpperCase().trim();
+    const isDhanyaCoupon = upperCode === DHANYA_COUPON_CODE;
 
     // Get coupon details
     const couponResult = await db.query(
@@ -17028,11 +17032,11 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'This coupon is not yet available' });
     }
 
-    if (coupon.expiry_date && new Date(coupon.expiry_date) < new Date()) {
+    if (!isDhanyaCoupon && coupon.expiry_date && new Date(coupon.expiry_date) < new Date()) {
       return res.status(400).json({ error: 'This coupon has expired' });
     }
 
-    if (coupon.max_redemptions && coupon.current_redemptions >= coupon.max_redemptions) {
+    if (!isDhanyaCoupon && coupon.max_redemptions && coupon.current_redemptions >= coupon.max_redemptions) {
       return res.status(400).json({ error: 'This coupon has reached its redemption limit' });
     }
 
@@ -17042,7 +17046,7 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       [coupon.id, userId]
     );
 
-    if (existingUsageResult.rows.length > 0) {
+    if (!isDhanyaCoupon && existingUsageResult.rows.length > 0) {
       return res.status(400).json({ error: 'You have already redeemed this coupon' });
     }
 
@@ -17066,8 +17070,14 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       }
     }
 
+    // DHANYA is a permanent reusable promo: every redemption grants 100 call credits.
+    const likesGranted = isDhanyaCoupon ? 0 : coupon.likes_value || 0;
+    const superlikesGranted = isDhanyaCoupon ? 0 : coupon.superlikes_value || 0;
+    const callCreditsValue = isDhanyaCoupon
+      ? DHANYA_COUPON_CALL_CREDITS
+      : coupon.call_credits_value || 0;
+
     // Handle call credits if this is a call credits coupon
-    const callCreditsValue = coupon.call_credits_value || 0;
     if (callCreditsValue > 0) {
       // Get or create call wallet
       const walletResult = await db.query(
@@ -17094,20 +17104,41 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       }
     }
 
-    // Record coupon usage
-    const usageResult = await db.query(
-      `INSERT INTO coupon_usages (coupon_id, user_id, likes_granted, superlikes_granted, ip_address, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [
-        coupon.id,
-        userId,
-        coupon.likes_value || 0,
-        coupon.superlikes_value || 0,
-        req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
-        req.headers['user-agent'] || null
-      ]
-    );
+    // Record coupon usage. Normal coupons keep the existing one-use rule; DHANYA can be reused.
+    const usageParams = [
+      coupon.id,
+      userId,
+      likesGranted,
+      superlikesGranted,
+      req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
+      req.headers['user-agent'] || null
+    ];
+
+    let usageResult;
+    try {
+      usageResult = await db.query(
+        `INSERT INTO coupon_usages (coupon_id, user_id, likes_granted, superlikes_granted, ip_address, user_agent)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        usageParams
+      );
+    } catch (usageError) {
+      if (!isDhanyaCoupon || usageError.code !== '23505') {
+        throw usageError;
+      }
+
+      usageResult = await db.query(
+        `UPDATE coupon_usages
+         SET likes_granted = likes_granted + $3,
+             superlikes_granted = superlikes_granted + $4,
+             redeemed_at = CURRENT_TIMESTAMP,
+             ip_address = $5,
+             user_agent = $6
+         WHERE coupon_id = $1 AND user_id = $2
+         RETURNING *`,
+        usageParams
+      );
+    }
 
     // Update coupon redemption count
     await db.query(
@@ -17131,8 +17162,8 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
     res.json({
       message: 'Coupon redeemed successfully!',
       usage: usageResult.rows[0],
-      likesGranted: coupon.likes_value || 0,
-      superlikesGranted: coupon.superlikes_value || 0,
+      likesGranted,
+      superlikesGranted,
       creditsGranted: callCreditsValue,
       callCreditsBalance: callCreditsBalance,
       updatedLimits: {

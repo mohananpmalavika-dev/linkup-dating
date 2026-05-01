@@ -79,6 +79,28 @@ const fixCoupon = async () => {
       console.log('   Created:', result.rows[0].created_at);
     } else {
       const coupon = checkResult.rows[0];
+      const reusableSettingsResult = await client.query(
+        `UPDATE coupons
+         SET coupon_type = $2,
+             likes_value = 0,
+             superlikes_value = 0,
+             call_credits_value = 100,
+             max_redemptions = NULL,
+             expiry_date = NULL,
+             is_active = true,
+             min_user_level = 0,
+             target_user_ids = NULL,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, code, coupon_type, call_credits_value`,
+        [coupon.id, 'callcredits']
+      );
+
+      console.log('Configured DHANYA as reusable with no expiry.');
+      console.log('   Type:', reusableSettingsResult.rows[0].coupon_type);
+      console.log('   Call Credits:', reusableSettingsResult.rows[0].call_credits_value);
+      return;
+      coupon.call_credits_value = reusableSettingsResult.rows[0].call_credits_value;
       console.log(`✓ Found DHANYA coupon (ID: ${coupon.id})`);
       
       if (!coupon.call_credits_value || coupon.call_credits_value === 0) {
