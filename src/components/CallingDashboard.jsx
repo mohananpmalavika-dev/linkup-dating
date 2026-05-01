@@ -254,10 +254,21 @@ const CallDashboard = () => {
     }
   };
 
-  const handleRedemptionSuccess = async (redemptionData) => {
+  const handleRedemptionSuccess = async (redemptionData = {}) => {
+    const returnedBalance = toNumber(redemptionData.callCreditsBalance, null);
+    const responseCreditsAdded = toNumber(
+      redemptionData.creditsGranted ?? redemptionData.callCreditsGranted ?? redemptionData.creditsAdded,
+      0
+    );
+    const creditsAdded = responseCreditsAdded ||
+      (Number.isFinite(returnedBalance) ? Math.max(0, returnedBalance - balance) : 0);
+
     setShowCouponModal(false);
+    if (Number.isFinite(returnedBalance)) {
+      setBalance(returnedBalance);
+    }
     await loadBalance();
-    showNotice(`✓ Coupon redeemed! ${redemptionData.creditsGranted || 0} credits added to your account.`, 'success');
+    showNotice(`Coupon redeemed! ${creditsAdded} credits added to your account.`, 'success');
   };
 
   return (

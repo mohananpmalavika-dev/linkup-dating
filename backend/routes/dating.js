@@ -16999,7 +16999,7 @@ const DHANYA_COUPON_CODE = 'DHANYA';
 const DHANYA_COUPON_CALL_CREDITS = 100;
 
 // Redeem a coupon code
-router.post('/redeem-coupon', authenticateToken, async (req, res) => {
+const redeemCoupon = async (req, res) => {
   const { couponCode } = req.body;
   const userId = req.user.id;
 
@@ -17023,7 +17023,7 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
 
     let coupon = couponResult.rows[0];
     if (isDhanyaCoupon) {
-      // Always upsert DHANYA coupon to ensure correct call_credits_value
+      // Always upsert DHANYA coupon so production data cannot drift back to 0 credits.
       const createdCouponResult = await db.query(
         `INSERT INTO coupons (
           code,
@@ -17042,21 +17042,25 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
           target_user_ids,
           created_at,
           updated_at
-) VALUES ($1, $2, 0, 0, $6, $5, 0, NULL, CURRENT_TIMESTAMP, true, $3, $4, 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+) VALUES ($1, $2, 0, 0, $3, NULL, 0, NULL, CURRENT_TIMESTAMP, true, $4, $5, 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT (code) DO UPDATE
-        SET call_credits_value = $6,
-            max_redemptions = $5,
+        SET coupon_type = EXCLUDED.coupon_type,
+            likes_value = 0,
+            superlikes_value = 0,
+            call_credits_value = EXCLUDED.call_credits_value,
+            max_redemptions = NULL,
             expiry_date = NULL,
             is_active = true,
+            min_user_level = 0,
+            target_user_ids = NULL,
             updated_at = CURRENT_TIMESTAMP
         RETURNING *`,
         [
           DHANYA_COUPON_CODE,
           'both',
+          DHANYA_COUPON_CALL_CREDITS,
           'Special reusable coupon code for 100 call credits',
-          userId,
-          null,
-          DHANYA_COUPON_CALL_CREDITS
+          userId
         ]
       );
 
@@ -17115,35 +17119,22 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
     const superlikesGranted = isDhanyaCoupon ? 0 : coupon.superlikes_value || 0;
     const callCreditsValue = isDhanyaCoupon
       ? DHANYA_COUPON_CALL_CREDITS
-      : coupon.call_credits_value || 0;
+      : Number(coupon.call_credits_value || 0) || 0;
 
-    console.log(`[DHANYA DEBUG] isDhanyaCoupon=${isDhanyaCoupon}, callCreditsValue=${callCreditsValue}, coupon.call_credits_value=${coupon.call_credits_value}, DHANYA_COUPON_CALL_CREDITS=${DHANYA_COUPON_CALL_CREDITS}`);
-
+    let callCreditsBalance = 0;
     // Handle call credits if this is a call credits coupon
     if (callCreditsValue > 0) {
-      // Get or create call wallet
       const walletResult = await db.query(
-        `SELECT * FROM call_credits WHERE user_id = $1`,
-        [userId]
+        `INSERT INTO call_credits (user_id, credits_balance, total_purchased, created_at, updated_at)
+         VALUES ($1, $2, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id) DO UPDATE
+         SET credits_balance = COALESCE(call_credits.credits_balance, 0) + EXCLUDED.credits_balance,
+             updated_at = CURRENT_TIMESTAMP
+         RETURNING credits_balance`,
+        [userId, callCreditsValue]
       );
 
-      if (walletResult.rows.length === 0) {
-        // Create new wallet
-        await db.query(
-          `INSERT INTO call_credits (user_id, credits_balance, total_purchased, created_at, updated_at)
-           VALUES ($1, $2, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
-          [userId, callCreditsValue]
-        );
-      } else {
-        // Update existing wallet
-        const currentBalance = walletResult.rows[0].credits_balance || 0;
-        await db.query(
-          `UPDATE call_credits
-           SET credits_balance = credits_balance + $1, updated_at = CURRENT_TIMESTAMP
-           WHERE user_id = $2`,
-          [callCreditsValue, userId]
-        );
-      }
+      callCreditsBalance = Number(walletResult.rows[0]?.credits_balance || 0) || 0;
     }
 
     // Record coupon usage. Normal coupons keep the existing one-use rule; DHANYA can be reused.
@@ -17191,23 +17182,15 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
     // Get updated daily limits with coupon credits
     const updatedLimits = await getDailyLimitSnapshot(userId);
 
-    // Get updated call credits balance
-    let callCreditsBalance = 0;
-    if (callCreditsValue > 0) {
-      const callCreditsResult = await db.query(
-        `SELECT credits_balance FROM call_credits WHERE user_id = $1`,
-        [userId]
-      );
-      callCreditsBalance = callCreditsResult.rows[0]?.credits_balance || 0;
-    }
-
     res.json({
       message: 'Coupon redeemed successfully!',
       usage: usageResult.rows[0],
       likesGranted,
       superlikesGranted,
       creditsGranted: callCreditsValue,
-      callCreditsBalance: callCreditsBalance,
+      callCreditsGranted: callCreditsValue,
+      creditsAdded: callCreditsValue,
+      callCreditsBalance,
       updatedLimits: {
         remainingLikes: updatedLimits.remainingLikes,
         remainingSuperlikes: updatedLimits.remainingSuperlikes,
@@ -17215,11 +17198,13 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
         couponSuperlikeCredits: updatedLimits.couponSuperlikeCredits
       }
     });
-    console.log(`[DHANYA RESPONSE] Sent response with creditsGranted=${callCreditsValue}, callCreditsBalance=${callCreditsBalance}`);
   } catch (err) {
     console.error('Error redeeming coupon:', err);
     res.status(500).json({ error: 'Failed to redeem coupon' });
   }
-});
+};
+
+router.post('/redeem-coupon', authenticateToken, redeemCoupon);
+router.redeemCoupon = redeemCoupon;
 
 module.exports = router;

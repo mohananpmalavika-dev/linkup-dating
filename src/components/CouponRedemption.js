@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import { apiCall } from '../utils/api';
 import '../styles/CouponRedemption.css';
 
 /**
@@ -14,14 +14,18 @@ const CouponRedemption = ({ onRedemptionSuccess, isOpen, onClose }) => {
   const [success, setSuccess] = useState('');
   const [redemptionDetails, setRedemptionDetails] = useState(null);
 
-  const token = localStorage.getItem('token');
+  const normalizeRedemptionDetails = (details = {}) => {
+    const creditsGranted = Number(
+      details.creditsGranted ?? details.callCreditsGranted ?? details.creditsAdded ?? 0
+    ) || 0;
 
-  const apiClient = axios.create({
-    baseURL: '/api',
-    headers: {
-      'Authorization': `Bearer ${token}`
-    }
-  });
+    return {
+      ...details,
+      creditsGranted,
+      callCreditsGranted: creditsGranted,
+      creditsAdded: creditsGranted
+    };
+  };
 
   const handleRedeemCoupon = async (e) => {
     e.preventDefault();
@@ -36,18 +40,19 @@ const CouponRedemption = ({ onRedemptionSuccess, isOpen, onClose }) => {
       setError('');
       setSuccess('');
 
-      const response = await apiClient.post('/redeem-coupon', {
+      const response = await apiCall('/dating/redeem-coupon', 'POST', {
         couponCode: couponCode.toUpperCase()
       });
+      const redemptionData = normalizeRedemptionDetails(response);
 
-      setRedemptionDetails(response.data);
-      setSuccess(`✓ Coupon redeemed successfully!`);
+      setRedemptionDetails(redemptionData);
+      setSuccess('Coupon redeemed successfully!');
       setCouponCode('');
 
       // Call parent callback after short delay
       setTimeout(() => {
         if (onRedemptionSuccess) {
-          onRedemptionSuccess(response.data);
+          onRedemptionSuccess(redemptionData);
         }
       }, 1500);
     } catch (err) {
@@ -72,7 +77,7 @@ const CouponRedemption = ({ onRedemptionSuccess, isOpen, onClose }) => {
     <div className="coupon-modal-overlay" onClick={handleClose}>
       <div className="coupon-modal" onClick={(e) => e.stopPropagation()}>
         <button className="modal-close" onClick={handleClose}>
-          ✕
+          x
         </button>
 
         <div className="modal-header">
@@ -82,7 +87,7 @@ const CouponRedemption = ({ onRedemptionSuccess, isOpen, onClose }) => {
 
         {success && redemptionDetails ? (
           <div className="success-content">
-            <div className="success-icon">✓</div>
+            <div className="success-icon">OK</div>
             <h3>Coupon Redeemed!</h3>
 
             <div className="redemption-summary">

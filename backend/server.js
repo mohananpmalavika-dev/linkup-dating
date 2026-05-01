@@ -536,6 +536,7 @@ app.use('/api/matches', authenticateToken, streakRoutes);
 app.use('/api/introductions', authenticateToken, introductionsRoutes);
 app.use('/api/boosts', boostRoutes);
 app.use('/api/preferences-priority', authenticateToken, preferencesPriorityRoutes);
+app.post('/api/redeem-coupon', authenticateToken, datingRoutes.redeemCoupon);
 app.use('/api/events', authenticateToken, eventRoutes);
 app.use('/api/double-dates', authenticateToken, doubleDatesRoutes);
 app.use('/api/referrals', referralRoutes);
