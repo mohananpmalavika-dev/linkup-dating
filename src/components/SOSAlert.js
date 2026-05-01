@@ -9,98 +9,44 @@ import {
 } from '../utils/keralaLocation';
 import '../styles/SOSAlert.css';
 
-const SESSION_DURATION_OPTIONS = [
-  { value: 90, label: '90 minutes' },
-  { value: 180, label: '3 hours' },
-  { value: 240, label: '4 hours' },
-  { value: 360, label: '6 hours' },
-];
-
-const CHECK_IN_OPTIONS = [
-  {
-    id: 'good',
-    label: 'I am safe',
-    description: 'Send a calm check-in to your trusted contact.',
-  },
-  {
-    id: 'ok',
-    label: 'Running late',
-    description: 'Let your contact know the date is still in progress.',
-  },
-  {
-    id: 'help',
-    label: 'Need help',
-    description: 'Escalate the session and tell your contact to check in now.',
-  },
-];
-
-const FALLBACK_TIPS = [
-  {
-    id: 'public-place',
-    title: 'Choose a public first meet',
-    description: 'Start with a busy cafe, mall, or other public venue where leaving is easy.',
-  },
-  {
-    id: 'own-ride',
-    title: 'Keep your own travel plan',
-    description: 'Avoid depending on a date for pickup or the ride home, especially on the first meet.',
-  },
-  {
-    id: 'trusted-contact',
-    title: 'Share the plan with one trusted person',
-    description: 'Let someone know where you expect to be, when you plan to leave, and who you are meeting.',
-  },
-  {
-    id: 'charged-phone',
-    title: 'Keep your phone charged and unlocked',
-    description: 'Save emergency numbers and keep location access available before you leave.',
-  },
-];
+const TRUSTED_NUMBER_STORAGE_KEY = 'linkup_sos_trusted_number';
+const DEFAULT_SESSION_DURATION_MINUTES = 180;
 
 const KERALA_HELP_PATHS = [
   {
     id: 'erss',
     title: 'Kerala Police ERSS',
     number: '112',
-    description: 'Statewide emergency response for urgent police help and rapid dispatch in Kerala.',
-    badge: 'Primary line',
-    officialLabel: 'Open Kerala Police ERSS',
+    description: 'Urgent police, fire, medical, and emergency dispatch support.',
+    badge: 'Emergency',
+    officialLabel: 'Kerala Police ERSS',
     officialUrl: 'https://keralapolice.gov.in/page/emergency-response-support-system',
   },
   {
     id: 'mitra-181',
     title: 'Mitra Women Helpline',
     number: '181',
-    description: 'Kerala women information and assistance helpline with 24x7 crisis support and referrals.',
+    description: '24x7 women safety support, crisis help, and referrals.',
     badge: 'Women support',
-    officialLabel: 'Open Mitra 181 details',
+    officialLabel: 'Mitra 181 details',
     officialUrl: 'https://kerala.gov.in/forwoman/MzEzNjE5MTY4LjI4/100',
   },
   {
     id: 'women-1091',
     title: 'Kerala Police Women Helpline',
     number: '1091',
-    description: 'Police helpline listed on the official Kerala Police emergency contacts page.',
-    badge: 'Police support',
-    officialLabel: 'Open Kerala Police contacts',
+    description: 'Police helpline for women safety concerns.',
+    badge: 'Police',
+    officialLabel: 'Police contacts',
     officialUrl: 'https://keralapolice.gov.in/page/contacts',
-  },
-  {
-    id: 'pink-patrol',
-    title: 'Pink Patrol',
-    number: '1515',
-    description: 'Kerala Police safety support for women and children in public spaces and transit corridors.',
-    badge: 'Public safety',
-    officialLabel: 'Open Pink Patrol details',
-    officialUrl: 'https://keralapolice.gov.in/page/pink-police-patrol',
   },
   {
     id: 'cybercrime',
     title: 'Cybercrime Helpline',
     number: '1930',
-    description: 'Use this for fraud, impersonation, harassment, sextortion, or payment scams connected to a date.',
-    badge: 'Fraud response',
-    officialLabel: 'Open cybercrime portal',
+    description: 'Fraud, impersonation, harassment, sextortion, or payment scams.',
+    badge: 'Cybercrime',
+    officialLabel: 'Cybercrime portal',
     officialUrl: 'https://cybercrime.gov.in/',
   },
 ];
@@ -108,35 +54,15 @@ const KERALA_HELP_PATHS = [
 const formatDateTime = (value) => {
   const date = value ? new Date(value) : null;
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return 'Not yet recorded';
+    return 'Not shared yet';
   }
 
   return date.toLocaleString([], {
-    weekday: 'short',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
-};
-
-const formatElapsedTime = (startValue) => {
-  const startTime = startValue ? new Date(startValue) : null;
-  if (!(startTime instanceof Date) || Number.isNaN(startTime.getTime())) {
-    return '0m';
-  }
-
-  const elapsedMs = Date.now() - startTime.getTime();
-  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${hours}h ${minutes}m`;
-  }
-
-  return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
 };
 
 const buildMapsUrl = (location) => {
@@ -145,44 +71,6 @@ const buildMapsUrl = (location) => {
   }
 
   return `https://maps.google.com/?q=${location.latitude},${location.longitude}`;
-};
-
-const normalizeHistoryItems = (payload) => {
-  const rawItems = Array.isArray(payload?.sessions)
-    ? payload.sessions
-    : Array.isArray(payload?.history)
-      ? payload.history
-      : Array.isArray(payload?.data)
-        ? payload.data
-        : [];
-
-  return rawItems.map((item, index) => ({
-    id: String(item.id || item.sessionId || item._id || `history-${index}`),
-    title: item.sosActivated ? 'SOS recorded' : 'Safety session',
-    description: item.trustedFriend
-      ? `Trusted contact: ${item.trustedFriend}`
-      : 'Trusted contact details were not returned.',
-    timestamp: item.date || item.createdAt || item.startTime || item.timestamp || '',
-    status: item.status || item.sessionStatus || 'completed',
-    meta: [
-      `${Number(item.checkInCount || 0)} check-ins`,
-      `${Number(item.duration || item.durationMinutes || 0)} min window`,
-    ],
-  }));
-};
-
-const normalizeTips = (payload) => {
-  const rawTips = Array.isArray(payload?.tips) ? payload.tips : [];
-
-  if (rawTips.length === 0) {
-    return FALLBACK_TIPS;
-  }
-
-  return rawTips.map((tip, index) => ({
-    id: String(tip.id || index),
-    title: String(tip.title || 'Safety tip').replace(/^[^\w]+/, '').trim() || 'Safety tip',
-    description: tip.description || 'Review the safety guidance before you head out.',
-  }));
 };
 
 const resolveKeralaContextLabel = (currentUser) => {
@@ -210,65 +98,79 @@ const getSessionIdFromResponse = (payload) =>
 const getSessionStartFromResponse = (payload) =>
   payload?.session?.startTime || payload?.session?.sharing_start_time || new Date().toISOString();
 
-const formatPhoneHref = (value) => `tel:${String(value || '').replace(/[^\d+]/g, '')}`;
+const cleanPhoneNumber = (value) => {
+  const cleaned = String(value || '')
+    .replace(/[^\d+]/g, '')
+    .replace(/(?!^)\+/g, '');
+
+  return cleaned.startsWith('00') ? `+${cleaned.slice(2)}` : cleaned;
+};
+
+const isValidPhoneNumber = (value) => {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15;
+};
+
+const formatPhoneHref = (value) => `tel:${cleanPhoneNumber(value)}`;
+
+const formatSmsHref = (number, body) =>
+  `sms:${cleanPhoneNumber(number)}?body=${encodeURIComponent(body)}`;
+
+const loadSavedTrustedNumber = () => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(TRUSTED_NUMBER_STORAGE_KEY);
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+    const phone = cleanPhoneNumber(parsedValue?.phone);
+    if (!isValidPhoneNumber(phone)) {
+      return null;
+    }
+
+    return {
+      name: String(parsedValue?.name || 'Trusted contact').trim() || 'Trusted contact',
+      phone,
+    };
+  } catch (error) {
+    return null;
+  }
+};
 
 const SOSAlert = ({ currentUser = null }) => {
   const [trustedContacts, setTrustedContacts] = useState([]);
   const [loadingContacts, setLoadingContacts] = useState(true);
-  const [historyItems, setHistoryItems] = useState([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
-  const [tips, setTips] = useState(FALLBACK_TIPS);
-  const [loadingTips, setLoadingTips] = useState(true);
   const [selectedContactId, setSelectedContactId] = useState('');
-  const [sessionDuration, setSessionDuration] = useState(180);
+  const [savedTrustedNumber, setSavedTrustedNumber] = useState(null);
+  const [trustedName, setTrustedName] = useState('');
+  const [trustedPhone, setTrustedPhone] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [sessionStartedAt, setSessionStartedAt] = useState('');
   const [sessionStatus, setSessionStatus] = useState('idle');
-  const [isSharingLocation, setIsSharingLocation] = useState(false);
   const [locationSnapshot, setLocationSnapshot] = useState(null);
-  const [lastCheckIn, setLastCheckIn] = useState(null);
-  const [safetyNote, setSafetyNote] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [actionLoading, setActionLoading] = useState('');
-  const [activityLog, setActivityLog] = useState([]);
   const watchIdRef = useRef(null);
 
-  const currentContact = trustedContacts.find((contact) => contact.id === selectedContactId) || null;
   const keralaContextLabel = useMemo(() => resolveKeralaContextLabel(currentUser), [currentUser]);
-  const isSessionLive = sessionStatus === 'active' || sessionStatus === 'emergency';
-  const sessionElapsed = isSessionLive ? formatElapsedTime(sessionStartedAt) : '0m';
+  const currentContact = trustedContacts.find((contact) => contact.id === selectedContactId) || null;
   const mapsUrl = buildMapsUrl(locationSnapshot);
-  const timelineItems = [...activityLog, ...historyItems]
-    .sort((leftItem, rightItem) => new Date(rightItem.timestamp).getTime() - new Date(leftItem.timestamp).getTime())
-    .slice(0, 6);
+  const isSessionLive = sessionStatus === 'active' || sessionStatus === 'emergency';
 
-  const pushActivity = (title, description = '') => {
-    setActivityLog((currentLog) => [
-      {
-        id: `activity-${Date.now()}-${currentLog.length}`,
-        title,
-        description,
-        timestamp: new Date().toISOString(),
-        status: sessionStatus,
-        meta: [],
-      },
-      ...currentLog,
-    ]);
-  };
-
-  const loadHistory = async () => {
-    setLoadingHistory(true);
-
-    try {
-      const response = await dateSafetyService.getSessionHistory(6);
-      setHistoryItems(normalizeHistoryItems(response));
-    } catch (error) {
-      setHistoryItems([]);
-    } finally {
-      setLoadingHistory(false);
+  useEffect(() => {
+    const savedNumber = loadSavedTrustedNumber();
+    if (savedNumber) {
+      setSavedTrustedNumber(savedNumber);
+      setTrustedName(savedNumber.name);
+      setTrustedPhone(savedNumber.phone);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -278,11 +180,9 @@ const SOSAlert = ({ currentUser = null }) => {
 
       try {
         const response = await getAcceptedTrustedContacts();
-        if (cancelled) {
-          return;
+        if (!cancelled) {
+          setTrustedContacts(normalizeTrustedContacts(response));
         }
-
-        setTrustedContacts(normalizeTrustedContacts(response));
       } catch (error) {
         if (!cancelled) {
           setTrustedContacts([]);
@@ -294,28 +194,7 @@ const SOSAlert = ({ currentUser = null }) => {
       }
     };
 
-    const loadSafetyTips = async () => {
-      setLoadingTips(true);
-
-      try {
-        const response = await dateSafetyService.getSafetyTips();
-        if (!cancelled) {
-          setTips(normalizeTips(response));
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setTips(FALLBACK_TIPS);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingTips(false);
-        }
-      }
-    };
-
     void loadTrustedContacts();
-    void loadHistory();
-    void loadSafetyTips();
 
     return () => {
       cancelled = true;
@@ -343,13 +222,12 @@ const SOSAlert = ({ currentUser = null }) => {
       latitude: position.latitude,
       longitude: position.longitude,
       accuracy: position.accuracy,
+      lastUpdated: timestamp,
     };
 
     setLocationSnapshot((currentSnapshot) => ({
       ...currentSnapshot,
       ...nextLocation,
-      lastUpdated: timestamp,
-      updateCount: (currentSnapshot?.updateCount || 0) + 1,
       address: currentSnapshot?.address || '',
     }));
 
@@ -357,19 +235,11 @@ const SOSAlert = ({ currentUser = null }) => {
       const address = await dateSafetyService.reverseGeocode(position.latitude, position.longitude);
       setLocationSnapshot((currentSnapshot) => (
         currentSnapshot
-          ? {
-              ...currentSnapshot,
-              address,
-            }
-          : {
-              ...nextLocation,
-              lastUpdated: timestamp,
-              updateCount: 1,
-              address,
-            }
+          ? { ...currentSnapshot, address }
+          : { ...nextLocation, address }
       ));
     } catch (error) {
-      // Ignore address lookup failures and keep raw coordinates available.
+      // Coordinates are still useful if the address lookup fails.
     }
 
     if (!activeSessionId) {
@@ -379,8 +249,14 @@ const SOSAlert = ({ currentUser = null }) => {
     try {
       await dateSafetyService.updateLocation(activeSessionId, position.latitude, position.longitude);
     } catch (error) {
-      setErrorMessage(error.message || 'We could not update your live location right now.');
+      setErrorMessage(error.message || 'Location was captured, but LinkUp could not update it.');
     }
+  };
+
+  const captureLocation = async (activeSessionId = sessionId) => {
+    const location = await dateSafetyService.getUserLocation();
+    await updateLocationSnapshot(location, activeSessionId);
+    return location;
   };
 
   const ensureSession = async () => {
@@ -389,10 +265,14 @@ const SOSAlert = ({ currentUser = null }) => {
     }
 
     if (!selectedContactId) {
-      throw new Error('Choose a trusted contact to use in-app SOS, or call Kerala emergency support directly below.');
+      throw new Error('In-app SOS needs a LinkUp trusted contact. You can still call or text your saved trusted number.');
     }
 
-    const response = await dateSafetyService.startSession(selectedContactId, null, sessionDuration);
+    const response = await dateSafetyService.startSession(
+      selectedContactId,
+      null,
+      DEFAULT_SESSION_DURATION_MINUTES
+    );
 
     if (!response?.success) {
       throw new Error(response?.error || 'Unable to start a LinkUp safety session.');
@@ -400,150 +280,129 @@ const SOSAlert = ({ currentUser = null }) => {
 
     const nextSessionId = getSessionIdFromResponse(response);
     if (!nextSessionId) {
-      throw new Error('LinkUp did not return a session ID for this safety session.');
+      throw new Error('LinkUp did not return a session ID.');
     }
 
     setSessionId(nextSessionId);
     setSessionStartedAt(getSessionStartFromResponse(response));
     setSessionStatus('active');
-    pushActivity(
-      'Safety session started',
-      currentContact ? `Linked to ${currentContact.name}.` : 'Trusted contact linked.'
-    );
-
     return nextSessionId;
   };
 
-  const handleStartSession = async () => {
-    setActionLoading('start-session');
+  const handleSaveTrustedNumber = (event) => {
+    event.preventDefault();
+
+    const phone = cleanPhoneNumber(trustedPhone);
+    if (!isValidPhoneNumber(phone)) {
+      setErrorMessage('Enter a valid trusted phone number.');
+      setStatusMessage('');
+      return;
+    }
+
+    const nextTrustedNumber = {
+      name: trustedName.trim() || 'Trusted contact',
+      phone,
+    };
+
+    setSavedTrustedNumber(nextTrustedNumber);
+    setTrustedName(nextTrustedNumber.name);
+    setTrustedPhone(nextTrustedNumber.phone);
+    setErrorMessage('');
+    setStatusMessage(`${nextTrustedNumber.name} is saved as your trusted number.`);
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(TRUSTED_NUMBER_STORAGE_KEY, JSON.stringify(nextTrustedNumber));
+    }
+  };
+
+  const handleRemoveTrustedNumber = () => {
+    setSavedTrustedNumber(null);
+    setTrustedName('');
+    setTrustedPhone('');
+    setErrorMessage('');
+    setStatusMessage('Trusted number removed.');
+
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(TRUSTED_NUMBER_STORAGE_KEY);
+    }
+  };
+
+  const handleShareLocation = async () => {
+    setActionLoading('share-location');
     setErrorMessage('');
     setStatusMessage('');
 
     try {
-      await ensureSession();
-      setStatusMessage(`Safety session is live${currentContact ? ` with ${currentContact.name}` : ''}.`);
+      const location = locationSnapshot || await captureLocation(sessionId || null);
+      const nextMapsUrl = buildMapsUrl(locationSnapshot || location);
+      const shareText = [
+        'LinkUp safety update',
+        `Area: ${keralaContextLabel}`,
+        nextMapsUrl ? `Location: ${nextMapsUrl}` : 'Location could not be attached.',
+      ].filter(Boolean).join('\n');
+
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({
+          title: 'LinkUp safety update',
+          text: shareText,
+          url: nextMapsUrl || undefined,
+        });
+        setStatusMessage('Location shared from your device.');
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareText);
+        setStatusMessage('Location copied. Paste it into SMS or WhatsApp.');
+      } else {
+        throw new Error('Sharing is not available on this device.');
+      }
     } catch (error) {
-      setErrorMessage(error.message || 'Unable to start your safety session.');
+      setErrorMessage(error.message || 'Unable to share your location right now.');
     } finally {
       setActionLoading('');
     }
   };
 
-  const handleEndSession = async () => {
-    if (!sessionId) {
+  const handleTextTrustedNumber = async () => {
+    if (!savedTrustedNumber?.phone) {
+      setErrorMessage('Add one trusted phone number first.');
+      setStatusMessage('');
       return;
     }
 
-    setActionLoading('end-session');
+    setActionLoading('text-trusted');
     setErrorMessage('');
     setStatusMessage('');
 
     try {
-      const response = await dateSafetyService.endSession(sessionId, safetyNote.trim());
-      if (!response?.success) {
-        throw new Error(response?.error || 'Unable to end the current safety session.');
-      }
+      let nextMapsUrl = buildMapsUrl(locationSnapshot);
+      let locationAttached = Boolean(nextMapsUrl);
 
-      if (watchIdRef.current !== null) {
-        dateSafetyService.stopWatchingLocation(watchIdRef.current);
-        watchIdRef.current = null;
-      }
-
-      setIsSharingLocation(false);
-      setSessionStatus('completed');
-      setSessionId('');
-      setSessionStartedAt('');
-      setStatusMessage('Safety session ended. Kerala emergency buttons stay available any time you need them.');
-      pushActivity('Safety session ended', 'LinkUp closed the active safety window.');
-      await loadHistory();
-    } catch (error) {
-      setErrorMessage(error.message || 'Unable to end the current safety session.');
-    } finally {
-      setActionLoading('');
-    }
-  };
-
-  const handleStartLocationSharing = async () => {
-    if (isSharingLocation) {
-      return;
-    }
-
-    setActionLoading('start-sharing');
-    setErrorMessage('');
-    setStatusMessage('');
-
-    try {
-      const activeSessionId = await ensureSession();
-      const location = await dateSafetyService.getUserLocation();
-      await updateLocationSnapshot(location, activeSessionId);
-
-      watchIdRef.current = dateSafetyService.watchUserLocation(
-        (nextLocation) => {
-          void updateLocationSnapshot(nextLocation, activeSessionId);
-        },
-        (error) => {
-          setErrorMessage(error.message || 'Live location sharing stopped unexpectedly.');
-          setIsSharingLocation(false);
-          if (watchIdRef.current !== null) {
-            dateSafetyService.stopWatchingLocation(watchIdRef.current);
-            watchIdRef.current = null;
-          }
+      if (!nextMapsUrl) {
+        try {
+          const location = await captureLocation(sessionId || null);
+          nextMapsUrl = buildMapsUrl(location);
+          locationAttached = Boolean(nextMapsUrl);
+        } catch (error) {
+          locationAttached = false;
         }
-      );
-
-      setIsSharingLocation(true);
-      setStatusMessage('Live location sharing is running for this safety session.');
-      pushActivity('Live location started', 'Location updates are now being shared.');
-    } catch (error) {
-      setErrorMessage(error.message || 'Unable to start live location sharing.');
-    } finally {
-      setActionLoading('');
-    }
-  };
-
-  const handleStopLocationSharing = () => {
-    if (watchIdRef.current !== null) {
-      dateSafetyService.stopWatchingLocation(watchIdRef.current);
-      watchIdRef.current = null;
-    }
-
-    setIsSharingLocation(false);
-    setStatusMessage('Live location sharing has been paused.');
-    setErrorMessage('');
-    pushActivity('Live location paused', 'Location updates are no longer streaming.');
-  };
-
-  const handleSendCheckIn = async (status) => {
-    setActionLoading(`check-in-${status}`);
-    setErrorMessage('');
-    setStatusMessage('');
-
-    try {
-      const activeSessionId = await ensureSession();
-      const response = await dateSafetyService.sendCheckIn(activeSessionId, status, safetyNote.trim());
-
-      if (!response?.success) {
-        throw new Error(response?.error || 'Unable to send the check-in.');
       }
 
-      const nextStatus = status === 'help' ? 'emergency' : 'active';
-      setSessionStatus(nextStatus);
-      setLastCheckIn({
-        status,
-        timestamp: response?.checkIn?.timestamp || new Date().toISOString(),
-      });
+      const message = [
+        'I need help. Please call or check on me now.',
+        `Area: ${keralaContextLabel}`,
+        nextMapsUrl ? `My location: ${nextMapsUrl}` : null,
+      ].filter(Boolean).join('\n');
+
+      if (typeof window !== 'undefined') {
+        window.location.href = formatSmsHref(savedTrustedNumber.phone, message);
+      }
+
       setStatusMessage(
-        status === 'help'
-          ? 'Urgent check-in sent. If you are in danger, call 112 now.'
-          : 'Check-in sent to your trusted contact.'
+        locationAttached
+          ? `Message with location ready for ${savedTrustedNumber.name}.`
+          : `Message ready for ${savedTrustedNumber.name}. Location was not attached.`
       );
-      pushActivity(
-        status === 'help' ? 'Urgent check-in sent' : 'Check-in sent',
-        safetyNote.trim() || `Status: ${status}.`
-      );
-      await loadHistory();
     } catch (error) {
-      setErrorMessage(error.message || 'Unable to send the check-in.');
+      setErrorMessage(error.message || 'Unable to prepare a trusted contact message.');
     } finally {
       setActionLoading('');
     }
@@ -552,7 +411,7 @@ const SOSAlert = ({ currentUser = null }) => {
   const handleActivateSos = async () => {
     const confirmed = typeof window === 'undefined'
       ? true
-      : window.confirm('Activate SOS now? LinkUp will share your latest location and mark this session as emergency.');
+      : window.confirm('Activate LinkUp SOS now? Your location will be shared with your LinkUp trusted contact.');
 
     if (!confirmed) {
       return;
@@ -564,9 +423,7 @@ const SOSAlert = ({ currentUser = null }) => {
 
     try {
       const activeSessionId = await ensureSession();
-      const location = await dateSafetyService.getUserLocation();
-      await updateLocationSnapshot(location, activeSessionId);
-
+      const location = await captureLocation(activeSessionId);
       const response = await dateSafetyService.activateSOS(
         activeSessionId,
         location.latitude,
@@ -578,56 +435,10 @@ const SOSAlert = ({ currentUser = null }) => {
       }
 
       const emergencyNumber = response?.sos?.emergencyNumber || '112';
-
       setSessionStatus('emergency');
       setStatusMessage(`SOS activated. Call ${emergencyNumber} if you can stay on the line safely.`);
-      pushActivity(
-        'SOS activated',
-        `Emergency line: ${emergencyNumber}. ${safetyNote.trim() || 'Location shared from LinkUp.'}`
-      );
-      await loadHistory();
     } catch (error) {
       setErrorMessage(error.message || 'LinkUp could not activate SOS.');
-    } finally {
-      setActionLoading('');
-    }
-  };
-
-  const handleShareLocation = async () => {
-    setActionLoading('share-location');
-    setErrorMessage('');
-    setStatusMessage('');
-
-    try {
-      const location = locationSnapshot || await dateSafetyService.getUserLocation();
-      if (!locationSnapshot) {
-        await updateLocationSnapshot(location, sessionId || null);
-      }
-
-      const nextMapsUrl = buildMapsUrl(locationSnapshot || location);
-      const shareText = [
-        'LinkUp safety update',
-        `Kerala context: ${keralaContextLabel}`,
-        nextMapsUrl,
-      ].join('\n');
-
-      if (navigator.share) {
-        await navigator.share({
-          title: 'LinkUp safety update',
-          text: shareText,
-          url: nextMapsUrl,
-        });
-        setStatusMessage('Location shared from your device.');
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareText);
-        setStatusMessage('Location copied. Paste it into WhatsApp, SMS, or another trusted channel.');
-      } else {
-        throw new Error('Sharing is not available on this device.');
-      }
-
-      pushActivity('Location prepared for sharing', 'A live maps link is ready for a trusted person.');
-    } catch (error) {
-      setErrorMessage(error.message || 'Unable to share your location right now.');
     } finally {
       setActionLoading('');
     }
@@ -656,389 +467,257 @@ const SOSAlert = ({ currentUser = null }) => {
           <p className="sos-eyebrow">Kerala Safety</p>
           <h1>Kerala SOS Safety Center</h1>
           <p className="sos-intro">
-            LinkUp now exposes a real safety route for dates in Kerala: trusted-contact sessions,
-            live location updates, fast check-ins, and official Kerala emergency paths in one place.
+            Call emergency help, text one trusted number, or share your current location from one simple screen.
           </p>
         </div>
 
-        <div className="sos-hero-card">
-          <span className="sos-hero-label">Coverage</span>
-          <strong>Prepared for {keralaContextLabel}</strong>
-          <p>
-            If something feels off, leave first, then use this screen to call Kerala emergency support,
-            share your live location, and escalate SOS inside LinkUp.
-          </p>
-        </div>
-      </section>
-
-      <section className="sos-stats-grid" aria-label="Safety summary">
-        <article className="sos-stat-card">
-          <strong>{trustedContacts.length}</strong>
-          <span>Trusted contacts</span>
-          <p>{trustedContacts.length > 0 ? 'Accepted contacts are ready for LinkUp SOS.' : 'Manual Kerala help paths still work even without a saved contact.'}</p>
-        </article>
-        <article className="sos-stat-card">
-          <strong>{isSessionLive ? (sessionStatus === 'emergency' ? 'Alert' : 'Live') : 'Idle'}</strong>
-          <span>Session state</span>
-          <p>{isSessionLive ? `Running for ${sessionElapsed}.` : 'Start a safety session before or during a date.'}</p>
-        </article>
-        <article className="sos-stat-card">
-          <strong>{locationSnapshot?.updateCount || 0}</strong>
-          <span>Location updates</span>
-          <p>{isSharingLocation ? 'Live location is streaming right now.' : 'Manual location sharing is ready when you need it.'}</p>
-        </article>
-        <article className="sos-stat-card">
-          <strong>{KERALA_HELP_PATHS.length}</strong>
-          <span>Official help paths</span>
-          <p>Kerala police, women support, and cybercrime channels are linked below.</p>
-        </article>
+        <button
+          type="button"
+          className="sos-emergency-call"
+          onClick={() => handleDialNumber('112')}
+        >
+          <span>Emergency</span>
+          Call Kerala Emergency 112
+        </button>
       </section>
 
       {errorMessage ? (
         <div className="sos-status-banner error" role="alert">
-          <span>Issue</span>
+          <strong>Issue</strong>
           <span>{errorMessage}</span>
         </div>
       ) : null}
 
       {!errorMessage && statusMessage ? (
         <div className="sos-status-banner" role="status">
-          <span>Update</span>
+          <strong>Update</strong>
           <span>{statusMessage}</span>
         </div>
       ) : null}
 
       <section className="sos-layout">
-        <div className="sos-main-column">
-          <section className="sos-panel">
-            <div className="sos-panel-heading">
-              <p>Session</p>
-              <h2>Live Safety Session</h2>
+        <section className="sos-panel sos-priority-panel">
+          <div className="sos-panel-heading">
+            <p>Need Help Now</p>
+            <h2>Quick Actions</h2>
+          </div>
+
+          <div className="sos-big-actions">
+            <button
+              type="button"
+              className="sos-primary-action danger"
+              onClick={() => handleDialNumber('112')}
+            >
+              Call 112 Now
+            </button>
+            <button
+              type="button"
+              className="sos-primary-action"
+              onClick={handleTextTrustedNumber}
+              disabled={actionLoading === 'text-trusted'}
+            >
+              {actionLoading === 'text-trusted' ? 'Preparing Message...' : 'Text Trusted Number'}
+            </button>
+            <button
+              type="button"
+              className="sos-secondary-action"
+              onClick={handleShareLocation}
+              disabled={actionLoading === 'share-location'}
+            >
+              {actionLoading === 'share-location' ? 'Getting Location...' : 'Share My Location'}
+            </button>
+            <button
+              type="button"
+              className="sos-secondary-action"
+              onClick={handleActivateSos}
+              disabled={actionLoading === 'activate-sos'}
+            >
+              {actionLoading === 'activate-sos' ? 'Activating...' : 'Activate LinkUp SOS'}
+            </button>
+          </div>
+
+          <div className="sos-current-state">
+            <div>
+              <span>Trusted number</span>
+              <strong>{savedTrustedNumber ? `${savedTrustedNumber.name} (${savedTrustedNumber.phone})` : 'Not added yet'}</strong>
             </div>
-
-            <div className="sos-controls-grid">
-              <label className="sos-field">
-                <span>Trusted contact</span>
-                <select
-                  value={selectedContactId}
-                  onChange={(event) => setSelectedContactId(event.target.value)}
-                  disabled={loadingContacts}
-                >
-                  <option value="">
-                    {loadingContacts ? 'Loading contacts...' : 'Choose a trusted contact'}
-                  </option>
-                  {trustedContacts.map((contact) => (
-                    <option key={contact.id} value={contact.id}>
-                      {contact.name} - {contact.relationship}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="sos-field">
-                <span>Safety window</span>
-                <select
-                  value={sessionDuration}
-                  onChange={(event) => setSessionDuration(Number.parseInt(event.target.value, 10) || 180)}
-                >
-                  {SESSION_DURATION_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div>
+              <span>LinkUp contact</span>
+              <strong>
+                {loadingContacts
+                  ? 'Loading...'
+                  : currentContact
+                    ? currentContact.name
+                    : 'Not selected'}
+              </strong>
             </div>
-
-            <div className="sos-action-row">
-              <button
-                type="button"
-                className="sos-primary-action"
-                onClick={handleStartSession}
-                disabled={actionLoading === 'start-session' || isSessionLive}
-              >
-                {actionLoading === 'start-session' ? 'Starting...' : 'Start LinkUp Safety Session'}
-              </button>
-              <button
-                type="button"
-                className="sos-secondary-action"
-                onClick={isSharingLocation ? handleStopLocationSharing : handleStartLocationSharing}
-                disabled={actionLoading === 'start-sharing'}
-              >
-                {actionLoading === 'start-sharing'
-                  ? 'Preparing location...'
-                  : isSharingLocation
-                    ? 'Pause Live Location'
-                    : 'Start Live Location'}
-              </button>
-              <button
-                type="button"
-                className="sos-secondary-action"
-                onClick={handleShareLocation}
-                disabled={actionLoading === 'share-location'}
-              >
-                {actionLoading === 'share-location' ? 'Sharing...' : 'Share Current Location'}
-              </button>
-              <button
-                type="button"
-                className="sos-secondary-action"
-                onClick={handleEndSession}
-                disabled={actionLoading === 'end-session' || !sessionId}
-              >
-                {actionLoading === 'end-session' ? 'Ending...' : 'End Session'}
-              </button>
+            <div>
+              <span>Last location</span>
+              <strong>{locationSnapshot?.address || (mapsUrl ? 'Map link ready' : 'Not shared yet')}</strong>
             </div>
-
-            <article className="sos-incident-card">
-              <div className="sos-incident-topline">
-                <div>
-                  <h3>{sessionStatus === 'emergency' ? 'Emergency mode is active' : 'Current safety session'}</h3>
-                  <p>
-                    {sessionId
-                      ? `Session started ${formatDateTime(sessionStartedAt)}.`
-                      : 'No LinkUp session is active yet. Kerala help lines below still work immediately.'}
-                  </p>
-                </div>
-                <span className={`sos-alert-status ${isSessionLive ? 'live' : 'idle'}`}>
-                  {sessionStatus === 'emergency' ? 'Emergency' : isSessionLive ? 'Live' : 'Idle'}
-                </span>
-              </div>
-
-              <div className="sos-summary-grid">
-                <div>
-                  <span>Trusted contact</span>
-                  <strong>{currentContact?.name || 'Not selected'}</strong>
-                </div>
-                <div>
-                  <span>Elapsed</span>
-                  <strong>{sessionElapsed}</strong>
-                </div>
-                <div>
-                  <span>Last location</span>
-                  <strong>{locationSnapshot?.address || (mapsUrl ? 'Coordinates ready' : 'No location captured yet')}</strong>
-                </div>
-                <div>
-                  <span>Last check-in</span>
-                  <strong>
-                    {lastCheckIn
-                      ? `${lastCheckIn.status} at ${formatDateTime(lastCheckIn.timestamp)}`
-                      : 'No check-in sent yet'}
-                  </strong>
-                </div>
-              </div>
-
-              {mapsUrl ? (
-                <p className="sos-inline-helper">
-                  Latest map link: {mapsUrl}
-                </p>
-              ) : null}
-            </article>
-          </section>
-
-          <section className="sos-panel">
-            <div className="sos-panel-heading">
-              <p>Check-in</p>
-              <h2>Check-ins and SOS</h2>
+            <div>
+              <span>SOS status</span>
+              <strong>{sessionStatus === 'emergency' ? 'Active' : isSessionLive ? 'Session ready' : 'Idle'}</strong>
             </div>
+          </div>
 
-            <div className="sos-toggle-stack">
-              {CHECK_IN_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={`sos-toggle ${lastCheckIn?.status === option.id ? 'active' : ''}`}
-                  onClick={() => handleSendCheckIn(option.id)}
-                  disabled={actionLoading === `check-in-${option.id}`}
-                >
-                  <strong>{option.label}</strong>
-                  <div>{actionLoading === `check-in-${option.id}` ? 'Sending update...' : option.description}</div>
-                </button>
-              ))}
-            </div>
+          {mapsUrl ? (
+            <p className="sos-map-link">
+              Latest map link: {mapsUrl}
+            </p>
+          ) : null}
+        </section>
+
+        <section className="sos-panel">
+          <div className="sos-panel-heading">
+            <p>One Trusted Number</p>
+            <h2>Trusted Contact</h2>
+          </div>
+
+          <form className="sos-trusted-form" onSubmit={handleSaveTrustedNumber}>
+            <label className="sos-field">
+              <span>Name</span>
+              <input
+                type="text"
+                value={trustedName}
+                onChange={(event) => setTrustedName(event.target.value)}
+                placeholder="Trusted person"
+                maxLength={40}
+              />
+            </label>
 
             <label className="sos-field">
-              <span>Optional note</span>
-              <textarea
-                value={safetyNote}
-                onChange={(event) => setSafetyNote(event.target.value)}
-                placeholder="Example: Meeting at Lulu Mall and leaving by 9:30 PM."
-                rows={3}
-                maxLength={240}
+              <span>Phone number</span>
+              <input
+                type="tel"
+                value={trustedPhone}
+                onChange={(event) => setTrustedPhone(event.target.value)}
+                placeholder="+91 98765 43210"
+                inputMode="tel"
               />
             </label>
 
             <div className="sos-action-row">
-              <button
-                type="button"
-                className="sos-primary-action"
-                onClick={handleActivateSos}
-                disabled={actionLoading === 'activate-sos'}
-              >
-                {actionLoading === 'activate-sos' ? 'Activating...' : 'Activate In-App SOS'}
+              <button type="submit" className="sos-primary-action">
+                Save Trusted Number
               </button>
-              <button
-                type="button"
-                className="sos-secondary-action"
-                onClick={() => handleDialNumber('112')}
+              {savedTrustedNumber ? (
+                <button
+                  type="button"
+                  className="sos-text-action danger"
+                  onClick={handleRemoveTrustedNumber}
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+          </form>
+
+          {savedTrustedNumber ? (
+            <div className="sos-trusted-card">
+              <div>
+                <span>Saved</span>
+                <strong>{savedTrustedNumber.name}</strong>
+                <p>{savedTrustedNumber.phone}</p>
+              </div>
+              <div className="sos-contact-actions">
+                <button
+                  type="button"
+                  className="sos-secondary-action compact"
+                  onClick={() => handleDialNumber(savedTrustedNumber.phone)}
+                >
+                  Call Trusted Number
+                </button>
+                <button
+                  type="button"
+                  className="sos-text-action"
+                  onClick={handleTextTrustedNumber}
+                  disabled={actionLoading === 'text-trusted'}
+                >
+                  Text Location
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="sos-empty-state">
+              Add one phone number you trust. It stays on this device and is used for quick call or SMS actions.
+            </div>
+          )}
+        </section>
+
+        <section className="sos-panel">
+          <div className="sos-panel-heading">
+            <p>LinkUp SOS</p>
+            <h2>In-App Trusted Contact</h2>
+          </div>
+
+          {loadingContacts ? (
+            <div className="sos-empty-state">Loading LinkUp trusted contacts...</div>
+          ) : trustedContacts.length > 0 ? (
+            <label className="sos-field">
+              <span>Choose contact for LinkUp SOS</span>
+              <select
+                value={selectedContactId}
+                onChange={(event) => setSelectedContactId(event.target.value)}
               >
-                Call Kerala Emergency 112
-              </button>
-            </div>
-
-            <div className="sos-callout">
-              <strong>If you do not have a saved trusted contact yet</strong>
-              <p>
-                You can still call 112, 181, 1091, 1515, or 1930 directly from this screen and share your
-                live maps link manually.
-              </p>
-            </div>
-          </section>
-
-          <section className="sos-panel">
-            <div className="sos-panel-heading">
-              <p>Kerala Help</p>
-              <h2>Official Kerala Help Paths</h2>
-            </div>
-
-            <div className="sos-contact-list">
-              {KERALA_HELP_PATHS.map((resource) => (
-                <article key={resource.id} className="sos-contact-card">
-                  <div className="sos-contact-stack">
-                    <div>
-                      <h3>{resource.title}</h3>
-                      <p>{resource.description}</p>
-                    </div>
-                    <div className="sos-channel-row">
-                      <span>Call {resource.number}</span>
-                      <span>Official Kerala path</span>
-                    </div>
-                  </div>
-
-                  <div className="sos-contact-actions">
-                    <span className="sos-priority-badge">{resource.badge}</span>
-                    <button
-                      type="button"
-                      className="sos-secondary-action compact"
-                      onClick={() => handleDialNumber(resource.number)}
-                    >
-                      Call {resource.number}
-                    </button>
-                    <button
-                      type="button"
-                      className="sos-text-action"
-                      onClick={() => handleOpenOfficialPath(resource.officialUrl)}
-                    >
-                      {resource.officialLabel}
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <div className="sos-side-column">
-          <section className="sos-panel">
-            <div className="sos-panel-heading">
-              <p>Contacts</p>
-              <h2>Trusted Contacts</h2>
-            </div>
-
-            {loadingContacts ? (
-              <div className="sos-empty-state">Loading trusted contacts...</div>
-            ) : trustedContacts.length > 0 ? (
-              <div className="sos-contact-list">
                 {trustedContacts.map((contact) => (
-                  <article key={contact.id} className="sos-contact-card">
-                    <div>
-                      <h3>{contact.name}</h3>
-                      <p>{contact.relationship}</p>
-                    </div>
-                    <div className="sos-contact-actions">
-                      <span className="sos-priority-badge">
-                        {selectedContactId === contact.id ? 'Selected' : 'Ready'}
-                      </span>
-                      <button
-                        type="button"
-                        className="sos-text-action"
-                        onClick={() => setSelectedContactId(contact.id)}
-                      >
-                        Use for SOS
-                      </button>
-                    </div>
-                  </article>
+                  <option key={contact.id} value={contact.id}>
+                    {contact.name} - {contact.relationship}
+                  </option>
                 ))}
-              </div>
-            ) : (
-              <div className="sos-empty-state">
-                No accepted trusted contacts were found on this account yet. Kerala emergency buttons still work
-                immediately, and manual location sharing is available above.
-              </div>
-            )}
-          </section>
-
-          <section className="sos-panel">
-            <div className="sos-panel-heading">
-              <p>History</p>
-              <h2>Recent Safety History</h2>
+              </select>
+            </label>
+          ) : (
+            <div className="sos-empty-state">
+              No LinkUp trusted contact is connected yet. Your saved phone number and emergency calls still work here.
             </div>
+          )}
 
-            {loadingHistory ? (
-              <div className="sos-empty-state">Loading your recent safety history...</div>
-            ) : timelineItems.length > 0 ? (
-              <div className="sos-history-list">
-                {timelineItems.map((item) => (
-                  <article key={item.id} className="sos-history-card">
-                    <div>
-                      <h3>{item.title}</h3>
-                      <p>{item.description}</p>
-                    </div>
-                    <span className="sos-history-outcome">
-                      {item.status === 'emergency' ? 'Emergency' : item.status || 'Recorded'}
-                    </span>
-                    <div className="sos-history-meta">
-                      <span>{formatDateTime(item.timestamp)}</span>
-                      {(item.meta || []).filter(Boolean).map((entry) => (
-                        <span key={`${item.id}-${entry}`}>{entry}</span>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="sos-empty-state">
-                No recent safety sessions yet. Your first session will appear here after you start or escalate one.
-              </div>
-            )}
-          </section>
+          <div className="sos-session-note">
+            <span>{sessionStatus === 'emergency' ? 'SOS active' : isSessionLive ? 'Session ready' : 'No active session'}</span>
+            <p>
+              {sessionId
+                ? `Started ${formatDateTime(sessionStartedAt)}.`
+                : 'LinkUp SOS starts a safety session automatically when you activate it.'}
+            </p>
+          </div>
+        </section>
 
-          <section className="sos-panel">
-            <div className="sos-panel-heading">
-              <p>Before You Go</p>
-              <h2>Kerala Date Safety Basics</h2>
-            </div>
+        <section className="sos-panel">
+          <div className="sos-panel-heading">
+            <p>Kerala Help</p>
+            <h2>Official Kerala Help Paths</h2>
+          </div>
 
-            {loadingTips ? (
-              <div className="sos-empty-state">Loading safety guidance...</div>
-            ) : (
-              <ul className="sos-list">
-                {tips.map((tip) => (
-                  <li key={tip.id}>
-                    <strong>{tip.title}:</strong> {tip.description}
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="sos-contact-list">
+            {KERALA_HELP_PATHS.map((resource) => (
+              <article key={resource.id} className="sos-contact-card">
+                <div>
+                  <span className="sos-priority-badge">{resource.badge}</span>
+                  <h3>{resource.title}</h3>
+                  <p>{resource.description}</p>
+                </div>
 
-            <div className="sos-callout">
-              <strong>Safe-dating fallback</strong>
-              <p>
-                If the app flow fails at any point, treat this screen like a fast emergency board: call the right
-                Kerala line first, then leave the location and share your maps link manually.
-              </p>
-            </div>
-          </section>
-        </div>
+                <div className="sos-contact-actions">
+                  <button
+                    type="button"
+                    className="sos-secondary-action compact"
+                    onClick={() => handleDialNumber(resource.number)}
+                  >
+                    Call {resource.number}
+                  </button>
+                  <button
+                    type="button"
+                    className="sos-text-action"
+                    onClick={() => handleOpenOfficialPath(resource.officialUrl)}
+                  >
+                    {resource.officialLabel}
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       </section>
     </div>
   );

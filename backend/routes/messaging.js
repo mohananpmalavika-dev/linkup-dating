@@ -141,7 +141,16 @@ router.get('/matches/:matchId/messages', async (req, res) => {
     res.json(result.rows.reverse());
   } catch (err) {
     console.error('Get messages error:', err);
-    res.status(500).json({ error: 'Failed to get messages' });
+    console.error('Error details:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      stack: err.stack
+    });
+    res.status(500).json({ 
+      error: 'Failed to get messages',
+      details: err.message 
+    });
   }
 });
 
@@ -266,7 +275,16 @@ router.post('/matches/:matchId/messages', async (req, res) => {
     res.json({ message: 'Message sent', data: createdMessage });
   } catch (err) {
     console.error('Send message error:', err);
-    res.status(500).json({ error: 'Failed to send message' });
+    console.error('Error details:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      stack: err.stack
+    });
+    res.status(500).json({ 
+      error: 'Failed to send message',
+      details: err.message 
+    });
   }
 });
 
@@ -339,7 +357,16 @@ router.post('/messages/:messageId/reactions', async (req, res) => {
     });
   } catch (err) {
     console.error('Toggle message reaction error:', err);
-    res.status(500).json({ error: 'Failed to update reaction' });
+    console.error('Error details:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      stack: err.stack
+    });
+    res.status(500).json({ 
+      error: 'Failed to update reaction',
+      details: err.message 
+    });
   }
 });
 
@@ -363,7 +390,16 @@ router.delete('/messages/:messageId', async (req, res) => {
     res.json({ message: 'Message deleted' });
   } catch (err) {
     console.error('Delete message error:', err);
-    res.status(500).json({ error: 'Failed to delete message' });
+    console.error('Error details:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      stack: err.stack
+    });
+    res.status(500).json({ 
+      error: 'Failed to delete message',
+      details: err.message 
+    });
   }
 });
 
