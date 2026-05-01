@@ -677,17 +677,35 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
     setStep(4);
   };
 
-  // Submit complete signup
+// Submit complete signup
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
     setLoading(true);
     setError('');
+    setMpinError('');
+    setMpinSuccess('');
     const resolvedLocation = resolveKeralaLocation(formData);
 
     if (formData.pincode && !isValidPincode(formData.pincode)) {
       setLoading(false);
       setError('Enter a valid 6-digit pincode before creating your profile.');
       return;
+    }
+
+    // Validate MPIN if provided
+    if (mpin && mpin.length > 0) {
+      if (mpin.length < 4) {
+        setLoading(false);
+        setMpinError('MPIN must be at least 4 digits');
+        return;
+      }
+      if (mpin !== confirmMpin) {
+        setLoading(false);
+        setMpinError('MPINs do not match');
+        return;
+      }
     }
 
     try {
@@ -842,13 +860,16 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
 
-        {/* Step Indicators */}
+{/* Step Indicators */}
         <div className="step-indicators">
-          {[1, 2, 3, 4].map(s => (
-            <div key={s} className={`step ${s <= step ? 'active' : ''}`}>
-              {s}
-            </div>
-          ))}
+          {[1, 2, 3, 4, 5].map(s => {
+            const labels = { 1: 'Account', 2: 'Name', 3: 'Profile', 4: 'Photos', 5: 'Security' };
+            return (
+              <div key={s} className={`step ${s <= step ? 'active' : ''}`} title={labels[s]}>
+                {s}
+              </div>
+            );
+          })}
         </div>
 
         {/* Step 1: Email & OTP Verification */}
@@ -1402,9 +1423,9 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
           </div>
         )}
 
-        {/* Step 4: Photos */}
+{/* Step 4: Photos */}
         {step === 4 && (
-          <form className="signup-step" onSubmit={handleSubmit}>
+          <form className="signup-step" onSubmit={(e) => { e.preventDefault(); setStep(5); }}>
             <h2>Add Your Photos</h2>
             <div className="form-group">
               <label>Upload Photos</label>
@@ -1437,7 +1458,79 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
               )}
             </div>
             <button type="submit" className="btn-submit" disabled={loading || formData.photos.length === 0}>
-              {loading ? 'Creating Account...' : `Create Account (${formData.photos.length} photo${formData.photos.length !== 1 ? 's' : ''})`}
+              {loading ? 'Saving...' : `Continue (${formData.photos.length} photo${formData.photos.length !== 1 ? 's' : ''})`}
+            </button>
+            <button type="button" className="btn-outline" onClick={() => setStep(5)} disabled={loading}>
+              Skip Photo Upload
+            </button>
+          </form>
+        )}
+
+        {/* Step 5: Security (MPIN - Optional) */}
+        {step === 5 && (
+          <form className="signup-step" onSubmit={handleSubmit}>
+            <h2>Secure Your Account</h2>
+            <p className="helper-text">Add an MPIN for quick login instead of password</p>
+            
+            <div className="form-group">
+              <label>MPIN (4-6 digits)</label>
+              <input
+                type="password"
+                inputMode="numeric"
+                value={mpin}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setMpin(value);
+                  setMpinError('');
+                  setMpinSuccess('');
+                }}
+                placeholder="Enter 4-6 digit MPIN"
+                maxLength="6"
+                disabled={loading}
+              />
+              <small className="helper-text">Optional - you can always add this later</small>
+            </div>
+
+            <div className="form-group">
+              <label>Confirm MPIN</label>
+              <input
+                type="password"
+                inputMode="numeric"
+                value={confirmMpin}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setConfirmMpin(value);
+                  setMpinError('');
+                  setMpinSuccess('');
+                }}
+                placeholder="Re-enter MPIN"
+                maxLength="6"
+                disabled={loading}
+              />
+            </div>
+
+            {mpinError && <div className="error-message">{mpinError}</div>}
+            {mpinSuccess && <div className="success-message">{mpinSuccess}</div>}
+
+            <button 
+              type="submit" 
+              className="btn-submit" 
+              disabled={loading || (mpin !== '' && mpin !== confirmMpin)}
+            >
+              {loading ? 'Creating Account...' : (mpin ? 'Create Account with MPIN' : 'Create Account (No MPIN)')}
+            </button>
+            
+            <button 
+              type="button" 
+              className="btn-outline" 
+              onClick={() => {
+                setMpin('');
+                setConfirmMpin('');
+                handleSubmit(new Event('submit'));
+              }}
+              disabled={loading}
+            >
+              Skip MPIN
             </button>
           </form>
         )}
