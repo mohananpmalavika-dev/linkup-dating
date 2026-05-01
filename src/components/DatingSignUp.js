@@ -136,8 +136,8 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   const looksLikePhoneNumber = (value) => /^\+?[0-9\s()-]{7,}$/.test(String(value || '').trim());
   const legalNoticeMessage = getTranslationValue(language, 'public.signupNotice');
 
-  const validateUsername = (value) => {
-    return /^[a-zA-Z0-9_-]{3,20}$/.test(value);
+const validateUsername = (value) => {
+    return /^[a-zA-Z0-9_.-]{3,20}$/.test(value);
   };
 
   const trackFunnelEvent = async (eventName, payload = {}) => {
@@ -287,11 +287,12 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    if (referralCode.trim()) {
-      const validReferral = await validateReferralCode(referralCode, false);
+if (referralCode.trim()) {
+      // Make referral non-blocking - allow to continue even if invalid
+      const validReferral = await validateReferralCode(referralCode, true);
       if (!validReferral) {
-        setError('Please use a valid referral code or clear the field to continue.');
-        return;
+        // Show warning but don't block - user can still sign up
+        setSuccess('Referral code could not be validated. You can still sign up.');
       }
     }
 
@@ -320,7 +321,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     }
 
     if (otpMethod === 'email' && looksLikePhoneNumber(email) && !validateEmail(normalizedEmail)) {
-      setError('That looks like a phone number. Please use your email address or switch to phone OTP method.');
+setError('That looks like a phone number. Please use your email (like yourname@example.com) or switch to phone OTP method.');
       return;
     }
 
@@ -486,7 +487,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
 
     if (!validateUsername(value)) {
       setUsernameStatus(null);
-      setUsernameError('Username can only contain letters, numbers, underscores, and dashes (3-20 characters)');
+setUsernameError('Username can only contain letters, numbers, periods, underscores, and dashes (3-20 characters)');
       return;
     }
 
@@ -1007,13 +1008,15 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                       ? `Resend OTP (${resendCooldown}s)` 
                       : 'Resend OTP'}
                   </button>
-                  <button
+<button
                     type="button"
                     className="btn-outline"
                     onClick={() => {
                       setOtpSent(false);
                       setOtp('');
                       setOtpId('');
+                      setError('');
+                      setSuccess('');
                       if (resendTimerRef.current) {
                         clearInterval(resendTimerRef.current);
                       }
@@ -1021,7 +1024,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                     }}
                     disabled={loading}
                   >
-                    Change Method
+                    Change Method or Start Over
                   </button>
                 </div>
               </>

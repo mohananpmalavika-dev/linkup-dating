@@ -112,7 +112,12 @@ const getRequestMetadata = (req) => ({
   userAgent: req.headers['user-agent'] || null
 });
 
-const isStrongPassword = (value = '') => String(value || '').length >= 8;
+const isStrongPassword = (value = '') => {
+  const pwd = String(value || '');
+  if (pwd.length < 8) return false;
+  // Require at least one uppercase, one lowercase, one number
+  return /[A-Z]/.test(pwd) && /[a-z]/.test(pwd) && /[0-9]/.test(pwd);
+};
 const isEmailAddress = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeRecipient(value));
 const looksLikePhoneNumber = (value = '') => /^\+?[0-9\s()-]{7,}$/.test(String(value || '').trim());
 const resolveAuthContact = ({ identifier, email, phone } = {}) => {
@@ -499,10 +504,10 @@ const applyOtpRegistrationProfile = async (userId, email, registrationData = {})
   const locationCountry = String(registrationData.country || '').trim() || null;
   const bio = String(registrationData.bio || '').trim() || null;
 
-  if (normalizedUsername && !/^[a-zA-Z0-9_-]{3,20}$/.test(normalizedUsername)) {
+if (normalizedUsername && !/^[a-zA-Z0-9_.-]{3,20}$/.test(normalizedUsername)) {
     throw createHttpError(
       400,
-      'Username can only contain letters, numbers, underscores, and dashes (3-20 characters)'
+      'Username can only contain letters, numbers, periods, underscores, dashes (3-20 characters)'
     );
   }
 
@@ -613,8 +618,12 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    if (password !== confirmPassword) {
+if (password !== confirmPassword) {
       return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters with uppercase, lowercase, and number' });
     }
 
     // Check account creation limit BEFORE age verification
@@ -1764,7 +1773,7 @@ router.post('/reset-password', async (req, res) => {
     }
 
     if (!isStrongPassword(newPassword)) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+return res.status(400).json({ error: 'Password must be at least 8 characters with uppercase, lowercase, and number' });
     }
 
     const resetEntry = findStoredPasswordResetEntry({ resetId, email: normalizedEmail });
@@ -1842,9 +1851,9 @@ router.post('/set-username', async (req, res) => {
       return res.status(400).json({ error: 'Username required' });
     }
 
-    if (!/^[a-zA-Z0-9_-]{3,20}$/.test(username)) {
+if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(username)) {
       return res.status(400).json({
-        error: 'Username can only contain letters, numbers, underscores, and dashes (3-20 characters)'
+        error: 'Username can only contain letters, numbers, periods, underscores, dashes (3-20 characters)'
       });
     }
 
@@ -2508,14 +2517,14 @@ router.post('/google-signup', async (req, res) => {
     const firebaseConfig = require('../config/firebase');
     const tokenVerification = await firebaseConfig.verifyFirebaseIdToken(idToken);
 
-    if (!tokenVerification.success) {
+if (!tokenVerification.success) {
       return res.status(401).json({
         error: 'Invalid Firebase token',
         code: 'INVALID_FIREBASE_TOKEN'
       });
     }
 
-// Sync admin privileges if needed
+    // Sync admin privileges if needed
     await syncAdminPrivilegesForEmail(normalizedEmail);
 
     // Check if user already exists
