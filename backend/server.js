@@ -623,7 +623,7 @@ db.init()
       const { syncModelsInOrder } = require('./utils/syncModels');
 
       logger.info('Starting controlled model sync...');
-      syncModelsInOrder(dbModels.sequelize, dbModels, logger).then(async () => {
+      await syncModelsInOrder(dbModels.sequelize, dbModels, logger);
         logger.info('✓ Sequelize models synchronized successfully');
         
         // Initialize IP blocklist table (critical for auth flows)
@@ -703,14 +703,8 @@ db.init()
           });
           // Don't fail startup if calling system init fails
         }
-      }).catch(err => {
-        logger.error('Sequelize sync error', {
-          message: err.message,
-          stack: err.stack
-        });
-      });
     } catch (err) {
-      logger.error('Failed to load Sequelize models for sync', {
+      logger.error('Sequelize sync error', {
         message: err.message,
         stack: err.stack
       });

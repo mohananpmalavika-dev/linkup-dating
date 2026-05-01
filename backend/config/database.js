@@ -108,6 +108,32 @@ const init = async () => {
       );
     `);
 
+      await client.query(`
+      ALTER TABLE dating_profiles
+      ADD COLUMN IF NOT EXISTS is_available_for_calls BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS call_earnings DECIMAL(12,2) DEFAULT 0.00,
+      ADD COLUMN IF NOT EXISTS pending_payout DECIMAL(12,2) DEFAULT 0.00,
+      ADD COLUMN IF NOT EXISTS total_calls_taken INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS total_call_minutes INTEGER DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS call_rating DECIMAL(3,2) DEFAULT 0.00;
+    `);
+
+      await client.query(`
+      UPDATE dating_profiles
+      SET is_available_for_calls = COALESCE(is_available_for_calls, FALSE),
+          call_earnings = COALESCE(call_earnings, 0.00),
+          pending_payout = COALESCE(pending_payout, 0.00),
+          total_calls_taken = COALESCE(total_calls_taken, 0),
+          total_call_minutes = COALESCE(total_call_minutes, 0),
+          call_rating = COALESCE(call_rating, 0.00)
+      WHERE is_available_for_calls IS NULL
+         OR call_earnings IS NULL
+         OR pending_payout IS NULL
+         OR total_calls_taken IS NULL
+         OR total_call_minutes IS NULL
+         OR call_rating IS NULL;
+    `);
+
       // Create profile_photos table
       await client.query(`
       CREATE TABLE IF NOT EXISTS profile_photos (
@@ -426,6 +452,311 @@ const init = async () => {
     `);
 
       await client.query(`
+      CREATE TABLE IF NOT EXISTS referrals (
+        id SERIAL PRIMARY KEY,
+        referrer_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        referral_code VARCHAR(20) UNIQUE NOT NULL,
+        referral_link VARCHAR(500),
+        referred_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        status VARCHAR(20) DEFAULT 'pending',
+        reward JSONB DEFAULT '{}'::jsonb,
+        expires_at TIMESTAMP,
+        completed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
+      ALTER TABLE referrals
+      ADD COLUMN IF NOT EXISTS referral_link VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS referred_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS reward JSONB DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS friend_relationships (
+        id SERIAL PRIMARY KEY,
+        user_id_1 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        user_id_2 INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status VARCHAR(20) DEFAULT 'pending',
+        request_sent_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        accepted_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id_1, user_id_2)
+      );
+    `);
+
+      await client.query(`
+      ALTER TABLE friend_relationships
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS request_sent_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS friend_referrals (
+        id SERIAL PRIMARY KEY,
+        referrer_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        referred_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        recipient_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        referral_type VARCHAR(40) DEFAULT 'romantic_setup',
+        referral_message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        accepted_at TIMESTAMP,
+        match_result VARCHAR(30) DEFAULT 'pending'
+      );
+    `);
+
+      await client.query(`
+      ALTER TABLE friend_referrals
+      ADD COLUMN IF NOT EXISTS referral_type VARCHAR(40) DEFAULT 'romantic_setup',
+      ADD COLUMN IF NOT EXISTS referral_message TEXT,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS match_result VARCHAR(30) DEFAULT 'pending';
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS social_integrations (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        platform VARCHAR(30) NOT NULL,
+        username VARCHAR(255) NOT NULL,
+        external_id VARCHAR(255),
+        access_token TEXT,
+        is_public BOOLEAN DEFAULT FALSE,
+        synced_at TIMESTAMP,
+        verified_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, platform)
+      );
+    `);
+
+      await client.query(`
+      ALTER TABLE social_integrations
+      ADD COLUMN IF NOT EXISTS external_id VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS access_token TEXT,
+      ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS synced_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS verified_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS message_requests (
+        id SERIAL PRIMARY KEY,
+        from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        to_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message TEXT NOT NULL,
+        request_type VARCHAR(30) DEFAULT 'intent',
+        is_priority BOOLEAN DEFAULT FALSE,
+        delivery_band VARCHAR(30) DEFAULT 'standard',
+        status VARCHAR(20) DEFAULT 'pending',
+        expires_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(from_user_id, to_user_id)
+      );
+    `);
+
+      await client.query(`
+      ALTER TABLE message_requests
+      ADD COLUMN IF NOT EXISTS request_type VARCHAR(30) DEFAULT 'intent',
+      ADD COLUMN IF NOT EXISTS is_priority BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS delivery_band VARCHAR(30) DEFAULT 'standard',
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending',
+      ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS group_chats (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        created_by_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        group_type VARCHAR(40) DEFAULT 'custom',
+        match_id INTEGER REFERENCES matches(id) ON DELETE SET NULL,
+        profile_photo_url VARCHAR(500),
+        max_members INTEGER DEFAULT 100,
+        is_active BOOLEAN DEFAULT TRUE,
+        settings JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
+      ALTER TABLE group_chats
+      ADD COLUMN IF NOT EXISTS description TEXT,
+      ADD COLUMN IF NOT EXISTS group_type VARCHAR(40) DEFAULT 'custom',
+      ADD COLUMN IF NOT EXISTS match_id INTEGER REFERENCES matches(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS profile_photo_url VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS max_members INTEGER DEFAULT 100,
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE,
+      ADD COLUMN IF NOT EXISTS settings JSONB DEFAULT '{}'::jsonb,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS group_chat_members (
+        id SERIAL PRIMARY KEY,
+        group_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role VARCHAR(30) DEFAULT 'member',
+        status VARCHAR(30) DEFAULT 'active',
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        left_at TIMESTAMP,
+        last_read_message_id INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(group_id, user_id)
+      );
+    `);
+
+      await client.query(`
+      ALTER TABLE group_chat_members
+      ADD COLUMN IF NOT EXISTS role VARCHAR(30) DEFAULT 'member',
+      ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'active',
+      ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS left_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS last_read_message_id INTEGER,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS group_chat_messages (
+        id SERIAL PRIMARY KEY,
+        group_id INTEGER NOT NULL REFERENCES group_chats(id) ON DELETE CASCADE,
+        from_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        message TEXT,
+        media_type VARCHAR(30),
+        media_url VARCHAR(500),
+        message_type VARCHAR(30) DEFAULT 'text',
+        is_edited BOOLEAN DEFAULT FALSE,
+        edited_at TIMESTAMP,
+        reactions JSONB DEFAULT '[]'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      await client.query(`
+      ALTER TABLE group_chat_messages
+      ADD COLUMN IF NOT EXISTS message TEXT,
+      ADD COLUMN IF NOT EXISTS media_type VARCHAR(30),
+      ADD COLUMN IF NOT EXISTS media_url VARCHAR(500),
+      ADD COLUMN IF NOT EXISTS message_type VARCHAR(30) DEFAULT 'text',
+      ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS edited_at TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+      await client.query(`
+      UPDATE referrals
+      SET status = COALESCE(status, 'pending'),
+          reward = COALESCE(reward, '{}'::jsonb),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE status IS NULL
+         OR reward IS NULL
+         OR created_at IS NULL
+         OR updated_at IS NULL;
+
+      UPDATE friend_relationships
+      SET status = COALESCE(status, 'pending'),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE status IS NULL
+         OR created_at IS NULL
+         OR updated_at IS NULL;
+
+      UPDATE friend_referrals
+      SET referral_type = COALESCE(referral_type, 'romantic_setup'),
+          match_result = COALESCE(match_result, 'pending'),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+      WHERE referral_type IS NULL
+         OR match_result IS NULL
+         OR created_at IS NULL;
+
+      UPDATE social_integrations
+      SET is_public = COALESCE(is_public, FALSE),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE is_public IS NULL
+         OR created_at IS NULL
+         OR updated_at IS NULL;
+
+      UPDATE message_requests
+      SET request_type = COALESCE(request_type, 'intent'),
+          is_priority = COALESCE(is_priority, FALSE),
+          delivery_band = COALESCE(delivery_band, 'standard'),
+          status = COALESCE(status, 'pending'),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE request_type IS NULL
+         OR is_priority IS NULL
+         OR delivery_band IS NULL
+         OR status IS NULL
+         OR created_at IS NULL
+         OR updated_at IS NULL;
+
+      UPDATE group_chats
+      SET group_type = COALESCE(group_type, 'custom'),
+          max_members = COALESCE(max_members, 100),
+          is_active = COALESCE(is_active, TRUE),
+          settings = COALESCE(settings, '{}'::jsonb),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE group_type IS NULL
+         OR max_members IS NULL
+         OR is_active IS NULL
+         OR settings IS NULL
+         OR created_at IS NULL
+         OR updated_at IS NULL;
+
+      UPDATE group_chat_members
+      SET role = COALESCE(role, 'member'),
+          status = COALESCE(status, 'active'),
+          joined_at = COALESCE(joined_at, CURRENT_TIMESTAMP),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE role IS NULL
+         OR status IS NULL
+         OR joined_at IS NULL
+         OR created_at IS NULL
+         OR updated_at IS NULL;
+
+      UPDATE group_chat_messages
+      SET message_type = COALESCE(message_type, 'text'),
+          is_edited = COALESCE(is_edited, FALSE),
+          reactions = COALESCE(reactions, '[]'::jsonb),
+          created_at = COALESCE(created_at, CURRENT_TIMESTAMP),
+          updated_at = COALESCE(updated_at, CURRENT_TIMESTAMP)
+      WHERE message_type IS NULL
+         OR is_edited IS NULL
+         OR reactions IS NULL
+         OR created_at IS NULL
+         OR updated_at IS NULL;
+    `);
+
+      await client.query(`
       CREATE TABLE IF NOT EXISTS profile_boosts (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -721,6 +1052,21 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_call_requests_caller_id ON call_requests(caller_id);
       CREATE INDEX IF NOT EXISTS idx_call_requests_receiver_id ON call_requests(receiver_id);
       CREATE INDEX IF NOT EXISTS idx_call_requests_status ON call_requests(status);
+      CREATE INDEX IF NOT EXISTS idx_availability_calls ON dating_profiles(is_available_for_calls)
+        WHERE is_available_for_calls = TRUE;
+      CREATE INDEX IF NOT EXISTS idx_referrals_referrer_user_id ON referrals(referrer_user_id);
+      CREATE INDEX IF NOT EXISTS idx_referrals_referral_code ON referrals(referral_code);
+      CREATE INDEX IF NOT EXISTS idx_referrals_status ON referrals(status);
+      CREATE INDEX IF NOT EXISTS idx_friend_relationships_user_1_status ON friend_relationships(user_id_1, status);
+      CREATE INDEX IF NOT EXISTS idx_friend_relationships_user_2_status ON friend_relationships(user_id_2, status);
+      CREATE INDEX IF NOT EXISTS idx_friend_referrals_recipient_id ON friend_referrals(recipient_user_id);
+      CREATE INDEX IF NOT EXISTS idx_social_integrations_user_id ON social_integrations(user_id);
+      CREATE INDEX IF NOT EXISTS idx_message_requests_from_user_id ON message_requests(from_user_id);
+      CREATE INDEX IF NOT EXISTS idx_message_requests_to_user_id ON message_requests(to_user_id);
+      CREATE INDEX IF NOT EXISTS idx_group_chats_created_by_user_id ON group_chats(created_by_user_id);
+      CREATE INDEX IF NOT EXISTS idx_group_chat_members_group_id ON group_chat_members(group_id);
+      CREATE INDEX IF NOT EXISTS idx_group_chat_members_user_id ON group_chat_members(user_id);
+      CREATE INDEX IF NOT EXISTS idx_group_chat_messages_group_id ON group_chat_messages(group_id);
     `);
 
       // Migration: backfill legacy users columns expected by auth and profile flows

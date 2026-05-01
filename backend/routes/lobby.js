@@ -101,8 +101,8 @@ router.post('/messages', async (req, res) => {
 
     // Insert message
     const result = await db.query(
-      `INSERT INTO lobby_messages (from_user_id, message, message_type)
-       VALUES ($1, $2, 'text')
+      `INSERT INTO lobby_messages (from_user_id, message, message_type, created_at)
+       VALUES ($1, $2, 'text', NOW())
        RETURNING *`,
       [userId, message]
     );

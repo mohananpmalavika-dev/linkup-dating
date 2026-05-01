@@ -284,6 +284,42 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true,
       field: 'verified_at'
+    },
+    isAvailableForCalls: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_available_for_calls'
+    },
+    callEarnings: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: false,
+      defaultValue: 0,
+      field: 'call_earnings'
+    },
+    pendingPayout: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: false,
+      defaultValue: 0,
+      field: 'pending_payout'
+    },
+    totalCallsTaken: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'total_calls_taken'
+    },
+    totalCallMinutes: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      field: 'total_call_minutes'
+    },
+    callRating: {
+      type: DataTypes.DECIMAL(3, 2),
+      allowNull: false,
+      defaultValue: 0,
+      field: 'call_rating'
     }
   }, {
     tableName: 'dating_profiles',
@@ -309,6 +345,9 @@ module.exports = (sequelize, DataTypes) => {
       { fields: ['profile_completion_percent'] },
       { fields: ['video_authentication_status'] },
       { fields: ['video_authentication_score'] },
+      { fields: ['is_available_for_calls'] },
+      { fields: ['call_rating'] },
+      { fields: ['total_calls_taken'] },
       // Geospatial index for location-based queries
       { fields: ['location_lat', 'location_lng'] }
     ]

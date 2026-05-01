@@ -349,8 +349,8 @@ router.post('/:chatroomId/leave', async (req, res) => {
 
     // Create system message
     await db.query(
-      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type)
-       VALUES ($1, $2, $3, 'system')`,
+      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type, created_at)
+       VALUES ($1, $2, $3, 'system', NOW())`,
       [chatroomId, userId, `User left the group${reason ? `: ${reason}` : ''}`]
     );
 
@@ -458,8 +458,8 @@ router.post('/:chatroomId/messages', async (req, res) => {
 
     // Insert message
     const result = await db.query(
-      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type)
-       VALUES ($1, $2, $3, 'text')
+      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type, created_at)
+       VALUES ($1, $2, $3, 'text', NOW())
        RETURNING *`,
       [chatroomId, userId, message]
     );
@@ -774,8 +774,8 @@ router.delete('/:chatroomId/members/:memberId', async (req, res) => {
 
     // Create system message
     await db.query(
-      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type)
-       VALUES ($1, $2, $3, 'system')`,
+      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type, created_at)
+       VALUES ($1, $2, $3, 'system', NOW())`,
       [chatroomId, userId, 'User was removed from the group']
     );
 

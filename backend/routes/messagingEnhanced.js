@@ -476,9 +476,10 @@ router.post('/disappearing', async (req, res) => {
          message_type,
          is_disappearing,
          disappears_at,
-         disappear_after_seconds
+         disappear_after_seconds,
+         created_at
        )
-       VALUES ($1, $2, $3, $4, 'text', TRUE, $5, $6)
+       VALUES ($1, $2, $3, $4, 'text', TRUE, $5, $6, NOW())
        RETURNING *`,
       [matchId, userId, toUserId, message, disappearsAt, disappearAfterSeconds]
     );
