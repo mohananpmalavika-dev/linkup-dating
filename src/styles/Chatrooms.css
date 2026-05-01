@@ -309,7 +309,10 @@
   overflow: hidden;
   transition: all 0.3s;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
 }
 
 .chatroom-card:hover {
@@ -793,6 +796,168 @@
   border-radius: 0;
 }
 
+/* Chatrooms List Container */
+.chatrooms-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 20px 20px 20px;
+}
+
+.chatroom-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.chatroom-header-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0.5rem;
+}
+
+.chatroom-header-info h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.member-badge {
+  display: inline-block;
+  background: #e8eef9;
+  color: var(--dh-logo-copper, #d06030);
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.chatroom-description {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  color: #666;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.chatroom-meta {
+  display: flex;
+  gap: 1rem;
+  font-size: 0.8rem;
+  color: #999;
+  margin: 0;
+}
+
+.created-by,
+.created-at {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Join Button */
+.btn-join {
+  padding: 0.5rem 1.25rem;
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(208, 96, 48, 0.2);
+}
+
+.btn-join:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
+}
+
+.btn-join:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-join.joined {
+  background: #4caf50;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+}
+
+.btn-join.joined:hover:not(:disabled) {
+  background: #45a049;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.btn-join:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Empty/No Chatrooms State */
+.no-chatrooms {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: #999;
+  text-align: center;
+  padding: 2rem;
+}
+
+.no-chatrooms p {
+  margin: 0.5rem 0;
+  font-size: 1rem;
+}
+
+.no-chatrooms p:first-child {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+/* Load More Button */
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 1.5rem 0;
+  border-top: 1px solid #eee;
+}
+
+.load-more button {
+  padding: 0.75rem 2rem;
+  background: white;
+  border: 2px solid var(--dh-logo-copper, #d06030);
+  color: var(--dh-logo-copper, #d06030);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.load-more button:hover {
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .chatroom-chat-layout {
@@ -812,6 +977,16 @@
   }
 
   .btn {
+    width: 100%;
+  }
+
+  .chatroom-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .btn-join {
     width: 100%;
   }
 }
