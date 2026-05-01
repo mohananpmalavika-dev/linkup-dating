@@ -100,6 +100,8 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   
   // Hidden account handle used by older-user friendly signup. Users can change it later.
   const [username, setUsername] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState(''); // 'checking', 'available', 'taken'
+  const [usernameError, setUsernameError] = useState('');
   const resendTimerRef = React.useRef(null);
 
 const [formData, setFormData] = useState({
@@ -557,6 +559,76 @@ setError('That looks like a phone number. Please use your email (like yourname@e
     }
 
     return null;
+  };
+
+  const handleUsernameChange = async (value) => {
+    setUsername(value);
+    
+    if (!value.trim()) {
+      setUsernameStatus('');
+      setUsernameError('');
+      return;
+    }
+
+    if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(value)) {
+      setUsernameStatus('');
+      setUsernameError('Username must be 3-20 characters (letters, numbers, _, ., -)');
+      return;
+    }
+
+    setUsernameStatus('checking');
+    setUsernameError('');
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/check-username`, {
+        username: value
+      });
+
+      if (response.data?.available) {
+        setUsernameStatus('available');
+        setUsernameError('');
+      } else {
+        setUsernameStatus('taken');
+        setUsernameError('Username already taken');
+      }
+    } catch (err) {
+      setUsernameStatus('');
+      setUsernameError(err.response?.data?.error || 'Error checking username');
+    }
+  };
+
+  const handleSetUsername = async (e) => {
+    e.preventDefault();
+    
+    if (!username.trim() || usernameStatus !== 'available') {
+      setError('Please choose an available username');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/auth/set-username`,
+        { username },
+        { headers: { Authorization: `Bearer ${verifiedToken}` } }
+      );
+
+      setUsername(response.data?.user?.username || username);
+      setVerifiedUser({
+        ...(verifiedUser || {}),
+        ...response.data?.user
+      });
+      setSuccess('✓ Username set successfully');
+      setStep(3);
+
+      await trackFunnelEvent('dating_onboarding_username_set', {
+        context: { usernameLength: username.length }
+      });
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to set username');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleProfileInputChange = (e) => {
