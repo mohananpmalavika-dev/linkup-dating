@@ -99,7 +99,7 @@ const MessageToolbar = ({
             onClick={() => togglePanel('templates')}
             title="Quick reply templates"
           >
-            Tpl
+            Ideas
           </button>
 
           <button
@@ -108,7 +108,7 @@ const MessageToolbar = ({
             onClick={() => togglePanel('search')}
             title="Search messages"
           >
-            Find
+            Search
           </button>
 
           <button
@@ -117,7 +117,7 @@ const MessageToolbar = ({
             onClick={() => togglePanel('attachments')}
             title="Attach files"
           >
-            File
+            Attach
           </button>
 
           <button
@@ -126,7 +126,7 @@ const MessageToolbar = ({
             onClick={() => togglePanel('location')}
             title="Share location"
           >
-            Map
+            Location
           </button>
 
           <button
@@ -156,7 +156,7 @@ const MessageToolbar = ({
                 closePanels();
               }}
             >
-              Security setup
+              Secure chat
             </button>
             <button
               type="button"
@@ -166,7 +166,7 @@ const MessageToolbar = ({
                 closePanels();
               }}
             >
-              Disappearing mode
+              Disappearing messages
             </button>
             <button
               type="button"

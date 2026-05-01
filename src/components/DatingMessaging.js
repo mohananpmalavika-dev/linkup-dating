@@ -212,7 +212,7 @@ const DatingMessaging = ({
   const [securitySetupReady, setSecuritySetupReady] = useState(false);
   const [countdownNow, setCountdownNow] = useState(Date.now());
   const [showDatePlanner, setShowDatePlanner] = useState(Boolean(location.state?.focusPlanner));
-  const [matchStatePending, setMatchStatePending] = useState('');
+  const [, setMatchStatePending] = useState('');
   const [streakDays, setStreakDays] = useState(0);
   const [engagementScore, setEngagementScore] = useState(0);
   const [streakActive, setStreakActive] = useState(false);
@@ -227,11 +227,11 @@ const DatingMessaging = ({
   const [pendingMessage, setPendingMessage] = useState(null);
   const [showQualityMeter, setShowQualityMeter] = useState(false);
   const [showIcebreakerPlayer, setShowIcebreakerPlayer] = useState(false);
+  const [showMoreActions, setShowMoreActions] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const socketRef = useRef(null);
   const typingTimeoutRef = useRef(null);
-  const mediaInputRef = useRef(null);
   const voiceRecorderRef = useRef(null);
   const voiceIntervalRef = useRef(null);
   const statusTimeoutRef = useRef(null);
@@ -242,6 +242,11 @@ const DatingMessaging = ({
   const { currentStreak } = useStreaks(activeMatchId);
   const { matchVideo, fetchMatchVideo, rateVideo } = useIcebreakerVideos();
   const journey = activeMatch?.journey || null;
+  const showJourneySummary = Boolean(
+    journey?.pendingProposal ||
+    journey?.nudge ||
+    Number(journey?.progressCount || 0) > 0
+  );
   const sharedActionSuggestions = Array.isArray(journey?.sharedActions) ? journey.sharedActions : [];
   const notificationsAvailable = notificationService.getPermissionStatus().available;
   const icebreakers = useMemo(() => buildIcebreakers(activeMatch), [activeMatch]);
@@ -300,7 +305,7 @@ const DatingMessaging = ({
       baseActions.push({
         id: 'match-snooze',
         type: 'snooze',
-        label: 'Snooze 3 days'
+        label: 'Pause 3 days'
       });
     }
 
@@ -323,6 +328,11 @@ const DatingMessaging = ({
       )
   );
   const showComposerStarters = messages.length < 3 && icebreakers.length > 0;
+  const hasComposerSuggestions =
+    showComposerStarters ||
+    showPhaseTwoRescueStrip ||
+    identityStarterChips.length > 0 ||
+    sharedActionSuggestions.length > 0;
 
   const showStatus = useCallback((message, tone = 'info') => {
     if (statusTimeoutRef.current) {
@@ -373,7 +383,7 @@ const DatingMessaging = ({
       setMessages((response || []).map((message) => normalizeMessage(message, currentUserId)));
       notifyConversationActivity();
     } catch (loadError) {
-      setError(typeof loadError === 'string' ? loadError : 'Failed to load messages');
+      setError(typeof loadError === 'string' ? loadError : 'We could not load messages. Please try again.');
     } finally {
       if (showLoader) {
         setLoadingMessages(false);
@@ -433,7 +443,7 @@ const DatingMessaging = ({
         }
       } catch (matchError) {
         if (!cancelled) {
-          setError(typeof matchError === 'string' ? matchError : 'Failed to load conversation');
+          setError(typeof matchError === 'string' ? matchError : 'We could not load this conversation.');
         }
       } finally {
         if (!cancelled) {
@@ -646,7 +656,7 @@ const DatingMessaging = ({
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [activeMatchId, activeMatchUserId, appendMessage, currentUserId, loadMessages]);
+  }, [activeMatchId, activeMatchUserId, activeMatch?.firstName, appendMessage, currentUserId, loadMessages]);
 
   const stopTypingSignal = () => {
     if (typingTimeoutRef.current) {
@@ -751,7 +761,7 @@ const DatingMessaging = ({
         );
       }
     } catch (sendError) {
-      setError(typeof sendError === 'string' ? sendError : 'Failed to send message');
+      setError(typeof sendError === 'string' ? sendError : 'We could not send that message. Please try again.');
     } finally {
       setSendingMessage(false);
     }
@@ -837,14 +847,14 @@ const DatingMessaging = ({
       ));
       showStatus(
         state === 'archived'
-          ? 'Conversation archived. You can bring it back from your matches list.'
+          ? 'Conversation hidden from Active. You can show it again from Matches.'
           : state === 'snoozed'
-            ? 'Conversation snoozed for 3 days.'
-            : 'Conversation moved back to active.',
+            ? 'Conversation paused for 3 days.'
+            : 'Conversation is active again.',
         'success'
       );
     } catch (stateError) {
-      setError(typeof stateError === 'string' ? stateError : 'Failed to update conversation state');
+      setError(typeof stateError === 'string' ? stateError : 'We could not update this conversation.');
     } finally {
       setMatchStatePending('');
     }
@@ -904,32 +914,9 @@ const DatingMessaging = ({
       );
       setActiveReactionPickerMessageId(null);
     } catch (reactionError) {
-      setError(typeof reactionError === 'string' ? reactionError : 'Failed to update reaction');
+      setError(typeof reactionError === 'string' ? reactionError : 'Could not update that reaction.');
     } finally {
       setReactionLoadingMessageId(null);
-    }
-  };
-
-  const handleImageSelect = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file || !activeMatchId) {
-      return;
-    }
-
-    setSendingMedia(true);
-    setError('');
-
-    try {
-      const createdMessage = await sendMediaAsset(file, 'image');
-      appendMessage(createdMessage);
-      notifyConversationActivity();
-    } catch (sendError) {
-      setError(typeof sendError === 'string' ? sendError : 'Failed to send image');
-    } finally {
-      setSendingMedia(false);
-      if (mediaInputRef.current) {
-        mediaInputRef.current.value = '';
-      }
     }
   };
 
@@ -962,7 +949,7 @@ const DatingMessaging = ({
           appendMessage(createdMessage);
           notifyConversationActivity();
         } catch (sendError) {
-          setError(typeof sendError === 'string' ? sendError : 'Failed to send voice note');
+          setError(typeof sendError === 'string' ? sendError : 'Could not send the voice note.');
         } finally {
           setSendingMedia(false);
         }
@@ -1017,7 +1004,7 @@ const DatingMessaging = ({
         'success'
       );
     } catch (attachmentError) {
-      setError(typeof attachmentError === 'string' ? attachmentError : 'Failed to send attachment');
+      setError(typeof attachmentError === 'string' ? attachmentError : 'Could not send the attachment.');
     } finally {
       setSendingMedia(false);
     }
@@ -1042,7 +1029,7 @@ const DatingMessaging = ({
       notifyConversationActivity();
       showStatus('Location shared in chat.', 'success');
     } catch (locationError) {
-      setError(typeof locationError === 'string' ? locationError : 'Failed to share location');
+      setError(typeof locationError === 'string' ? locationError : 'Could not share location.');
     } finally {
       setSendingMessage(false);
     }
@@ -1245,47 +1232,16 @@ const DatingMessaging = ({
               </span>
             </div>
           </button>
-
-          {activeMatchId && currentStreak && (
-            <StreakBadge
-              matchId={activeMatchId}
-              matchName={activeMatch?.firstName}
-              compact={true}
-            />
-          )}
         </div>
 
         <div className="messaging-header-actions">
-          {securitySetupReady ? (
-            <span className="messaging-badge">Secure setup ready</span>
-          ) : null}
-
-          {notificationsAvailable && notificationPermission !== 'granted' ? (
-            <button
-              type="button"
-              className="btn-enable-notifications"
-              onClick={handleEnableNotifications}
-            >
-              Enable Alerts
-            </button>
-          ) : null}
-
           <button
             type="button"
-            className="btn-schedule-call"
+            className="btn-chat-secondary"
             onClick={() => setShowDatePlanner((currentValue) => !currentValue)}
             title="Plan a date"
           >
-            {journey?.pendingProposal?.isReceived ? 'Review Plan' : showDatePlanner ? 'Hide Plan' : 'Plan Date'}
-          </button>
-
-          <button
-            type="button"
-            className="btn-quality-meter"
-            onClick={() => setShowQualityMeter((current) => !current)}
-            title="Conversation quality insights"
-          >
-            {showQualityMeter ? 'Hide Quality' : 'Quality'}
+            {journey?.pendingProposal?.isReceived ? 'Review plan' : showDatePlanner ? 'Hide plan' : 'Plan'}
           </button>
 
           <button
@@ -1304,14 +1260,118 @@ const DatingMessaging = ({
 
           <button
             type="button"
-            className="btn-video-call"
+            className="btn-chat-primary"
             onClick={() => onVideoCall?.(activeMatch, location.pathname)}
             title="Start video call"
           >
-            Video
+            Call
+          </button>
+
+          <button
+            type="button"
+            className="btn-chat-more"
+            onClick={() => setShowMoreActions((current) => !current)}
+            aria-expanded={showMoreActions}
+            title="More conversation tools"
+          >
+            More
           </button>
         </div>
       </div>
+
+      {showMoreActions ? (
+        <div className="messaging-more-panel">
+          {securitySetupReady ? (
+            <span className="messaging-badge">Secure setup ready</span>
+          ) : null}
+
+          {notificationsAvailable && notificationPermission !== 'granted' ? (
+            <button
+              type="button"
+              className="messaging-more-action"
+              onClick={() => {
+                setShowMoreActions(false);
+                handleEnableNotifications();
+              }}
+            >
+              Enable message alerts
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            className="messaging-more-action"
+            onClick={() => {
+              setShowMoreActions(false);
+              setShowQualityMeter((current) => !current);
+            }}
+          >
+            {showQualityMeter ? 'Hide conversation insights' : 'Show conversation insights'}
+          </button>
+
+          <button
+            type="button"
+            className="messaging-more-action"
+            onClick={async () => {
+              setShowMoreActions(false);
+              if (!matchVideo) {
+                await fetchMatchVideo(activeMatchUserId);
+              }
+              setShowIcebreakerPlayer(true);
+            }}
+          >
+            Watch video intro
+          </button>
+
+          <button
+            type="button"
+            className="messaging-more-action"
+            onClick={() => {
+              setShowMoreActions(false);
+              handleToolbarMore('disappearing');
+            }}
+          >
+            Disappearing messages
+          </button>
+
+          <button
+            type="button"
+            className="messaging-more-action"
+            onClick={() => {
+              setShowMoreActions(false);
+              handleToolbarMore('encrypt');
+            }}
+          >
+            Secure chat setup
+          </button>
+
+          {streakDays > 0 || engagementScore > 0 || totalReactions > 0 ? (
+            <div className="messaging-more-stats">
+              {streakDays > 0 ? (
+                <StreakBadge
+                  matchId={activeMatchId}
+                  streakDays={streakDays}
+                  emoji="Active"
+                  isActive={streakActive}
+                  totalMessages={messages.length}
+                  engagementScore={engagementScore}
+                />
+              ) : null}
+
+              {engagementScore > 0 || totalReactions > 0 ? (
+                <EngagementScoreDisplay
+                  matchId={activeMatchId}
+                  streakDays={streakDays}
+                  engagementScore={engagementScore}
+                  totalMessages={messages.length}
+                  reactionCount={totalReactions}
+                  isActive={streakActive}
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {error ? (
         <div className="messaging-error" role="alert">
@@ -1325,7 +1385,7 @@ const DatingMessaging = ({
         </div>
       ) : null}
 
-      {streakDays > 0 && (
+      {false && streakDays > 0 && (
         <StreakBadge
           matchId={activeMatchId}
           streakDays={streakDays}
@@ -1336,7 +1396,7 @@ const DatingMessaging = ({
         />
       )}
 
-      {(engagementScore > 0 || totalReactions > 0) && (
+      {false && (engagementScore > 0 || totalReactions > 0) && (
         <EngagementScoreDisplay
           matchId={activeMatchId}
           streakDays={streakDays}
@@ -1347,13 +1407,15 @@ const DatingMessaging = ({
         />
       )}
 
-      {journey ? (
+      {showJourneySummary ? (
         <div className="messaging-journey-card">
           <div className="messaging-journey-top">
             <div>
-              <strong>Date Journey</strong>
+              <strong>Next step</strong>
               <p>
-                {journey.progressCount || 0}/{journey.milestones?.length || 5} milestones reached with {activeMatch.firstName}.
+                {journey.pendingProposal?.isReceived
+                  ? `${activeMatch.firstName} suggested a plan. Review it when you are ready.`
+                  : `You have completed ${journey.progressCount || 0} of ${journey.milestones?.length || 5} simple steps with ${activeMatch.firstName}.`}
               </p>
             </div>
             {journey.nudge ? (
@@ -1361,7 +1423,7 @@ const DatingMessaging = ({
             ) : null}
           </div>
 
-          {journey.milestones?.length ? (
+          {false && journey.milestones?.length ? (
             <div className="messaging-journey-milestones">
               {journey.milestones.map((milestone) => (
                 <span
@@ -1409,10 +1471,11 @@ const DatingMessaging = ({
           </div>
         ) : messages.length === 0 ? (
           <div className="empty-messages empty-messages-start">
-            <p>Say hello to {activeMatch.firstName}!</p>
+            <h3>Start the chat</h3>
+            <p>Send a simple message to {activeMatch.firstName}. You can use one of these ideas.</p>
             {icebreakers.length > 0 ? (
               <div className="icebreaker-list">
-                {icebreakers.map((icebreaker) => (
+                {icebreakers.slice(0, 3).map((icebreaker) => (
                   <button
                     key={icebreaker}
                     type="button"
@@ -1491,6 +1554,7 @@ const DatingMessaging = ({
                   <ReactionPicker
                     messageId={message.id}
                     matchId={activeMatchId}
+                    options={REACTION_OPTIONS}
                     onReactionSelected={(emoji) => {
                       handleToggleReaction(message.id, emoji);
                       setActiveReactionPickerMessageId(null);
@@ -1521,49 +1585,11 @@ const DatingMessaging = ({
         onMore={handleToolbarMore}
       />
 
-      {sharedActionSuggestions.length > 0 ? (
-        <div className="shared-actions-strip">
-          <span className="composer-starters-label">Shared-interest actions:</span>
+      {hasComposerSuggestions ? (
+        <div className="composer-starters">
+          <span className="composer-starters-label">Helpful ideas</span>
           <div className="composer-starters-list">
-            {sharedActionSuggestions.map((action) => (
-              <button
-                key={`${action.type}-${action.label}`}
-                type="button"
-                className="composer-starter-chip"
-                onClick={() => handleSharedAction(action)}
-              >
-                {action.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {identityStarterChips.length > 0 && !showDatePlanner ? (
-        <div className="identity-pack-strip">
-          <span className="composer-starters-label">Local and language angle:</span>
-          <div className="composer-starters-list">
-            {identityStarterChips.map((starter) => (
-              <button
-                key={starter}
-                type="button"
-                className="composer-starter-chip identity-starter-chip"
-                onClick={() => handleUseIcebreaker(starter)}
-              >
-                {starter}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      {showPhaseTwoRescueStrip ? (
-        <div className="conversation-rescue-strip">
-          <span className="composer-starters-label">
-            {conversationHealth.readyForCall ? 'Best next move:' : conversationRescuePlan?.label || 'Conversation rescue:'}
-          </span>
-          <div className="composer-starters-list">
-            {phaseTwoRescueActions.map((action) => (
+            {showPhaseTwoRescueStrip ? phaseTwoRescueActions.slice(0, 3).map((action) => (
               <button
                 key={action.id}
                 type="button"
@@ -1572,16 +1598,9 @@ const DatingMessaging = ({
               >
                 {action.label}
               </button>
-            ))}
-          </div>
-        </div>
-      ) : null}
+            )) : null}
 
-      {showComposerStarters ? (
-        <div className="composer-starters">
-          <span className="composer-starters-label">Try an opener:</span>
-          <div className="composer-starters-list">
-            {icebreakers.map((icebreaker) => (
+            {showComposerStarters ? icebreakers.slice(0, 3).map((icebreaker) => (
               <button
                 key={`composer-${icebreaker}`}
                 type="button"
@@ -1589,6 +1608,28 @@ const DatingMessaging = ({
                 onClick={() => handleUseIcebreaker(icebreaker)}
               >
                 {icebreaker}
+              </button>
+            )) : null}
+
+            {identityStarterChips.length > 0 && !showDatePlanner ? identityStarterChips.slice(0, 1).map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                className="composer-starter-chip identity-starter-chip"
+                onClick={() => handleUseIcebreaker(starter)}
+              >
+                {starter}
+              </button>
+            )) : null}
+
+            {sharedActionSuggestions.slice(0, 2).map((action) => (
+              <button
+                key={`${action.type}-${action.label}`}
+                type="button"
+                className="composer-starter-chip"
+                onClick={() => handleSharedAction(action)}
+              >
+                {action.label}
               </button>
             ))}
           </div>
@@ -1620,24 +1661,6 @@ const DatingMessaging = ({
       ) : null}
 
       <div className="message-input-container">
-        <input
-          ref={mediaInputRef}
-          type="file"
-          accept="image/*"
-          onChange={handleImageSelect}
-          style={{ display: 'none' }}
-        />
-
-        <button
-          type="button"
-          className="btn-media"
-          onClick={() => mediaInputRef.current?.click()}
-          disabled={sendingMedia || isRecordingVoice || loadingMatch}
-          title="Send image"
-        >
-          Img
-        </button>
-
         {isRecordingVoice ? (
           <div className="voice-recording-indicator">
             <span className="recording-dot" />
@@ -1659,14 +1682,14 @@ const DatingMessaging = ({
             disabled={sendingMedia || loadingMatch}
             title="Record voice note"
           >
-            Mic
+            Voice
           </button>
         )}
 
         <input
           ref={inputRef}
           type="text"
-          placeholder={disappearingEnabled ? 'Send a disappearing message...' : 'Say something nice...'}
+          placeholder={disappearingEnabled ? 'Write a disappearing message...' : 'Write a message...'}
           value={inputMessage}
           onChange={handleTyping}
           onKeyDown={(event) => {
