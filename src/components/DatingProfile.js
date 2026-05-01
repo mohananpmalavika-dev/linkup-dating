@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '../router';
 import datingProfileService from '../services/datingProfileService';
+import { clearStoredAuthData } from '../utils/auth';
 import '../styles/DatingProfile.css';
 
 const normalizeInterests = (interests) => (Array.isArray(interests) ? interests : []);
@@ -87,6 +88,13 @@ const DatingProfile = () => {
   useEffect(() => {
     loadProfile();
   }, [loadProfile]);
+
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to logout?')) {
+      clearStoredAuthData();
+      navigate('/', { replace: true });
+    }
+  };
 
   const completionChecklist = useMemo(() => [
     {
@@ -404,6 +412,10 @@ const DatingProfile = () => {
             <button type="button" className="profile-action-card" onClick={() => navigate('/more')}>
               <strong>More Tools</strong>
               <span>Boosts, analytics, safety, referrals</span>
+            </button>
+            <button type="button" className="profile-action-card logout-card" onClick={handleLogout}>
+              <strong>Logout</strong>
+              <span>Sign out from your account</span>
             </button>
           </div>
         </div>

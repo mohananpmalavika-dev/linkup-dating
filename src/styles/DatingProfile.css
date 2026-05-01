@@ -1084,6 +1084,25 @@
   line-height: 1.4;
 }
 
+.profile-action-card.logout-card {
+  border-color: #fee2e2;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+.profile-action-card.logout-card:hover {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.profile-action-card.logout-card strong {
+  color: #dc2626;
+}
+
+.profile-action-card.logout-card span {
+  color: #b91c1c;
+}
+
 /* Edit Mode */
 .profile-edit {
   padding: 20px;
