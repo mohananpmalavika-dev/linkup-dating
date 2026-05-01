@@ -750,7 +750,7 @@ const syncReferralQualityBonuses = async (referrerUserId) => {
 const buildReferralQualitySummary = (evaluations = []) => {
   const completedReferrals = evaluations.length;
   const qualityActivated = evaluations.filter((evaluation) => evaluation.qualityEvaluation.qualityQualified).length;
-  const qualityBonusAwarded = evaluations.filter((evaluation) => evaluation.program.qualityState.bonusAwarded).length;
+  const qualityBonusAwarded = evaluations.filter((evaluation) => evaluation.bonusAwarded).length;
   const averageQualityScore = completedReferrals
     ? Math.round(
         evaluations.reduce(
