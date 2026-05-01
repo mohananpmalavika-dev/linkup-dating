@@ -22,8 +22,8 @@ const isMissingMessageTypeColumnError = (error) =>
 const insertTextMessage = async (matchId, userId, toUserId, normalizedMessage) => {
   try {
     return await db.query(
-      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, message_type)
-       VALUES ($1, $2, $3, $4, 'text')
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, message_type, created_at)
+       VALUES ($1, $2, $3, $4, 'text', NOW())
        RETURNING *`,
       [matchId, userId, toUserId, normalizedMessage]
     );
@@ -35,8 +35,8 @@ const insertTextMessage = async (matchId, userId, toUserId, normalizedMessage) =
     console.warn('messages.message_type column missing; sending text message without message_type metadata');
 
     return db.query(
-      `INSERT INTO messages (match_id, from_user_id, to_user_id, message)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, created_at)
+       VALUES ($1, $2, $3, $4, NOW())
        RETURNING *`,
       [matchId, userId, toUserId, normalizedMessage]
     );
@@ -54,8 +54,8 @@ const insertMediaMessage = async ({
 }) => {
   try {
     return await db.query(
-      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration, message_type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration, message_type, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
        RETURNING *`,
       [
         matchId,
@@ -76,8 +76,8 @@ const insertMediaMessage = async ({
     console.warn('messages.message_type column missing; sending media message without message_type metadata');
 
     return db.query(
-      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO messages (match_id, from_user_id, to_user_id, message, media_type, media_url, duration, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
        RETURNING *`,
       [matchId, userId, toUserId, `[${mediaType}]`, mediaType, mediaUrl, duration]
     );

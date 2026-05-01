@@ -82,7 +82,8 @@ const normalizeMessage = (message, currentUserId) => ({
   isOwn: Number(message.from_user_id ?? message.fromUserId ?? message.senderId) === Number(currentUserId)
 });
 
-const buildIcebreakers = (match = {}) => {
+const buildIcebreakers = (match) => {
+  if (!match) return [];
   const interestList = Array.isArray(match.interests) ? match.interests.filter(Boolean) : [];
   const suggestions = [];
 
