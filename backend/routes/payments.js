@@ -395,4 +395,100 @@ router.get('/receipts', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * POST /payments/validate-discount
+ * Validate discount code
+ * Body: { code, planId }
+ */
+router.post('/validate-discount', authenticateToken, async (req, res) => {
+  try {
+    const { code, planId } = req.body;
+    const userId = req.user.id;
+
+    if (!code || !planId) {
+      return res.status(400).json({ valid: false, message: 'Code and plan required' });
+    }
+
+    // Get discount code from database
+    const discountResult = await db.query(
+      `SELECT * FROM discount_codes 
+       WHERE code = $1 AND active = TRUE
+       AND (valid_until IS NULL OR valid_until > CURRENT_TIMESTAMP)`,
+      [code.toUpperCase()]
+    );
+
+    if (discountResult.rows.length === 0) {
+      return res.json({ valid: false, message: 'Invalid or expired discount code' });
+    }
+
+    const discount = discountResult.rows[0];
+
+    // Check if code has usage limit
+    if (discount.max_uses) {
+      const usageResult = await db.query(
+        `SELECT COUNT(*) as count FROM payments 
+         WHERE discount_code = $1 AND status = 'completed'`,
+        [code]
+      );
+
+      if (parseInt(usageResult.rows[0].count) >= discount.max_uses) {
+        return res.json({ valid: false, message: 'Discount code usage limit exceeded' });
+      }
+    }
+
+    // Check if user already used this code
+    if (discount.one_per_user) {
+      const userUsageResult = await db.query(
+        `SELECT COUNT(*) as count FROM payments 
+         WHERE discount_code = $1 AND user_id = $2 AND status = 'completed'`,
+        [code, userId]
+      );
+
+      if (parseInt(userUsageResult.rows[0].count) > 0) {
+        return res.json({ valid: false, message: 'You have already used this discount code' });
+      }
+    }
+
+    // Check if applicable to this plan
+    if (discount.applicable_plans && discount.applicable_plans.length > 0) {
+      if (!discount.applicable_plans.includes(planId)) {
+        return res.json({ valid: false, message: 'This discount is not applicable to selected plan' });
+      }
+    }
+
+    // Check minimum amount requirement
+    if (discount.min_amount) {
+      const planResult = await db.query(
+        `SELECT price FROM subscription_plans WHERE id = $1`,
+        [planId]
+      );
+
+      if (planResult.rows.length === 0) {
+        return res.status(400).json({ valid: false, message: 'Invalid plan' });
+      }
+
+      const planPrice = planResult.rows[0].price;
+      if (planPrice < discount.min_amount) {
+        return res.json({ 
+          valid: false, 
+          message: `Minimum purchase of ₹${discount.min_amount} required for this discount` 
+        });
+      }
+    }
+
+    res.json({
+      valid: true,
+      discount: {
+        code: discount.code,
+        type: discount.type, // 'percentage' or 'fixed'
+        value: discount.value,
+        description: discount.description
+      }
+    });
+  } catch (error) {
+    console.error('Error validating discount:', error);
+    res.status(500).json({ error: 'Failed to validate discount code' });
+  }
+});
+
 module.exports = router;

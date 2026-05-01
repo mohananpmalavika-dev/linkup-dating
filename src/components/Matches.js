@@ -30,6 +30,84 @@ const buildInboxLikeProfileContext = (like) => ({
   }
 });
 
+const MATCH_STATE_FILTERS = [
+  { value: 'active', label: 'Active' },
+  { value: 'archived', label: 'Hidden' },
+  { value: 'snoozed', label: 'Paused' },
+  { value: 'all', label: 'All' }
+];
+
+const formatMatchName = (match = {}) => {
+  const name = match.firstName || match.name || 'Your match';
+  return match.age ? `${name}, ${match.age}` : name;
+};
+
+const formatMatchLocation = (location = {}) => location?.city || 'Nearby';
+
+const formatLastMessage = (match = {}) => {
+  const message = match.lastMessage?.text || '';
+
+  if (!message) {
+    return 'No messages yet';
+  }
+
+  return `${message.substring(0, 70)}${message.length > 70 ? '...' : ''}`;
+};
+
+const getMatchHint = (match = {}, conversationHealth = {}) => {
+  const messageCount = Number(match.messageCount || conversationHealth.messageCount || 0);
+
+  if (!match.lastMessage && messageCount === 0) {
+    return {
+      tone: 'new',
+      label: 'New match',
+      copy: 'Send a friendly first message when you are ready.'
+    };
+  }
+
+  if (conversationHealth.readyForCall) {
+    return {
+      tone: 'warm',
+      label: 'Good momentum',
+      copy: 'This chat looks ready for a call or simple date plan.'
+    };
+  }
+
+  if (conversationHealth.needsRevive) {
+    return {
+      tone: 'paused',
+      label: 'Quiet chat',
+      copy: 'A light check-in can restart the conversation.'
+    };
+  }
+
+  return {
+    tone: conversationHealth.score >= 65 ? 'warm' : 'steady',
+    label: 'Next step',
+    copy: conversationHealth.nextBestMove || 'Keep the chat moving with one specific question.'
+  };
+};
+
+const getManagementCopy = (management = {}) => {
+  if (!management?.state || management.state === 'active') {
+    return '';
+  }
+
+  if (management.state === 'archived') {
+    return 'Hidden from your active list';
+  }
+
+  if (management.state === 'snoozed') {
+    const snoozedUntil = management.snoozedUntil ? new Date(management.snoozedUntil) : null;
+    const dateLabel = snoozedUntil && !Number.isNaN(snoozedUntil.getTime())
+      ? snoozedUntil.toLocaleDateString()
+      : 'later';
+    return `Paused until ${dateLabel}`;
+  }
+
+  return '';
+};
+
 const Matches = ({
   pageLabel = 'Matches',
   onMatchCreated,
@@ -60,6 +138,7 @@ const Matches = ({
   const [isPremium, setIsPremium] = useState(false);
   const [requestActionLoading, setRequestActionLoading] = useState(null);
   const [matchStateLoadingId, setMatchStateLoadingId] = useState(null);
+  const [openMenuMatchId, setOpenMenuMatchId] = useState(null);
   const isMessagesPage = pageLabel === 'Messages';
 
   useEffect(() => {
@@ -95,7 +174,7 @@ const Matches = ({
       const data = await datingProfileService.getMatches(50);
       setMatches(data.matches || []);
     } catch (loadError) {
-      setLoadError('Failed to load matches');
+      setLoadError('We could not load your matches. Please try again.');
       console.error(loadError);
     } finally {
       setLoading(false);
@@ -164,7 +243,7 @@ const Matches = ({
       await loadMatches();
       onMatchCreated?.();
     } catch (err) {
-      setActionError('Failed to accept request');
+      setActionError('Could not accept this request. Please try again.');
       console.error(err);
     } finally {
       setRequestActionLoading(null);
@@ -178,7 +257,7 @@ const Matches = ({
       await datingProfileService.declineMessageRequest(requestId);
       setMessageRequests((current) => current.filter((req) => req.id !== requestId));
     } catch (err) {
-      setActionError('Failed to decline request');
+      setActionError('Could not decline this request. Please try again.');
       console.error(err);
     } finally {
       setRequestActionLoading(null);
@@ -195,6 +274,7 @@ const Matches = ({
       setMatches((currentMatches) => currentMatches.filter((match) => match.id !== matchId));
       onUnmatch?.(matchId);
     } catch (unmatchError) {
+      setActionError('Could not unmatch right now. Please try again.');
       console.error('Failed to unmatch:', unmatchError);
     }
   };
@@ -219,7 +299,7 @@ const Matches = ({
         ))
       );
     } catch (stateError) {
-      setActionError(typeof stateError === 'string' ? stateError : 'Failed to update match state');
+      setActionError(typeof stateError === 'string' ? stateError : 'Could not update this match. Please try again.');
     } finally {
       setMatchStateLoadingId(null);
     }
@@ -262,7 +342,7 @@ const Matches = ({
         console.error('Failed to recover like-back state:', recoveryError);
       }
 
-      setActionError('Failed to like this profile back');
+      setActionError('Could not like this profile back. Please try again.');
       console.error('Failed to like back:', likeError);
     } finally {
       setLikingBackUserId(null);
@@ -316,7 +396,28 @@ const Matches = ({
     }),
     [actionableMatches, dateProposals, likesReceived, messageRequests, whoLikedMe]
   );
-  const headerCount = isMessagesPage ? actionInboxItems.length : displayMatches.length;
+  const tabCounts = {
+    matches: filteredMatches.length,
+    likes: whoLikedMe.length || likesReceived.length,
+    requests: messageRequests.length
+  };
+  const activeHeaderCount = isMessagesPage
+    ? actionInboxItems.length
+    : activeTab === 'likes'
+      ? tabCounts.likes
+      : activeTab === 'requests'
+        ? tabCounts.requests
+        : displayMatches.length;
+  const headerTitle = isMessagesPage
+    ? 'Inbox'
+    : activeTab === 'likes'
+      ? 'Likes'
+      : activeTab === 'requests'
+        ? 'Requests'
+        : 'Matches';
+  const shouldShowQuickLikes = !isMessagesPage && activeTab === 'matches' && (
+    loadingLikes || likesReceived.length > 0 || Boolean(actionError) || Boolean(navigationNotice)
+  );
 
   const handleOpenSuggestedMessage = (match, prefillMessage) => {
     onSelectMatch?.(match, location.pathname, { prefillMessage });
@@ -453,15 +554,29 @@ const Matches = ({
   return (
     <div className="matches-container">
       <div className="matches-header">
-        <h2>{isMessagesPage ? 'Inbox' : 'My Matches'} ({headerCount})</h2>
+        <div className="matches-title-row">
+          <div>
+            <h2>
+              {headerTitle}
+              {' '}
+              <span className="matches-count">{activeHeaderCount}</span>
+            </h2>
+            <p className="matches-header-copy">
+              {isMessagesPage
+                ? 'Quick actions and conversations in one simple place.'
+                : 'People who matched with you. Start with a message, call, or simple plan.'}
+            </p>
+          </div>
+        </div>
         {!isMessagesPage ? (
           <>
-            <div className="filter-tabs">
+            <div className="filter-tabs" aria-label="Matches sections">
               <button
                 className={`filter-btn ${activeTab === 'matches' ? 'active' : ''}`}
                 onClick={() => setActiveTab('matches')}
+                aria-pressed={activeTab === 'matches'}
               >
-                Matches
+                Matches <span className="tab-count">{tabCounts.matches}</span>
               </button>
               <button
                 className={`filter-btn ${activeTab === 'likes' ? 'active' : ''}`}
@@ -469,8 +584,9 @@ const Matches = ({
                   setActiveTab('likes');
                   loadWhoLikedMe();
                 }}
+                aria-pressed={activeTab === 'likes'}
               >
-                Who Liked You
+                Likes <span className="tab-count">{tabCounts.likes}</span>
               </button>
               <button
                 className={`filter-btn ${activeTab === 'requests' ? 'active' : ''}`}
@@ -478,46 +594,50 @@ const Matches = ({
                   setActiveTab('requests');
                   loadMessageRequests();
                 }}
+                aria-pressed={activeTab === 'requests'}
               >
-                Requests {messageRequests.length > 0 ? `(${messageRequests.length})` : ''}
+                Requests <span className="tab-count">{tabCounts.requests}</span>
               </button>
             </div>
 
             {activeTab === 'matches' ? (
-              <div className="filter-tabs match-state-tabs">
-                {['active', 'archived', 'snoozed', 'all'].map((state) => (
+              <div className="filter-tabs match-state-tabs" aria-label="Match filters">
+                {MATCH_STATE_FILTERS.map((filter) => (
                   <button
-                    key={state}
-                    className={`filter-btn ${matchStateFilter === state ? 'active' : ''}`}
-                    onClick={() => setMatchStateFilter(state)}
+                    key={filter.value}
+                    className={`filter-btn ${matchStateFilter === filter.value ? 'active' : ''}`}
+                    onClick={() => setMatchStateFilter(filter.value)}
+                    aria-pressed={matchStateFilter === filter.value}
                   >
-                    {state.charAt(0).toUpperCase() + state.slice(1)}
+                    {filter.label}
                   </button>
                 ))}
               </div>
             ) : null}
           </>
-        ) : (
-          <p className="matches-header-copy">
-            Real matches, safe dates, better conversations. Start with the items that need action first.
-          </p>
-        )}
+        ) : null}
       </div>
 
       {activeTab === 'likes' ? (
         <div className="likes-you-section">
           <div className="likes-you-header">
             <div>
-              <h3>Who Liked You</h3>
-              <p>{isPremium ? 'See everyone who liked your profile.' : 'Upgrade to Premium to see who liked you.'}</p>
+              <h3>Likes</h3>
+              <p>{isPremium ? 'People who liked you. Like back to make a match.' : 'Upgrade to see who liked you.'}</p>
             </div>
             <button type="button" className="likes-refresh-btn" onClick={loadWhoLikedMe}>
               Refresh
             </button>
           </div>
 
+          {actionError ? (
+            <div className="likes-you-feedback" role="status">
+              {actionError}
+            </div>
+          ) : null}
+
           {loadingWhoLiked ? (
-            <div className="likes-you-empty"><p>Loading...</p></div>
+            <div className="likes-you-empty"><p>Checking likes...</p></div>
           ) : whoLikedMe.length > 0 ? (
             <div className="likes-you-list">
               {whoLikedMe.map((liker) => (
@@ -533,7 +653,7 @@ const Matches = ({
                   />
                   <div className="like-card-body">
                     <h4>{liker.isRevealed ? `${liker.firstName}, ${liker.age}` : 'Someone liked you'}</h4>
-                    <p>{liker.isRevealed ? (liker.location?.city || 'Nearby') : 'Upgrade to Premium to see who'}</p>
+                    <p>{liker.isRevealed ? (liker.location?.city || 'Nearby') : 'Premium can reveal this profile'}</p>
                     {liker.isRevealed ? (
                       <div className="like-card-actions">
                         <button
@@ -547,7 +667,7 @@ const Matches = ({
                     ) : (
                       <div className="like-card-actions">
                         <button type="button" className="like-card-secondary" disabled>
-                          🔒 Premium Only
+                          Premium only
                         </button>
                       </div>
                     )}
@@ -565,16 +685,22 @@ const Matches = ({
         <div className="likes-you-section">
           <div className="likes-you-header">
             <div>
-              <h3>Message Requests</h3>
-              <p>People who want to message you without matching.</p>
+              <h3>Requests</h3>
+              <p>People who asked to start a chat. Accept only if you feel comfortable.</p>
             </div>
             <button type="button" className="likes-refresh-btn" onClick={loadMessageRequests}>
               Refresh
             </button>
           </div>
 
+          {actionError ? (
+            <div className="likes-you-feedback" role="status">
+              {actionError}
+            </div>
+          ) : null}
+
           {loadingRequests ? (
-            <div className="likes-you-empty"><p>Loading...</p></div>
+            <div className="likes-you-empty"><p>Checking requests...</p></div>
           ) : messageRequests.length > 0 ? (
             <div className="likes-you-list">
               {messageRequests.map((req) => (
@@ -589,7 +715,7 @@ const Matches = ({
                   />
                   <div className="like-card-body">
                     <h4>{req.firstName}, {req.age}</h4>
-                    <p>📍 {req.location?.city || 'Nearby'}</p>
+                    <p>{req.location?.city || 'Nearby'}</p>
                     <div className="request-message"><em>"{req.message}"</em></div>
                     <div className="like-card-actions">
                       <button
@@ -625,8 +751,8 @@ const Matches = ({
             <section className="action-inbox-panel">
               <div className="action-inbox-header">
                 <div>
-                  <h3>Action Inbox</h3>
-                  <p>One place for likes, date plans, direct intents, reveals, and rescue nudges that can move a match forward.</p>
+                  <h3>Needs attention</h3>
+                  <p>Quick actions for likes, requests, date plans, and chats that may need a reply.</p>
                 </div>
                 <button
                   type="button"
@@ -703,18 +829,18 @@ const Matches = ({
                 <div className="likes-you-empty">
                   <p>
                     {loadingDateProposals
-                      ? 'Refreshing your intent inbox...'
-                      : 'No urgent actions right now. New likes, date plans, requests, and momentum nudges will show up here.'}
+                      ? 'Refreshing your inbox...'
+                      : 'All caught up. New likes, requests, plans, and helpful chat reminders will appear here.'}
                   </p>
                 </div>
               )}
             </section>
-          ) : (
+          ) : shouldShowQuickLikes ? (
             <div className="likes-you-section">
               <div className="likes-you-header">
                 <div>
-                  <h3>Likes You</h3>
-                  <p>People who already showed interest in you.</p>
+                  <h3>New likes</h3>
+                  <p>Like back to create a match.</p>
                 </div>
                 <button type="button" className="likes-refresh-btn" onClick={loadLikesReceived}>
                   Refresh
@@ -735,11 +861,7 @@ const Matches = ({
 
               {loadingLikes ? (
                 <div className="likes-you-empty">
-                  <p>
-                    {isMessagesPage
-                      ? 'No conversations yet. Start swiping to find someone!'
-                      : 'No matches yet. Start swiping to find someone!'}
-                  </p>
+                  <p>Checking new likes...</p>
                 </div>
               ) : likesReceived.length > 0 ? (
                 <div className="likes-you-list">
@@ -782,18 +904,18 @@ const Matches = ({
                 </div>
               ) : (
                 <div className="likes-you-empty">
-                  <p>No likes yet. Keep your profile active and check back soon.</p>
+                  <p>No new likes right now.</p>
                 </div>
               )}
             </div>
-          )}
+          ) : null}
 
           {!isMessagesPage && activeTab === 'matches' && actionableMatches.length > 0 ? (
             <section className="match-rescue-panel">
               <div className="match-rescue-header">
                 <div>
-                  <h3>Keep the momentum going</h3>
-                  <p>LinkUp spotted a few matches that could use a timely next step.</p>
+                  <h3>Helpful next steps</h3>
+                  <p>Simple suggestions to start, restart, or move a good chat forward.</p>
                 </div>
               </div>
 
@@ -803,16 +925,16 @@ const Matches = ({
                     <div className="match-rescue-copy">
                       <span className={`match-rescue-kind ${suggestion.kind}`}>
                         {suggestion.kind === 'first_message'
-                          ? 'New match'
+                          ? 'Say hello'
                           : suggestion.kind === 'revive'
-                            ? 'Needs a nudge'
-                            : 'Ready to plan'}
+                            ? 'Check in'
+                            : 'Ready to meet'}
                       </span>
                       <h4>{suggestion.title}</h4>
                       <p>{suggestion.description}</p>
                       {suggestion.prefillMessage ? (
                         <div className="match-rescue-preview">
-                          <strong>Suggested message</strong>
+                          <strong>Message you can send</strong>
                           <span>{suggestion.prefillMessage}</span>
                         </div>
                       ) : null}
@@ -846,12 +968,19 @@ const Matches = ({
             <div className="matches-list">
               {displayMatches.map((match) => {
                 const conversationHealth = calculateConversationHealth({ match });
+                const matchHint = getMatchHint(match, conversationHealth);
+                const managementCopy = getManagementCopy(match.management);
+                const isMenuOpen = String(openMenuMatchId) === String(match.id);
+                const matchName = formatMatchName(match);
+                const isActiveMatch = !match.management?.state || match.management.state === 'active';
 
                 return (
                 <div key={match.id} className="match-item">
-                  <div
+                  <button
+                    type="button"
                     className="match-photo"
-                    onClick={() => onSelectMatch?.(match)}
+                    onClick={() => onViewProfile?.(match)}
+                    aria-label={`View ${matchName}'s profile`}
                     style={{
                       backgroundImage: match.photos?.[0]
                         ? `url(${match.photos[0]})`
@@ -859,58 +988,40 @@ const Matches = ({
                     }}
                   >
                     {match.profileVerified ? (
-                      <div className="verified-indicator">✓</div>
+                      <span className="verified-indicator" aria-label="Verified profile">✓</span>
                     ) : null}
-                  </div>
+                  </button>
 
                   <div className="match-info">
                     <div className="match-header-row">
-                      <h3>{match.firstName}, {match.age}</h3>
+                      <h3>{matchName}</h3>
                       {(match.unreadCount || 0) > 0 ? (
-                        <span className="unread-badge">{match.unreadCount}</span>
+                        <span className="unread-badge" aria-label={`${match.unreadCount} unread messages`}>
+                          {match.unreadCount}
+                        </span>
                       ) : null}
                     </div>
-                    <p className="match-location">📍 {match.location?.city}</p>
+                    <p className="match-location">{formatMatchLocation(match.location)}</p>
                     <p className="last-message">
-                      {match.lastMessage?.text
-                        ? `${match.lastMessage.text.substring(0, 50)}${match.lastMessage.text.length > 50 ? '...' : ''}`
-                        : 'Start the conversation'}
+                      {formatLastMessage(match)}
                     </p>
-                    <div className="match-health-row">
-                      <span className={`match-health-pill ${conversationHealth.score >= 65 ? 'warm' : conversationHealth.score >= 45 ? 'steady' : 'cool'}`}>
-                        {conversationHealth.label} · {conversationHealth.score}
-                      </span>
-                      <span className="match-health-copy">{conversationHealth.nextBestMove}</span>
+                    <div className={`match-next-step ${matchHint.tone}`}>
+                      <span>{matchHint.label}</span>
+                      <p>{matchHint.copy}</p>
                     </div>
-                    {match.management?.state && match.management.state !== 'active' ? (
-                      <p className="match-management-copy">
-                        {match.management.state === 'archived'
-                          ? 'Archived by you'
-                          : `Snoozed until ${new Date(match.management.snoozedUntil).toLocaleDateString()}`}
-                      </p>
+                    {managementCopy ? (
+                      <p className="match-management-copy">{managementCopy}</p>
                     ) : null}
                     {match.journey ? (
                       <div className="match-journey">
                         <div className="match-journey-top">
                           <span className="match-journey-progress">
-                            {match.journey.progressCount || 0}/{match.journey.milestones?.length || 5} milestones
+                            {match.journey.progressCount || 0} of {match.journey.milestones?.length || 5} steps done
                           </span>
                           {match.journey.nudge ? (
                             <span className="match-journey-pill">{match.journey.nudge.title}</span>
                           ) : null}
                         </div>
-                        {match.journey.milestones?.length ? (
-                          <div className="match-milestone-list">
-                            {match.journey.milestones.map((milestone) => (
-                              <span
-                                key={`${match.id}-${milestone.key}`}
-                                className={`match-milestone-chip ${milestone.achieved ? 'achieved' : ''}`}
-                              >
-                                {milestone.label}
-                              </span>
-                            ))}
-                          </div>
-                        ) : null}
                         {match.journey.nudge ? (
                           <p className="match-journey-copy">{match.journey.nudge.message}</p>
                         ) : null}
@@ -922,16 +1033,16 @@ const Matches = ({
                     <button
                       className="btn-message"
                       onClick={() => onSelectMatch?.(match)}
-                      title="Send Message"
+                      title="Open chat"
                     >
-                      💬
+                      Chat
                     </button>
                     <button
                       className="btn-video"
                       onClick={() => onStartVideoCall?.(match, location.pathname)}
-                      title="Start Video Call"
+                      title="Start video call"
                     >
-                      📹
+                      Call
                     </button>
                     <button
                       className="btn-plan"
@@ -942,48 +1053,68 @@ const Matches = ({
                     </button>
                     <button
                       className="btn-more"
-                      onClick={() => {
-                        const menu = document.querySelector(`#menu-${match.id}`);
-                        menu?.classList.toggle('visible');
-                      }}
+                      onClick={() => setOpenMenuMatchId(isMenuOpen ? null : match.id)}
                       title="More options"
+                      aria-expanded={isMenuOpen}
+                      aria-controls={`menu-${match.id}`}
                     >
-                      ⋯
+                      More
                     </button>
-                    <div id={`menu-${match.id}`} className="action-menu">
-                      <button onClick={() => onViewProfile?.(match)}>
+                    <div id={`menu-${match.id}`} className={`action-menu ${isMenuOpen ? 'visible' : ''}`}>
+                      <button onClick={() => {
+                        setOpenMenuMatchId(null);
+                        onViewProfile?.(match);
+                      }}>
                         View Profile
                       </button>
-                      <button onClick={() => onPlanDate?.(match, location.pathname)}>
+                      <button onClick={() => {
+                        setOpenMenuMatchId(null);
+                        onPlanDate?.(match, location.pathname);
+                      }}>
                         Plan Date
                       </button>
-                      <button onClick={() => onScheduleVideoCall?.(match, location.pathname)}>
+                      <button onClick={() => {
+                        setOpenMenuMatchId(null);
+                        onScheduleVideoCall?.(match, location.pathname);
+                      }}>
                         Schedule Video Call
                       </button>
-                      {match.management?.state === 'active' ? (
+                      {isActiveMatch ? (
                         <button
-                          onClick={() => handleUpdateMatchState(match.id, 'archived')}
+                          onClick={() => {
+                            setOpenMenuMatchId(null);
+                            handleUpdateMatchState(match.id, 'archived');
+                          }}
                           disabled={matchStateLoadingId === match.id}
                         >
-                          {matchStateLoadingId === match.id ? 'Saving...' : 'Archive'}
+                          {matchStateLoadingId === match.id ? 'Saving...' : 'Hide from Active'}
                         </button>
                       ) : (
                         <button
-                          onClick={() => handleUpdateMatchState(match.id, 'active')}
+                          onClick={() => {
+                            setOpenMenuMatchId(null);
+                            handleUpdateMatchState(match.id, 'active');
+                          }}
                           disabled={matchStateLoadingId === match.id}
                         >
-                          {matchStateLoadingId === match.id ? 'Saving...' : 'Move To Active'}
+                          {matchStateLoadingId === match.id ? 'Saving...' : 'Show in Active'}
                         </button>
                       )}
                       {match.management?.state !== 'snoozed' ? (
                         <button
-                          onClick={() => handleUpdateMatchState(match.id, 'snoozed')}
+                          onClick={() => {
+                            setOpenMenuMatchId(null);
+                            handleUpdateMatchState(match.id, 'snoozed');
+                          }}
                           disabled={matchStateLoadingId === match.id}
                         >
-                          {matchStateLoadingId === match.id ? 'Saving...' : 'Snooze 3 Days'}
+                          {matchStateLoadingId === match.id ? 'Saving...' : 'Pause 3 Days'}
                         </button>
                       ) : null}
-                      <button onClick={() => handleUnmatch(match.id)}>
+                      <button onClick={() => {
+                        setOpenMenuMatchId(null);
+                        handleUnmatch(match.id);
+                      }}>
                         Unmatch
                       </button>
                     </div>
@@ -994,7 +1125,8 @@ const Matches = ({
             </div>
           ) : (
             <div className="no-matches">
-              <p>{isMessagesPage ? 'No messages yet. Start a conversation from your matches!' : 'No matches yet. Start swiping to find someone!'}</p>
+              <h3>{isMessagesPage ? 'No messages yet' : 'No matches yet'}</h3>
+              <p>{isMessagesPage ? 'No messages yet. Start a conversation from your matches!' : 'No matches yet. Visit Discover and like profiles to make a match.'}</p>
             </div>
           )}
         </>

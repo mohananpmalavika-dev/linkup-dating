@@ -74,7 +74,6 @@ const buildDateInboxItems = (dateProposals = []) =>
           ? proposal.proposerName || 'Your match'
           : proposal.recipientName || 'Your match';
       const isPending = proposal.status === 'pending';
-      const isAccepted = proposal.status === 'accepted';
       const isReceived = Boolean(proposal.isReceived);
       const title = isPending
         ? isReceived
@@ -150,10 +149,10 @@ export const buildActionInboxItems = ({
       subtitle: suggestion.description,
       meta:
         suggestion.kind === 'ready_to_plan'
-          ? 'Next best step'
+          ? 'Ready to meet'
           : suggestion.kind === 'revive'
-            ? 'Rescue nudge'
-            : 'Fresh match',
+            ? 'Check in'
+            : 'Say hello',
       preview: suggestion.prefillMessage || suggestion.secondaryPrefillMessage || '',
       primaryLabel: suggestion.ctaLabel,
       secondaryLabel: suggestion.secondaryCtaLabel || '',

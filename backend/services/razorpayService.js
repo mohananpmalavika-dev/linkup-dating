@@ -97,7 +97,7 @@ class RazorpayService {
   /**
    * Process successful payment
    */
-  async processPayment(userId, orderId, paymentId, signature, planId) {
+  async processPayment(userId, orderId, paymentId, signature, planId, discountCode, isUpgrade) {
     try {
       // Verify signature
       if (!this.verifyPaymentSignature(orderId, paymentId, signature)) {
@@ -182,7 +182,12 @@ class RazorpayService {
         await client.query(
           `INSERT INTO user_analytics (user_id, event_type, event_data, created_at)
            VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`,
-          [userId, 'premium_subscription', JSON.stringify({ plan_id: planId, amount: payment.amount })]
+          [userId, 'premium_subscription', JSON.stringify({ 
+            plan_id: planId, 
+            amount: payment.amount,
+            discount_code: discountCode || null,
+            is_upgrade: isUpgrade || false
+          })]
         );
 
         await client.query('COMMIT');
