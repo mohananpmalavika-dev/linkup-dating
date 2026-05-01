@@ -381,4 +381,11 @@ router.get('/request/:requestId', async (req, res) => {
   }
 });
 
+// Default GET / route - same as /available for backwards compatibility  
+router.get('/', (req, res, next) => {
+  // Delegate to /available route
+  req.url = '/available';
+  router.handle(req, res);
+});
+
 module.exports = router;
