@@ -27,7 +27,7 @@ const useDailyChallenges = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiClient.get('/api/challenges/today');
+      const response = await apiClient.get('/challenges/today');
       if (response.data.success) {
         setTodayChallenges(response.data.challenges || []);
       }
@@ -45,7 +45,7 @@ const useDailyChallenges = () => {
   const fetchWeeklyChallenges = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/api/challenges/weekly');
+      const response = await apiClient.get('/challenges/weekly');
       if (response.data.success) {
         setWeeklyChallenges(response.data.challenges || {});
       }
@@ -62,7 +62,7 @@ const useDailyChallenges = () => {
    */
   const fetchPointsBalance = useCallback(async () => {
     try {
-      const response = await apiClient.get('/api/challenges/points/balance');
+      const response = await apiClient.get('/challenges/points/balance');
       if (response.data.success) {
         setPointsBalance({
           totalPoints: response.data.totalPoints,
@@ -83,7 +83,7 @@ const useDailyChallenges = () => {
     try {
       setLoading(true);
       const response = await apiClient.post(
-        `/api/challenges/${challengeId}/progress`,
+        `/challenges/${challengeId}/progress`,
         { increment }
       );
 
@@ -116,7 +116,7 @@ const useDailyChallenges = () => {
   const redeemPoints = useCallback(async (pointsToRedeem, rewardType, rewardValue) => {
     try {
       setLoading(true);
-      const response = await apiClient.post('/api/challenges/points/redeem', {
+      const response = await apiClient.post('/challenges/points/redeem', {
         pointsToRedeem,
         rewardType,
         rewardValue
@@ -144,7 +144,7 @@ const useDailyChallenges = () => {
     try {
       setLoading(true);
       const response = await apiClient.post(
-        `/api/challenges/redemptions/${redemptionId}/apply`,
+        `/challenges/redemptions/${redemptionId}/apply`,
         {}
       );
 
@@ -165,7 +165,7 @@ const useDailyChallenges = () => {
    */
   const fetchRedemptionHistory = useCallback(async (limit = 20) => {
     try {
-      const response = await apiClient.get('/api/challenges/redemptions/history', {
+      const response = await apiClient.get('/challenges/redemptions/history', {
         params: { limit }
       });
 
@@ -182,7 +182,7 @@ const useDailyChallenges = () => {
    */
   const fetchLeaderboard = useCallback(async (limit = 20) => {
     try {
-      const response = await apiClient.get('/api/challenges/leaderboard/weekly', {
+      const response = await apiClient.get('/challenges/leaderboard/weekly', {
         params: { limit }
       });
 
