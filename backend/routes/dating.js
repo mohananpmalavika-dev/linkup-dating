@@ -6199,7 +6199,12 @@ router.post('/interactions/rewind', authenticateToken, async (req, res) => {
     );
 
     if (passResult.rows.length === 0) {
-      return res.status(404).json({ error: 'No passes to rewind' });
+      return res.status(400).json({ 
+        error: 'No passes to rewind',
+        message: 'You have not passed on any profiles recently to rewind',
+        rewindsSent: rewindsSent,
+        rewindsRemaining: Math.max(0, rewindLimit - rewindsSent)
+      });
     }
 
     const lastPass = passResult.rows[0];
@@ -7559,7 +7564,7 @@ router.post('/message-requests/:requestId/decline', async (req, res) => {
 // ========== PHASE 4: ADVANCED PROFILE ANALYTICS & INSIGHTS ==========
 
 // 53. RECORD PROFILE VIEW
-router.post('/profiles/:userId/view', async (req, res) => {
+router.post('/profiles/:userId/view', authenticateToken, async (req, res) => {
   try {
     const viewerUserId = req.user.id;
     const { userId: viewedUserId } = req.params;
@@ -8439,7 +8444,7 @@ router.get('/profiles/me/premium-dashboard', async (req, res) => {
 });
 
 // 56. GET COMPATIBILITY WITH PROFILE
-router.get('/profiles/:userId/compatibility', async (req, res) => {
+router.get('/profiles/:userId/compatibility', authenticateToken, async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { userId: targetUserId } = req.params;
@@ -8633,137 +8638,8 @@ const checkAndCreateMutualMatch = async (userId1, userId2) => {
 // Note: Daily limits endpoint is defined earlier at line 5790 with complete implementation
 
 // 9c. REWIND LAST INTERACTION
-router.post('/interactions/rewind', async (req, res) => {
-  let userId;
-  try {
-    userId = req.user.id;
-    const { profileUserId } = req.body; // Optional: specific profile to rewind
-
-    // Get subscription access to check premium status
-    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
-    const isPremium = subscriptionAccess.isPremium || subscriptionAccess.isGold;
-
-    // Check daily limits for rewind (3/day for free, unlimited for premium)
-    const today = new Date().toISOString().split('T')[0];
-    const analyticsResult = await db.query(
-      `SELECT rewinds_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
-      [userId, today]
-    );
-
-    const rewindsSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_sent || 0) : 0;
-    const rewindLimit = isPremium ? Infinity : 3; // Premium: unlimited, Free: 3/day
-
-    if (rewindsSent >= rewindLimit) {
-      return res.status(429).json({
-        error: 'Daily rewind limit reached',
-        limit: rewindLimit,
-        used: rewindsSent,
-        remaining: 0,
-        isPremium: false,
-        upsellMessage: 'Upgrade to Premium for unlimited rewinds!'
-      });
-    }
-
-    let lastInteraction;
-
-    if (profileUserId) {
-      // Rewind specific profile (from undo history)
-      const specificResult = await db.query(
-        `SELECT * FROM user_decision_history 
-         WHERE user_id = $1 
-           AND profile_user_id = $2 
-           AND decision_type = 'pass'
-         ORDER BY decision_timestamp DESC 
-         LIMIT 1`,
-        [userId, profileUserId]
-      );
-
-      if (specificResult.rows.length === 0) {
-        return res.status(404).json({ error: 'No pass found for this profile' });
-      }
-
-      lastInteraction = {
-        to_user_id: profileUserId,
-        interaction_type: 'pass'
-      };
-
-      // Mark as undone in decision history
-      await db.query(
-        `UPDATE user_decision_history 
-         SET undo_action = true, undone_at = CURRENT_TIMESTAMP
-         WHERE user_id = $1 AND profile_user_id = $2 AND decision_type = 'pass'
-         ORDER BY decision_timestamp DESC 
-         LIMIT 1`,
-        [userId, profileUserId]
-      );
-    } else {
-      // Rewind most recent interaction (within last 5 minutes to prevent abuse)
-      const recentResult = await db.query(
-        `SELECT * FROM interactions 
-         WHERE from_user_id = $1 
-           AND interaction_type IN ('like', 'superlike', 'pass')
-           AND created_at > NOW() - INTERVAL '5 minutes'
-         ORDER BY created_at DESC 
-         LIMIT 1`,
-        [userId]
-      );
-
-      if (recentResult.rows.length === 0) {
-        return res.status(400).json({ error: 'No recent interactions to rewind' });
-      }
-
-      lastInteraction = recentResult.rows[0];
-
-      // Update decision history
-      await db.query(
-        `UPDATE user_decision_history 
-         SET undo_action = true, undone_at = CURRENT_TIMESTAMP
-         WHERE user_id = $1 AND profile_user_id = $2 AND decision_type = $3
-         ORDER BY decision_timestamp DESC 
-         LIMIT 1`,
-        [userId, lastInteraction.to_user_id, lastInteraction.interaction_type]
-      );
-    }
-
-    // Delete the last interaction
-    await db.query(
-      `DELETE FROM interactions 
-       WHERE from_user_id = $1 
-         AND to_user_id = $2 
-         AND interaction_type = $3`,
-      [userId, lastInteraction.to_user_id, lastInteraction.interaction_type]
-    );
-
-    // Update analytics
-    await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent, created_at)
-       VALUES ($1, $2::date, 1, NOW())
-       ON CONFLICT (user_id, activity_date) DO UPDATE
-       SET rewinds_sent = user_analytics.rewinds_sent + 1`,
-      [userId, today]
-    );
-
-    // Invalidate discovery cache
-    await invalidateDiscoveryCache(userId);
-
-    res.json({
-      message: 'Interaction rewound',
-      rewindedProfile: { userId: lastInteraction.to_user_id, interactionType: lastInteraction.interaction_type },
-      rewindsUsed: rewindsSent + 1,
-      rewindsRemaining: isPremium ? 'Unlimited' : Math.max(0, rewindLimit - rewindsSent - 1),
-      isPremium
-    });
-  } catch (err) {
-    console.error('Rewind error:', err);
-    if (err.message.includes('Daily') || err.message.includes('limit')) {
-      return res.status(429).json({ error: err.message });
-    }
-    res.status(500).json({ error: 'Failed to rewind interaction' });
-  }
-});
-
 // 22. BLOCK USER
-router.post('/block-user/:userId', async (req, res) => {
+router.post('/block-user/:userId', authenticateToken, async (req, res) => {
   let blockingUserId;
   let blockedUserId;
   try {
@@ -8805,7 +8681,7 @@ router.post('/block-user/:userId', async (req, res) => {
 });
 
 // 22b. UNBLOCK USER
-router.post('/unblock-user/:userId', async (req, res) => {
+router.post('/unblock-user/:userId', authenticateToken, async (req, res) => {
   let blockingUserId;
   let blockedUserId;
   try {
@@ -8833,7 +8709,7 @@ router.post('/unblock-user/:userId', async (req, res) => {
 });
 
 // 22c. GET BLOCKED USERS
-router.get('/blocked-users', async (req, res) => {
+router.get('/blocked-users', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(normalizeInteger(req.query.limit) || 50, 100);
@@ -8858,7 +8734,7 @@ router.get('/blocked-users', async (req, res) => {
 });
 
 // 23. REPORT USER
-router.post('/report-user/:userId', async (req, res) => {
+router.post('/report-user/:userId', authenticateToken, async (req, res) => {
   try {
     const reportingUserId = req.user.id;
     const reportedUserId = normalizeInteger(req.params.userId);
@@ -8948,7 +8824,7 @@ router.get('/my-reports', async (req, res) => {
 // ============ PHASE 2: PROFILE VIEWS & ANALYTICS ============
 
 // 24. RECORD PROFILE VIEW
-router.post('/profile-views/:userId', async (req, res) => {
+router.post('/profile-views/:userId', authenticateToken, async (req, res) => {
   try {
     const viewerUserId = req.user.id;
     const viewedUserId = normalizeInteger(req.params.userId);
@@ -11202,7 +11078,7 @@ router.patch('/presence/offline', async (req, res) => {
 });
 
 // 68. CHECK IF USER IS ONLINE (Premium Feature)
-router.get('/presence/:targetUserId', async (req, res) => {
+router.get('/presence/:targetUserId', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { targetUserId } = req.params;
@@ -11774,7 +11650,7 @@ router.get('/analytics/conversation-insights', async (req, res) => {
 });
 
 // 78. GET MATCH EXPLANATION (why a profile was suggested)
-router.get('/match-explanation/:suggestedUserId', async (req, res) => {
+router.get('/match-explanation/:suggestedUserId', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const suggestedUserId = parseInt(req.params.suggestedUserId);
@@ -12252,7 +12128,7 @@ router.post('/verify/run-fraud-check', async (req, res) => {
 });
 
 // 88. GET PROFILE TRUST SCORE (view own or another user's trust score)
-router.get('/profile-trust-score/:targetUserId', async (req, res) => {
+router.get('/profile-trust-score/:targetUserId', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const targetUserId = parseInt(req.params.targetUserId);

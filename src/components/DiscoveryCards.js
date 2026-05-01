@@ -560,7 +560,13 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
         showFeedback('success', 'Your last pass is back in the stack.');
       }
     } catch (rewindError) {
-      showFeedback('error', 'Failed to rewind your last pass.');
+      // Check if the error is "no passes to rewind"
+      const errorMessage = typeof rewindError === 'string' ? rewindError : 'Failed to rewind your last pass.';
+      if (errorMessage.includes('No passes')) {
+        showFeedback('info', 'You haven\'t passed on any profiles recently to rewind.');
+      } else {
+        showFeedback('error', errorMessage);
+      }
       console.error(rewindError);
     }
   };
