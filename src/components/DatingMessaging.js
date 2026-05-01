@@ -327,12 +327,16 @@ const DatingMessaging = ({
         (conversationRescuePlan?.actions?.length || 0) > 0
       )
   );
-  const showComposerStarters = messages.length < 3 && icebreakers.length > 0;
+  const hasMessages = messages.length > 0;
+  const matchDisplayName = activeMatch?.firstName || 'your match';
+  const defaultGreeting = `Hi ${matchDisplayName}, nice to match with you.`;
+  const showComposerStarters = hasMessages && messages.length < 3 && icebreakers.length > 0;
   const hasComposerSuggestions =
     showComposerStarters ||
     showPhaseTwoRescueStrip ||
     identityStarterChips.length > 0 ||
     sharedActionSuggestions.length > 0;
+  const showComposerSuggestions = hasMessages && hasComposerSuggestions;
 
   const showStatus = useCallback((message, tone = 'info') => {
     if (statusTimeoutRef.current) {
@@ -1207,10 +1211,10 @@ const DatingMessaging = ({
         />
       )}
 
-      <div className="messaging-header">
+      <div className="messaging-header" role="banner">
         <div className="messaging-header-left">
           {onBack ? (
-            <button type="button" className="btn-message-back" onClick={onBack}>
+            <button type="button" className="btn-message-back" onClick={onBack} aria-label="Go back">
               Back
             </button>
           ) : null}
@@ -1219,14 +1223,15 @@ const DatingMessaging = ({
             type="button"
             className="profile-info profile-info-button"
             onClick={() => onViewProfile?.(activeMatch)}
+            aria-label={`View ${matchDisplayName}'s profile`}
           >
             {activeMatch.photos?.[0] ? (
-              <img src={activeMatch.photos[0]} alt={activeMatch.firstName} />
+              <img src={activeMatch.photos[0]} alt={`${matchDisplayName}'s profile`} />
             ) : (
-              <div className="profile-avatar-fallback">{activeMatch.firstName?.charAt(0) || '?'}</div>
+              <div className="profile-avatar-fallback">{matchDisplayName.charAt(0).toUpperCase()}</div>
             )}
             <div>
-              <h3>{activeMatch.firstName}</h3>
+              <h3>{matchDisplayName}</h3>
               <span className="online-status">
                 {otherUserTyping ? 'Typing...' : otherUserOnline ? 'Online' : 'Chat ready'}
               </span>
@@ -1240,8 +1245,9 @@ const DatingMessaging = ({
             className="btn-chat-secondary"
             onClick={() => setShowDatePlanner((currentValue) => !currentValue)}
             title="Plan a date"
+            aria-label="Plan a date"
           >
-            {journey?.pendingProposal?.isReceived ? 'Review plan' : showDatePlanner ? 'Hide plan' : 'Plan'}
+            {journey?.pendingProposal?.isReceived ? 'Review plan' : showDatePlanner ? 'Hide plan' : 'Plan date'}
           </button>
 
           <button
@@ -1254,6 +1260,7 @@ const DatingMessaging = ({
               setShowIcebreakerPlayer(true);
             }}
             title="Watch icebreaker video"
+            aria-label="Watch video intro"
           >
             📹 Video Intro
           </button>
@@ -1263,6 +1270,7 @@ const DatingMessaging = ({
             className="btn-chat-primary"
             onClick={() => onVideoCall?.(activeMatch, location.pathname)}
             title="Start video call"
+            aria-label={`Start a call with ${matchDisplayName}`}
           >
             Call
           </button>
@@ -1272,6 +1280,7 @@ const DatingMessaging = ({
             className="btn-chat-more"
             onClick={() => setShowMoreActions((current) => !current)}
             aria-expanded={showMoreActions}
+            aria-controls="messaging-more-panel"
             title="More conversation tools"
           >
             More
@@ -1280,7 +1289,7 @@ const DatingMessaging = ({
       </div>
 
       {showMoreActions ? (
-        <div className="messaging-more-panel">
+        <div className="messaging-more-panel" id="messaging-more-panel">
           {securitySetupReady ? (
             <span className="messaging-badge">Secure setup ready</span>
           ) : null}
@@ -1464,29 +1473,50 @@ const DatingMessaging = ({
         </div>
       ) : null}
 
-      <div className="messages-container">
+      <div
+        className="messages-container"
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions text"
+        aria-label={`Conversation with ${matchDisplayName}`}
+      >
         {loadingMessages ? (
-          <div className="empty-messages">
+          <div className="empty-messages" role="status">
             <p>Loading messages...</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="empty-messages empty-messages-start">
-            <h3>Start the chat</h3>
-            <p>Send a simple message to {activeMatch.firstName}. You can use one of these ideas.</p>
+          <div className="empty-messages empty-messages-start" aria-labelledby="start-chat-title">
+            <div className="empty-message-panel">
+              <span className="empty-message-kicker">New match</span>
+              <h3 id="start-chat-title">Say hello to {matchDisplayName}</h3>
+              <p>Pick one friendly starter below, or write your own short message.</p>
+              <button
+                type="button"
+                className="icebreaker-chip icebreaker-chip-primary"
+                onClick={() => handleUseIcebreaker(defaultGreeting)}
+                aria-label={`Use a simple hello for ${matchDisplayName}`}
+              >
+                Use simple hello
+              </button>
             {icebreakers.length > 0 ? (
-              <div className="icebreaker-list">
-                {icebreakers.slice(0, 3).map((icebreaker) => (
-                  <button
-                    key={icebreaker}
-                    type="button"
-                    className="icebreaker-chip"
-                    onClick={() => handleUseIcebreaker(icebreaker)}
-                  >
-                    {icebreaker}
-                  </button>
-                ))}
-              </div>
+                <>
+                  <span className="empty-message-helper">Conversation starters</span>
+                  <div className="icebreaker-list">
+                    {icebreakers.slice(0, 2).map((icebreaker) => (
+                      <button
+                        key={icebreaker}
+                        type="button"
+                        className="icebreaker-chip"
+                        onClick={() => handleUseIcebreaker(icebreaker)}
+                        aria-label={`Use starter: ${icebreaker}`}
+                      >
+                        {icebreaker}
+                      </button>
+                    ))}
+                  </div>
+                </>
             ) : null}
+            </div>
           </div>
         ) : (
           messages.map((message) => (
@@ -1573,19 +1603,21 @@ const DatingMessaging = ({
         <div ref={messagesEndRef} />
       </div>
 
-      <MessageToolbar
-        matchId={activeMatchId}
-        onSelectTemplate={(content) => {
-          setInputMessage(content);
-          inputRef.current?.focus();
-        }}
-        onSearch={handleSearchSelect}
-        onAttachment={handleToolbarAttachments}
-        onLocation={handleShareLocation}
-        onMore={handleToolbarMore}
-      />
+      {hasMessages ? (
+        <MessageToolbar
+          matchId={activeMatchId}
+          onSelectTemplate={(content) => {
+            setInputMessage(content);
+            inputRef.current?.focus();
+          }}
+          onSearch={handleSearchSelect}
+          onAttachment={handleToolbarAttachments}
+          onLocation={handleShareLocation}
+          onMore={handleToolbarMore}
+        />
+      ) : null}
 
-      {hasComposerSuggestions ? (
+      {showComposerSuggestions ? (
         <div className="composer-starters">
           <span className="composer-starters-label">Helpful ideas</span>
           <div className="composer-starters-list">
@@ -1669,6 +1701,7 @@ const DatingMessaging = ({
               type="button"
               className="btn-stop-recording"
               onClick={stopVoiceRecording}
+              aria-label="Stop recording voice note"
               title="Stop recording"
             >
               Stop
@@ -1680,6 +1713,7 @@ const DatingMessaging = ({
             className="btn-voice"
             onClick={startVoiceRecording}
             disabled={sendingMedia || loadingMatch}
+            aria-label="Record a voice note"
             title="Record voice note"
           >
             Voice
@@ -1692,6 +1726,7 @@ const DatingMessaging = ({
           placeholder={disappearingEnabled ? 'Write a disappearing message...' : 'Write a message...'}
           value={inputMessage}
           onChange={handleTyping}
+          aria-label={`Message ${matchDisplayName}`}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();
@@ -1718,6 +1753,7 @@ const DatingMessaging = ({
             isRecordingVoice
           }
           className="btn-send"
+          aria-label="Send message"
         >
           {sendingMessage || sendingMedia ? '...' : 'Send'}
         </button>
