@@ -2659,11 +2659,45 @@ if (!tokenVerification.success) {
         signupMethod: 'google'
       }
     });
-  } catch (err) {
-    console.error('Google signup error:', err);
+} catch (err) {
+    console.error('Google signup error:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      stack: err.stack
+    });
+    
+    // Provide more specific error messages
+    if (err.message?.includes('Firebase')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Google authentication failed. Please try again or use email signup.',
+        code: 'FIREBASE_ERROR'
+      });
+    }
+    
+    if (err.message?.includes('age') || err.code === 'UNDERAGE_USER') {
+      return res.status(403).json({
+        success: false,
+        error: 'You must be at least 18 years old to use LinkUp',
+        code: 'UNDERAGE_USER'
+      });
+    }
+    
+    if (err.message?.includes('email')) {
+      return res.status(409).json({
+        success: false,
+        error: 'An account with this email already exists',
+        code: 'EMAIL_EXISTS'
+      });
+    }
+    
+    // Generic fallback
     res.status(500).json({
       success: false,
-      error: err.message || 'Google signup failed'
+      error: process.env.NODE_ENV === 'development' 
+        ? err.message 
+        : 'Google signup failed. Please try again or use email signup.'
     });
   }
 });

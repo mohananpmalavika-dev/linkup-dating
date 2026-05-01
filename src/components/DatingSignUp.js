@@ -98,7 +98,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   const usernameCheckTimeoutRef = React.useRef(null);
   const resendTimerRef = React.useRef(null);
 
-  const [formData, setFormData] = useState({
+const [formData, setFormData] = useState({
     firstName: '',
     age: '',
     gender: 'female',
@@ -125,6 +125,12 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     education: '',
     photos: [],
   });
+
+  // MPIN state for optional screen lock
+  const [mpin, setMpin] = useState('');
+  const [confirmMpin, setConfirmMpin] = useState('');
+  const [mpinError, setMpinError] = useState('');
+  const [mpinSuccess, setMpinSuccess] = useState('');
 
   const INTERESTS = [
     'Travel', 'Fitness', 'Music', 'Art', 'Cooking', 'Gaming', 'Sports',
