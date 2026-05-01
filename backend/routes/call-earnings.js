@@ -93,7 +93,7 @@ router.get('/history', async (req, res) => {
         cs.rate_per_minute,
         cs.total_cost,
         cs.status,
-        u_caller.first_name as caller_name,
+        caller_profile.first_name as caller_name,
         (
           SELECT photo_url 
           FROM profile_photos 
@@ -102,7 +102,7 @@ router.get('/history', async (req, res) => {
           LIMIT 1
         ) as caller_photo
       FROM call_sessions cs
-      LEFT JOIN users u_caller ON u_caller.id = cs.caller_id
+      LEFT JOIN dating_profiles caller_profile ON caller_profile.user_id = cs.caller_id
       WHERE cs.receiver_id = $1
         AND cs.status IN ('completed', 'declined', 'no_answer')
       ORDER BY cs.created_at DESC

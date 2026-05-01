@@ -101,6 +101,7 @@ async function runMigration() {
       CREATE TABLE IF NOT EXISTS call_requests (
         id SERIAL PRIMARY KEY,
         request_id VARCHAR(100) UNIQUE NOT NULL,
+        session_id VARCHAR(100),
         caller_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         receiver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         call_type VARCHAR(20) DEFAULT 'voice',
@@ -110,6 +111,9 @@ async function runMigration() {
         expires_at TIMESTAMP,
         responded_at TIMESTAMP
       );
+    `);
+    await client.query(`
+      ALTER TABLE call_requests ADD COLUMN IF NOT EXISTS session_id VARCHAR(100);
     `);
     console.log('✓ Created call_requests table');
 

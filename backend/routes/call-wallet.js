@@ -7,6 +7,14 @@ const db = require('../config/database');
 
 const router = express.Router();
 
+const CREDIT_PACKAGES = [
+  { id: 1, credits: 50, price: 50, bonus: 0, label: 'Starter' },
+  { id: 2, credits: 100, price: 95, bonus: 5, label: 'Basic' },
+  { id: 3, credits: 250, price: 225, bonus: 25, label: 'Popular' },
+  { id: 4, credits: 500, price: 425, bonus: 75, label: 'Pro' },
+  { id: 5, credits: 1000, price: 800, bonus: 200, label: 'Premium' }
+];
+
 const parseInteger = (value, fallback = null) => {
   const parsedValue = Number.parseInt(value, 10);
   return Number.isFinite(parsedValue) ? parsedValue : fallback;
@@ -75,19 +83,10 @@ router.get('/packages', async (req, res) => {
     const minPurchase = await getCallSetting('min_credits_purchase', '50');
     const enabled = await getCallSetting('calling_enabled', 'true');
     
-    // Define available packages
-    const packages = [
-      { id: 1, credits: 50, price: 50, bonus: 0, label: 'Starter' },
-      { id: 2, credits: 100, price: 95, bonus: 5, label: 'Basic' },
-      { id: 3, credits: 250, price: 225, bonus: 25, label: 'Popular' },
-      { id: 4, credits: 500, price: 425, bonus: 75, label: 'Pro' },
-      { id: 5, credits: 1000, price: 800, bonus: 200, label: 'Premium' }
-    ];
-    
     res.json({
       success: true,
       enabled: enabled === 'true',
-      packages,
+      packages: CREDIT_PACKAGES,
       minPurchase: parseInteger(minPurchase, 50)
     });
   } catch (error) {
@@ -102,18 +101,12 @@ router.post('/purchase/initiate', async (req, res) => {
     const userId = req.user.id;
     const packageId = parseInteger(req.body.packageId);
     
-    const packagePrices = {
-      1: { credits: 50, price: 50 },
-      2: { credits: 100, price: 95 },
-      3: { credits: 250, price: 225 },
-      4: { credits: 500, price: 425 },
-      5: { credits: 1000, price: 800 }
-    };
-    
-    const pkg = packagePrices[packageId];
+    const pkg = CREDIT_PACKAGES.find((creditPackage) => creditPackage.id === packageId);
     if (!pkg) {
       return res.status(400).json({ error: 'Invalid package' });
     }
+
+    const totalCredits = Number(pkg.credits) + Number(pkg.bonus || 0);
     
     // In production, create Razorpay order here
     // For now, simulate with order ID
@@ -130,7 +123,9 @@ router.post('/purchase/initiate', async (req, res) => {
       success: true,
       orderId,
       amount: pkg.price,
-      credits: pkg.credits,
+      credits: totalCredits,
+      baseCredits: pkg.credits,
+      bonusCredits: pkg.bonus,
       // In production, add Razorpay public key here
       key: 'razorpay_key'
     });

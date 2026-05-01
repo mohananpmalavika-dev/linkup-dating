@@ -1,118 +1,273 @@
 /**
- * Calling Dashboard - FRND-style paid calling interface
- * Users can buy credits and make/receive voice/video calls
+ * Calling Dashboard - paid voice/video calling marketplace.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import callWalletService from '../services/callWalletService';
 import '../styles/CallingDashboard.css';
 
-const CREDIT_PACKAGES = [
-  { id: 'starter', name: 'Starter', credits: 50, price: 50, bonus: 0 },
-  { id: 'basic', name: 'Basic', credits: 100, price: 95, bonus: 5 },
-  { id: 'popular', name: 'Popular', credits: 250, price: 225, bonus: 25 },
-  { id: 'pro', name: 'Pro', credits: 500, price: 425, bonus: 75 },
-  { id: 'premium', name: 'Premium', credits: 1000, price: 800, bonus: 200 }
+const ESTIMATED_CALL_MINUTES = 5;
+
+const FALLBACK_CREDIT_PACKAGES = [
+  { id: 1, name: 'Starter', credits: 50, price: 50, bonus: 0 },
+  { id: 2, name: 'Basic', credits: 100, price: 95, bonus: 5 },
+  { id: 3, name: 'Popular', credits: 250, price: 225, bonus: 25 },
+  { id: 4, name: 'Pro', credits: 500, price: 425, bonus: 75 },
+  { id: 5, name: 'Premium', credits: 1000, price: 800, bonus: 200 }
 ];
+
+const CALL_TYPES = {
+  voice: {
+    label: 'Voice',
+    actionLabel: 'Voice call',
+    description: 'Audio only'
+  },
+  video: {
+    label: 'Video',
+    actionLabel: 'Video call',
+    description: 'Camera and audio'
+  }
+};
+
+const toNumber = (value, fallback = 0) => {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : fallback;
+};
+
+const getUserId = (user) => user?.userId || user?.id || user?._id;
+
+const normalizePackage = (pkg) => ({
+  id: pkg.id,
+  name: pkg.name || pkg.label || 'Credits',
+  credits: toNumber(pkg.credits),
+  price: toNumber(pkg.price),
+  bonus: toNumber(pkg.bonus)
+});
+
+const normalizeCaller = (user) => {
+  const rates = user.rates || {};
+
+  return {
+    ...user,
+    userId: getUserId(user),
+    name: user.name || user.firstName || 'LinkUp user',
+    age: user.age,
+    location: user.location,
+    bio: user.bio || 'Available for a friendly call.',
+    photoUrl: user.photoUrl || user.photo_url,
+    callRating: toNumber(user.callRating),
+    totalCalls: toNumber(user.totalCalls),
+    rates: {
+      voice: toNumber(user.voiceRate ?? rates.voice, 5),
+      video: toNumber(user.videoRate ?? rates.video, 10)
+    },
+    interests: Array.isArray(user.interests) ? user.interests : []
+  };
+};
 
 const CallDashboard = () => {
   const { currentUser, apiCall } = useApp();
   const [balance, setBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
+  const [packages, setPackages] = useState(FALLBACK_CREDIT_PACKAGES);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [purchasing, setPurchasing] = useState(false);
-  const [purchaseSuccess, setPurchaseSuccess] = useState(false);
   const [callingUsers, setCallingUsers] = useState([]);
   const [loadingMarket, setLoadingMarket] = useState(false);
-  const [callModal, setCallModal] = useState(null);
-  const [calling, setCalling] = useState(false);
+  const [marketEnabled, setMarketEnabled] = useState(true);
+  const [availability, setAvailability] = useState(false);
+  const [loadingAvailability, setLoadingAvailability] = useState(true);
+  const [updatingAvailability, setUpdatingAvailability] = useState(false);
+  const [activeCallAction, setActiveCallAction] = useState(null);
+  const [pendingRequest, setPendingRequest] = useState(null);
+  const [notice, setNotice] = useState(null);
 
-  useEffect(() => {
-    loadBalance();
-    loadCallingMarket();
+  const normalizedPackages = useMemo(
+    () => packages.map(normalizePackage),
+    [packages]
+  );
+
+  const showNotice = useCallback((message, tone = 'info') => {
+    setNotice({ message, tone });
   }, []);
 
-  const loadBalance = async () => {
+  const loadBalance = useCallback(async () => {
     setLoadingBalance(true);
     try {
       const data = await callWalletService.getBalance();
-      setBalance(data.balance || 0);
+      setBalance(toNumber(data.balance));
     } catch (error) {
       console.error('Failed to load balance:', error);
+      showNotice('Could not load your call credits. Please try again.', 'error');
     } finally {
       setLoadingBalance(false);
     }
-  };
+  }, [showNotice]);
 
-  const loadCallingMarket = async () => {
+  const loadPackages = useCallback(async () => {
+    try {
+      const data = await callWalletService.getPackages();
+      if (Array.isArray(data.packages) && data.packages.length > 0) {
+        setPackages(data.packages);
+      }
+    } catch (error) {
+      console.error('Failed to load packages:', error);
+      setPackages(FALLBACK_CREDIT_PACKAGES);
+    }
+  }, []);
+
+  const loadCallingMarket = useCallback(async () => {
     setLoadingMarket(true);
     try {
-      const data = await apiCall('/calling/market', 'GET');
-      setCallingUsers(data.users || []);
+      const data = await apiCall('/calling/market/available', 'GET');
+      setMarketEnabled(data.enabled !== false);
+      setCallingUsers((data.users || []).map(normalizeCaller).filter((user) => user.userId));
     } catch (error) {
       console.error('Failed to load market:', error);
+      showNotice('Could not load people available for calls.', 'error');
     } finally {
       setLoadingMarket(false);
+    }
+  }, [apiCall, showNotice]);
+
+  const loadAvailability = useCallback(async () => {
+    setLoadingAvailability(true);
+    try {
+      const data = await apiCall('/calling/earnings/availability', 'GET');
+      setAvailability(Boolean(data.isAvailable));
+    } catch (error) {
+      console.error('Failed to load availability:', error);
+    } finally {
+      setLoadingAvailability(false);
+    }
+  }, [apiCall]);
+
+  useEffect(() => {
+    loadBalance();
+    loadPackages();
+    loadCallingMarket();
+    loadAvailability();
+  }, [loadAvailability, loadBalance, loadCallingMarket, loadPackages]);
+
+  const handleToggleAvailability = async () => {
+    if (!currentUser || updatingAvailability) {
+      return;
+    }
+
+    const nextAvailability = !availability;
+    setUpdatingAvailability(true);
+    try {
+      const data = await apiCall('/calling/earnings/availability', 'POST', {
+        available: nextAvailability
+      });
+      setAvailability(Boolean(data.isAvailable));
+      showNotice(
+        data.isAvailable
+          ? 'You are available for incoming paid calls.'
+          : 'You are offline for paid calls.',
+        'success'
+      );
+      await loadCallingMarket();
+    } catch (error) {
+      console.error('Failed to update availability:', error);
+      showNotice('Could not update your call availability.', 'error');
+    } finally {
+      setUpdatingAvailability(false);
     }
   };
 
   const handlePurchase = async (pkg) => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      showNotice('Please log in to buy call credits.', 'error');
+      return;
+    }
+
     setSelectedPackage(pkg);
     setPurchasing(true);
-    setPurchaseSuccess(false);
 
     try {
-      // Step 1: Initiate purchase
       const initiate = await callWalletService.initiatePurchase(pkg.id);
       if (initiate.checkoutUrl) {
-        // In production, redirect to payment checkout
-        // window.location.href = initiate.checkoutUrl;
-        console.log('Would redirect to payment:', initiate.checkoutUrl);
-        alert(`Payment gateway integration needed for ${pkg.price} INR`);
+        window.location.href = initiate.checkoutUrl;
+        return;
       }
+
+      showNotice(
+        `Payment order created for ${pkg.credits + pkg.bonus} credits. Complete payment when checkout opens.`,
+        'success'
+      );
     } catch (error) {
       console.error('Purchase failed:', error);
+      showNotice(error?.response?.data?.error || 'Could not start the credit purchase.', 'error');
     } finally {
       setPurchasing(false);
     }
   };
 
-  const handleStartCall = async (user) => {
-    if (!user || balance < 5) {
-      alert('Insufficient credits. Please purchase credits first.');
+  const handleStartCall = async (user, callType = 'voice') => {
+    const callerId = getUserId(user);
+    const normalizedCallType = callType === 'video' ? 'video' : 'voice';
+    const rate = toNumber(user?.rates?.[normalizedCallType], normalizedCallType === 'video' ? 10 : 5);
+    const requiredCredits = rate * ESTIMATED_CALL_MINUTES;
+
+    if (!callerId) {
+      showNotice('This caller profile is missing a valid ID.', 'error');
       return;
     }
 
-    setCallModal(user);
-    setCalling(true);
+    if (balance < requiredCredits) {
+      showNotice(
+        `You need at least ${requiredCredits} credits for a ${CALL_TYPES[normalizedCallType].label.toLowerCase()} call.`,
+        'error'
+      );
+      return;
+    }
+
+    const actionId = `${callerId}:${normalizedCallType}`;
+    setActiveCallAction(actionId);
 
     try {
-      // Deduct initial credits (first minute estimate)
-      const deduct = await callWalletService.deductCredits(null, 5, 'voice');
-      if (deduct.success) {
-        // Navigate to call interface
-        console.log('Starting call with:', user.name);
-        // In production, open call interface
-        alert(`Starting call with ${user.name}...`);
+      const response = await apiCall('/calling/market/request', 'POST', {
+        targetUserId: callerId,
+        callType: normalizedCallType
+      });
+
+      if (response?.success) {
+        setPendingRequest({
+          ...response,
+          userName: user.name,
+          userId: callerId
+        });
+        showNotice(
+          `${CALL_TYPES[normalizedCallType].label} call request sent to ${user.name}. Credits are reserved only when they accept.`,
+          'success'
+        );
       }
     } catch (error) {
       console.error('Failed to start call:', error);
+      showNotice(error?.response?.data?.error || 'Could not send the call request.', 'error');
     } finally {
-      setCalling(false);
-      setCallModal(null);
+      setActiveCallAction(null);
     }
   };
 
   return (
     <div className="calling-dashboard">
       <div className="calling-header">
-        <h1>📞 FRND Calling</h1>
-        <p>Make friends through voice and video calls</p>
+        <h1>Calls</h1>
+        <p>Use credits to request voice or video calls with people who are available now.</p>
       </div>
 
-      {/* Balance Card */}
+      {notice ? (
+        <div className={`calling-notice calling-notice-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>
+          <span>{notice.message}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       <div className="balance-card">
         <div className="balance-info">
           <span className="balance-label">Your Credits</span>
@@ -122,58 +277,93 @@ const CallDashboard = () => {
             <span className="balance-amount">{balance} credits</span>
           )}
         </div>
-        <button 
+        <button
           className="btn-reload"
           onClick={() => document.getElementById('credits-section')?.scrollIntoView({ behavior: 'smooth' })}
+          type="button"
         >
-          Reload Credits
+          Add Credits
         </button>
       </div>
 
-      {/* Credit Packages */}
+      <section className="availability-section">
+        <div>
+          <h2>Receive Calls</h2>
+          <p>
+            {availability
+              ? 'You are visible to people looking for a call.'
+              : 'Turn this on when you are ready to receive paid calls.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          className={`availability-toggle ${availability ? 'active' : ''}`}
+          onClick={handleToggleAvailability}
+          disabled={loadingAvailability || updatingAvailability}
+          aria-pressed={availability}
+        >
+          {loadingAvailability
+            ? 'Checking...'
+            : updatingAvailability
+              ? 'Saving...'
+              : availability
+                ? 'Available'
+                : 'Go Available'}
+        </button>
+      </section>
+
       <section id="credits-section" className="credits-section">
         <h2>Buy Credits</h2>
         <div className="packages-grid">
-          {CREDIT_PACKAGES.map((pkg) => (
-            <div 
-              key={pkg.id} 
+          {normalizedPackages.map((pkg) => (
+            <button
+              type="button"
+              key={pkg.id}
               className={`package-card ${selectedPackage?.id === pkg.id ? 'selected' : ''}`}
               onClick={() => handlePurchase(pkg)}
+              disabled={purchasing}
             >
-              <div className="package-badge">{pkg.name}</div>
-              <div className="package-credits">{pkg.credits + pkg.bonus} credits</div>
-              {pkg.bonus > 0 && (
-                <div className="package-bonus">+{pkg.bonus} bonus</div>
-              )}
-              <div className="package-price">₹{pkg.price}</div>
-              <button 
-                className="btn-buy-package"
-                onClick={(e) => { e.stopPropagation(); handlePurchase(pkg); }}
-                disabled={purchasing}
-              >
-                {purchasing && selectedPackage?.id === pkg.id ? 'Processing...' : 'Buy Now'}
-              </button>
-            </div>
+              <span className="package-badge">{pkg.name}</span>
+              <span className="package-credits">{pkg.credits + pkg.bonus} credits</span>
+              {pkg.bonus > 0 ? (
+                <span className="package-bonus">+{pkg.bonus} bonus</span>
+              ) : null}
+              <span className="package-price">INR {pkg.price}</span>
+              <span className="btn-buy-package">
+                {purchasing && selectedPackage?.id === pkg.id ? 'Processing...' : 'Buy'}
+              </span>
+            </button>
           ))}
         </div>
       </section>
 
-      {/* Calling Market */}
       <section className="market-section">
-        <h2>People Ready to Talk</h2>
-        <p className="market-hint">Browse profiles and start a call with someone interesting</p>
-        
+        <div className="section-title-row">
+          <div>
+            <h2>Available Now</h2>
+            <p className="market-hint">Send a request first. The call starts only after they accept.</p>
+          </div>
+          <button type="button" className="btn-refresh" onClick={loadCallingMarket} disabled={loadingMarket}>
+            Refresh
+          </button>
+        </div>
+
         {loadingMarket ? (
-          <div className="loading-market">Loading available callers...</div>
+          <div className="loading-market">Loading available people...</div>
+        ) : !marketEnabled ? (
+          <div className="empty-market">
+            <p>Calling is currently unavailable.</p>
+            <p>Please check back later.</p>
+          </div>
         ) : callingUsers.length === 0 ? (
           <div className="empty-market">
-            <p>No callers available right now.</p>
-            <p>Check back soon or be the first to go live!</p>
+            <p>No one is available for calls right now.</p>
+            <p>You can turn on your own availability above or check again soon.</p>
           </div>
         ) : (
           <div className="callers-list">
             {callingUsers.map((user) => (
-              <div key={user.id} className="caller-card">
+              <div key={user.userId} className="caller-card">
                 <div className="caller-avatar">
                   {user.photoUrl ? (
                     <img src={user.photoUrl} alt={user.name} />
@@ -182,72 +372,78 @@ const CallDashboard = () => {
                   )}
                 </div>
                 <div className="caller-info">
-                  <h3>{user.name}</h3>
-                  <p className="caller-bio">{user.bio || 'Looking to chat!'}</p>
+                  <h3>{user.name}{user.age ? `, ${user.age}` : ''}</h3>
+                  <p className="caller-bio">{user.bio}</p>
                   <div className="caller-tags">
-                    <span className="caller-rate">₹{user.voiceRate}/min</span>
-                    {user.interests?.slice(0, 2).map((tag, i) => (
+                    <span className="caller-rate">Voice INR {user.rates.voice}/min</span>
+                    <span className="caller-rate video-rate">Video INR {user.rates.video}/min</span>
+                    {user.interests.slice(0, 2).map((tag, i) => (
                       <span key={i} className="caller-tag">{tag}</span>
                     ))}
                   </div>
                 </div>
                 <div className="caller-actions">
-                  <button 
-                    className="btn-voice-call"
-                    onClick={() => handleStartCall(user)}
-                    disabled={balance < 5}
-                    title={`Start voice call (${user.voiceRate}/min)`}
-                  >
-                    📞 Call
-                  </button>
-                  <button 
-                    className="btn-video-call"
-                    onClick={() => handleStartCall({ ...user, callType: 'video' })}
-                    disabled={balance < 10}
-                    title={`Start video call (${user.videoRate}/min)`}
-                  >
-                    📹 Video
-                  </button>
+                  {Object.entries(CALL_TYPES).map(([callType, config]) => {
+                    const requiredCredits = user.rates[callType] * ESTIMATED_CALL_MINUTES;
+                    const actionId = `${user.userId}:${callType}`;
+                    const disabled = activeCallAction !== null || balance < requiredCredits;
+
+                    return (
+                      <button
+                        key={callType}
+                        className={`btn-call-action btn-${callType}-call`}
+                        onClick={() => handleStartCall(user, callType)}
+                        disabled={disabled}
+                        title={`${config.actionLabel}: ${requiredCredits} credits minimum`}
+                        type="button"
+                      >
+                        <strong>{activeCallAction === actionId ? 'Sending...' : config.label}</strong>
+                        <span>{config.description}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        <button className="btn-go-live" onClick={() => alert('Go Live feature coming soon!')}>
-          🎤 Become a Caller - Earn Credits
-        </button>
+        {pendingRequest ? (
+          <div className="pending-call-card" role="status">
+            <strong>Request sent</strong>
+            <p>{pendingRequest.userName} has about two minutes to accept. Keep this page open for updates.</p>
+          </div>
+        ) : null}
       </section>
 
-      {/* Pricing Info */}
       <section className="pricing-section">
         <h2>How It Works</h2>
         <div className="pricing-steps">
           <div className="pricing-step">
             <span className="step-number">1</span>
             <h3>Buy Credits</h3>
-            <p>Choose a package that fits your budget</p>
+            <p>Choose a package that fits your budget.</p>
           </div>
           <div className="pricing-step">
             <span className="step-number">2</span>
-            <h3>Browse Callers</h3>
-            <p>Find interesting people to chat with</p>
+            <h3>Pick a Person</h3>
+            <p>Only available profiles are shown here.</p>
           </div>
           <div className="pricing-step">
             <span className="step-number">3</span>
-            <h3>Start a Call</h3>
-            <p>Voice or video - credits are deducted per minute</p>
+            <h3>Send Request</h3>
+            <p>Voice or video, with the rate shown first.</p>
           </div>
           <div className="pricing-step">
             <span className="step-number">4</span>
-            <h3>Earn as a Caller</h3>
-            <p>Go live and earn credits when others call you</p>
+            <h3>Talk Safely</h3>
+            <p>The call begins only after both sides agree.</p>
           </div>
         </div>
         <div className="pricing-rates">
           <h3>Current Rates</h3>
-          <p>Voice: ₹5/min | Video: ₹10/min</p>
-          <p>Callers earn 70% of each call</p>
+          <p>Rates are shown on each profile before you send a request.</p>
+          <p>Credits are checked for a 5 minute estimate and settled after the call.</p>
         </div>
       </section>
     </div>

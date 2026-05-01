@@ -70,7 +70,9 @@ router.get('/available', async (req, res) => {
         u.id as user_id,
         dp.first_name,
         dp.age,
-        dp.location,
+        dp.location_city as location,
+        dp.bio,
+        dp.interests,
         dp.call_rating,
         dp.total_calls_taken,
         (
@@ -87,7 +89,7 @@ router.get('/available', async (req, res) => {
       INNER JOIN dating_profiles dp ON dp.user_id = u.id
       WHERE dp.is_available_for_calls = TRUE
         AND u.id != $1
-        AND u.status = 'active'
+        AND COALESCE(dp.is_active, TRUE) = TRUE
       ORDER BY dp.call_rating DESC, dp.total_calls_taken DESC
       LIMIT $2 OFFSET $3
     `, [userId, limit, offset]);
@@ -97,6 +99,8 @@ router.get('/available', async (req, res) => {
       name: user.first_name,
       age: user.age,
       location: user.location,
+      bio: user.bio,
+      interests: user.interests || [],
       photoUrl: user.photo_url,
       callRating: Number(user.call_rating) || 0,
       totalCalls: user.total_calls_taken || 0,
@@ -138,7 +142,7 @@ router.get('/user/:userId', async (req, res) => {
         u.id as user_id,
         dp.first_name,
         dp.age,
-        dp.location,
+        dp.location_city as location,
         dp.bio,
         dp.call_rating,
         dp.total_calls_taken,
@@ -154,7 +158,7 @@ router.get('/user/:userId', async (req, res) => {
         ) as photo_url
       FROM users u
       INNER JOIN dating_profiles dp ON dp.user_id = u.id
-      WHERE u.id = $1 AND u.status = 'active'
+      WHERE u.id = $1 AND COALESCE(dp.is_active, TRUE) = TRUE
     `, [targetUserId]);
     
     if (result.rows.length === 0) {
@@ -195,10 +199,15 @@ router.get('/user/:userId', async (req, res) => {
 router.post('/request', async (req, res) => {
   try {
     const callerId = req.user.id;
-    const { targetUserId, callType } = req.body;
+    const targetUserId = parseInteger(req.body.targetUserId);
+    const { callType } = req.body;
     
     if (!targetUserId) {
       return res.status(400).json({ error: 'Target user ID required' });
+    }
+
+    if (String(targetUserId) === String(callerId)) {
+      return res.status(400).json({ error: 'You cannot call yourself' });
     }
     
     if (!(await isCallingEnabled())) {
@@ -224,7 +233,7 @@ router.post('/request', async (req, res) => {
     
     // Check target is available
     const targetResult = await db.query(
-      'SELECT is_available_for_calls FROM dating_profiles WHERE user_id = $1',
+      'SELECT is_available_for_calls FROM dating_profiles WHERE user_id = $1 AND COALESCE(is_active, TRUE) = TRUE',
       [targetUserId]
     );
     
@@ -237,9 +246,9 @@ router.post('/request', async (req, res) => {
     
     // Create call request
     await db.query(`
-      INSERT INTO call_requests (request_id, caller_id, receiver_id, call_type, credits_required, status, expires_at)
-      VALUES ($1, $2, $3, $4, $5, 'pending', CURRENT_TIMESTAMP + INTERVAL '2 minutes')
-    `, [requestId, callerId, targetUserId, callTypeFinal, estimatedCost]);
+      INSERT INTO call_requests (request_id, session_id, caller_id, receiver_id, call_type, credits_required, status, expires_at)
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending', CURRENT_TIMESTAMP + INTERVAL '2 minutes')
+    `, [requestId, sessionId, callerId, targetUserId, callTypeFinal, estimatedCost]);
     
     // Create session record
     await db.query(`
@@ -268,42 +277,68 @@ router.post('/accept/:requestId', async (req, res) => {
     const receiverId = req.user.id;
     const requestId = req.params.requestId;
     
-    const requestResult = await db.query(
-      'SELECT * FROM call_requests WHERE request_id = $1 AND receiver_id = $2 AND status = $3',
-      [requestId, receiverId, 'pending']
-    );
-    
-    if (requestResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Request not found or expired' });
+    const client = await db.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const requestResult = await client.query(
+        `SELECT * FROM call_requests
+         WHERE request_id = $1
+           AND receiver_id = $2
+           AND status = $3
+           AND expires_at > CURRENT_TIMESTAMP
+         FOR UPDATE`,
+        [requestId, receiverId, 'pending']
+      );
+
+      if (requestResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Request not found or expired' });
+      }
+
+      const request = requestResult.rows[0];
+      const debitResult = await client.query(`
+        UPDATE call_credits
+        SET credits_balance = credits_balance - $2,
+            total_spent = total_spent + $2,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = $1
+          AND credits_balance >= $2
+        RETURNING credits_balance
+      `, [request.caller_id, request.credits_required]);
+
+      if (debitResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Caller no longer has enough credits' });
+      }
+
+      await client.query(`
+        UPDATE call_requests
+        SET status = 'accepted', responded_at = CURRENT_TIMESTAMP
+        WHERE request_id = $1
+      `, [requestId]);
+
+      await client.query(`
+        UPDATE call_sessions
+        SET status = 'ringing', start_time = CURRENT_TIMESTAMP
+        WHERE session_id = $1
+      `, [request.session_id]);
+
+      await client.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: 'Call request accepted',
+        sessionId: request.session_id,
+        balance: debitResult.rows[0].credits_balance
+      });
+    } catch (transactionError) {
+      await client.query('ROLLBACK');
+      throw transactionError;
+    } finally {
+      client.release();
     }
-    
-    const request = requestResult.rows[0];
-    
-    // Update request status
-    await db.query(`
-      UPDATE call_requests 
-      SET status = 'accepted', responded_at = CURRENT_TIMESTAMP
-      WHERE request_id = $1
-    `, [requestId]);
-    
-    // Update session status
-    await db.query(`
-      UPDATE call_sessions 
-      SET status = 'ringing', start_time = CURRENT_TIMESTAMP
-      WHERE caller_id = $1 AND receiver_id = $2 AND status = 'requested'
-    `, [request.caller_id, receiverId]);
-    
-    // Deduct initial credits
-    await db.query(`
-      UPDATE call_credits 
-      SET credits_balance = credits_balance - $2
-      WHERE user_id = $1
-    `, [request.caller_id, request.credits_required]);
-    
-    res.json({
-      success: true,
-      message: 'Call request accepted'
-    });
   } catch (error) {
     console.error('Accept call request error:', error);
     res.status(500).json({ error: 'Failed to accept call' });
@@ -316,22 +351,43 @@ router.post('/decline/:requestId', async (req, res) => {
     const receiverId = req.user.id;
     const requestId = req.params.requestId;
     
-    await db.query(`
-      UPDATE call_requests 
-      SET status = 'declined', responded_at = CURRENT_TIMESTAMP
-      WHERE request_id = $1 AND receiver_id = $2
-    `, [requestId, receiverId]);
-    
-    await db.query(`
-      UPDATE call_sessions 
-      SET status = 'declined', ended_at = CURRENT_TIMESTAMP
-      WHERE session_id = (SELECT session_id FROM call_requests WHERE request_id = $1)
-    `, [requestId]);
-    
-    res.json({
-      success: true,
-      message: 'Call request declined'
-    });
+    const client = await db.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const requestResult = await client.query(`
+        UPDATE call_requests
+        SET status = 'declined', responded_at = CURRENT_TIMESTAMP
+        WHERE request_id = $1
+          AND receiver_id = $2
+          AND status = 'pending'
+        RETURNING session_id
+      `, [requestId, receiverId]);
+
+      if (requestResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Request not found or already handled' });
+      }
+
+      await client.query(`
+        UPDATE call_sessions
+        SET status = 'declined', ended_at = CURRENT_TIMESTAMP
+        WHERE session_id = $1
+      `, [requestResult.rows[0].session_id]);
+
+      await client.query('COMMIT');
+
+      res.json({
+        success: true,
+        message: 'Call request declined'
+      });
+    } catch (transactionError) {
+      await client.query('ROLLBACK');
+      throw transactionError;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error('Decline call request error:', error);
     res.status(500).json({ error: 'Failed to decline call' });
@@ -346,11 +402,11 @@ router.get('/request/:requestId', async (req, res) => {
     
     const result = await db.query(`
       SELECT cr.*, 
-        u_caller.first_name as caller_name,
-        u_receiver.first_name as receiver_name
+        caller_profile.first_name as caller_name,
+        receiver_profile.first_name as receiver_name
       FROM call_requests cr
-      LEFT JOIN users u_caller ON u_caller.id = cr.caller_id
-      LEFT JOIN users u_receiver ON u_receiver.id = cr.receiver_id
+      LEFT JOIN dating_profiles caller_profile ON caller_profile.user_id = cr.caller_id
+      LEFT JOIN dating_profiles receiver_profile ON receiver_profile.user_id = cr.receiver_id
       WHERE cr.request_id = $1 AND (cr.caller_id = $2 OR cr.receiver_id = $2)
     `, [requestId, userId]);
     
@@ -364,6 +420,7 @@ router.get('/request/:requestId', async (req, res) => {
       success: true,
       request: {
         requestId: request.request_id,
+        sessionId: request.session_id,
         callerId: request.caller_id,
         callerName: request.caller_name,
         receiverId: request.receiver_id,
