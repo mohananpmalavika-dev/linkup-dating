@@ -246,14 +246,14 @@ router.post('/request', async (req, res) => {
     
     // Create call request
     await db.query(`
-      INSERT INTO call_requests (request_id, session_id, caller_id, receiver_id, call_type, credits_required, status, expires_at)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending', CURRENT_TIMESTAMP + INTERVAL '2 minutes')
+      INSERT INTO call_requests (request_id, session_id, caller_id, receiver_id, call_type, credits_required, status, expires_at, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending', CURRENT_TIMESTAMP + INTERVAL '2 minutes', NOW())
     `, [requestId, sessionId, callerId, targetUserId, callTypeFinal, estimatedCost]);
     
     // Create session record
     await db.query(`
-      INSERT INTO call_sessions (session_id, caller_id, receiver_id, call_type, rate_per_minute, status)
-      VALUES ($1, $2, $3, $4, $5, 'requested')
+      INSERT INTO call_sessions (session_id, caller_id, receiver_id, call_type, rate_per_minute, status, created_at)
+      VALUES ($1, $2, $3, $4, $5, 'requested', NOW())
     `, [sessionId, callerId, targetUserId, callTypeFinal, rate]);
     
     res.json({

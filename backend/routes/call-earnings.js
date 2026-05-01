@@ -209,8 +209,8 @@ router.post('/payout', async (req, res) => {
     
     // Create payout request
     const payoutResult = await db.query(`
-      INSERT INTO call_payouts (user_id, amount, method, upi_id, bank_account, bank_ifsc, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+      INSERT INTO call_payouts (user_id, amount, method, upi_id, bank_account, bank_ifsc, status, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())
       RETURNING id
     `, [userId, payoutAmount, method || 'upi', upiId || null, bankAccount || null, bankIfsc || null]);
     
@@ -319,8 +319,8 @@ router.post('/session/:sessionId/complete', async (req, res) => {
     
     // Record earnings transaction
     await db.query(`
-      INSERT INTO call_earnings (user_id, call_session_id, amount, type, status)
-      VALUES ($1, $2, $3, 'earned', 'completed')
+      INSERT INTO call_earnings (user_id, call_session_id, amount, type, status, created_at)
+      VALUES ($1, $2, $3, 'earned', 'completed', NOW())
     `, [receiverId, session.id, earnings]);
     
     // Refund remaining credits to caller
@@ -339,8 +339,8 @@ router.post('/session/:sessionId/complete', async (req, res) => {
       `, [refundAmount, callerId]);
       
       await db.query(`
-        INSERT INTO call_earnings (user_id, call_session_id, amount, type, status)
-        VALUES ($1, $2, $3, 'refund', 'completed')
+        INSERT INTO call_earnings (user_id, call_session_id, amount, type, status, created_at)
+        VALUES ($1, $2, $3, 'refund', 'completed', NOW())
       `, [callerId, session.id, refundAmount]);
     }
     

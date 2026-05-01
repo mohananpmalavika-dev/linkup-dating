@@ -128,8 +128,8 @@ router.post('/purchase/initiate', async (req, res) => {
     
     // Store pending purchase
     await db.query(
-      `INSERT INTO call_earnings (user_id, amount, type, status, reference_id)
-       VALUES ($1, $2, 'credit_purchase', 'pending', $3)`,
+      `INSERT INTO call_earnings (user_id, amount, type, status, reference_id, created_at)
+       VALUES ($1, $2, 'credit_purchase', 'pending', $3, NOW())`,
       [userId, pkg.price, orderId]
     );
     

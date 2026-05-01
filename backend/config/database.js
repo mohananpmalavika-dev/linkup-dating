@@ -577,6 +577,114 @@ const init = async () => {
       );
     `);
 
+      // Create call_settings table (admin-controlled rates)
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS call_settings (
+        id SERIAL PRIMARY KEY,
+        key VARCHAR(50) UNIQUE NOT NULL,
+        value TEXT,
+        description VARCHAR(255),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+      // Insert default call settings if not exist
+      await client.query(`
+      INSERT INTO call_settings (key, value, description) VALUES
+      ('voice_rate_per_minute', '5', 'Rate per minute for voice calls (INR)'),
+      ('video_rate_per_minute', '10', 'Rate per minute for video calls (INR)'),
+      ('earner_payout_percent', '70', 'Percentage of revenue earned by call receiver'),
+      ('min_payout_amount', '500', 'Minimum amount for payout request'),
+      ('min_credits_purchase', '50', 'Minimum credits purchase amount'),
+      ('calling_enabled', 'true', 'Enable/disable calling feature'),
+      ('payment_gateway', 'razorpay', 'Payment gateway: razorpay, upi, or both')
+      ON CONFLICT (key) DO NOTHING;
+    `);
+
+      // Create call_sessions table
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS call_sessions (
+        id SERIAL PRIMARY KEY,
+        session_id VARCHAR(100) UNIQUE NOT NULL,
+        caller_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        receiver_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        call_type VARCHAR(20) DEFAULT 'voice',
+        start_time TIMESTAMP,
+        end_time TIMESTAMP,
+        duration_seconds INTEGER DEFAULT 0,
+        rate_per_minute DECIMAL(10,2) DEFAULT 0.00,
+        total_cost DECIMAL(10,2) DEFAULT 0.00,
+        status VARCHAR(20) DEFAULT 'requested',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ended_at TIMESTAMP
+      );
+    `);
+
+      // Create call_requests table
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS call_requests (
+        id SERIAL PRIMARY KEY,
+        request_id VARCHAR(100) UNIQUE NOT NULL,
+        session_id VARCHAR(100),
+        caller_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        receiver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        call_type VARCHAR(20) DEFAULT 'voice',
+        credits_required DECIMAL(10,2),
+        status VARCHAR(20) DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP,
+        responded_at TIMESTAMP
+      );
+    `);
+
+      // Create call_credits table for calling feature
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS call_credits (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        credits_balance DECIMAL(12,2) DEFAULT 0.00,
+        total_spent DECIMAL(12,2) DEFAULT 0.00,
+        total_purchased DECIMAL(12,2) DEFAULT 0.00,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT unique_user_credits UNIQUE (user_id)
+      );
+    `);
+
+      // Create call_earnings table
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS call_earnings (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        call_session_id INTEGER,
+        amount DECIMAL(10,2) NOT NULL,
+        type VARCHAR(20) NOT NULL,
+        reference_id VARCHAR(100),
+        status VARCHAR(20) DEFAULT 'pending',
+        payment_method VARCHAR(20),
+        payment_reference VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        processed_at TIMESTAMP
+      );
+    `);
+
+      // Create call_payouts table
+      await client.query(`
+      CREATE TABLE IF NOT EXISTS call_payouts (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        amount DECIMAL(12,2) NOT NULL,
+        method VARCHAR(20) NOT NULL,
+        upi_id VARCHAR(100),
+        bank_account VARCHAR(50),
+        bank_ifsc VARCHAR(20),
+        status VARCHAR(20) DEFAULT 'pending',
+        failure_reason VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        processed_at TIMESTAMP
+      );
+    `);
+
       // Create indices for better query performance
       await client.query(`
       CREATE INDEX IF NOT EXISTS idx_dating_profiles_user_id ON dating_profiles(user_id);
@@ -604,6 +712,15 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_encryption_keys_active ON encryption_keys(is_active);
       CREATE INDEX IF NOT EXISTS idx_chat_backups_user_id ON chat_backups(user_id);
       CREATE INDEX IF NOT EXISTS idx_chat_backups_match_id ON chat_backups(match_id);
+      CREATE INDEX IF NOT EXISTS idx_call_credits_user_id ON call_credits(user_id);
+      CREATE INDEX IF NOT EXISTS idx_call_earnings_user_id ON call_earnings(user_id);
+      CREATE INDEX IF NOT EXISTS idx_call_payouts_user_id ON call_payouts(user_id);
+      CREATE INDEX IF NOT EXISTS idx_call_sessions_caller_id ON call_sessions(caller_id);
+      CREATE INDEX IF NOT EXISTS idx_call_sessions_receiver_id ON call_sessions(receiver_id);
+      CREATE INDEX IF NOT EXISTS idx_call_sessions_status ON call_sessions(status);
+      CREATE INDEX IF NOT EXISTS idx_call_requests_caller_id ON call_requests(caller_id);
+      CREATE INDEX IF NOT EXISTS idx_call_requests_receiver_id ON call_requests(receiver_id);
+      CREATE INDEX IF NOT EXISTS idx_call_requests_status ON call_requests(status);
     `);
 
       // Migration: backfill legacy users columns expected by auth and profile flows
