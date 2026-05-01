@@ -23,6 +23,7 @@ import Matches from './components/Matches';
 import DatingMessaging from './components/DatingMessaging';
 import DatingProfile from './components/DatingProfile';
 import DatingProfileView from './components/DatingProfileView';
+import AccountSettings from './components/AccountSettings';
 import MPINSetup from './components/MPINSetup';
 import VideoDating from './components/VideoDating';
 import ChatRooms from './components/ChatRooms';
@@ -165,11 +166,33 @@ const inferNavigationPage = (pathname, returnPath = '') => {
     return 'social';
   }
 
-  if (targetPath.startsWith('/profile')) {
+  if (targetPath === '/profile' || targetPath.startsWith('/profile/legal')) {
     return 'profile';
   }
 
-  if (targetPath.startsWith('/more')) {
+  if (
+    targetPath.startsWith('/more') ||
+    targetPath.startsWith('/account-settings') ||
+    targetPath.startsWith('/subscription') ||
+    targetPath.startsWith('/boost') ||
+    targetPath.startsWith('/analytics') ||
+    targetPath.startsWith('/referrals') ||
+    targetPath.startsWith('/profile-reset') ||
+    targetPath.startsWith('/moments') ||
+    targetPath.startsWith('/icebreaker') ||
+    targetPath.startsWith('/events') ||
+    targetPath.startsWith('/double-dates') ||
+    targetPath.startsWith('/video-verification') ||
+    targetPath.startsWith('/catfish-detection') ||
+    targetPath.startsWith('/achievements') ||
+    targetPath.startsWith('/leaderboards') ||
+    targetPath.startsWith('/daily-challenges') ||
+    targetPath.startsWith('/streaks') ||
+    targetPath.startsWith('/preferences-priority') ||
+    targetPath.startsWith('/smart-rewind') ||
+    targetPath.startsWith('/opening-templates') ||
+    targetPath.startsWith('/photo-ab-testing')
+  ) {
     return 'more';
   }
 
@@ -1081,7 +1104,11 @@ const AppContent = () => {
                 />
               }
             />
-            <Route path="profile" element={<DatingProfile onLogout={handleLogout} />} />
+            <Route path="profile" element={<DatingProfile />} />
+            <Route
+              path="account-settings"
+              element={<AccountSettings onBack={() => navigate('/more')} onLogout={handleLogout} />}
+            />
             <Route
               path="mpin-setup"
               element={
@@ -1094,6 +1121,9 @@ const AppContent = () => {
             <Route path="legal/privacy" element={<PrivacyPolicyPage />} />
             <Route path="legal/terms" element={<TermsOfServicePage />} />
             <Route path="legal/refund" element={<RefundPolicyPage />} />
+            <Route path="profile/legal/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="profile/legal/terms" element={<TermsOfServicePage />} />
+            <Route path="profile/legal/refund" element={<RefundPolicyPage />} />
             <Route path="achievements" element={<AchievementsPage />} />
             <Route path="leaderboards" element={<AchievementsPage defaultTab="leaderboards" />} />
             <Route

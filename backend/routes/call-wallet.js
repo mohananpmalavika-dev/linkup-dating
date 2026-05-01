@@ -62,6 +62,10 @@ const getOrCreateWallet = async (userId) => {
 // Get wallet balance
 router.get('/balance', async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const userId = req.user.id;
     const wallet = await getOrCreateWallet(userId);
     
@@ -73,7 +77,7 @@ router.get('/balance', async (req, res) => {
     });
   } catch (error) {
     console.error('Get wallet balance error:', error);
-    res.status(500).json({ error: 'Failed to get balance' });
+    res.status(500).json({ error: 'Failed to get balance', details: error.message });
   }
 });
 
@@ -98,9 +102,19 @@ router.get('/packages', async (req, res) => {
 // Initialize Razorpay order for credit purchase
 router.post('/purchase/initiate', async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const userId = req.user.id;
     const packageId = parseInteger(req.body.packageId);
     
+    console.log('Purchase initiate - userId:', userId, 'packageId:', packageId, 'body:', req.body);
+    
+    if (packageId === null) {
+      return res.status(400).json({ error: 'Invalid or missing package ID' });
+    }
+
     const pkg = CREDIT_PACKAGES.find((creditPackage) => creditPackage.id === packageId);
     if (!pkg) {
       return res.status(400).json({ error: 'Invalid package' });
@@ -131,13 +145,17 @@ router.post('/purchase/initiate', async (req, res) => {
     });
   } catch (error) {
     console.error('Purchase initiate error:', error);
-    res.status(500).json({ error: 'Failed to initiate purchase' });
+    res.status(500).json({ error: 'Failed to initiate purchase', details: error.message });
   }
 });
 
 // Verify payment and add credits
 router.post('/purchase/verify', async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const userId = req.user.id;
     const { orderId, paymentId, credits } = req.body;
     
@@ -177,13 +195,17 @@ router.post('/purchase/verify', async (req, res) => {
     });
   } catch (error) {
     console.error('Purchase verify error:', error);
-    res.status(500).json({ error: 'Failed to verify payment' });
+    res.status(500).json({ error: 'Failed to verify payment', details: error.message });
   }
 });
 
 // Deduct credits for call (called when call starts)
 router.post('/deduct', async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const userId = req.user.id;
     const { sessionId, estimatedMinutes } = req.body;
     
@@ -224,13 +246,17 @@ router.post('/deduct', async (req, res) => {
     });
   } catch (error) {
     console.error('Deduct credits error:', error);
-    res.status(500).json({ error: 'Failed to deduct credits' });
+    res.status(500).json({ error: 'Failed to deduct credits', details: error.message });
   }
 });
 
 // Refund unused credits after call ends
 router.post('/refund', async (req, res) => {
   try {
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const userId = req.user.id;
     const { sessionId, actualDurationSeconds, totalCharged } = req.body;
     
@@ -280,7 +306,7 @@ router.post('/refund', async (req, res) => {
     });
   } catch (error) {
     console.error('Refund credits error:', error);
-    res.status(500).json({ error: 'Failed to process refund' });
+    res.status(500).json({ error: 'Failed to process refund', details: error.message });
   }
 });
 
