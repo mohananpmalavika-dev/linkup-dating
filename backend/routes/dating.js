@@ -5997,6 +5997,7 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
       throw analyticsErr;
     }
 
+    let isNewLike = false;
     try {
       const likeInsertResult = await db.query(
         `INSERT INTO interactions (from_user_id, to_user_id, interaction_type, created_at)
@@ -6007,101 +6008,130 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
       );
       console.log(`[LIKE] Insert result rowCount: ${likeInsertResult.rowCount}`);
       
-      if (likeInsertResult.rowCount > 0) {
+      isNewLike = likeInsertResult.rowCount > 0;
+      
+      if (isNewLike) {
         await persistLearningFeedback({
           userId: fromUserId,
           targetUserId: userId,
           interactionType: 'like'
         });
+      } else {
+        // Like already exists - check if this is a genuine duplicate attempt
+        const existingLike = await db.query(
+          `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type = 'like'`,
+          [fromUserId, userId]
+        );
+        console.log(`[LIKE] Duplicate like attempt detected for user ${fromUserId} to user ${userId}`);
+        
+        if (existingLike.rows.length > 0) {
+          // Get updated limits
+          const updatedLimits = await getDailyLimitSnapshot(fromUserId);
+          return res.status(409).json({
+            error: 'You already liked this profile',
+            isMatch: false,
+            isDuplicate: true,
+            remainingLikes: updatedLimits.remainingLikes,
+            couponLikesCredits: updatedLimits.couponLikesCredits,
+            message: 'You already liked this profile'
+          });
+        }
       }
     } catch (insertErr) {
       console.error(`[LIKE] Error inserting interaction:`, insertErr);
       throw insertErr;
     }
 
-    try {
-      await db.query(
-        `INSERT INTO user_analytics (user_id, activity_date, likes_sent, created_at)
-         VALUES ($1, $2, 1, NOW())
-         ON CONFLICT (user_id, activity_date) DO UPDATE
-         SET likes_sent = user_analytics.likes_sent + 1`,
-        [fromUserId, today]
-      );
-      console.log(`[LIKE] Updated user analytics`);
-    } catch (analyticsUpdateErr) {
-      console.error(`[LIKE] Error updating user analytics:`, analyticsUpdateErr);
-      throw analyticsUpdateErr;
-    }
-
-    try {
-      await spamFraudService.trackUserActivity({ userId: fromUserId, action: 'like_profile', analyticsUpdates: { likes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
-      console.log(`[LIKE] Tracked user activity`);
-    } catch (spamErr) {
-      console.error(`[LIKE] Error tracking user activity:`, spamErr);
-      // Don't throw - spam check shouldn't block the like
-    }
-
-    try {
-      const mutualResult = await db.query(
-        `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,
-        [userId, fromUserId]
-      );
-      console.log(`[LIKE] Mutual check result: ${mutualResult.rows.length} matching interactions`);
-
-      if (mutualResult.rows.length > 0) {
-        try {
-          const persistedMatch = await ensureActiveMatch(fromUserId, userId);
-          console.log(`[LIKE] Match created/updated:`, persistedMatch?.id);
-
-          if (!persistedMatch) {
-            throw new Error(`Failed to persist mutual like match for users ${fromUserId} and ${userId}`);
-          }
-
-          if (typeof req.emitToUser === 'function') {
-            [fromUserId, userId].forEach((pid) => {
-              req.emitToUser(pid, 'new_match', { match: persistedMatch, user: { id: fromUserId }, matchedUserId: pid === fromUserId ? userId : fromUserId, createdAt: new Date().toISOString() });
-            });
-          }
-
-          await Promise.all([
-            userNotificationService.createNotification(fromUserId, { type: 'new_match', title: 'You have a new match', body: 'Someone liked you back. Open the chat to say hello.', metadata: { matchId: persistedMatch.id, matchedUserId: userId } }),
-            userNotificationService.createNotification(userId, { type: 'new_match', title: 'It is a match', body: 'You matched with someone new. Start the conversation when you are ready.', metadata: { matchId: persistedMatch.id, matchedUserId: fromUserId } })
-          ]);
-          console.log(`[LIKE] Notifications sent`);
-
-          await spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
-          await spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
-          await spamFraudService.refreshSystemMetrics();
-          console.log(`[LIKE] Match analytics updated`);
-
-          // Get updated limits after like
-          const updatedLimits = await getDailyLimitSnapshot(fromUserId);
-
-          return res.json({
-            message: 'Its a match!',
-            isMatch: true,
-            match: persistedMatch,
-            remainingLikes: updatedLimits.remainingLikes,
-            couponLikesCredits: updatedLimits.couponLikesCredits
-          });
-        } catch (matchErr) {
-          console.error(`[LIKE] Error processing mutual match:`, matchErr);
-          throw matchErr;
-        }
+    if (isNewLike) {
+      try {
+        await db.query(
+          `INSERT INTO user_analytics (user_id, activity_date, likes_sent, created_at)
+           VALUES ($1, $2, 1, NOW())
+           ON CONFLICT (user_id, activity_date) DO UPDATE
+           SET likes_sent = user_analytics.likes_sent + 1`,
+          [fromUserId, today]
+        );
+        console.log(`[LIKE] Updated user analytics`);
+      } catch (analyticsUpdateErr) {
+        console.error(`[LIKE] Error updating user analytics:`, analyticsUpdateErr);
+        throw analyticsUpdateErr;
       }
 
+      try {
+        await spamFraudService.trackUserActivity({ userId: fromUserId, action: 'like_profile', analyticsUpdates: { likes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
+        console.log(`[LIKE] Tracked user activity`);
+      } catch (spamErr) {
+        console.error(`[LIKE] Error tracking user activity:`, spamErr);
+        // Don't throw - spam check shouldn't block the like
+      }
+    }
+
+    if (isNewLike) {
+      try {
+        const mutualResult = await db.query(
+          `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,
+          [userId, fromUserId]
+        );
+        console.log(`[LIKE] Mutual check result: ${mutualResult.rows.length} matching interactions`);
+
+        if (mutualResult.rows.length > 0) {
+          try {
+            const persistedMatch = await ensureActiveMatch(fromUserId, userId);
+            console.log(`[LIKE] Match created/updated:`, persistedMatch?.id);
+
+            if (!persistedMatch) {
+              throw new Error(`Failed to persist mutual like match for users ${fromUserId} and ${userId}`);
+            }
+
+            if (typeof req.emitToUser === 'function') {
+              [fromUserId, userId].forEach((pid) => {
+                req.emitToUser(pid, 'new_match', { match: persistedMatch, user: { id: fromUserId }, matchedUserId: pid === fromUserId ? userId : fromUserId, createdAt: new Date().toISOString() });
+              });
+            }
+
+            await Promise.all([
+              userNotificationService.createNotification(fromUserId, { type: 'new_match', title: 'You have a new match', body: 'Someone liked you back. Open the chat to say hello.', metadata: { matchId: persistedMatch.id, matchedUserId: userId } }),
+              userNotificationService.createNotification(userId, { type: 'new_match', title: 'It is a match', body: 'You matched with someone new. Start the conversation when you are ready.', metadata: { matchId: persistedMatch.id, matchedUserId: fromUserId } })
+            ]);
+            console.log(`[LIKE] Notifications sent`);
+
+            await spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
+            await spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
+            await spamFraudService.refreshSystemMetrics();
+            console.log(`[LIKE] Match analytics updated`);
+
+            // Get updated limits after like
+            const updatedLimits = await getDailyLimitSnapshot(fromUserId);
+
+            return res.json({
+              message: 'Its a match!',
+              isMatch: true,
+              match: persistedMatch,
+              remainingLikes: updatedLimits.remainingLikes,
+              couponLikesCredits: updatedLimits.couponLikesCredits
+            });
+          } catch (matchErr) {
+            console.error(`[LIKE] Error processing mutual match:`, matchErr);
+            throw matchErr;
+          }
+        }
+      } catch (mutualErr) {
+        console.error(`[LIKE] Error checking mutual likes:`, mutualErr);
+        throw mutualErr;
+      }
+    }
+
+    // If we got here, it's a new like but no mutual match yet
+    if (isNewLike) {
       // Get updated limits after like
       const updatedLimits = await getDailyLimitSnapshot(fromUserId);
 
-      res.json({
+      return res.json({
         message: 'Profile liked',
         isMatch: false,
         remainingLikes: updatedLimits.remainingLikes,
         couponLikesCredits: updatedLimits.couponLikesCredits
       });
-    } catch (mutualErr) {
-      console.error(`[LIKE] Error checking mutual likes:`, mutualErr);
-      throw mutualErr;
     }
   } catch (err) {
     const errorId = `LIKE_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;

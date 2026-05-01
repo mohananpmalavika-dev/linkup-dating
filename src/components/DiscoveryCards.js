@@ -625,12 +625,21 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
     try {
       const response = await datingProfileService.likeProfile(profile.userId);
+      
+      // Only update state if this was a new like (not a duplicate)
+      if (response.isDuplicate) {
+        // Backend is returning a 409 for duplicates, but axios will throw
+        // This should be handled in the catch block
+        return;
+      }
+      
       if (response.remainingLikes !== undefined) {
         setRemainingLikes(response.remainingLikes);
       } else {
         setRemainingLikes((currentLikes) => Math.max(0, currentLikes - 1));
       }
 
+      // Only add to liked set if this was a new like
       setLikedUserIds((prev) => new Set([...prev, userId]));
 
       if (response.isMatch) {
@@ -639,8 +648,18 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
       moveToNextCard();
     } catch (likeError) {
-      showFeedback('error', 'Failed to like this profile.');
-      console.error(likeError);
+      // Handle 409 conflict error (duplicate like)
+      if (likeError.response?.status === 409) {
+        // Make sure the userId is in the liked set
+        if (!likedUserIds.has(userId)) {
+          setLikedUserIds((prev) => new Set([...prev, userId]));
+        }
+        showFeedback('info', `You already liked ${profile.firstName}.`);
+        moveToNextCard();
+      } else {
+        showFeedback('error', 'Failed to like this profile.');
+        console.error(likeError);
+      }
     }
   };
 
@@ -704,7 +723,22 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const handleQuickViewLike = useCallback(async (profile) => {
     try {
       const userId = String(profile.id);
+      
+      // Check if already liked
+      if (likedUserIds.has(userId)) {
+        console.log(`Profile ${userId} already liked, skipping`);
+        return;
+      }
+      
       const response = await datingProfileService.likeProfile(profile.id);
+      
+      // Only update state if this was a new like (not a duplicate)
+      if (response.isDuplicate) {
+        // Add to liked set even though it's a duplicate from backend perspective
+        setLikedUserIds((prev) => new Set([...prev, userId]));
+        return;
+      }
+      
       if (response.remainingLikes !== undefined) {
         setRemainingLikes(response.remainingLikes);
       } else {
@@ -715,9 +749,18 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
         onMatch?.({ ...profile, matchId: response.match?.id || null });
       }
     } catch (error) {
-      console.error('Error liking from quick view:', error);
+      // Handle 409 conflict error (duplicate like)
+      if (error.response?.status === 409) {
+        const userId = String(profile.id);
+        if (!likedUserIds.has(userId)) {
+          setLikedUserIds((prev) => new Set([...prev, userId]));
+        }
+        console.log(`Profile ${profile.id} already liked`);
+      } else {
+        console.error('Error liking from quick view:', error);
+      }
     }
-  }, [onMatch]);
+  }, [onMatch, likedUserIds]);
 
   const handleQuickViewPass = useCallback(async (profile) => {
     try {
