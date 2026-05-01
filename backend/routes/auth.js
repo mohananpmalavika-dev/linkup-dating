@@ -2515,7 +2515,7 @@ router.post('/google-signup', async (req, res) => {
       });
     }
 
-    // Sync admin privileges if needed
+// Sync admin privileges if needed
     await syncAdminPrivilegesForEmail(normalizedEmail);
 
     // Check if user already exists
@@ -2524,28 +2524,52 @@ router.post('/google-signup', async (req, res) => {
       [normalizedEmail]
     );
 
-    // Age verification is only required for NEW users (signup), not existing users (login)
+    // Age verification is required for NEW users (signup), optional for existing users (login)
     let verifiedAge = null;
-    if (existingUserResult.rows.length === 0 && !ageVerification) {
-      return res.status(400).json({ error: 'Date of birth verification is required for signup' });
-    }
-
-    // Validate age verification only if provided or if creating new account
-    if (ageVerification) {
+    
+    if (existingUserResult.rows.length === 0) {
+      // NEW USER: Age verification is MANDATORY
+      if (!ageVerification) {
+        return res.status(400).json({ error: 'Date of birth verification is required for signup' });
+      }
+      
+      // Validate age verification for new user
       const ageValidation = validateAgeVerification(ageVerification);
       if (!ageValidation.valid) {
         return res.status(400).json({
-          error: ageValidation.errors[0] || 'Invalid date of birth'
+          error: ageValidation.errors[0] || 'Invalid date of birth',
+          code: 'AGE_VERIFICATION_FAILED'
         });
       }
 
       if (!ageValidation.isOver18) {
         return res.status(403).json({
-          error: 'You must be at least 18 years old to use LinkUp'
+          error: 'You must be at least 18 years old to use LinkUp',
+          code: 'UNDERAGE_USER'
         });
       }
 
       verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
+    } else {
+      // EXISTING USER: Validate age only if provided (optional for returning users)
+      if (ageVerification) {
+        const ageValidation = validateAgeVerification(ageVerification);
+        if (!ageValidation.valid) {
+          return res.status(400).json({
+            error: ageValidation.errors[0] || 'Invalid date of birth',
+            code: 'AGE_VERIFICATION_FAILED'
+          });
+        }
+
+        if (!ageValidation.isOver18) {
+          return res.status(403).json({
+            error: 'You must be at least 18 years old to use LinkUp',
+            code: 'UNDERAGE_USER'
+          });
+        }
+
+        verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
+      }
     }
 
     let user;
