@@ -31,6 +31,15 @@ router.post('/messages', async (req, res) => {
     const userId = req.user?.id;
     const { message } = req.body;
 
+    console.log('LOBBY MESSAGE - Request received:', {
+      userId,
+      hasBody: !!req.body,
+      bodyKeys: req.body ? Object.keys(req.body) : 'none',
+      messageType: typeof message,
+      messageValue: message,
+      contentType: req.headers['content-type']
+    });
+
     // Validate user authentication first
     if (!userId) {
       console.warn('LOBBY MESSAGE - No user ID from request:', {
@@ -44,12 +53,19 @@ router.post('/messages', async (req, res) => {
       });
     }
 
-    // Validate message
+    // Validate message - log detailed diagnostics
     if (!message) {
-      console.warn('LOBBY MESSAGE - No message provided');
+      console.warn('LOBBY MESSAGE - No message provided:', {
+        body: req.body,
+        messageField: message,
+        messageUndefined: message === undefined,
+        messageNull: message === null,
+        messageFalsy: !message
+      });
       return res.status(400).json({ 
         error: 'Message is required',
-        code: 'NO_MESSAGE'
+        code: 'NO_MESSAGE',
+        hint: 'Include a "message" field in the request body with text content'
       });
     }
 
@@ -57,7 +73,8 @@ router.post('/messages', async (req, res) => {
       console.warn('LOBBY MESSAGE - Invalid message type:', typeof message);
       return res.status(400).json({ 
         error: 'Message must be a string',
-        code: 'INVALID_MESSAGE_TYPE'
+        code: 'INVALID_MESSAGE_TYPE',
+        received: typeof message
       });
     }
 
@@ -66,7 +83,9 @@ router.post('/messages', async (req, res) => {
       console.warn('LOBBY MESSAGE - Message is empty after trim');
       return res.status(400).json({ 
         error: 'Message cannot be empty',
-        code: 'EMPTY_MESSAGE'
+        code: 'EMPTY_MESSAGE',
+        originalLength: message.length,
+        trimmedLength: trimmedMessage.length
       });
     }
 
@@ -74,7 +93,8 @@ router.post('/messages', async (req, res) => {
       console.warn('LOBBY MESSAGE - Message too long:', trimmedMessage.length);
       return res.status(400).json({ 
         error: 'Message cannot exceed 5000 characters',
-        code: 'MESSAGE_TOO_LONG'
+        code: 'MESSAGE_TOO_LONG',
+        length: trimmedMessage.length
       });
     }
 
