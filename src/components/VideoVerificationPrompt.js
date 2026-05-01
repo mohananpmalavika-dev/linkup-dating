@@ -3,7 +3,7 @@
  * Prompts users to verify their identity via video call
  * Shows benefits and requirements
  */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/VideoVerificationPrompt.css';
 
 const VideoVerificationPrompt = ({ 
@@ -13,6 +13,38 @@ const VideoVerificationPrompt = ({
   userIsPremium = false
 }) => {
   const [showDetails, setShowDetails] = useState(false);
+
+  useEffect(() => {
+    console.log('VideoVerificationPrompt mounted', { 
+      hasOnInitiateVerification: !!onInitiateVerification,
+      hasDismiss: !!onDismiss,
+      isVerified,
+      userIsPremium
+    });
+  }, [onInitiateVerification, onDismiss, isVerified, userIsPremium]);
+
+  const handleStartVerification = (e) => {
+    console.log('Start Verification button clicked', e);
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (typeof onInitiateVerification === 'function') {
+      console.log('Calling onInitiateVerification');
+      onInitiateVerification();
+    } else {
+      console.error('onInitiateVerification is not a function:', onInitiateVerification);
+    }
+  };
+
+  const handleDismiss = (e) => {
+    console.log('Remind Me Later button clicked');
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (typeof onDismiss === 'function') {
+      onDismiss();
+    }
+  };
 
   if (isVerified) {
     return (
@@ -78,8 +110,13 @@ const VideoVerificationPrompt = ({
 
       <div className="how-it-works">
         <button 
+          type="button"
           className="details-toggle"
-          onClick={() => setShowDetails(!showDetails)}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setShowDetails(!showDetails);
+          }}
         >
           {showDetails ? '▼' : '▶'} How it works
         </button>
@@ -123,14 +160,16 @@ const VideoVerificationPrompt = ({
 
       <div className="prompt-actions">
         <button 
+          type="button"
           className="btn-verify"
-          onClick={onInitiateVerification}
+          onClick={handleStartVerification}
         >
           Start Verification
         </button>
         <button 
+          type="button"
           className="btn-dismiss"
-          onClick={onDismiss}
+          onClick={handleDismiss}
         >
           Remind Me Later
         </button>

@@ -24,6 +24,8 @@ const appDataRoutes = require('./routes/app-data');
 const astrologyRoutes = require('./routes/astrology');
 const flashsalesRoutes = require('./routes/flashsales');
 const videoCallRoutes = require('./routes/video-calls');
+const callMarketRoutes = require('./routes/call-market');
+const callWalletRoutes = require('./routes/call-wallet');
 const socialRoutes = require('./routes/social');
 const notificationRoutes = require('./routes/notifications');
 const challengeRoutes = require('./routes/challenges');
@@ -46,6 +48,7 @@ const dateSafetyRoutes = require('./routes/dateSafety');
 const icebreakerVideoRoutes = require('./routes/icebreakerVideos');
 const momentsRoutes = require('./routes/moments');
 const videoInsightsRoutes = require('./routes/videoInsights');
+const paymentsRoutes = require('./routes/payments');
 const { authenticateToken } = require('./middleware/auth');
 const { checkIPBlock } = require('./middleware/ipBlocking');
 
@@ -519,14 +522,13 @@ app.use('/api/messaging', authenticateToken, messagingEnhancedRoutes);
 app.use('/api/chatrooms', authenticateToken, chatroomsRoutes);
 app.use('/api/lobby', authenticateToken, lobbyRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
-app.use('/api/social', socialRoutes);
+app.use('/api/social', authenticateToken, socialRoutes);
 app.use('/api/notifications', authenticateToken, notificationRoutes);
 app.use('/api/challenges', authenticateToken, challengeRoutes);
 app.use('/api/streaks', authenticateToken, streakRoutes);
 app.use('/api/introductions', authenticateToken, introductionsRoutes);
 app.use('/api/boosts', boostRoutes);
 app.use('/api/preferences-priority', authenticateToken, preferencesPriorityRoutes);
-app.use('/api/profile-reset', authenticateToken, profileResetRoutes);
 app.use('/api/events', authenticateToken, eventRoutes);
 app.use('/api/double-dates', authenticateToken, doubleDatesRoutes);
 app.use('/api/referrals', referralRoutes);
@@ -539,8 +541,12 @@ app.use('/api/catfish-detection', authenticateToken, catfishDetectionRoutes);
 app.use('/api/video-verification', authenticateToken, videoVerificationRoutes);
 app.use('/api/date-safety', authenticateToken, dateSafetyRoutes);
 app.use('/api/icebreaker-videos', authenticateToken, icebreakerVideoRoutes);
+app.use('/api/profile-reset', profileResetRoutes);
+app.use('/api/calling/market', authenticateToken, callMarketRoutes);
+app.use('/api/calling/wallet', authenticateToken, callWalletRoutes);
 app.use('/api/moments', momentsRoutes);
 app.use('/api/video-insights', videoInsightsRoutes);
+app.use('/api/payments', authenticateToken, paymentsRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -673,6 +679,20 @@ db.init()
             message: err.message,
             stack: err.stack
           });
+        }
+
+        // Run FRND calling system migration
+        try {
+          logger.info('Initializing FRND calling system tables...');
+          const runFrndMigration = require('./migrations/20250601_frnd_calling_system');
+          await runFrndMigration();
+          logger.info('✓ FRND calling system initialized');
+        } catch (err) {
+          logger.warn('Failed to initialize FRND calling system', {
+            message: err.message,
+            code: err.code
+          });
+          // Don't fail startup if calling system init fails
         }
       }).catch(err => {
         logger.error('Sequelize sync error', {

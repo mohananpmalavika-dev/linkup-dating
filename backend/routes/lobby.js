@@ -35,8 +35,8 @@ router.post('/messages', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    if (!message) {
-      return res.status(400).json({ error: 'Message required' });
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required and must be a non-empty string' });
     }
 
     // Insert message
@@ -44,18 +44,28 @@ router.post('/messages', async (req, res) => {
       `INSERT INTO lobby_messages (from_user_id, message)
        VALUES ($1, $2)
        RETURNING *`,
-      [userId, message]
+      [userId, message.trim()]
     );
+
+    if (!result.rows || result.rows.length === 0) {
+      console.error('SEND LOBBY MESSAGE - No rows returned from INSERT');
+      return res.status(500).json({ error: 'Failed to create message' });
+    }
 
     // Get message details with user info
     const messageResult = await db.query(
       `SELECT lm.*, dp.first_name, dp.username, profile_photos.photo_url
        FROM lobby_messages lm
-       JOIN dating_profiles dp ON lm.from_user_id = dp.user_id
+       LEFT JOIN dating_profiles dp ON lm.from_user_id = dp.user_id
        LEFT JOIN profile_photos ON lm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
        WHERE lm.id = $1`,
       [result.rows[0].id]
     );
+
+    if (!messageResult.rows || messageResult.rows.length === 0) {
+      console.error('SEND LOBBY MESSAGE - Failed to retrieve message after insert');
+      return res.status(500).json({ error: 'Failed to retrieve message' });
+    }
 
     // Emit via WebSocket to all connected users
     if (req.io) {
@@ -65,7 +75,24 @@ router.post('/messages', async (req, res) => {
     res.status(201).json(messageResult.rows[0]);
   } catch (err) {
     console.error('Send lobby message error:', err);
-    res.status(500).json({ error: 'Failed to send message' });
+    console.error('Send lobby message error details:', {
+      code: err.code,
+      message: err.message,
+      detail: err.detail
+    });
+    
+    let errorMessage = 'Failed to send message';
+    let statusCode = 500;
+
+    if (err.code === '23502') {
+      errorMessage = 'Missing required fields';
+      statusCode = 400;
+    } else if (err.code === '23503') {
+      errorMessage = 'User not found';
+      statusCode = 400;
+    }
+
+    res.status(statusCode).json({ error: errorMessage });
   }
 });
 

@@ -46,6 +46,7 @@ import PhotoABTestDashboard from './components/PhotoABTestDashboard';
 import ProfileResetPanel from './components/ProfileResetPanel';
 import ReferralDashboard from './components/ReferralDashboard';
 import VideoVerificationPrompt from './components/VideoVerificationPrompt';
+import VideoVerificationCall from './components/VideoVerificationCall';
 import IntroductionsWidget from './components/IntroductionsWidget';
 import StatusPreferenceManager from './components/StatusPreferenceManager';
 import SubscriptionPage from './components/SubscriptionPage/SubscriptionPage';
@@ -735,6 +736,21 @@ const AppContent = () => {
     setIncomingCall(null);
   };
 
+  const handleStartVideoVerification = () => {
+    try {
+      // Navigate to video verification page with intent to verify
+      console.log('Starting video verification, current location:', location.pathname);
+      navigate('/video-verification-call', {
+        state: {
+          verificationMode: true,
+          returnPath: location.pathname
+        }
+      });
+    } catch (error) {
+      console.error('Error starting video verification:', error);
+    }
+  };
+
   const handleNavigationChange = async (page) => {
     switch (page) {
       case 'browse':
@@ -1102,7 +1118,8 @@ const AppContent = () => {
             <Route path="events" element={<EventsList />} />
             <Route path="double-dates" element={<DoubleDateGroups />} />
             <Route path="date-safety-guide" element={<DateSafetyKit />} />
-            <Route path="video-verification" element={<VideoVerificationPrompt />} />
+            <Route path="video-verification" element={<VideoVerificationPrompt onInitiateVerification={handleStartVideoVerification} />} />
+            <Route path="video-verification-call" element={<VideoVerificationCall />} />
             <Route path="catfish-detection" element={<CatfishDetectionDashboard />} />
             <Route path="streaks" element={<StreakLeaderboard />} />
             <Route path="introductions" element={<IntroductionsWidget />} />

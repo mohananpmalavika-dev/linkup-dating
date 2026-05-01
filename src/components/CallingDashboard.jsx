@@ -48,7 +48,7 @@ const CallDashboard = () => {
   const loadCallingMarket = async () => {
     setLoadingMarket(true);
     try {
-      const data = await apiCall('/api/calling/market', 'GET');
+      const data = await apiCall('/calling/market', 'GET');
       setCallingUsers(data.users || []);
     } catch (error) {
       console.error('Failed to load market:', error);

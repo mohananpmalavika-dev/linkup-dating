@@ -1101,6 +1101,32 @@ const init = async () => {
       );
     `);
 
+    // Create moments table for ephemeral 24-hour stories
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS moments (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        photo_url TEXT NOT NULL,
+        photo_key VARCHAR(500),
+        caption TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL,
+        view_count INTEGER DEFAULT 0,
+        is_deleted BOOLEAN DEFAULT FALSE
+      );
+    `);
+
+    // Create moment_views table to track who viewed each moment
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS moment_views (
+        id SERIAL PRIMARY KEY,
+        moment_id INTEGER NOT NULL REFERENCES moments(id) ON DELETE CASCADE,
+        viewer_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(moment_id, viewer_user_id)
+      );
+    `);
+
     // Create user_search_history table for dating search history
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_search_history (
@@ -1157,6 +1183,11 @@ const init = async () => {
       CREATE INDEX IF NOT EXISTS idx_system_metrics_metric_date ON system_metrics(metric_date);
       CREATE INDEX IF NOT EXISTS idx_favorite_profiles_user_id ON favorite_profiles(user_id);
       CREATE INDEX IF NOT EXISTS idx_favorite_profiles_favorite_user_id ON favorite_profiles(favorite_user_id);
+      CREATE INDEX IF NOT EXISTS idx_moments_user_id ON moments(user_id);
+      CREATE INDEX IF NOT EXISTS idx_moments_expires_at ON moments(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_moments_created_at_user_id ON moments(created_at, user_id);
+      CREATE INDEX IF NOT EXISTS idx_moment_views_moment_id ON moment_views(moment_id);
+      CREATE INDEX IF NOT EXISTS idx_moment_views_viewer_user_id ON moment_views(viewer_user_id);
       CREATE INDEX IF NOT EXISTS idx_user_search_history_user_id ON user_search_history(user_id);
       CREATE INDEX IF NOT EXISTS idx_user_search_history_created_at ON user_search_history(created_at);
       CREATE INDEX IF NOT EXISTS idx_user_notifications_user_id ON user_notifications(user_id);

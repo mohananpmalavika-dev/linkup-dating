@@ -79,53 +79,159 @@ router.get('/:chatroomId', async (req, res) => {
 
 // CREATE CHATROOM (authenticated users only)
 router.post('/', async (req, res) => {
+  let client;
   try {
-    const userId = req.user?.id;
-    if (!userId) {
-      console.warn('CREATE CHATROOM - No user ID in request');
-      return res.status(401).json({ error: 'Unauthorized' });
+    // Validate user authentication
+    if (!req.user) {
+      console.warn('CREATE CHATROOM - No req.user object', {
+        authHeader: req.headers['authorization']
+      });
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const userId = req.user?.id || req.user?.userId;
+    console.log('CREATE CHATROOM - Request received', {
+      userId,
+      hasUser: !!req.user,
+      userKeys: req.user ? Object.keys(req.user) : 'none'
+    });
+    
+    if (!userId || typeof userId !== 'number') {
+      console.warn('CREATE CHATROOM - Invalid user ID:', { userId, type: typeof userId });
+      return res.status(401).json({ 
+        error: 'Invalid user authentication',
+        details: 'User ID is missing or invalid'
+      });
     }
 
     const { name, description, isPublic, maxMembers } = req.body;
+    console.log('CREATE CHATROOM - Body received:', { name, description, isPublic, maxMembers });
 
-    if (!name) {
-      console.warn('CREATE CHATROOM - No name provided');
-      return res.status(400).json({ error: 'Chatroom name required' });
+    // Validate required fields
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      console.warn('CREATE CHATROOM - Invalid name provided:', name);
+      return res.status(400).json({ error: 'Chatroom name is required and must be a string' });
     }
 
-    console.log('CREATE CHATROOM - Attempting to create:', { userId, name, isPublic });
+    const trimmedName = name.trim();
+    const trimmedDesc = description?.trim() || '';
 
+    if (trimmedName.length < 1 || trimmedName.length > 255) {
+      return res.status(400).json({ error: 'Chatroom name must be between 1 and 255 characters' });
+    }
+
+    // Validate userId is a valid number
+    if (!userId || typeof userId !== 'number') {
+      console.error('CREATE CHATROOM - userId validation failed:', { userId, type: typeof userId, userObj: req.user });
+      return res.status(401).json({ 
+        error: 'Authentication failed - invalid user ID',
+        userId,
+        userKeys: Object.keys(req.user || {})
+      });
+    }
+
+    console.log('CREATE CHATROOM - Attempting to create:', { userId, name: trimmedName, isPublic, maxMembers });
+
+    // Validate inputs before sending to DB
+    const insertParams = [userId, trimmedName, trimmedDesc, isPublic !== false, maxMembers || 100];
+    console.log('CREATE CHATROOM - Insert params:', {
+      userId,
+      name: trimmedName,
+      description: trimmedDesc,
+      isPublic: isPublic !== false,
+      maxMembers: maxMembers || 100,
+      paramTypes: [typeof userId, typeof trimmedName, typeof trimmedDesc, typeof (isPublic !== false), typeof (maxMembers || 100)]
+    });
+
+    // Insert with explicit error handling
     const result = await db.query(
       `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [userId, name, description || '', isPublic !== false, maxMembers || 100]
+      insertParams
     );
+
+    if (!result.rows || result.rows.length === 0) {
+      console.error('CREATE CHATROOM - No rows returned from INSERT');
+      return res.status(500).json({ error: 'Failed to create chatroom' });
+    }
 
     const chatroomId = result.rows[0].id;
     console.log('CREATE CHATROOM - Created with ID:', chatroomId);
 
     // Add creator as first member
-    await db.query(
+    const memberResult = await db.query(
       `INSERT INTO chatroom_members (chatroom_id, user_id)
-       VALUES ($1, $2)`,
+       VALUES ($1, $2)
+       RETURNING *`,
       [chatroomId, userId]
     );
+
+    if (!memberResult.rows || memberResult.rows.length === 0) {
+      console.error('CREATE CHATROOM - Failed to add creator as member');
+      // Still return success since chatroom was created
+    }
 
     console.log('CREATE CHATROOM - Success, user added as member');
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Create chatroom error:', err);
-    console.error('Error details:', {
+    console.error('Create chatroom error stack:', err.stack);
+    console.error('Create chatroom error full:', err);
+    console.error('Create chatroom SQL error details:', {
       code: err.code,
       message: err.message,
       detail: err.detail,
       table: err.table,
-      column: err.column
+      column: err.column,
+      severity: err.severity,
+      position: err.position,
+      length: err.length,
+      routine: err.routine
     });
-    res.status(500).json({ 
-      error: 'Failed to create chatroom',
-      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+
+    // More specific error messages
+    let errorMessage = 'Failed to create chatroom';
+    let statusCode = 500;
+
+    if (err.code === '23505') {
+      errorMessage = 'Chatroom name already exists';
+      statusCode = 409;
+    } else if (err.code === '23502') {
+      // Extract which field caused the NOT NULL violation
+      // PostgreSQL error detail format: "Failing row contains (id, created_by_user_id, name, ...)."
+      let failedColumn = 'unknown field';
+      if (err.detail) {
+        // Try multiple extraction patterns
+        const columnMatch = err.detail.match(/column "([^"]+)"/i);
+        if (columnMatch) {
+          failedColumn = columnMatch[1];
+        } else {
+          // Log the actual error detail for debugging
+          console.error('CREATE CHATROOM - Could not parse column from detail:', err.detail);
+          failedColumn = 'unknown field (check logs)';
+        }
+      }
+      errorMessage = `Missing required field: ${failedColumn}`;
+      console.error('CREATE CHATROOM - NOT NULL constraint violation:', {
+        failedColumn,
+        detail: err.detail,
+        hint: err.hint
+      });
+      statusCode = 400;
+      console.error('NOT NULL violation on column:', failedColumn, 'Full detail:', err.detail);
+    } else if (err.code === '23503') {
+      errorMessage = 'User not found or invalid user ID';
+      statusCode = 400;
+    } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+      errorMessage = 'Database connection failed';
+      statusCode = 503;
+    }
+
+    res.status(statusCode).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined,
+      code: process.env.NODE_ENV === 'development' ? err.code : undefined
     });
   }
 });

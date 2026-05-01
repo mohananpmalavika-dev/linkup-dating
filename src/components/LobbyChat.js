@@ -12,6 +12,7 @@ import { BACKEND_BASE_URL } from '../utils/api';
 const LobbyChat = ({ onBack }) => {
   const currentUser = getStoredUserData();
   const currentUserId = currentUser?.id;
+  const authToken = getStoredAuthToken();
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -19,6 +20,14 @@ const LobbyChat = ({ onBack }) => {
   const [onlineCount, setOnlineCount] = useState(0);
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
+
+  // Check authentication
+  useEffect(() => {
+    if (!currentUserId || !authToken) {
+      setError('Authentication required. Please log in to use the lobby.');
+      setLoading(false);
+    }
+  }, [currentUserId, authToken]);
 
   // Load messages and setup WebSocket
   useEffect(() => {
@@ -64,11 +73,21 @@ const LobbyChat = ({ onBack }) => {
       }
     });
 
+    // Handle connection errors
+    socketRef.current.on('connect_error', (connectError) => {
+      console.error('WebSocket connection error:', connectError);
+      setError('Connection error. Please refresh the page.');
+    });
+
+    socketRef.current.on('disconnect', (reason) => {
+      console.warn('WebSocket disconnected:', reason);
+    });
+
     return () => {
       socketRef.current?.emit('leave_lobby');
       socketRef.current?.disconnect();
     };
-  }, [currentUserId]);
+  }, [currentUserId, authToken]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -77,19 +96,41 @@ const LobbyChat = ({ onBack }) => {
 
   // Send message
   const handleSendMessage = async () => {
-    if (!inputMessage.trim()) return;
+    // Check authentication first
+    if (!currentUserId || !authToken) {
+      setError('You must be logged in to send messages');
+      return;
+    }
+
+    if (!inputMessage || !inputMessage.trim()) {
+      setError('Message cannot be empty');
+      return;
+    }
+
+    if (inputMessage.trim().length > 500) {
+      setError('Message cannot exceed 500 characters');
+      return;
+    }
 
     const draftMessage = inputMessage;
 
     try {
+      setError('');
       setInputMessage('');
 
-      await lobbyService.sendMessage(draftMessage);
+      const response = await lobbyService.sendMessage(draftMessage);
+      
+      // Verify response has required fields
+      if (!response || !response.id) {
+        throw new Error('Invalid response from server');
+      }
+
       // Message will be added via WebSocket
+      console.log('Message sent successfully:', response.id);
     } catch (err) {
-      setError('Failed to send message');
+      console.error('Failed to send message:', err);
+      setError(typeof err === 'string' ? err : err.message || 'Failed to send message');
       setInputMessage(draftMessage); // Restore message on error
-      console.error(err);
     }
   };
 

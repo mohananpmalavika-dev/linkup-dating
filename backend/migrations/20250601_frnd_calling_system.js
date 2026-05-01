@@ -6,7 +6,7 @@
 const db = require('../config/database');
 
 async function runMigration() {
-  const client = await db.connect();
+  const client = await db.pool.connect();
   
   try {
     console.log('🔄 Running FRND Calling migration...');

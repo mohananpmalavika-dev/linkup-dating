@@ -12288,54 +12288,6 @@ router.post('/verify/run-fraud-check', async (req, res) => {
   }
 });
 
-// 88. GET PROFILE TRUST SCORE (view own or another user's trust score)
-router.get('/profile-trust-score/:targetUserId', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const targetUserId = parseInt(req.params.targetUserId);
-
-    // Can only view own score, or if viewing another's (future feature)
-    if (userId !== targetUserId) {
-      return res.status(403).json({ error: 'Can only view your own trust score' });
-    }
-
-    const result = await db.query(
-      `SELECT 
-        overall_trust_score,
-        fraud_risk_level,
-        is_verified_photo,
-        is_verified_email,
-        is_verified_phone,
-        red_flags
-       FROM profile_verification_scores
-       WHERE user_id = $1`,
-      [targetUserId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Trust score not available' });
-    }
-
-    const score = result.rows[0];
-
-    res.json({
-      trustScore: {
-        overallScore: score.overall_trust_score,
-        riskLevel: score.fraud_risk_level,
-        verifications: {
-          photoVerified: score.is_verified_photo,
-          emailVerified: score.is_verified_email,
-          phoneVerified: score.is_verified_phone
-        },
-        redFlags: score.red_flags || []
-      }
-    });
-  } catch (err) {
-    console.error('Get profile trust score error:', err);
-    res.status(500).json({ error: 'Failed to fetch trust score' });
-  }
-});
-
 // 89. REPORT HARASSMENT (safety flag with multiple categories)
 router.post('/conversations/report-harassment/:matchId', async (req, res) => {
   try {
@@ -15879,7 +15831,7 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
       include: [
         {
           model: dbModels.User,
-          as: 'profile_user',
+          as: 'profileUser',
           attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
           include: [
             {
@@ -15889,7 +15841,7 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
             },
             {
               model: dbModels.ProfilePhoto,
-              as: 'profilePhotos',
+              as: 'photos',
               attributes: ['id', 'photo_url', 'position'],
               limit: 1,
               order: [['position', 'ASC']]
@@ -15910,16 +15862,16 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
       passReason: decision.pass_reason,
       passReasonLabel: rewindService.getReasonLabel(decision.pass_reason),
       passReasonIcon: rewindService.getReasonIcon(decision.pass_reason),
-      profile: decision.profile_user ? {
-        id: decision.profile_user.id,
-        firstName: decision.profile_user.firstName,
-        age: decision.profile_user.age,
-        bio: decision.profile_user.bio,
-        verified: decision.profile_user.profileVerified,
-        interests: decision.profile_user.datingProfile?.interests || [],
-        goals: decision.profile_user.datingProfile?.relationshipGoals,
-        location: decision.profile_user.datingProfile?.location,
-        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
+      profile: decision.profileUser ? {
+        id: decision.profileUser.id,
+        firstName: decision.profileUser.firstName,
+        age: decision.profileUser.age,
+        bio: decision.profileUser.bio,
+        verified: decision.profileUser.profileVerified,
+        interests: decision.profileUser.datingProfile?.interests || [],
+        goals: decision.profileUser.datingProfile?.relationshipGoals,
+        location: decision.profileUser.datingProfile?.location,
+        photoUrl: decision.profileUser.photos?.[0]?.photo_url
       } : null
     }));
     
@@ -15972,7 +15924,7 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
       include: [
         {
           model: dbModels.User,
-          as: 'profile_user',
+          as: 'profileUser',
           attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
           include: [
             {
@@ -15982,7 +15934,7 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
             },
             {
               model: dbModels.ProfilePhoto,
-              as: 'profilePhotos',
+              as: 'photos',
               attributes: ['id', 'photo_url', 'position'],
               limit: 1,
               order: [['position', 'ASC']]
@@ -15999,16 +15951,16 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
       profileId: decision.profile_user_id,
       passedAt: decision.decision_timestamp,
       reason: decision.pass_reason || 'other',
-      profile: decision.profile_user ? {
-        id: decision.profile_user.id,
-        firstName: decision.profile_user.firstName,
-        age: decision.profile_user.age,
-        bio: decision.profile_user.bio,
-        verified: decision.profile_user.profileVerified,
-        interests: decision.profile_user.datingProfile?.interests || [],
-        goals: decision.profile_user.datingProfile?.relationshipGoals,
-        location: decision.profile_user.datingProfile?.location,
-        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
+      profile: decision.profileUser ? {
+        id: decision.profileUser.id,
+        firstName: decision.profileUser.firstName,
+        age: decision.profileUser.age,
+        bio: decision.profileUser.bio,
+        verified: decision.profileUser.profileVerified,
+        interests: decision.profileUser.datingProfile?.interests || [],
+        goals: decision.profileUser.datingProfile?.relationshipGoals,
+        location: decision.profileUser.datingProfile?.location,
+        photoUrl: decision.profileUser.photos?.[0]?.photo_url
       } : null
     }));
     

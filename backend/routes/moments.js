@@ -24,8 +24,15 @@ router.post('/upload', upload.single('photo'), async (req, res) => {
     const userId = req.user.id;
 
     if (req.file) {
-      photoUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-      photoKey = photoKey || `moments/${Date.now()}-${req.file.originalname}`;
+      // Generate a storage key for the file
+      photoKey = photoKey || `moments/${userId}/${Date.now()}-${req.file.originalname}`;
+      
+      // Create a mock S3 URL (or use actual S3 upload when configured)
+      // For now, generate a URL pattern that can be resolved later
+      photoUrl = `https://linkup-storage.s3.amazonaws.com/${photoKey}`;
+      
+      // TODO: Actually upload req.file.buffer to S3 using the photoKey
+      // For now, we store a reference that can be resolved later
     }
 
     if (!photoUrl) {
@@ -62,6 +69,38 @@ router.get('/feed', async (req, res) => {
 });
 
 /**
+ * GET /api/moments/my-moments
+ * Get user's own active moments (24hr window)
+ * MUST come before /:momentId routes to avoid being caught by param matching
+ */
+router.get('/my-moments', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await momentService.getUserMoments(userId);
+
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/moments/stats
+ * Get moments feed statistics (FOMO metrics)
+ * MUST come before /:momentId routes to avoid being caught by param matching
+ */
+router.get('/stats', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await momentService.getMomentsStats(userId);
+
+    return res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/moments/:momentId/view
  * Record that current user viewed a moment
  */
@@ -90,36 +129,6 @@ router.get('/:momentId/viewers', async (req, res) => {
     const result = await momentService.getMomentViewers(momentId, userId);
 
     return res.status(result.success ? 200 : 403).json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/moments/my-moments
- * Get user's own active moments (24hr window)
- */
-router.get('/my-moments', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const result = await momentService.getUserMoments(userId);
-
-    return res.status(result.success ? 200 : 400).json(result);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/moments/stats
- * Get moments feed statistics (FOMO metrics)
- */
-router.get('/stats', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const result = await momentService.getMomentsStats(userId);
-
-    return res.status(result.success ? 200 : 400).json(result);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

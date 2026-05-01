@@ -1,4 +1,4 @@
-const { PhotoABTest, PhotoABTestResult, User, DatingProfile } = require('../models');
+const { PhotoABTest, PhotoABTestResult, User, DatingProfile, ProfilePhoto } = require('../models');
 const { Op, Sequelize } = require('sequelize');
 
 const photoABTestService = {

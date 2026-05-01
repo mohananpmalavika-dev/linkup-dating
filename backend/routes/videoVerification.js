@@ -4,9 +4,27 @@
  */
 
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
 const VideoVerificationService = require('../services/videoVerificationService');
 const { VideoVerificationBadge, VideoAuthenticationResult } = require('../models');
+const { authenticateToken } = require('../middleware/auth');
+
+// Configure multer for video upload
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024 // 50MB max file size
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ['video/webm', 'video/mp4', 'video/quicktime'];
+    if (allowedMimes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only video files are allowed'));
+    }
+  }
+});
 
 /**
  * POST /api/video-verification/process-result
@@ -258,6 +276,49 @@ router.post('/flag-review', async (req, res) => {
 });
 
 /**
+ * POST /api/video-verification/verify
+ * Submit video for verification and get results
+ */
+router.post('/verify', authenticateToken, upload.single('video'), async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Video file is required'
+      });
+    }
+
+    // Call the verification service to process the video
+    const result = await VideoVerificationService.processVerificationVideo(userId, req.file);
+
+    res.json({
+      success: result.success,
+      verified: result.verified,
+      message: result.message,
+      scores: result.scores,
+      requiresManualReview: result.requiresManualReview,
+      reason: result.reason
+    });
+  } catch (error) {
+    console.error('Error during verification:', error);
+    res.status(500).json({
+      success: false,
+      verified: false,
+      message: 'Error processing verification video',
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/video-verification/pending-review (Admin only)
  * Get badges pending manual review
  */
@@ -290,3 +351,4 @@ router.get('/pending-review', async (req, res) => {
 });
 
 module.exports = router;
+
