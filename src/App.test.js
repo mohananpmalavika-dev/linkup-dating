@@ -221,12 +221,11 @@ test("opens the dating signup flow from the launch screen", async () => {
   fireEvent.click(await screen.findByRole("button", { name: /sign up/i }));
 
   expect(
-    screen.getByRole("heading", { level: 1, name: /create your dating profile/i })
+    screen.getByRole("heading", { level: 1, name: /create your profile/i })
   ).toBeInTheDocument();
   expect(screen.getByRole("heading", { level: 2, name: /create your account/i })).toBeInTheDocument();
-  // DatingSignUp uses a <label> not wired with htmlFor -> input, so assert by visible text.
-  expect(screen.getByText(/phone number \(optional\)/i)).toBeInTheDocument();
-  expect(screen.getByText(/real matches, safe dates, better conversations/i)).toBeInTheDocument();
+  expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+  expect(screen.getByText(/a few simple details/i)).toBeInTheDocument();
 });
 
 test("authenticated users only see dating navigation and inbox content", async () => {

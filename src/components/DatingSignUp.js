@@ -63,13 +63,19 @@ const MESSAGE_GATING_OPTIONS = [
   { value: 'trusted_only', label: 'Highest-trust intros' }
 ];
 
+const SIMPLE_SIGNUP_STEPS = [
+  { number: 1, label: 'Account' },
+  { number: 2, label: 'Details' },
+  { number: 3, label: 'Photo' }
+];
+
 /**
  * DatingSignUp Component
  * Sign up for dating app with profile creation
  * Uses OTP-based authentication matching the Login flow
  */
 const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
-  const [step, setStep] = useState(1); // 1: Email OTP, 2: Username, 3: Profile, 4: Photos
+  const [step, setStep] = useState(1); // 1: contact code, 2: basic details, 3: optional photo
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -88,14 +94,12 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   const [referralValidated, setReferralValidated] = useState(false);
   const [referralMessage, setReferralMessage] = useState('');
   const [validatingReferral, setValidatingReferral] = useState(false);
+  const [showReferralCode, setShowReferralCode] = useState(false);
   const [ageVerification, setAgeVerification] = useState(null);
   const [gmailSigningIn, setGmailSigningIn] = useState(false);
   
-  // Username state
+  // Hidden account handle used by older-user friendly signup. Users can change it later.
   const [username, setUsername] = useState('');
-  const [usernameStatus, setUsernameStatus] = useState(null); // 'checking', 'available', 'taken'
-  const [usernameError, setUsernameError] = useState('');
-  const usernameCheckTimeoutRef = React.useRef(null);
   const resendTimerRef = React.useRef(null);
 
 const [formData, setFormData] = useState({
@@ -114,10 +118,10 @@ const [formData, setFormData] = useState({
     languages: ['English'],
     religion: '',
     communityPreference: '',
-    conversationStyle: '',
-    weekendStyle: '',
-    planningStyle: '',
-    socialEnergy: '',
+    conversationStyle: 'steady',
+    weekendStyle: 'cozy',
+    planningStyle: 'balanced',
+    socialEnergy: 'balanced',
     messageGating: 'balanced',
     interests: [],
     height: '',
@@ -141,10 +145,6 @@ const [formData, setFormData] = useState({
   const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   const looksLikePhoneNumber = (value) => /^\+?[0-9\s()-]{7,}$/.test(String(value || '').trim());
   const legalNoticeMessage = getTranslationValue(language, 'public.signupNotice');
-
-const validateUsername = (value) => {
-    return /^[a-zA-Z0-9_.-]{3,20}$/.test(value);
-  };
 
   const trackFunnelEvent = async (eventName, payload = {}) => {
     if (!verifiedToken) {
@@ -215,8 +215,10 @@ const validateUsername = (value) => {
         setVerifiedUser(backendUser);
         setEmail(user.email);
         setOtpSent(false);
-        setStep(2); // Skip OTP step, go straight to username
+        setStep(2);
         setSuccess('✓ Google signup successful! Now set your username.');
+
+        setSuccess('Google sign up successful. Please add your basic details.');
 
         // Track event
         try {
@@ -246,13 +248,11 @@ const validateUsername = (value) => {
     if (urlCode) {
       const normalizedCode = urlCode.trim().toUpperCase();
       setReferralCode(normalizedCode);
+      setShowReferralCode(true);
       void validateReferralCode(normalizedCode, true);
     }
 
     return () => {
-      if (usernameCheckTimeoutRef.current) {
-        clearTimeout(usernameCheckTimeoutRef.current);
-      }
       if (resendTimerRef.current) {
         clearInterval(resendTimerRef.current);
       }
@@ -303,7 +303,7 @@ if (referralCode.trim()) {
     }
 
     if (otpMethod === 'phone' && !phone.trim()) {
-      setError('Please enter your phone number to receive OTP via SMS');
+      setError('Please enter your mobile number to receive the SMS code.');
       return;
     }
 
@@ -342,7 +342,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
     }
 
     if (!ageVerification?.dateOfBirth || !ageVerification?.method) {
-      setError('Complete age verification before requesting an OTP.');
+      setError('Please confirm your age before requesting a code.');
       return;
     }
 
@@ -362,7 +362,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
       setOtpId(response.data.otpId || '');
       setOtpSent(true);
       const channel = otpMethod === 'phone' ? 'SMS' : 'email';
-      setSuccess(response.data?.message || `OTP sent to your ${channel}!`);
+      setSuccess(response.data?.message || `Code sent by ${channel}.`);
       setResendCooldown(60); // 60 second cooldown
       
       // Start countdown timer
@@ -379,7 +379,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
         });
       }, 1000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to send OTP');
+      setError(err.response?.data?.error || 'Failed to send the code');
     } finally {
       setLoading(false);
     }
@@ -409,7 +409,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
 
       setOtpId(response.data.otpId || '');
       const channel = otpMethod === 'phone' ? 'SMS' : 'email';
-      setSuccess(response.data?.message || `OTP resent to your ${channel}!`);
+      setSuccess(response.data?.message || `Code sent again by ${channel}.`);
       setResendCooldown(60); // Reset cooldown
       
       // Start countdown timer
@@ -426,7 +426,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
         });
       }, 1000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to resend OTP');
+      setError(err.response?.data?.error || 'Failed to resend the code');
     } finally {
       setLoading(false);
     }
@@ -438,12 +438,12 @@ setError('That looks like a phone number. Please use your email (like yourname@e
     setError('');
 
     if (!otp.trim()) {
-      setError('Please enter the OTP');
+      setError('Please enter the code');
       return;
     }
 
     if (!/^\d{6}$/.test(otp.trim())) {
-      setError('Please enter the 6-digit OTP');
+      setError('Please enter the 6-digit code');
       return;
     }
 
@@ -459,8 +459,8 @@ setError('That looks like a phone number. Please use your email (like yourname@e
       const { token, user } = response.data;
       setVerifiedToken(token);
       setVerifiedUser(user);
-      setStep(2); // Move to username setup
-      setSuccess('Email verified! Now set your username.');
+      setStep(2);
+      setSuccess('Code verified. Please add your basic details.');
       setOtp('');
       setOtpId('');
       setOtpSent(false);
@@ -477,94 +477,86 @@ setError('That looks like a phone number. Please use your email (like yourname@e
         ).catch(() => {})
       ]);
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid OTP');
+      setError(err.response?.data?.error || 'Invalid code');
     } finally {
       setLoading(false);
     }
   };
 
-  // Check username availability
-  const checkUsernameAvailability = async (value) => {
-    if (!value || value.length < 3) {
-      setUsernameStatus(null);
-      setUsernameError('');
-      return;
+  const getUsernameBase = () => {
+    const emailName = email.split('@')[0];
+    const preferred = formData.firstName || verifiedUser?.name || emailName || 'linkup';
+    const cleaned = String(preferred)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, '')
+      .replace(/^[_.-]+|[_.-]+$/g, '')
+      .slice(0, 14);
+
+    if (cleaned.length >= 3) {
+      return cleaned;
     }
 
-    if (!validateUsername(value)) {
-      setUsernameStatus(null);
-setUsernameError('Username can only contain letters, numbers, periods, underscores, and dashes (3-20 characters)');
-      return;
-    }
-
-    setUsernameStatus('checking');
-    setUsernameError('');
-
-    try {
-      const response = await axios.post(`${API_BASE_URL}/auth/check-username`, {
-        username: value
-      });
-
-      if (response.data.available) {
-        setUsernameStatus('available');
-      } else {
-        setUsernameStatus('taken');
-        setUsernameError('This username is already taken');
-      }
-    } catch (err) {
-      setUsernameStatus(null);
-      setUsernameError('Error checking username availability');
-    }
+    return `${cleaned || 'user'}123`.slice(0, 14);
   };
 
-  const handleUsernameChange = (value) => {
-    setUsername(value);
-    
-    if (usernameCheckTimeoutRef.current) {
-      clearTimeout(usernameCheckTimeoutRef.current);
-    }
-    
-    usernameCheckTimeoutRef.current = setTimeout(() => {
-      checkUsernameAvailability(value);
-    }, 500);
-  };
+  const ensureUsernameQuietly = async () => {
+    const existingUsername = username || verifiedUser?.username;
 
-  // Set username
-  const handleSetUsername = async (e) => {
-    e.preventDefault();
-    setError('');
-
-    if (!username.trim()) {
-      setError('Please enter a username');
-      return;
+    if (existingUsername || !verifiedToken) {
+      return existingUsername || null;
     }
 
-    if (usernameStatus !== 'available') {
-      setError('Please choose an available username');
-      return;
-    }
+    const base = getUsernameBase();
+    const suffixes = [
+      '',
+      formData.age || '',
+      Math.floor(1000 + Math.random() * 9000).toString(),
+      Date.now().toString().slice(-5)
+    ];
+    const candidates = [...new Set(
+      suffixes.map((suffix) => `${base}${suffix}`.slice(0, 20))
+    )].filter((candidate) => /^[a-zA-Z0-9_.-]{3,20}$/.test(candidate));
 
-    setLoading(true);
-    try {
-      await axios.post(`${API_BASE_URL}/auth/set-username`, {
-        username: username.trim()
-      }, {
-        headers: { Authorization: `Bearer ${verifiedToken}` }
-      });
+    for (const candidate of candidates) {
+      try {
+        const availability = await axios.post(`${API_BASE_URL}/auth/check-username`, {
+          username: candidate
+        });
 
-      await trackFunnelEvent('dating_onboarding_username_set', {
-        context: {
-          usernameLength: username.trim().length
+        if (availability.data && availability.data.available === false) {
+          continue;
         }
-      });
 
-      setStep(3); // Move to profile setup
-      setSuccess('Username set! Now complete your dating profile.');
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to set username');
-    } finally {
-      setLoading(false);
+        const response = await axios.post(`${API_BASE_URL}/auth/set-username`, {
+          username: candidate
+        }, {
+          headers: { Authorization: `Bearer ${verifiedToken}` }
+        });
+
+        setUsername(candidate);
+        setVerifiedUser((previousUser) => ({
+          ...(previousUser || {}),
+          ...(response.data?.user || {}),
+          username: response.data?.user?.username || candidate
+        }));
+
+        await trackFunnelEvent('dating_onboarding_username_set', {
+          context: {
+            usernameLength: candidate.length,
+            autoGenerated: true
+          }
+        });
+
+        return candidate;
+      } catch (usernameError) {
+        if (usernameError.response?.status !== 409) {
+          console.error('Automatic username setup failed:', usernameError);
+        }
+      }
     }
+
+    return null;
   };
 
   const handleProfileInputChange = (e) => {
@@ -641,14 +633,10 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
       !formData.firstName ||
       !formData.age ||
       !resolvedLocation.city ||
-      !formData.relationshipGoals ||
-      !formData.languages.length ||
-      !formData.conversationStyle ||
-      !formData.weekendStyle ||
-      !formData.planningStyle ||
-      !formData.socialEnergy
+      !formData.gender ||
+      !formData.relationshipGoals
     ) {
-      setError('Add your intent, language, conversation rhythm, and dating style before continuing.');
+      setError('Please add your name, gender, city, and what you are looking for.');
       return;
     }
 
@@ -674,7 +662,7 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
         messageGating: formData.messageGating
       }
     });
-    setStep(4);
+    setStep(3);
   };
 
 // Submit complete signup
@@ -709,8 +697,10 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
     }
 
     try {
+      const ensuredUsername = await ensureUsernameQuietly();
+
       // Create dating profile
-      await axios.post(`${API_BASE_URL}/dating/profiles`, {
+      const profileResponse = await axios.post(`${API_BASE_URL}/dating/profiles`, {
         firstName: formData.firstName,
         age: formData.age,
         gender: formData.gender,
@@ -804,7 +794,16 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
           ? 'Account created successfully and referral rewards were applied.'
           : 'Account created successfully!'
       );
-      onSignUpSuccess?.(verifiedToken, verifiedUser);
+      const completedUser = {
+        ...(verifiedUser || {}),
+        username: ensuredUsername || verifiedUser?.username,
+        firstName: formData.firstName,
+        name: formData.firstName,
+        city: resolvedLocation.city,
+        profile: profileResponse.data?.profile || verifiedUser?.profile || null
+      };
+      setVerifiedUser(completedUser);
+      onSignUpSuccess?.(verifiedToken, completedUser);
     } catch (err) {
       console.error('Signup error:', err);
       setError(err.response?.data?.error || 'Failed to create profile');
@@ -820,7 +819,7 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
       age: verification?.age ? String(verification.age) : prev.age
     }));
     setError('');
-    setSuccess('Age verified. Now create your account.');
+    setSuccess('Age confirmed. Now create your account.');
   };
 
   if (!ageVerification) {
@@ -847,6 +846,7 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
             <button
               type="button"
               className="btn-back"
+              aria-label="Back"
               onClick={onBackToLaunch}
               disabled={loading || otpSent}
             >
@@ -854,26 +854,440 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
             </button>
           </div>
         )}
-        <h1>Create Your Dating Profile</h1>
-        <p className="signup-positioning">Real matches, safe dates, better conversations.</p>
+        <h1>Create your profile</h1>
+        <p className="signup-positioning">A few simple details to start meeting real people.</p>
 
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
 
-{/* Step Indicators */}
-        <div className="step-indicators">
-          {[1, 2, 3, 4, 5].map(s => {
-            const labels = { 1: 'Account', 2: 'Name', 3: 'Profile', 4: 'Photos', 5: 'Security' };
-            return (
-              <div key={s} className={`step ${s <= step ? 'active' : ''}`} title={labels[s]}>
-                {s}
+        {/* Step Indicators */}
+        <div className="signup-progress" aria-label="Signup progress">
+          <span>Step {step} of {SIMPLE_SIGNUP_STEPS.length}</span>
+          <div className="step-indicators">
+            {SIMPLE_SIGNUP_STEPS.map((signupStep) => (
+              <div
+                key={signupStep.number}
+                className={`step ${signupStep.number <= step ? 'active' : ''}`}
+                title={signupStep.label}
+              >
+                <strong>{signupStep.number}</strong>
+                <small>{signupStep.label}</small>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
 
-        {/* Step 1: Email & OTP Verification */}
+        {/* Step 1: Contact verification */}
         {step === 1 && (
+          <form className="signup-step simplified-step" onSubmit={otpSent ? handleVerifyOtp : handleSendOtp}>
+            <h2>{otpSent ? 'Enter your 6-digit code' : 'Create your account'}</h2>
+            <p className="signup-step-note">
+              We will send one short code. No password is needed.
+            </p>
+
+            {!otpSent ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-google-signup"
+                  onClick={handleGoogleSignup}
+                  disabled={loading || gmailSigningIn}
+                >
+                  <span className="google-icon" aria-hidden="true">G</span>
+                  {gmailSigningIn ? 'Opening Google...' : 'Continue with Google'}
+                </button>
+
+                <div className="divider-or">
+                  <span>or use email</span>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="signup-email">Email address</label>
+                  <input
+                    id="signup-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    disabled={loading}
+                    autoComplete="email"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Where should we send the code?</label>
+                  <div className="method-toggle" role="group" aria-label="Code delivery method">
+                    <button
+                      type="button"
+                      className={otpMethod === 'email' ? 'selected' : ''}
+                      onClick={() => setOtpMethod('email')}
+                      disabled={loading}
+                    >
+                      Email
+                    </button>
+                    <button
+                      type="button"
+                      className={otpMethod === 'phone' ? 'selected' : ''}
+                      onClick={() => setOtpMethod('phone')}
+                      disabled={loading}
+                    >
+                      SMS
+                    </button>
+                  </div>
+                </div>
+
+                {otpMethod === 'phone' && (
+                  <div className="form-group">
+                    <label htmlFor="signup-phone">Mobile number</label>
+                    <input
+                      id="signup-phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      disabled={loading}
+                      autoComplete="tel"
+                    />
+                    <small className="helper-text">SMS sign up still needs your email for the account.</small>
+                  </div>
+                )}
+
+                {showReferralCode ? (
+                  <div className="form-group">
+                    <label htmlFor="signup-referral">Invite code (optional)</label>
+                    <input
+                      id="signup-referral"
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => {
+                        setReferralCode(e.target.value.toUpperCase());
+                        setReferralValidated(false);
+                        setReferralMessage('');
+                      }}
+                      onBlur={() => {
+                        if (referralCode.trim()) {
+                          void validateReferralCode(referralCode, false);
+                        }
+                      }}
+                      placeholder="Invite code"
+                      disabled={loading || validatingReferral}
+                    />
+                    {referralMessage ? (
+                      <small className="helper-text" style={{ color: referralValidated ? '#166534' : '#9f1239' }}>
+                        {validatingReferral ? 'Checking invite code...' : referralMessage}
+                      </small>
+                    ) : null}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-text"
+                    onClick={() => setShowReferralCode(true)}
+                    disabled={loading}
+                  >
+                    I have an invite code
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  className="btn-submit"
+                  disabled={loading || (otpMethod === 'phone' && !phone.trim())}
+                >
+                  {loading ? 'Sending code...' : `Send code by ${otpMethod === 'phone' ? 'SMS' : 'email'}`}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label htmlFor="signup-code">6-digit code</label>
+                  <input
+                    id="signup-code"
+                    type="text"
+                    inputMode="numeric"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="123456"
+                    maxLength="6"
+                    autoComplete="one-time-code"
+                    disabled={loading}
+                  />
+                  <small className="helper-text">
+                    Code sent to {otpMethod === 'phone' ? phone : email}
+                  </small>
+                </div>
+
+                <button type="submit" className="btn-submit" disabled={loading}>
+                  {loading ? 'Checking code...' : 'Continue'}
+                </button>
+
+                <div className="otp-actions">
+                  <button
+                    type="button"
+                    className="btn-resend"
+                    onClick={handleResendOtp}
+                    disabled={loading || resendCooldown > 0}
+                  >
+                    {resendCooldown > 0
+                      ? `Send again in ${resendCooldown}s`
+                      : 'Send code again'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={() => {
+                      setOtpSent(false);
+                      setOtp('');
+                      setOtpId('');
+                      setError('');
+                      setSuccess('');
+                      if (resendTimerRef.current) {
+                        clearInterval(resendTimerRef.current);
+                      }
+                      setResendCooldown(0);
+                    }}
+                    disabled={loading}
+                  >
+                    Change email or phone
+                  </button>
+                </div>
+              </>
+            )}
+          </form>
+        )}
+
+        {/* Step 2: Basic profile */}
+        {step === 2 && (
+          <div className="signup-step simplified-step">
+            <h2>Your basic details</h2>
+            <p className="signup-step-note">Only the important details are needed now.</p>
+
+            <div className="form-group">
+              <label htmlFor="signup-first-name">First name</label>
+              <input
+                id="signup-first-name"
+                type="text"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleProfileInputChange}
+                placeholder="Your first name"
+                autoComplete="given-name"
+              />
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="signup-age">Age</label>
+                <input
+                  id="signup-age"
+                  type="number"
+                  name="age"
+                  value={formData.age}
+                  onChange={handleProfileInputChange}
+                  min="18"
+                  max="120"
+                  readOnly={Boolean(ageVerification)}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="signup-gender">Gender</label>
+                <select id="signup-gender" name="gender" value={formData.gender} onChange={handleProfileInputChange}>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="signup-city">City</label>
+              <input
+                id="signup-city"
+                type="text"
+                name="city"
+                value={formData.city}
+                onChange={handleProfileInputChange}
+                placeholder="Kochi, Trivandrum, Kozhikode..."
+                autoComplete="address-level2"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="signup-intent">I am looking for</label>
+              <select
+                id="signup-intent"
+                name="relationshipGoals"
+                value={formData.relationshipGoals}
+                onChange={handleProfileInputChange}
+              >
+                {RELATIONSHIP_INTENT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Languages</label>
+              <div className="interests-grid simple-grid">
+                {LANGUAGE_OPTIONS.slice(0, 4).map((currentLanguage) => (
+                  <button
+                    key={currentLanguage}
+                    type="button"
+                    className={`interest-tag ${formData.languages.includes(currentLanguage) ? 'selected' : ''}`}
+                    onClick={() => handleLanguageToggle(currentLanguage)}
+                  >
+                    {currentLanguage}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <details className="optional-profile-details">
+              <summary>Add more details now</summary>
+              <div className="optional-profile-body">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="signup-district">District</label>
+                    <select
+                      id="signup-district"
+                      name="district"
+                      value={formData.district}
+                      onChange={handleProfileInputChange}
+                    >
+                      <option value="">Select district</option>
+                      {districtOptions.map((district) => (
+                        <option key={district.value} value={district.value}>
+                          {district.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="signup-pincode">Pincode</label>
+                    <input
+                      id="signup-pincode"
+                      type="text"
+                      inputMode="numeric"
+                      name="pincode"
+                      value={formData.pincode}
+                      onChange={handleProfileInputChange}
+                      placeholder="682030"
+                      maxLength="6"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="signup-occupation">Occupation</label>
+                    <input
+                      id="signup-occupation"
+                      type="text"
+                      name="occupation"
+                      value={formData.occupation}
+                      onChange={handleProfileInputChange}
+                      placeholder="Your occupation"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="signup-education">Education</label>
+                    <input
+                      id="signup-education"
+                      type="text"
+                      name="education"
+                      value={formData.education}
+                      onChange={handleProfileInputChange}
+                      placeholder="Your education"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="signup-bio">About you</label>
+                  <textarea
+                    id="signup-bio"
+                    name="bio"
+                    value={formData.bio}
+                    onChange={handleProfileInputChange}
+                    placeholder="A short line about yourself"
+                    rows="3"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Interests</label>
+                  <div className="interests-grid">
+                    {INTERESTS.map((interest) => (
+                      <button
+                        key={interest}
+                        type="button"
+                        className={`interest-tag ${formData.interests.includes(interest) ? 'selected' : ''}`}
+                        onClick={() => handleInterestToggle(interest)}
+                      >
+                        {interest}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <button type="button" className="btn-submit" onClick={handleNext}>
+              Continue
+            </button>
+          </div>
+        )}
+
+        {/* Step 3: Optional photo */}
+        {step === 3 && (
+          <form className="signup-step simplified-step" onSubmit={handleSubmit}>
+            <h2>Add a photo</h2>
+            <p className="signup-step-note">A photo helps trust, but you can add it later.</p>
+
+            <div className="form-group">
+              <label htmlFor="signup-photos">Choose photo</label>
+              <input
+                id="signup-photos"
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                disabled={loading}
+              />
+              {formData.photos.length > 0 && (
+                <div className="photo-preview">
+                  <div className="photos-grid">
+                    {formData.photos.map((photo, idx) => (
+                      <div key={idx} className="photo-item">
+                        <img src={photo.preview} alt={`Profile upload ${idx + 1}`} />
+                        <button
+                          type="button"
+                          className="btn-remove"
+                          onClick={() => handleRemovePhoto(idx)}
+                          title="Remove photo"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button type="submit" className="btn-submit" disabled={loading}>
+              {loading ? 'Creating profile...' : 'Create my profile'}
+            </button>
+            <button type="button" className="btn-outline" onClick={handleSubmit} disabled={loading}>
+              Skip photo for now
+            </button>
+          </form>
+        )}
+
+        {/* Step 1: Email & OTP Verification */}
+        {false && step === 1 && (
           <form className="signup-step" onSubmit={otpSent ? handleVerifyOtp : handleSendOtp}>
             <h2>{otpSent ? 'Verify Your Email' : 'Create Your Account'}</h2>
 
@@ -1060,7 +1474,7 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
         )}
 
         {/* Step 2: Set Username */}
-        {step === 2 && (
+        {false && step === 2 && (
           <form className="signup-step" onSubmit={handleSetUsername}>
             <h2>Choose Your Username</h2>
             <div className="form-group">
@@ -1424,7 +1838,7 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
         )}
 
 {/* Step 4: Photos */}
-        {step === 4 && (
+        {false && step === 4 && (
           <form className="signup-step" onSubmit={(e) => { e.preventDefault(); setStep(5); }}>
             <h2>Add Your Photos</h2>
             <div className="form-group">
@@ -1467,7 +1881,7 @@ setUsernameError('Username can only contain letters, numbers, periods, underscor
         )}
 
         {/* Step 5: Security (MPIN - Optional) */}
-        {step === 5 && (
+        {false && step === 5 && (
           <form className="signup-step" onSubmit={handleSubmit}>
             <h2>Secure Your Account</h2>
             <p className="helper-text">Add an MPIN for quick login instead of password</p>

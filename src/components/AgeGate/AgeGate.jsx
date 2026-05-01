@@ -99,7 +99,11 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
       });
 
       if (response.data.verified || response.data.success) {
-        setStep('confirm');
+        onAgeVerified({
+          method: verificationMethod,
+          dateOfBirth: dateOfBirth,
+          age: calculateAge(dateOfBirth)
+        });
       } else {
         setError(response.data.error || 'Age verification failed');
       }
@@ -124,6 +128,62 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
       age: ageBracket
     });
   };
+
+  return (
+    <div className="age-gate-container">
+      <div className="age-gate-card simple-age-card">
+        <div className="age-gate-header">
+          <h1>Confirm your age</h1>
+          <p className="age-gate-subtitle">LinkUp is for adults 18 and older.</p>
+        </div>
+
+        <div className="age-gate-step">
+          <div className="form-group">
+            <label htmlFor="age-date-of-birth">Date of birth</label>
+            <input
+              id="age-date-of-birth"
+              type="date"
+              value={dateOfBirth}
+              onChange={handleDateChange}
+              max={new Date().toISOString().split('T')[0]}
+              className="dob-input"
+            />
+            {ageBracket !== null && (
+              <div className={`age-display ${ageBracket >= 18 ? 'valid' : 'invalid'}`}>
+                You are {ageBracket} years old
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="error-message">
+              {error}
+            </div>
+          )}
+
+          <button
+            className="button-primary"
+            onClick={handleVerify}
+            disabled={!dateOfBirth || loading}
+          >
+            {loading ? 'Checking...' : 'Continue'}
+          </button>
+
+          <button
+            className="button-secondary"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            Back
+          </button>
+
+          <p className="privacy-note">
+            Your birth date is used only to confirm the 18+ requirement.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="age-gate-container">

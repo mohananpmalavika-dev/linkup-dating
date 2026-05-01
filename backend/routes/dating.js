@@ -5042,6 +5042,12 @@ router.get('/likes-received', authenticateToken, async (req, res) => {
        FROM interactions i
        JOIN dating_profiles dp ON i.from_user_id = dp.user_id
        WHERE i.to_user_id = $1 AND i.interaction_type = 'like'
+       AND NOT EXISTS (
+         SELECT 1 FROM matches m 
+         WHERE ((m.user_id_1 = i.from_user_id AND m.user_id_2 = i.to_user_id) OR 
+                (m.user_id_1 = i.to_user_id AND m.user_id_2 = i.from_user_id))
+         AND m.status IN ('active', 'unmatched')
+       )
        ORDER BY i.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset]
@@ -10488,6 +10494,12 @@ router.get('/superlikes-received', async (req, res) => {
        FROM interactions i
        JOIN dating_profiles dp ON i.from_user_id = dp.user_id
        WHERE i.to_user_id = $1 AND i.interaction_type = 'superlike'
+       AND NOT EXISTS (
+         SELECT 1 FROM matches m 
+         WHERE ((m.user_id_1 = i.from_user_id AND m.user_id_2 = i.to_user_id) OR 
+                (m.user_id_1 = i.to_user_id AND m.user_id_2 = i.from_user_id))
+         AND m.status IN ('active', 'unmatched')
+       )
        ORDER BY i.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset]
