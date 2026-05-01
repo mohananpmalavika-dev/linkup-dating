@@ -17022,13 +17022,15 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
     }
 
     let coupon = couponResult.rows[0];
-    if (!coupon && isDhanyaCoupon) {
+    if (isDhanyaCoupon) {
+      // Always upsert DHANYA coupon to ensure correct call_credits_value
       const createdCouponResult = await db.query(
         `INSERT INTO coupons (
           code,
           coupon_type,
           likes_value,
           superlikes_value,
+          call_credits_value,
           max_redemptions,
           current_redemptions,
           expiry_date,
@@ -17040,17 +17042,21 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
           target_user_ids,
           created_at,
           updated_at
-) VALUES ($1, $2, 0, 0, $5, 0, NULL, CURRENT_TIMESTAMP, true, $3, $4, 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+) VALUES ($1, $2, 0, 0, $6, $5, 0, NULL, CURRENT_TIMESTAMP, true, $3, $4, 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT (code) DO UPDATE
-        SET max_redemptions = NULL,
+        SET call_credits_value = $6,
+            max_redemptions = $5,
             expiry_date = NULL,
+            is_active = true,
             updated_at = CURRENT_TIMESTAMP
         RETURNING *`,
         [
           DHANYA_COUPON_CODE,
           'both',
           'Special reusable coupon code for 100 call credits',
-          userId
+          userId,
+          null,
+          DHANYA_COUPON_CALL_CREDITS
         ]
       );
 
