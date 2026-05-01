@@ -194,7 +194,7 @@ const CallDashboard = () => {
       }
 
       showNotice(
-        `Payment order created for ${pkg.credits + pkg.bonus} credits. Complete payment when checkout opens.`,
+        `Payment order created for ${pkg.credits + pkg.bonus} credits. Checkout is not connected yet, so credits are added after payment is enabled.`,
         'success'
       );
     } catch (error) {
