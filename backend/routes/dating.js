@@ -17118,12 +17118,23 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
     // Get updated daily limits with coupon credits
     const updatedLimits = await getDailyLimitSnapshot(userId);
 
+    // Get updated call credits balance
+    let callCreditsBalance = 0;
+    if (callCreditsValue > 0) {
+      const callCreditsResult = await db.query(
+        `SELECT credits_balance FROM call_credits WHERE user_id = $1`,
+        [userId]
+      );
+      callCreditsBalance = callCreditsResult.rows[0]?.credits_balance || 0;
+    }
+
     res.json({
       message: 'Coupon redeemed successfully!',
       usage: usageResult.rows[0],
       likesGranted: coupon.likes_value || 0,
       superlikesGranted: coupon.superlikes_value || 0,
       creditsGranted: callCreditsValue,
+      callCreditsBalance: callCreditsBalance,
       updatedLimits: {
         remainingLikes: updatedLimits.remainingLikes,
         remainingSuperlikes: updatedLimits.remainingSuperlikes,
