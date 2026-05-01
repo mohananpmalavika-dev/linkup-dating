@@ -107,7 +107,9 @@ class IPBlockingService {
 
       return 2; // Default
     } catch (error) {
-      console.error('Error fetching block duration:', error);
+      if (!isMissingIPBlocklistTableError(error)) {
+        console.error('Error fetching block duration:', error);
+      }
       return 2; // Default fallback
     }
   }
@@ -119,24 +121,24 @@ class IPBlockingService {
     if (!ipAddress) return false;
 
     try {
-      const block = await IPBlocklist.findOne({
-        where: {
-          ipAddress,
-          isActive: true,
-          expiresAt: {
-            [Op.gt]: new Date() // Expiration time in future
-          }
-        }
-      });
+      return await withIPBlocklistRecovery(
+        'check an IP block',
+        async () => {
+          const block = await IPBlocklist.findOne({
+            where: {
+              ipAddress,
+              isActive: true,
+              expiresAt: {
+                [Op.gt]: new Date() // Expiration time in future
+              }
+            }
+          });
 
-      return !!block;
+          return !!block;
+        },
+        false
+      );
     } catch (error) {
-      // If table doesn't exist (42P01), log as warning but don't fail
-      if (error.code === '42P01') {
-        console.warn('IP blocklist table does not exist yet. Table will be created on next sync.');
-        return false;
-      }
-      
       console.error('Error checking IP block:', error);
       return false; // Fail open for availability
     }
@@ -149,34 +151,35 @@ class IPBlockingService {
     if (!ipAddress) return null;
 
     try {
-      const block = await IPBlocklist.findOne({
-        where: {
-          ipAddress,
-          isActive: true,
-          expiresAt: {
-            [Op.gt]: new Date()
-          }
-        }
-      });
+      return await withIPBlocklistRecovery(
+        'get IP block details',
+        async () => {
+          const block = await IPBlocklist.findOne({
+            where: {
+              ipAddress,
+              isActive: true,
+              expiresAt: {
+                [Op.gt]: new Date()
+              }
+            }
+          });
 
-      if (!block) return null;
+          if (!block) return null;
 
-      return {
-        isBlocked: true,
-        reason: block.reason,
-        blockedAt: block.blockedAt,
-        expiresAt: block.expiresAt,
-        remainingMinutes: Math.ceil((block.expiresAt - new Date()) / (1000 * 60)),
-        attemptedAge: block.attemptedAge,
-        attemptedEmail: block.attemptedEmail,
-        attemptCount: block.attemptCount
-      };
+          return {
+            isBlocked: true,
+            reason: block.reason,
+            blockedAt: block.blockedAt,
+            expiresAt: block.expiresAt,
+            remainingMinutes: Math.ceil((block.expiresAt - new Date()) / (1000 * 60)),
+            attemptedAge: block.attemptedAge,
+            attemptedEmail: block.attemptedEmail,
+            attemptCount: block.attemptCount
+          };
+        },
+        null
+      );
     } catch (error) {
-      // If table doesn't exist (42P01), just return null
-      if (error.code === '42P01') {
-        return null;
-      }
-      
       console.error('Error getting block details:', error);
       return null;
     }
@@ -192,58 +195,54 @@ class IPBlockingService {
     }
 
     try {
-      // Get current block duration from admin settings
-      const blockDurationHours = await this.getBlockDurationHours();
+      return await withIPBlocklistRecovery(
+        'block an underage-attempt IP',
+        async () => {
+          // Get current block duration from admin settings
+          const blockDurationHours = await this.getBlockDurationHours();
 
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + blockDurationHours);
+          const expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + blockDurationHours);
 
-      // Check if IP already exists
-      const existingBlock = await IPBlocklist.findOne({
-        where: { ipAddress }
-      });
+          // Check if IP already exists
+          const existingBlock = await IPBlocklist.findOne({
+            where: { ipAddress }
+          });
 
-      if (existingBlock) {
-        // Update existing block
-        await existingBlock.update({
-          attemptCount: existingBlock.attemptCount + 1,
-          attemptedEmail: email,
-          attemptedAge: age,
-          blockedAt: new Date(),
-          expiresAt,
-          isActive: true,
-          removedAt: null,
-          removedByAdminId: null
-        });
+          if (existingBlock) {
+            // Update existing block
+            await existingBlock.update({
+              attemptCount: existingBlock.attemptCount + 1,
+              attemptedEmail: email,
+              attemptedAge: age,
+              blockedAt: new Date(),
+              expiresAt,
+              isActive: true,
+              removedAt: null,
+              removedByAdminId: null
+            });
 
-        return existingBlock;
-      } else {
-        // Create new block
-        const block = await IPBlocklist.create({
-          ipAddress,
-          reason: 'underage_attempt',
-          blockDurationHours,
-          attemptedEmail: email,
-          attemptedAge: age,
-          attemptCount: 1,
-          expiresAt,
-          isActive: true
-        });
+            return existingBlock;
+          }
 
-        console.log(`[SECURITY] Blocked IP ${ipAddress} for underage attempt (age: ${age}, email: ${email})`);
-        return block;
-      }
+          // Create new block
+          const block = await IPBlocklist.create({
+            ipAddress,
+            reason: 'underage_attempt',
+            blockDurationHours,
+            attemptedEmail: email,
+            attemptedAge: age,
+            attemptCount: 1,
+            expiresAt,
+            isActive: true
+          });
+
+          console.log(`[SECURITY] Blocked IP ${ipAddress} for underage attempt (age: ${age}, email: ${email})`);
+          return block;
+        },
+        null
+      );
     } catch (error) {
-      // If table doesn't exist, log warning but don't fail
-      if (error.code === '42P01') {
-        console.warn('[SECURITY] IP blocklist table does not exist. Block attempt will be retried when table is available:', {
-          ip: ipAddress,
-          email,
-          age
-        });
-        return null;
-      }
-      
       console.error('Error blocking IP:', error);
       throw error;
     }
@@ -256,37 +255,46 @@ class IPBlockingService {
     if (!ipAddress) throw new Error('IP address required');
 
     try {
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + durationHours);
+      const block = await withIPBlocklistRecovery(
+        'manually block an IP',
+        async () => {
+          const expiresAt = new Date();
+          expiresAt.setHours(expiresAt.getHours() + durationHours);
 
-      const existingBlock = await IPBlocklist.findOne({
-        where: { ipAddress }
-      });
+          const existingBlock = await IPBlocklist.findOne({
+            where: { ipAddress }
+          });
 
-      if (existingBlock) {
-        await existingBlock.update({
-          reason: reason || existingBlock.reason,
-          blockDurationHours: durationHours,
-          expiresAt,
-          isActive: true,
-          removedAt: null,
-          updatedByAdminId: adminId
-        });
-        return existingBlock;
-      } else {
-        return await IPBlocklist.create({
-          ipAddress,
-          reason: reason || 'manual_block',
-          blockDurationHours: durationHours,
-          expiresAt,
-          isActive: true,
-          updatedByAdminId: adminId
-        });
-      }
-    } catch (error) {
-      if (error.code === '42P01') {
+          if (existingBlock) {
+            await existingBlock.update({
+              reason: reason || existingBlock.reason,
+              blockDurationHours: durationHours,
+              expiresAt,
+              isActive: true,
+              removedAt: null,
+              updatedByAdminId: adminId
+            });
+            return existingBlock;
+          }
+
+          return await IPBlocklist.create({
+            ipAddress,
+            reason: reason || 'manual_block',
+            blockDurationHours: durationHours,
+            expiresAt,
+            isActive: true,
+            updatedByAdminId: adminId
+          });
+        },
+        null
+      );
+
+      if (!block) {
         throw new Error('IP blocklist table not yet initialized. Please try again in a moment.');
       }
+
+      return block;
+    } catch (error) {
       console.error('Error manually blocking IP:', error);
       throw error;
     }
@@ -299,26 +307,35 @@ class IPBlockingService {
     if (!ipAddress) throw new Error('IP address required');
 
     try {
-      const block = await IPBlocklist.findOne({
-        where: { ipAddress }
-      });
+      const result = await withIPBlocklistRecovery(
+        'unblock an IP',
+        async () => {
+          const block = await IPBlocklist.findOne({
+            where: { ipAddress }
+          });
 
-      if (!block) {
-        throw new Error('IP block not found');
-      }
+          if (!block) {
+            throw new Error('IP block not found');
+          }
 
-      await block.update({
-        isActive: false,
-        removedAt: new Date(),
-        removedByAdminId: adminId
-      });
+          await block.update({
+            isActive: false,
+            removedAt: new Date(),
+            removedByAdminId: adminId
+          });
 
-      console.log(`[ADMIN] Removed block for IP ${ipAddress} by admin ${adminId}`);
-      return block;
-    } catch (error) {
-      if (error.code === '42P01') {
+          console.log(`[ADMIN] Removed block for IP ${ipAddress} by admin ${adminId}`);
+          return block;
+        },
+        null
+      );
+
+      if (!result) {
         throw new Error('IP blocklist table not yet initialized. Please try again in a moment.');
       }
+
+      return result;
+    } catch (error) {
       console.error('Error unblocking IP:', error);
       throw error;
     }
@@ -329,49 +346,51 @@ class IPBlockingService {
    */
   static async getBlockedIPs(page = 1, limit = 50, activeOnly = true) {
     try {
-      const offset = (page - 1) * limit;
+      return await withIPBlocklistRecovery(
+        'list blocked IPs',
+        async () => {
+          const offset = (page - 1) * limit;
 
-      const where = activeOnly
-        ? {
-            isActive: true,
-            expiresAt: { [Op.gt]: new Date() }
-          }
-        : {};
+          const where = activeOnly
+            ? {
+                isActive: true,
+                expiresAt: { [Op.gt]: new Date() }
+              }
+            : {};
 
-      const { count, rows } = await IPBlocklist.findAndCountAll({
-        where,
-        order: [['blockedAt', 'DESC']],
-        offset,
-        limit,
-        attributes: [
-          'id', 'ipAddress', 'reason', 'blockedAt', 'expiresAt',
-          'attemptedEmail', 'attemptedAge', 'attemptCount', 'isActive'
-        ]
-      });
+          const { count, rows } = await IPBlocklist.findAndCountAll({
+            where,
+            order: [['blockedAt', 'DESC']],
+            offset,
+            limit,
+            attributes: [
+              'id', 'ipAddress', 'reason', 'blockedAt', 'expiresAt',
+              'attemptedEmail', 'attemptedAge', 'attemptCount', 'isActive'
+            ]
+          });
 
-      return {
-        total: count,
-        page,
-        limit,
-        pages: Math.ceil(count / limit),
-        blocks: rows.map(block => ({
-          id: block.id,
-          ipAddress: block.ipAddress,
-          reason: block.reason,
-          blockedAt: block.blockedAt,
-          expiresAt: block.expiresAt,
-          remainingMinutes: Math.ceil((block.expiresAt - new Date()) / (1000 * 60)),
-          attemptedEmail: block.attemptedEmail,
-          attemptedAge: block.attemptedAge,
-          attemptCount: block.attemptCount,
-          isActive: block.isActive
-        }))
-      };
+          return {
+            total: count,
+            page,
+            limit,
+            pages: Math.ceil(count / limit),
+            blocks: rows.map(block => ({
+              id: block.id,
+              ipAddress: block.ipAddress,
+              reason: block.reason,
+              blockedAt: block.blockedAt,
+              expiresAt: block.expiresAt,
+              remainingMinutes: Math.ceil((block.expiresAt - new Date()) / (1000 * 60)),
+              attemptedEmail: block.attemptedEmail,
+              attemptedAge: block.attemptedAge,
+              attemptCount: block.attemptCount,
+              isActive: block.isActive
+            }))
+          };
+        },
+        { total: 0, page, limit, pages: 0, blocks: [] }
+      );
     } catch (error) {
-      if (error.code === '42P01') {
-        console.warn('IP blocklist table not yet initialized. Returning empty list.');
-        return { total: 0, page, limit, pages: 0, blocks: [] };
-      }
       console.error('Error getting blocked IPs:', error);
       throw error;
     }
@@ -382,25 +401,27 @@ class IPBlockingService {
    */
   static async cleanupExpiredBlocks() {
     try {
-      const now = new Date();
+      return await withIPBlocklistRecovery(
+        'clean up expired IP blocks',
+        async () => {
+          const now = new Date();
 
-      const result = await IPBlocklist.update(
-        { isActive: false },
-        {
-          where: {
-            isActive: true,
-            expiresAt: { [Op.lte]: now }
-          }
-        }
+          const result = await IPBlocklist.update(
+            { isActive: false },
+            {
+              where: {
+                isActive: true,
+                expiresAt: { [Op.lte]: now }
+              }
+            }
+          );
+
+          console.log(`[CLEANUP] Marked ${result[0]} expired IP blocks as inactive`);
+          return result[0];
+        },
+        0
       );
-
-      console.log(`[CLEANUP] Marked ${result[0]} expired IP blocks as inactive`);
-      return result[0];
     } catch (error) {
-      if (error.code === '42P01') {
-        console.warn('IP blocklist table not yet initialized. Cleanup will run on next sync.');
-        return 0;
-      }
       console.error('Error cleaning up expired blocks:', error);
       throw error;
     }
@@ -410,76 +431,80 @@ class IPBlockingService {
    * Get statistics about IP blocks
    */
   static async getBlockStatistics() {
+    const emptyStats = {
+      activeBlocksCount: 0,
+      totalBlocksCount: 0,
+      underageAttemptsCount: 0,
+      mostRecentBlock: null,
+      topBlockedEmails: []
+    };
+
     try {
-      const now = new Date();
+      return await withIPBlocklistRecovery(
+        'get IP block statistics',
+        async () => {
+          const now = new Date();
 
-      const [
-        activeBlocks,
-        totalBlocks,
-        underageAttempts,
-        mostRecentBlock,
-        topBlockedEmails
-      ] = await Promise.all([
-        // Active blocks
-        IPBlocklist.count({
-          where: {
-            isActive: true,
-            expiresAt: { [Op.gt]: now }
-          }
-        }),
+          const [
+            activeBlocks,
+            totalBlocks,
+            underageAttempts,
+            mostRecentBlock,
+            topBlockedEmails
+          ] = await Promise.all([
+            // Active blocks
+            IPBlocklist.count({
+              where: {
+                isActive: true,
+                expiresAt: { [Op.gt]: now }
+              }
+            }),
 
-        // Total blocks ever
-        IPBlocklist.count(),
+            // Total blocks ever
+            IPBlocklist.count(),
 
-        // Underage attempts
-        IPBlocklist.count({
-          where: { reason: 'underage_attempt' }
-        }),
+            // Underage attempts
+            IPBlocklist.count({
+              where: { reason: 'underage_attempt' }
+            }),
 
-        // Most recent block
-        IPBlocklist.findOne({
-          where: { isActive: true },
-          order: [['blockedAt', 'DESC']],
-          attributes: ['blockedAt', 'ipAddress']
-        }),
+            // Most recent block
+            IPBlocklist.findOne({
+              where: { isActive: true },
+              order: [['blockedAt', 'DESC']],
+              attributes: ['blockedAt', 'ipAddress']
+            }),
 
-        // Most common email addresses from blocks
-        IPBlocklist.findAll({
-          attributes: [
-            'attemptedEmail',
-            [sequelize.fn('COUNT', sequelize.col('attemptedEmail')), 'count']
-          ],
-          where: { attemptedEmail: { [Op.not]: null } },
-          group: ['attemptedEmail'],
-          order: [[sequelize.literal('count'), 'DESC']],
-          limit: 5,
-          raw: true
-        })
-      ]);
+            // Most common email addresses from blocks
+            IPBlocklist.findAll({
+              attributes: [
+                'attemptedEmail',
+                [sequelize.fn('COUNT', sequelize.col('attemptedEmail')), 'count']
+              ],
+              where: { attemptedEmail: { [Op.not]: null } },
+              group: ['attemptedEmail'],
+              order: [[sequelize.literal('count'), 'DESC']],
+              limit: 5,
+              raw: true
+            })
+          ]);
 
-      return {
-        activeBlocksCount: activeBlocks,
-        totalBlocksCount: totalBlocks,
-        underageAttemptsCount: underageAttempts,
-        mostRecentBlock: mostRecentBlock
-          ? {
-              ipAddress: mostRecentBlock.ipAddress,
-              blockedAt: mostRecentBlock.blockedAt
-            }
-          : null,
-        topBlockedEmails: topBlockedEmails || []
-      };
+          return {
+            activeBlocksCount: activeBlocks,
+            totalBlocksCount: totalBlocks,
+            underageAttemptsCount: underageAttempts,
+            mostRecentBlock: mostRecentBlock
+              ? {
+                  ipAddress: mostRecentBlock.ipAddress,
+                  blockedAt: mostRecentBlock.blockedAt
+                }
+              : null,
+            topBlockedEmails: topBlockedEmails || []
+          };
+        },
+        emptyStats
+      );
     } catch (error) {
-      if (error.code === '42P01') {
-        console.warn('IP blocklist table not yet initialized. Returning empty statistics.');
-        return {
-          activeBlocksCount: 0,
-          totalBlocksCount: 0,
-          underageAttemptsCount: 0,
-          mostRecentBlock: null,
-          topBlockedEmails: []
-        };
-      }
       console.error('Error getting block statistics:', error);
       throw error;
     }
