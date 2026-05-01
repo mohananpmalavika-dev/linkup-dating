@@ -1,33 +1,35 @@
 /* Login Page Styles */
 .login-container {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  min-height: 100svh;
+  height: 100vh;
   width: 100%;
   background: linear-gradient(135deg, #fff8f9 0%, #f8f5ff 100%);
-  padding: 1rem;
+  padding: 0;
   box-sizing: border-box;
-  overflow-y: auto;
+  overflow: hidden;
   font-family: inherit;
 }
 
 .login-card {
   background: white;
-  border-radius: 16px;
-  padding: 3rem 2rem;
+  border-radius: 0;
+  padding: 1.5rem 1.2rem;
   width: 100%;
   max-width: 520px;
+  height: 100vh;
+  max-height: 100vh;
+  overflow-y: auto;
   box-sizing: border-box;
   margin: 0 auto;
-  box-shadow: 0 10px 40px rgba(208, 96, 48, 0.15);
+  box-shadow: none;
   animation: slideUp 0.5s ease-out;
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.2rem;
 }
 
 .login-topbar {
@@ -41,19 +43,19 @@
 }
 
 .login-logo {
-  height: 92px;
-  width: min(100%, 176px);
+  height: 70px;
+  width: min(100%, 140px);
   object-fit: cover;
   object-position: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.8rem;
   border: 1px solid #eadff0;
   border-radius: 8px;
-  box-shadow: 0 12px 28px rgba(40, 24, 72, 0.14);
+  box-shadow: 0 8px 18px rgba(40, 24, 72, 0.1);
 }
 
 .login-header h1 {
-  margin: 0 0 0.5rem 0;
-  font-size: 2rem;
+  margin: 0 0 0.3rem 0;
+  font-size: 1.6rem;
   background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -62,9 +64,9 @@
 }
 
 .login-kicker {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.3rem;
   color: var(--dh-logo-copper, #d06030);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -73,19 +75,19 @@
 .login-subtitle {
   margin: 0;
   color: #666;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .form-intro h2 {
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.25rem;
   color: #2d2d2d;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
 }
 
 .intro-heading-row {
@@ -98,8 +100,8 @@
 .form-intro p {
   margin: 0;
   color: #666;
-  font-size: 0.95rem;
-  line-height: 1.5;
+  font-size: 0.9rem;
+  line-height: 1.4;
 }
 
 .form-group {
@@ -219,10 +221,10 @@
 }
 
 .form-input {
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.9rem;
   border: 2px solid #eee;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-family: inherit;
   transition: all 0.3s;
 }
@@ -400,14 +402,15 @@
 }
 
 .btn {
-  padding: 0.75rem 1.5rem;
+  padding: 0.65rem 1.3rem;
   border-radius: 8px;
   border: none;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
   font-family: inherit;
+  min-height: 40px;
 }
 
 .btn-primary {
