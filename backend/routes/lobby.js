@@ -31,12 +31,85 @@ router.post('/messages', async (req, res) => {
     const userId = req.user?.id;
     const { message } = req.body;
 
+    console.log('LOBBY MESSAGE - Request received:', {
+      userId,
+      hasBody: !!req.body,
+      bodyKeys: req.body ? Object.keys(req.body) : 'none',
+      messageType: typeof message,
+      messageValue: message,
+      contentType: req.headers['content-type']
+    });
+
+    // Validate user authentication first
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      console.warn('LOBBY MESSAGE - No user ID from request:', {
+        hasUser: !!req.user,
+        userKeys: req.user ? Object.keys(req.user) : 'none',
+        authHeader: req.headers['authorization'] ? 'present' : 'missing'
+      });
+      return res.status(401).json({ 
+        error: 'Unauthorized',
+        code: 'NO_USER_ID'
+      });
     }
 
-    if (!message || typeof message !== 'string' || !message.trim()) {
-      return res.status(400).json({ error: 'Message is required and must be a non-empty string' });
+    // Validate message - log detailed diagnostics
+    if (!message) {
+      console.warn('LOBBY MESSAGE - No message provided:', {
+        body: req.body,
+        messageField: message,
+        messageUndefined: message === undefined,
+        messageNull: message === null,
+        messageFalsy: !message
+      });
+      return res.status(400).json({ 
+        error: 'Message is required',
+        code: 'NO_MESSAGE',
+        hint: 'Include a "message" field in the request body with text content'
+      });
+    }
+
+    if (typeof message !== 'string') {
+      console.warn('LOBBY MESSAGE - Invalid message type:', typeof message);
+      return res.status(400).json({ 
+        error: 'Message must be a string',
+        code: 'INVALID_MESSAGE_TYPE',
+        received: typeof message
+      });
+    }
+
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage) {
+      console.warn('LOBBY MESSAGE - Message is empty after trim');
+      return res.status(400).json({ 
+        error: 'Message cannot be empty',
+        code: 'EMPTY_MESSAGE',
+        originalLength: message.length,
+        trimmedLength: trimmedMessage.length
+      });
+    }
+
+    if (trimmedMessage.length > 5000) {
+      console.warn('LOBBY MESSAGE - Message too long:', trimmedMessage.length);
+      return res.status(400).json({ 
+        error: 'Message cannot exceed 5000 characters',
+        code: 'MESSAGE_TOO_LONG',
+        length: trimmedMessage.length
+      });
+    }
+
+    // Verify user exists in database
+    const userCheck = await db.query(
+      'SELECT id FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userCheck.rows.length === 0) {
+      console.warn('LOBBY MESSAGE - User not found in database:', userId);
+      return res.status(401).json({ 
+        error: 'User not found',
+        code: 'USER_NOT_FOUND'
+      });
     }
 
     // Insert message
@@ -44,7 +117,7 @@ router.post('/messages', async (req, res) => {
       `INSERT INTO lobby_messages (from_user_id, message)
        VALUES ($1, $2)
        RETURNING *`,
-      [userId, message.trim()]
+      [userId, trimmedMessage]
     );
 
     if (!result.rows || result.rows.length === 0) {
@@ -78,21 +151,42 @@ router.post('/messages', async (req, res) => {
     console.error('Send lobby message error details:', {
       code: err.code,
       message: err.message,
-      detail: err.detail
+      detail: err.detail,
+      severity: err.severity
     });
     
     let errorMessage = 'Failed to send message';
+    let errorCode = 'UNKNOWN_ERROR';
     let statusCode = 500;
 
     if (err.code === '23502') {
-      errorMessage = 'Missing required fields';
+      // NOT NULL constraint violation - determine which field
+      if (err.detail && err.detail.includes('from_user_id')) {
+        errorMessage = 'User information is missing';
+        errorCode = 'MISSING_USER_ID';
+      } else if (err.detail && err.detail.includes('message')) {
+        errorMessage = 'Message content is missing';
+        errorCode = 'MISSING_MESSAGE';
+      } else {
+        errorMessage = 'Missing required fields';
+        errorCode = 'MISSING_REQUIRED_FIELD';
+      }
       statusCode = 400;
     } else if (err.code === '23503') {
       errorMessage = 'User not found';
+      errorCode = 'USER_NOT_FOUND';
       statusCode = 400;
+    } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+      errorMessage = 'Database connection failed';
+      errorCode = 'DB_CONNECTION_ERROR';
+      statusCode = 503;
     }
 
-    res.status(statusCode).json({ error: errorMessage });
+    res.status(statusCode).json({ 
+      error: errorMessage,
+      code: errorCode,
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
   }
 });
 

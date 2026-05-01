@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { getStoredAuthToken } from '../utils/auth';
 
 const API_URL = `${API_BASE_URL}/social`;
 
@@ -16,7 +17,10 @@ export const socialService = {
    */
   getHub: async () => {
     try {
-      const response = await axios.get(`${API_URL}/hub`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.get(`${API_URL}/hub`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to load social hub';
@@ -30,7 +34,10 @@ export const socialService = {
    */
   getReferralInfo: async () => {
     try {
-      const response = await axios.get(`${API_URL}/referral/me`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.get(`${API_URL}/referral/me`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to get referral info';
@@ -42,7 +49,10 @@ export const socialService = {
    */
   getReferralStats: async () => {
     try {
-      const response = await axios.get(`${API_URL}/referral/stats`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.get(`${API_URL}/referral/stats`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to get referral stats';
@@ -66,7 +76,10 @@ export const socialService = {
    */
   completeReferral: async (code) => {
     try {
-      const response = await axios.post(`${API_URL}/referral/complete`, { code });
+      const authToken = getStoredAuthToken();
+      const response = await axios.post(`${API_URL}/referral/complete`, { code }, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to apply referral';
@@ -80,7 +93,10 @@ export const socialService = {
    */
   sendFriendRequest: async (targetUserId) => {
     try {
-      const response = await axios.post(`${API_URL}/friends/add`, { targetUserId });
+      const authToken = getStoredAuthToken();
+      const response = await axios.post(`${API_URL}/friends/add`, { targetUserId }, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to send friend request';
@@ -92,7 +108,10 @@ export const socialService = {
    */
   acceptFriendRequest: async (friendshipId) => {
     try {
-      const response = await axios.post(`${API_URL}/friends/${friendshipId}/accept`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.post(`${API_URL}/friends/${friendshipId}/accept`, {}, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to accept friend request';
@@ -104,7 +123,10 @@ export const socialService = {
    */
   declineFriendRequest: async (friendshipId) => {
     try {
-      const response = await axios.post(`${API_URL}/friends/${friendshipId}/decline`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.post(`${API_URL}/friends/${friendshipId}/decline`, {}, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to decline friend request';
@@ -116,8 +138,10 @@ export const socialService = {
    */
   getFriends: async (status = 'accepted', limit = 50, offset = 0, direction = 'all') => {
     try {
+      const authToken = getStoredAuthToken();
       const response = await axios.get(`${API_URL}/friends/list`, {
-        params: { status, limit, offset, direction }
+        params: { status, limit, offset, direction },
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
       });
       return response.data;
     } catch (error) {
@@ -130,7 +154,10 @@ export const socialService = {
    */
   getFriendStatus: async (targetUserId) => {
     try {
-      const response = await axios.get(`${API_URL}/friends/status/${targetUserId}`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.get(`${API_URL}/friends/status/${targetUserId}`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to get friendship status';
@@ -142,7 +169,10 @@ export const socialService = {
    */
   removeFriend: async (friendshipId) => {
     try {
-      const response = await axios.delete(`${API_URL}/friends/${friendshipId}`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.delete(`${API_URL}/friends/${friendshipId}`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to remove friend';
@@ -156,10 +186,13 @@ export const socialService = {
    */
   addSocialIntegration: async (platform, username, isPublic = false) => {
     try {
+      const authToken = getStoredAuthToken();
       const response = await axios.post(`${API_URL}/integrations`, {
         platform,
         username,
         isPublic
+      }, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
       });
       return response.data;
     } catch (error) {
@@ -172,7 +205,10 @@ export const socialService = {
    */
   getSocialIntegrations: async () => {
     try {
-      const response = await axios.get(`${API_URL}/integrations`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.get(`${API_URL}/integrations`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to fetch social integrations';
@@ -184,7 +220,10 @@ export const socialService = {
    */
   updateSocialIntegration: async (integrationId, updates) => {
     try {
-      const response = await axios.patch(`${API_URL}/integrations/${integrationId}`, updates);
+      const authToken = getStoredAuthToken();
+      const response = await axios.patch(`${API_URL}/integrations/${integrationId}`, updates, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to update integration';
@@ -196,7 +235,10 @@ export const socialService = {
    */
   removeSocialIntegration: async (integrationId) => {
     try {
-      const response = await axios.delete(`${API_URL}/integrations/${integrationId}`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.delete(`${API_URL}/integrations/${integrationId}`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to remove integration';
@@ -222,7 +264,10 @@ export const socialService = {
    */
   joinCommunityRoom: async (roomSlug) => {
     try {
-      const response = await axios.post(`${API_URL}/community-rooms/${roomSlug}/join`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.post(`${API_URL}/community-rooms/${roomSlug}/join`, {}, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to join community room';
@@ -236,7 +281,10 @@ export const socialService = {
    */
   acceptDatingReferral: async (referralId) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/dating/referrals/${referralId}/accept`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.post(`${API_BASE_URL}/dating/referrals/${referralId}/accept`, {}, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to accept referral';
@@ -250,12 +298,15 @@ export const socialService = {
    */
   createGroupChat: async (name, description = '', memberIds = [], groupType = 'custom', matchId = null) => {
     try {
+      const authToken = getStoredAuthToken();
       const response = await axios.post(`${API_URL}/group-chats`, {
         name,
         description,
         memberIds,
         groupType,
         matchId
+      }, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
       });
       return response.data;
     } catch (error) {
@@ -268,7 +319,10 @@ export const socialService = {
    */
   getGroupChats: async () => {
     try {
-      const response = await axios.get(`${API_URL}/group-chats`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.get(`${API_URL}/group-chats`, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to fetch group chats';
@@ -280,10 +334,13 @@ export const socialService = {
    */
   sendGroupMessage: async (groupId, message, mediaType = null, mediaUrl = null) => {
     try {
+      const authToken = getStoredAuthToken();
       const response = await axios.post(`${API_URL}/group-chats/${groupId}/messages`, {
         message,
         mediaType,
         mediaUrl
+      }, {
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
       });
       return response.data;
     } catch (error) {
@@ -296,8 +353,10 @@ export const socialService = {
    */
   getGroupMessages: async (groupId, limit = 50, offset = 0) => {
     try {
+      const authToken = getStoredAuthToken();
       const response = await axios.get(`${API_URL}/group-chats/${groupId}/messages`, {
-        params: { limit, offset }
+        params: { limit, offset },
+        headers: authToken ? { 'Authorization': `Bearer ${authToken}` } : {}
       });
       return response.data;
     } catch (error) {

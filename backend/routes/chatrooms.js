@@ -143,10 +143,10 @@ router.post('/', async (req, res) => {
       paramTypes: [typeof userId, typeof trimmedName, typeof trimmedDesc, typeof (isPublic !== false), typeof (maxMembers || 100)]
     });
 
-    // Insert with explicit error handling
+// Insert with explicit error handling - includes updated_at for completeness
     const result = await db.query(
-      `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO chatrooms (created_by_user_id, name, description, is_public, max_members, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING *`,
       insertParams
     );
