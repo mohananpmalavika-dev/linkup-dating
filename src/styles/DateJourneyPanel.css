@@ -6,7 +6,7 @@
   border-radius: 22px;
   border: 1px solid #f1d7df;
   background:
-    radial-gradient(circle at top right, rgba(251, 113, 133, 0.12), transparent 42%),
+    radial-gradient(circle at top right, rgba(241, 160, 111, 0.12), transparent 42%),
     linear-gradient(180deg, #fff9fb 0%, #ffffff 100%);
 }
 
@@ -168,7 +168,7 @@
 
 .date-proposal-primary,
 .date-planner-submit {
-  background: linear-gradient(135deg, #fb7185, #f97316);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f), var(--dh-logo-copper, #d06030));
   color: #ffffff;
   padding: 10px 14px;
   border-radius: 999px;
@@ -222,8 +222,8 @@
 
 .date-type-chip.active {
   background: linear-gradient(135deg, #fff1f5, #ffedd5);
-  border-color: #fb7185;
-  box-shadow: 0 12px 26px rgba(249, 115, 22, 0.12);
+  border-color: var(--dh-logo-copper-light, #f1a06f);
+  box-shadow: 0 12px 26px rgba(208, 96, 48, 0.12);
 }
 
 .date-slot-chip {

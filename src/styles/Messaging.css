@@ -46,8 +46,8 @@
 }
 
 .tab-btn.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
+  border-bottom-color: var(--dh-logo-copper, #d06030);
 }
 
 .tab-btn:hover {
@@ -76,7 +76,7 @@
 
 .conversation-item.active {
   background: #e3f2fd;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .conversation-avatar {
@@ -116,7 +116,7 @@
 }
 
 .unread-badge {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border-radius: 50%;
   width: 20px;
@@ -228,7 +228,7 @@
 }
 
 .message.own .message-content {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
@@ -269,11 +269,11 @@
 }
 
 .message-input:focus {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .send-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   width: 45px;
@@ -416,8 +416,8 @@
 }
 
 .tab-btn.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
+  border-bottom-color: var(--dh-logo-copper, #d06030);
 }
 
 .tab-btn:hover {
@@ -446,7 +446,7 @@
 
 .conversation-item.active {
   background: #e3f2fd;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .conversation-avatar {
@@ -486,7 +486,7 @@
 }
 
 .unread-badge {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border-radius: 50%;
   width: 20px;
@@ -598,7 +598,7 @@
 }
 
 .message.own .message-content {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
@@ -639,11 +639,11 @@
 }
 
 .message-input:focus {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .send-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   width: 45px;
@@ -750,7 +750,7 @@
 
 .conversation-item.active {
   background: #e3f2fd;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .conversation-avatar {
@@ -790,7 +790,7 @@
 }
 
 .unread-badge {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border-radius: 50%;
   width: 20px;
@@ -902,7 +902,7 @@
 }
 
 .message.own .message-content {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
@@ -943,11 +943,11 @@
 }
 
 .message-input:focus {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .send-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   width: 45px;
@@ -1086,7 +1086,7 @@
 }
 
 .search-input:focus {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .chats-list {
@@ -1112,7 +1112,7 @@
 
 .chat-item.active {
   background: #e8eef7;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
   padding-left: calc(0.75rem - 4px);
 }
 
@@ -1146,7 +1146,7 @@
 }
 
 .unread-badge {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   padding: 0.2rem 0.6rem;
   border-radius: 12px;
@@ -1177,7 +1177,7 @@
 }
 
 .btn-start-chat {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
@@ -1229,16 +1229,16 @@
 }
 
 .filter-btn.active {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 2px 8px rgba(208, 96, 48, 0.3);
 }
 
 .filter-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
-  background: rgba(102, 126, 234, 0.05);
+  border-color: var(--dh-logo-copper, #d06030);
+  color: var(--dh-logo-copper, #d06030);
+  background: rgba(208, 96, 48, 0.05);
 }
 
 .filter-btn:active {
@@ -1302,7 +1302,7 @@
 .contact-identifier {
   margin: 0.1rem 0 0.1rem 0;
   font-size: 0.8rem;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -1444,7 +1444,7 @@
   align-items: center;
   padding: 1rem;
   border-bottom: 1px solid #ddd;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
@@ -1554,7 +1554,7 @@
 }
 
 .message.sent .message-bubble {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
@@ -1590,7 +1590,7 @@
   align-items: center;
   padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: rgba(102, 126, 234, 0.12);
+  background: rgba(208, 96, 48, 0.12);
   color: #4456b8;
   font-size: 0.75rem;
   font-weight: 600;
@@ -1659,7 +1659,7 @@
 }
 
 .search-input-field:focus {
-  border-bottom-color: #667eea;
+  border-bottom-color: var(--dh-logo-copper, #d06030);
 }
 
 .search-results-container {
@@ -1802,7 +1802,7 @@
 }
 
 .emoji-search-input:focus {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .emoji-categories {
@@ -1825,7 +1825,7 @@
 
 .emoji-category-btn.active {
   background: white;
-  border: 1px solid #667eea;
+  border: 1px solid var(--dh-logo-copper, #d06030);
 }
 
 .emoji-category-btn:hover {
@@ -1874,7 +1874,7 @@
 }
 
 .read-receipt.seen {
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .receipt-icon {
@@ -1977,14 +1977,14 @@
 .btn-clear-all {
   background: none;
   border: none;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   cursor: pointer;
   font-size: 0.9rem;
   text-decoration: underline;
 }
 
 .btn-clear-all:hover {
-  color: #764ba2;
+  color: var(--dh-logo-ink, #102030);
 }
 
 .notification-panel {
@@ -2098,9 +2098,9 @@
 }
 
 .btn-pagination:hover:not(:disabled) {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .btn-pagination:disabled {
@@ -2168,8 +2168,8 @@
 .message-thread {
   margin-bottom: 0.5rem;
   padding: 0.5rem;
-  background: rgba(102, 126, 234, 0.05);
-  border-left: 3px solid #667eea;
+  background: rgba(208, 96, 48, 0.05);
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
   border-radius: 4px;
 }
 
@@ -2196,7 +2196,7 @@
 .thread-sender {
   margin: 0;
   font-size: 0.75rem;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   font-weight: 600;
 }
 
@@ -2219,7 +2219,7 @@
 .btn-view-replies {
   background: none;
   border: none;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   cursor: pointer;
   font-size: 0.8rem;
   text-decoration: underline;
@@ -2227,14 +2227,14 @@
 }
 
 .btn-view-replies:hover {
-  color: #764ba2;
+  color: var(--dh-logo-ink, #102030);
 }
 
 /* Reply Context */
 .reply-context {
   padding: 0.75rem;
   background: #f0f0f0;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
   margin-bottom: 0.75rem;
   border-radius: 4px;
 }
@@ -2249,7 +2249,7 @@
 .reply-label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .btn-cancel-reply {
@@ -2294,7 +2294,7 @@
 }
 
 .edit-textarea:focus {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .edit-actions {
@@ -2314,12 +2314,12 @@
 }
 
 .btn-edit-save {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
 }
 
 .btn-edit-save:hover {
-  background: #764ba2;
+  background: var(--dh-logo-ink, #102030);
 }
 
 .btn-edit-cancel {
@@ -2352,7 +2352,7 @@
 }
 
 .message-textarea:focus {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .message-textarea::placeholder {
@@ -2499,7 +2499,7 @@
 
 .message-status {
   font-size: 0.75rem;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   margin-left: 0.25rem;
 }
 
@@ -2564,7 +2564,7 @@
 }
 
 .message-textarea:focus {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .message-actions {
@@ -2597,7 +2597,7 @@
 }
 
 .btn-send {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   font-size: 1.2rem;
@@ -2658,15 +2658,15 @@
 }
 
 .mode-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .mode-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border-color: transparent;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
 }
 
 .new-chat-panel h3 {
@@ -2702,9 +2702,9 @@
 }
 
 .user-card:hover {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
   transform: translateY(-5px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.2);
 }
 
 .user-avatar {
@@ -2739,8 +2739,8 @@
 
 .search-input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .search-results {
@@ -2764,9 +2764,9 @@
 }
 
 .user-search-result:hover {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
   background: #f9f9ff;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+  box-shadow: 0 2px 8px rgba(208, 96, 48, 0.1);
 }
 
 .user-search-result .user-avatar {
@@ -2807,7 +2807,7 @@
   padding: 0.25rem 0.5rem;
   background: #f0f4ff;
   border-radius: 3px;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   font-weight: 500;
 }
 
@@ -2868,13 +2868,13 @@
 }
 
 .settings-tab-btn.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
+  border-bottom-color: var(--dh-logo-copper, #d06030);
 }
 
 .btn-add-contact {
   padding: 0.5rem 1rem;
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border: none;
   border-radius: 6px;
@@ -3084,7 +3084,7 @@
 
 .unread-count {
   margin-left: 0.4rem;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .notification-list {
@@ -3174,7 +3174,7 @@
 
 @keyframes message-highlight {
   0% {
-    background: rgba(102, 126, 234, 0.12);
+    background: rgba(208, 96, 48, 0.12);
   }
   100% {
     background: transparent;
@@ -3236,7 +3236,7 @@
 }
 
 .category-btn.active {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: #fff;
 }
 
@@ -3315,8 +3315,8 @@
 
 .message-reply-preview,
 .replying-banner {
-  border-left: 3px solid #667eea;
-  background: rgba(102, 126, 234, 0.08);
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
+  background: rgba(208, 96, 48, 0.08);
   padding: 0.5rem 0.7rem;
   border-radius: 8px;
 }
@@ -4228,7 +4228,7 @@
 
 .sender-handle {
   margin: 0.2rem 0 0;
-  color: #3b82f6;
+  color: var(--dh-logo-copper, #d06030);
   font-size: 0.86rem;
   font-weight: 700;
 }

@@ -47,7 +47,7 @@
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-left: 4px solid #2196f3;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
   pointer-events: auto;
   animation: slideInRight 0.3s ease;
 }
@@ -90,11 +90,11 @@
 }
 
 .notification-item.like {
-  border-left-color: #ff6b9d;
+  border-left-color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 .notification-item.info {
-  border-left-color: #2196f3;
+  border-left-color: var(--dh-logo-copper, #d06030);
 }
 
 .notification-item.update {
@@ -110,7 +110,7 @@
 }
 
 .notification-item.default {
-  border-left-color: #2196f3;
+  border-left-color: var(--dh-logo-copper, #d06030);
 }
 
 .notification-icon {
@@ -167,15 +167,15 @@
 }
 
 .notification-item.like .notification-message {
-  color: #e91e63;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .notification-item.info .notification-title {
-  color: #1565c0;
+  color: var(--dh-logo-ink, #102030);
 }
 
 .notification-item.info .notification-message {
-  color: #1976d2;
+  color: var(--dh-logo-ink, #102030);
 }
 
 .notification-item.update .notification-title {

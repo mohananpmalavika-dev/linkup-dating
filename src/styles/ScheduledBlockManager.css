@@ -15,7 +15,7 @@
   align-items: center;
   padding: 16px;
   border-bottom: 1px solid #e8e8e8;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
@@ -110,15 +110,15 @@
 }
 
 .type-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .type-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border-color: transparent;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 2px 8px rgba(208, 96, 48, 0.2);
 }
 
 .add-block-form {
@@ -150,8 +150,8 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .form-group input:disabled {
@@ -202,12 +202,12 @@
 }
 
 .day-btn:hover:not(:disabled) {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .day-btn.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border-color: transparent;
 }
@@ -219,7 +219,7 @@
 
 .btn-add-block {
   padding: 12px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -231,7 +231,7 @@
 
 .btn-add-block:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
 }
 
 .btn-add-block:disabled {
@@ -271,8 +271,8 @@
 }
 
 .block-item:hover {
-  border-color: #667eea;
-  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 2px 6px rgba(208, 96, 48, 0.1);
 }
 
 .block-info {
@@ -338,9 +338,9 @@
 }
 
 .btn-toggle:hover:not(:disabled) {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
   background: #f0f4ff;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .btn-toggle.enabled {

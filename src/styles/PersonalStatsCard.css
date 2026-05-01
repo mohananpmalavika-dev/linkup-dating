@@ -47,14 +47,14 @@
 }
 
 .stat-number.above-average {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .stat-number.below-average {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f) 0%, var(--dh-logo-copper, #d06030) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -162,8 +162,8 @@
 }
 
 .info-box {
-  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-  border-left: 4px solid #667eea;
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030)15 0%, var(--dh-logo-ink, #102030)15 100%);
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
   padding: 1rem 1.5rem;
   border-radius: 8px;
   color: #666;

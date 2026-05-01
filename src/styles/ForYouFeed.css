@@ -8,10 +8,10 @@
   margin-bottom: 2rem;
   text-align: center;
   padding: 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.2);
 }
 
 .feed-header h2 {
@@ -114,7 +114,7 @@
   width: 40px;
   height: 40px;
   border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  border-top: 4px solid var(--dh-logo-copper, #d06030);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto;
@@ -137,7 +137,7 @@
 }
 
 .load-more-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   padding: 1rem 2rem;
@@ -149,12 +149,12 @@
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
 }
 
 .load-more-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 16px rgba(208, 96, 48, 0.4);
 }
 
 .load-more-btn:disabled {

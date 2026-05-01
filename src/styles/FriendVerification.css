@@ -35,8 +35,8 @@
 }
 
 .friend-verification .tab.active {
-  color: #ff6b9d;
-  border-bottom-color: #ff6b9d;
+  color: var(--dh-logo-copper-light, #f1a06f);
+  border-bottom-color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 .friend-verification .loading {
@@ -103,7 +103,7 @@
 
 .friend-verification .verification-card:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  border-color: #ff6b9d;
+  border-color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 .friend-verification .verification-card.status-approved {
@@ -116,7 +116,7 @@
 }
 
 .friend-verification .verification-card.status-pending_approval {
-  border-left: 4px solid #2196F3;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
 }
 
 .friend-verification .shared-header {
@@ -186,7 +186,7 @@
 }
 
 .friend-verification .separator {
-  color: #ff6b9d;
+  color: var(--dh-logo-copper-light, #f1a06f);
   font-weight: bold;
   font-size: 18px;
 }
@@ -254,16 +254,16 @@
 
 .friend-verification .share-tab .info {
   background: #e3f2fd;
-  color: #1565c0;
+  color: var(--dh-logo-ink, #102030);
   padding: 12px;
   border-radius: 8px;
-  border-left: 3px solid #1565c0;
+  border-left: 3px solid var(--dh-logo-ink, #102030);
   font-size: 13px;
   margin-bottom: 16px;
 }
 
 .friend-verification .btn-primary {
-  background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f) 0%, #c44569 100%);
   color: white;
   border: none;
   padding: 12px 16px;
@@ -334,7 +334,7 @@
 
 .friend-verification .form-group select:focus {
   outline: none;
-  border-color: #ff6b9d;
+  border-color: var(--dh-logo-copper-light, #f1a06f);
   box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.1);
 }
 
@@ -365,7 +365,7 @@
 }
 
 .friend-verification .btn-submit {
-  background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f) 0%, #c44569 100%);
   color: white;
 }
 

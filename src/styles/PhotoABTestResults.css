@@ -25,7 +25,7 @@
 
 /* Header */
 .results-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 30px;
   display: flex;
@@ -59,7 +59,7 @@
 }
 
 .status-completed {
-  color: #2196f3;
+  color: var(--dh-logo-copper, #d06030);
   font-weight: 600;
 }
 
@@ -119,12 +119,12 @@
 }
 
 .tab:hover {
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .tab.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
+  border-bottom-color: var(--dh-logo-copper, #d06030);
 }
 
 /* Tab Content */
@@ -395,14 +395,14 @@
   padding: 8px 12px;
   background: white;
   border-radius: 6px;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
   font-size: 13px;
 }
 
 .event-type {
   font-weight: 700;
   text-transform: uppercase;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   min-width: 50px;
 }
 
@@ -460,7 +460,7 @@
 }
 
 .insight-icon {
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   font-weight: bold;
   min-width: 20px;
 }

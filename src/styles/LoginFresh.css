@@ -1,9 +1,9 @@
 /* Fresh Login Page Styles - Modern & Clean */
 
 :root {
-  --primary: #d946a6;
+  --primary: var(--dh-logo-copper, #d06030);
   --primary-dark: #a71f6b;
-  --secondary: #7c3aed;
+  --secondary: var(--dh-logo-ink, #102030);
   --success: #10b981;
   --error: #ef4444;
   --warning: #f59e0b;
@@ -36,7 +36,7 @@
   border-radius: 20px;
   width: 100%;
   max-width: 480px;
-  box-shadow: 0 20px 60px rgba(217, 70, 166, 0.12);
+  box-shadow: 0 20px 60px rgba(208, 96, 48, 0.12);
   overflow: hidden;
   animation: slideUp 0.5s ease-out;
 }
@@ -199,7 +199,7 @@
   outline: none;
   border-color: var(--primary);
   background: white;
-  box-shadow: 0 0 0 3px rgba(217, 70, 166, 0.1);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .login-fresh-input::placeholder {
@@ -236,7 +236,7 @@
   outline: none;
   border-color: var(--primary);
   background: white;
-  box-shadow: 0 0 0 3px rgba(217, 70, 166, 0.1);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .login-fresh-otp-input.error {
@@ -270,7 +270,7 @@
 
 .login-fresh-btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(217, 70, 166, 0.3);
+  box-shadow: 0 10px 30px rgba(208, 96, 48, 0.3);
 }
 
 .login-fresh-btn-primary:active:not(:disabled) {
@@ -375,9 +375,9 @@
 }
 
 .login-fresh-message.info {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(208, 96, 48, 0.1);
   color: #1e40af;
-  border: 1px solid rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(208, 96, 48, 0.3);
 }
 
 /* Help Text */
@@ -457,7 +457,7 @@
   outline: none;
   border-color: var(--primary);
   background: white;
-  box-shadow: 0 0 0 3px rgba(217, 70, 166, 0.1);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .login-fresh-phone-input {

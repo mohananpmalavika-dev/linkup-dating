@@ -822,7 +822,7 @@
 }
 
 .score-fill.behavioral {
-  background: #f97316;
+  background: var(--dh-logo-copper, #d06030);
 }
 
 .score-fill.recency {

@@ -3,7 +3,7 @@
   padding: 24px;
   background:
     radial-gradient(circle at top left, rgba(244, 114, 182, 0.16), transparent 32%),
-    radial-gradient(circle at top right, rgba(124, 58, 237, 0.14), transparent 26%),
+    radial-gradient(circle at top right, rgba(16, 32, 48, 0.14), transparent 26%),
     linear-gradient(180deg, #fff8fb 0%, #f8fafc 100%);
   color: #1f2937;
 }
@@ -15,10 +15,10 @@
 
 .public-info-hero {
   padding: 28px;
-  border: 1px solid rgba(236, 72, 153, 0.14);
+  border: 1px solid rgba(208, 96, 48, 0.14);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 24px 60px rgba(79, 70, 229, 0.08);
+  box-shadow: 0 24px 60px rgba(16, 32, 48, 0.08);
 }
 
 .public-info-home {
@@ -36,7 +36,7 @@
 
 .public-info-home:hover,
 .public-info-home:focus-visible {
-  border-color: rgba(217, 70, 166, 0.28);
+  border-color: rgba(208, 96, 48, 0.28);
   color: #a63b87;
 }
 
@@ -101,14 +101,14 @@
 }
 
 .public-info-action-primary {
-  background: linear-gradient(135deg, #ec4899, #7c3aed);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030), var(--dh-logo-ink, #102030));
   color: #ffffff;
-  box-shadow: 0 14px 26px rgba(124, 58, 237, 0.18);
+  box-shadow: 0 14px 26px rgba(16, 32, 48, 0.18);
 }
 
 .public-info-action-secondary {
   background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(217, 70, 166, 0.16);
+  border-color: rgba(208, 96, 48, 0.16);
   color: #a63b87;
 }
 
@@ -174,7 +174,7 @@
 
 .public-info-contact-item dt {
   margin: 0;
-  color: #7c3aed;
+  color: var(--dh-logo-ink, #102030);
   font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.08em;

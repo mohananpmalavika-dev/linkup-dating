@@ -9,8 +9,8 @@
 /* ── CSS Custom Properties (Design Tokens) ── */
 :root {
   /* Primary Gradient (Signature DatingHub Purple) */
-  --lu-primary-start: #667eea;
-  --lu-primary-end: #764ba2;
+  --lu-primary-start: var(--dh-logo-copper, #d06030);
+  --lu-primary-end: var(--dh-logo-ink, #102030);
   --lu-primary-gradient: linear-gradient(135deg, var(--lu-primary-start) 0%, var(--lu-primary-end) 100%);
 
   /* Kerala Brand Accents (Warm, Trustworthy) */
@@ -30,7 +30,7 @@
   --lu-success: #22c55e;
   --lu-warning: #f59e0b;
   --lu-error: #ef4444;
-  --lu-info: #3b82f6;
+  --lu-info: var(--dh-logo-copper, #d06030);
 
   /* Neutral Scale (Slate-based for premium feel) */
   --lu-white: #ffffff;
@@ -112,7 +112,7 @@
   --lu-shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 10px 10px -5px rgba(15, 23, 42, 0.04);
   --lu-shadow-2xl: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
   --lu-shadow-gold: 0 10px 30px rgba(212, 175, 55, 0.3);
-  --lu-shadow-glow: 0 0 20px rgba(102, 126, 234, 0.3);
+  --lu-shadow-glow: 0 0 20px rgba(208, 96, 48, 0.3);
 
   /* Transitions */
   --lu-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
@@ -225,11 +225,11 @@
 .lu-btn-primary {
   background: var(--lu-primary-gradient);
   color: var(--lu-text-inverse);
-  box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 14px rgba(208, 96, 48, 0.4);
 }
 
 .lu-btn-primary:hover {
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+  box-shadow: 0 6px 20px rgba(208, 96, 48, 0.5);
   transform: translateY(-1px);
 }
 

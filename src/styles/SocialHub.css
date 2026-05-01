@@ -32,7 +32,7 @@
 
 .social-hero-card {
   padding: 24px;
-  border-left: 6px solid #2563eb;
+  border-left: 6px solid var(--dh-logo-ink, #102030);
 }
 
 .social-eyebrow {
@@ -117,8 +117,8 @@
 .social-action-card:hover,
 .social-action-card:focus-visible {
   outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+  border-color: var(--dh-logo-ink, #102030);
+  box-shadow: 0 0 0 3px rgba(16, 32, 48, 0.16);
 }
 
 .social-simple-layout {
@@ -272,8 +272,8 @@
 }
 
 .social-btn {
-  border: 1px solid #2563eb;
-  background: #2563eb;
+  border: 1px solid var(--dh-logo-ink, #102030);
+  background: var(--dh-logo-ink, #102030);
   color: #ffffff;
   padding: 0 18px;
 }
@@ -299,7 +299,7 @@
 .social-btn:focus-visible,
 .social-link-button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+  box-shadow: 0 0 0 3px rgba(16, 32, 48, 0.18);
 }
 
 .social-btn:disabled {

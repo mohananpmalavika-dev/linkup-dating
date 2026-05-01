@@ -70,8 +70,8 @@
 }
 
 .tab.active {
-  color: #8b5cf6;
-  border-bottom-color: #8b5cf6;
+  color: var(--dh-logo-copper, #d06030);
+  border-bottom-color: var(--dh-logo-copper, #d06030);
 }
 
 /* Search */
@@ -89,7 +89,7 @@
 
 .search-input:focus {
   outline: none;
-  border-color: #8b5cf6;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 /* Content */
@@ -140,7 +140,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: #8b5cf6;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   display: flex;
   align-items: center;
@@ -186,7 +186,7 @@
 }
 
 .action-btn:hover {
-  border-color: #8b5cf6;
+  border-color: var(--dh-logo-copper, #d06030);
   background: #f5f5f5;
 }
 
@@ -211,8 +211,8 @@
 }
 
 .action-btn.message {
-  border-color: #3b82f6;
-  color: #3b82f6;
+  border-color: var(--dh-logo-copper, #d06030);
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .action-btn.message:hover {

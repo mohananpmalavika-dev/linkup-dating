@@ -157,14 +157,14 @@
 }
 
 .incoming-call-accept {
-  background: linear-gradient(135deg, #fb7185, #f97316);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f), var(--dh-logo-copper, #d06030));
   color: var(--lu-text-inverse);
-  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.35);
+  box-shadow: 0 8px 24px rgba(208, 96, 48, 0.35);
 }
 
 .incoming-call-accept:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(249, 115, 22, 0.45);
+  box-shadow: 0 12px 32px rgba(208, 96, 48, 0.45);
 }
 
 .incoming-call-accept:active {

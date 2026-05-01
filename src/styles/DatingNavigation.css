@@ -50,7 +50,7 @@
 
 .nav-btn:hover {
   color: var(--lu-primary-start);
-  background: rgba(102, 126, 234, 0.06);
+  background: rgba(208, 96, 48, 0.06);
 }
 
 .nav-btn:active {
@@ -63,7 +63,7 @@
 }
 
 .nav-btn.active .nav-icon-wrapper svg {
-  filter: drop-shadow(0 2px 4px rgba(102, 126, 234, 0.3));
+  filter: drop-shadow(0 2px 4px rgba(208, 96, 48, 0.3));
 }
 
 /* ── Active Indicator (Animated Dot) ── */
@@ -138,7 +138,7 @@
   position: absolute;
   top: -4px;
   right: -6px;
-  background: linear-gradient(135deg, #ff6b9d, #f43f5e);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f), #f43f5e);
   color: white;
   min-width: 18px;
   height: 18px;
@@ -181,7 +181,7 @@
 }
 
 .nav-btn-sos.active .nav-indicator {
-  background: linear-gradient(135deg, #ef4444, #f97316);
+  background: linear-gradient(135deg, #ef4444, var(--dh-logo-copper, #d06030));
 }
 
 .nav-btn-sos .nav-icon-wrapper svg {

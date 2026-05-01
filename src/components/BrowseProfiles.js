@@ -717,7 +717,7 @@ const BrowseProfiles = ({ onProfileSelect, onMatch }) => {
                   style={{
                     backgroundImage: profile.photos?.[0]
                       ? `url(${profile.photos[0]})`
-                      : 'linear-gradient(135deg, #dbeafe, #ccfbf1)'
+                      : 'linear-gradient(135deg, var(--dh-logo-bg-warm, #fff4ed), var(--dh-logo-copper-light, #f1a06f))'
                   }}
                 >
                   {profile.profileVerified ? (

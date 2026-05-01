@@ -120,7 +120,7 @@
 }
 
 .poll-option:hover:not(.show-results) {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
   background: #f8f9ff;
 }
 
@@ -166,7 +166,7 @@
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   transition: width 0.5s ease;
 }
 
@@ -188,7 +188,7 @@
 }
 
 .poll-option:hover .radio-button {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .poll-option.selected .radio-button {
@@ -230,7 +230,7 @@
 
 .create-poll-header {
   padding: 1rem 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
@@ -267,7 +267,7 @@
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .option-input {
@@ -318,7 +318,7 @@
 
 .create-poll-btn {
   width: 100%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   padding: 1rem;

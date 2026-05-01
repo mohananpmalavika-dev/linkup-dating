@@ -647,7 +647,7 @@ const Matches = ({
                     style={{
                       backgroundImage: liker.photoUrl && liker.isRevealed
                         ? `url(${liker.photoUrl})`
-                        : 'linear-gradient(135deg, #f97316, #fb7185)',
+                        : 'linear-gradient(135deg, var(--dh-logo-copper, #d06030), var(--dh-logo-copper-light, #f1a06f))',
                       filter: liker.isRevealed ? 'none' : 'blur(8px)'
                     }}
                   />
@@ -710,7 +710,7 @@ const Matches = ({
                     style={{
                       backgroundImage: req.photoUrl
                         ? `url(${req.photoUrl})`
-                        : 'linear-gradient(135deg, #f97316, #fb7185)'
+                        : 'linear-gradient(135deg, var(--dh-logo-copper, #d06030), var(--dh-logo-copper-light, #f1a06f))'
                     }}
                   />
                   <div className="like-card-body">
@@ -872,7 +872,7 @@ const Matches = ({
                         style={{
                           backgroundImage: like.photo_url
                             ? `url(${like.photo_url})`
-                            : 'linear-gradient(135deg, #f97316, #fb7185)'
+                            : 'linear-gradient(135deg, var(--dh-logo-copper, #d06030), var(--dh-logo-copper-light, #f1a06f))'
                         }}
                       />
                       <div className="like-card-body">
@@ -984,7 +984,7 @@ const Matches = ({
                     style={{
                       backgroundImage: match.photos?.[0]
                         ? `url(${match.photos[0]})`
-                        : 'linear-gradient(135deg, #667eea, #764ba2)'
+                        : 'linear-gradient(135deg, var(--dh-logo-copper, #d06030), var(--dh-logo-ink, #102030))'
                     }}
                   >
                     {match.profileVerified ? (

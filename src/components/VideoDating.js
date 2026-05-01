@@ -1042,7 +1042,7 @@ const VideoDating = ({
       if (remoteVideoElement?.videoWidth && remoteVideoElement?.videoHeight && remoteStreamAvailable) {
         context.drawImage(remoteVideoElement, 0, 0, canvas.width, canvas.height);
       } else {
-        drawPlaceholder(0, 0, canvas.width, canvas.height, remoteLabel, '#8b5cf6');
+        drawPlaceholder(0, 0, canvas.width, canvas.height, remoteLabel, '#d06030');
       }
 
       const pipWidth = 300;
@@ -1056,7 +1056,7 @@ const VideoDating = ({
       if (localVideoElement?.videoWidth && localVideoElement?.videoHeight && mediaReady) {
         context.drawImage(localVideoElement, pipX, pipY, pipWidth, pipHeight);
       } else {
-        drawPlaceholder(pipX, pipY, pipWidth, pipHeight, localLabel, '#f97316');
+        drawPlaceholder(pipX, pipY, pipWidth, pipHeight, localLabel, '#f1a06f');
       }
       context.fillStyle = 'rgba(3, 7, 18, 0.78)';
       context.fillRect(pipX + 14, pipY + pipHeight - 42, 130, 28);

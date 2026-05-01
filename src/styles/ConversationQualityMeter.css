@@ -57,7 +57,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   flex-shrink: 0;
 }
 
@@ -128,7 +128,7 @@
 }
 
 .metric-value {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 2px 8px;
   border-radius: 12px;
@@ -169,7 +169,7 @@
   padding: 12px;
   border-radius: 8px;
   text-align: center;
-  border-top: 3px solid #667eea;
+  border-top: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .stat-icon {
@@ -214,7 +214,7 @@
 }
 
 .topic-tag {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 4px 12px;
   border-radius: 16px;
@@ -313,7 +313,7 @@
 /* Spinner Animation */
 .spinner {
   border: 3px solid #f3f3f3;
-  border-top: 3px solid #667eea;
+  border-top: 3px solid var(--dh-logo-copper, #d06030);
   border-radius: 50%;
   width: 30px;
   height: 30px;

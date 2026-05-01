@@ -117,7 +117,7 @@
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #0f766e 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #0f766e 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   display: flex;
   align-items: center;
@@ -274,7 +274,7 @@
   padding: 14px;
   border-radius: 18px;
   background:
-    radial-gradient(circle at top right, rgba(102, 126, 234, 0.06), transparent 48%),
+    radial-gradient(circle at top right, rgba(208, 96, 48, 0.06), transparent 48%),
     linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
   border: 1px solid #e2e8f0;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.04);
@@ -492,7 +492,7 @@
 }
 
 .message-highlighted .message-content {
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.25);
+  box-shadow: 0 0 0 2px rgba(208, 96, 48, 0.25);
 }
 
 .message-stack {
@@ -613,7 +613,7 @@
 }
 
 .message.other .message-flag {
-  background: rgba(102, 126, 234, 0.12);
+  background: rgba(208, 96, 48, 0.12);
   color: #4455a8;
 }
 
@@ -649,7 +649,7 @@
 .message-reaction-toggle {
   border: none;
   background: transparent;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;

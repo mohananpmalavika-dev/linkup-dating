@@ -129,14 +129,14 @@
 }
 
 .preset-btn:hover {
-  border-color: #2196f3;
-  background: rgba(33, 150, 243, 0.05);
+  border-color: var(--dh-logo-copper, #d06030);
+  background: rgba(208, 96, 48, 0.05);
 }
 
 .preset-btn.active {
-  border-color: #2196f3;
-  background: linear-gradient(135deg, rgba(33, 150, 243, 0.15), rgba(33, 150, 243, 0.08));
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.2);
+  border-color: var(--dh-logo-copper, #d06030);
+  background: linear-gradient(135deg, rgba(208, 96, 48, 0.15), rgba(208, 96, 48, 0.08));
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.2);
 }
 
 .preset-btn:disabled {
@@ -208,8 +208,8 @@
 /* Info Section */
 
 .info-section {
-  background: linear-gradient(135deg, rgba(33, 150, 243, 0.08), rgba(0, 188, 212, 0.08));
-  border: 1px solid rgba(33, 150, 243, 0.2);
+  background: linear-gradient(135deg, rgba(208, 96, 48, 0.08), rgba(241, 160, 111, 0.08));
+  border: 1px solid rgba(208, 96, 48, 0.2);
   border-radius: 8px;
   padding: 1rem;
 }
@@ -261,13 +261,13 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #2196f3, #1976d2);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030), var(--dh-logo-ink, #102030));
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1976d2, #1565c0);
-  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+  background: linear-gradient(135deg, var(--dh-logo-ink, #102030), var(--dh-logo-ink, #102030));
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
 }
 
 .btn-secondary {

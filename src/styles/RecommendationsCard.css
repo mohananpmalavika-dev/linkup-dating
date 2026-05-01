@@ -132,7 +132,7 @@
 }
 
 .action-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   padding: 0.75rem 1.5rem;
@@ -144,7 +144,7 @@
 
 .action-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.4);
 }
 
 .rec-type-badge {
@@ -188,7 +188,7 @@
   background: #f0f4ff;
   padding: 1.5rem;
   border-radius: 12px;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
   margin-bottom: 2rem;
 }
 
@@ -213,7 +213,7 @@
   flex-shrink: 0;
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border-radius: 50%;
   display: flex;

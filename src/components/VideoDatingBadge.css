@@ -5,7 +5,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.625rem 1rem;
-  background: linear-gradient(135deg, #ff5722, #ff7043);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030), var(--dh-logo-copper-light, #f1a06f));
   color: white;
   border-radius: 8px;
   font-weight: 600;

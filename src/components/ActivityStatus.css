@@ -36,8 +36,8 @@
 /* Active state */
 .activity-status.active .activity-button {
   background-color: #e3f2fd;
-  border-color: #2196f3;
-  color: #1976d2;
+  border-color: var(--dh-logo-copper, #d06030);
+  color: var(--dh-logo-ink, #102030);
 }
 
 .activity-status.active .activity-button:hover {
@@ -62,7 +62,7 @@
   right: 8px;
   width: 8px;
   height: 8px;
-  background-color: #2196f3;
+  background-color: var(--dh-logo-copper, #d06030);
   border-radius: 50%;
   transform: translateY(-50%);
   animation: activity-pulse 1.5s infinite;
@@ -160,7 +160,7 @@
 
   .activity-status.active .activity-button {
     background-color: #1a237e;
-    border-color: #2196f3;
+    border-color: var(--dh-logo-copper, #d06030);
     color: #64b5f6;
   }
 

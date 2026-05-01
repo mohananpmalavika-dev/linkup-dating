@@ -58,11 +58,11 @@
 
 .double-date-groups .group-card:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  border-color: #ff6b9d;
+  border-color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 .double-date-groups .group-card.status-scheduled {
-  border-left: 4px solid #2196F3;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
 }
 
 .double-date-groups .group-card.status-completed {
@@ -99,7 +99,7 @@
 
 .double-date-groups .status-badge.scheduled {
   background: #e3f2fd;
-  color: #1976d2;
+  color: var(--dh-logo-ink, #102030);
 }
 
 .double-date-groups .status-badge.completed {
@@ -141,7 +141,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
 }
 
 .double-date-groups .avatar img {
@@ -202,13 +202,13 @@
 }
 
 .double-date-groups .btn-chat {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
 .double-date-groups .btn-chat:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(208, 96, 48, 0.3);
 }
 
 .double-date-groups .btn-complete {
@@ -340,7 +340,7 @@
 
 .double-date-groups .textarea-group textarea:focus {
   outline: none;
-  border-color: #ff6b9d;
+  border-color: var(--dh-logo-copper-light, #f1a06f);
   box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.1);
 }
 
@@ -351,7 +351,7 @@
   padding: 8px;
   background: #fafafa;
   border-radius: 6px;
-  border-left: 2px solid #ff6b9d;
+  border-left: 2px solid var(--dh-logo-copper-light, #f1a06f);
 }
 
 .double-date-groups .modal-actions {
@@ -380,7 +380,7 @@
 }
 
 .double-date-groups .btn-submit {
-  background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f) 0%, #c44569 100%);
   color: white;
 }
 

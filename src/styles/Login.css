@@ -21,7 +21,7 @@
   max-width: 520px;
   box-sizing: border-box;
   margin: 0 auto;
-  box-shadow: 0 10px 40px rgba(217, 70, 166, 0.15);
+  box-shadow: 0 10px 40px rgba(208, 96, 48, 0.15);
   animation: slideUp 0.5s ease-out;
 }
 
@@ -54,7 +54,7 @@
 .login-header h1 {
   margin: 0 0 0.5rem 0;
   font-size: 2rem;
-  background: linear-gradient(135deg, #d946a6 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -63,7 +63,7 @@
 
 .login-kicker {
   margin: 0 0 0.5rem;
-  color: #d946a6;
+  color: var(--dh-logo-copper, #d06030);
   font-size: 0.85rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -367,7 +367,7 @@
 
 .username-status.checking {
   background: #e3f2fd;
-  color: #1976d2;
+  color: var(--dh-logo-ink, #102030);
 }
 
 .username-status.available {

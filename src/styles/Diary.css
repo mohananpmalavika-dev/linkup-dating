@@ -4,13 +4,13 @@
 
 .diary-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   padding: 0;
 }
 
 /* HERO SECTION */
 .diary-hero {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 60px 40px;
   text-align: center;
@@ -55,7 +55,7 @@
 
 .diary-primary-btn {
   background: white;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   border: none;
   padding: 12px 32px;
   border-radius: 8px;
@@ -105,7 +105,7 @@
 
 .diary-view-btn.active {
   background: white;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   border-color: white;
 }
 
@@ -135,8 +135,8 @@
 .diary-search-input:focus,
 .diary-filter-select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .diary-mood-filter {
@@ -166,10 +166,10 @@
 }
 
 .diary-mood-btn.active {
-  background: #667eea;
-  border-color: #667eea;
+  background: var(--dh-logo-copper, #d06030);
+  border-color: var(--dh-logo-copper, #d06030);
   color: white;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.4);
 }
 
 .diary-tags-filter {
@@ -195,14 +195,14 @@
 }
 
 .diary-tag-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .diary-tag-btn.active {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 /* ENTRIES SECTION */
@@ -293,7 +293,7 @@
 
 .diary-category-badge {
   display: inline-block;
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   padding: 4px 12px;
   border-radius: 20px;
@@ -318,7 +318,7 @@
 
 .diary-card-tag {
   background: #f0f0f0;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   padding: 4px 10px;
   border-radius: 12px;
   font-size: 0.8rem;
@@ -342,7 +342,7 @@
 }
 
 .diary-edit-btn {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
 }
 
@@ -476,8 +476,8 @@
 .diary-form-group textarea:focus,
 .diary-form-group select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .diary-form-group textarea {
@@ -536,12 +536,12 @@
 
 .diary-mood-option:hover {
   transform: scale(1.1);
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .diary-mood-option.active {
-  border-color: #667eea;
-  background: rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  background: rgba(208, 96, 48, 0.1);
   transform: scale(1.15);
 }
 
@@ -555,7 +555,7 @@
 }
 
 .diary-add-tag-btn {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border: none;
   padding: 12px 20px;
@@ -585,7 +585,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   padding: 6px 12px;
   border-radius: 20px;
@@ -647,7 +647,7 @@
 }
 
 .diary-submit-btn {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
 }
 
@@ -699,7 +699,7 @@
 }
 
 .diary-calendar-header button {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border: none;
   padding: 8px 15px;
@@ -722,7 +722,7 @@
 
 .diary-cal-weekday {
   font-weight: 700;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   text-align: center;
   padding: 10px;
   text-transform: uppercase;
@@ -757,8 +757,8 @@
 }
 
 .diary-cal-day.has-entries {
-  background: rgba(102, 126, 234, 0.05);
-  border-color: #667eea;
+  background: rgba(208, 96, 48, 0.05);
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .diary-cal-day.has-items {
@@ -766,17 +766,17 @@
 }
 
 .diary-cal-day:not(.empty):hover:not(:disabled) {
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 2px 8px rgba(208, 96, 48, 0.2);
 }
 
 .diary-cal-day.is-selected {
   border-color: #3749b6;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.18);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.18);
 }
 
 .diary-cal-day.is-today {
-  background: linear-gradient(180deg, rgba(102, 126, 234, 0.08), white);
+  background: linear-gradient(180deg, rgba(208, 96, 48, 0.08), white);
 }
 
 .diary-cal-day-num {
@@ -798,7 +798,7 @@
 }
 
 .diary-cal-dot-entry {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
 }
 
 .diary-cal-dot-note {
@@ -828,7 +828,7 @@
 }
 
 .diary-cal-badge-entry {
-  background: rgba(102, 126, 234, 0.14);
+  background: rgba(208, 96, 48, 0.14);
   color: #4854c7;
 }
 
@@ -894,7 +894,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   font-weight: 700;
 }
@@ -970,8 +970,8 @@
 .diary-calendar-field select:focus,
 .diary-calendar-field textarea:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.12);
 }
 
 .diary-calendar-checkbox {
@@ -990,7 +990,7 @@
 }
 
 .diary-calendar-form-actions .diary-primary-btn {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   box-shadow: none;
 }
@@ -1060,7 +1060,7 @@
 }
 
 .diary-calendar-entry-category {
-  background: rgba(102, 126, 234, 0.14);
+  background: rgba(208, 96, 48, 0.14);
   color: #4252b8;
 }
 
@@ -1310,7 +1310,7 @@
 }
 
 .diary-mood-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 25px;
   border-radius: 12px;

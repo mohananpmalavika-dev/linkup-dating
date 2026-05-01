@@ -264,7 +264,7 @@
   padding: 12px;
   background: rgba(255, 255, 255, 0.6);
   border-radius: 8px;
-  border-left: 3px solid #3b82f6;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .info-icon {

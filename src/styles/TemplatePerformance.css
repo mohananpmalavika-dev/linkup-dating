@@ -1,7 +1,7 @@
 /* TemplatePerformance Component Styles */
 
 .template-performance {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f) 0%, var(--dh-logo-copper, #d06030) 100%);
   border-radius: 12px;
   padding: 24px;
   max-width: 900px;
@@ -104,7 +104,7 @@
 
 .rank-badge {
   display: inline-block;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f) 0%, var(--dh-logo-copper, #d06030) 100%);
   color: white;
   padding: 4px 10px;
   border-radius: 20px;
@@ -302,7 +302,7 @@
 .use-again-button {
   width: 100%;
   padding: 8px 12px;
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f) 0%, var(--dh-logo-copper, #d06030) 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -314,7 +314,7 @@
 
 .use-again-button:hover {
   transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.4);
 }
 
 /* Empty State */

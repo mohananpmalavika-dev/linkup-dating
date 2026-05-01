@@ -6,7 +6,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: linear-gradient(135deg, rgba(217, 70, 166, 0.03) 0%, rgba(124, 58, 237, 0.03) 100%);
+  background: linear-gradient(135deg, rgba(208, 96, 48, 0.03) 0%, rgba(16, 32, 48, 0.03) 100%);
   overflow: hidden;
 }
 
@@ -16,12 +16,12 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  background: linear-gradient(135deg, #d946a6 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   position: sticky;
   top: 0;
   z-index: 10;
-  box-shadow: 0 4px 12px rgba(217, 70, 166, 0.3);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
 }
 
 .chatrooms-header h2 {
@@ -123,9 +123,9 @@
 
 .modal-input:focus,
 .modal-textarea:focus {
-  border-color: #d946a6;
-  box-shadow: 0 0 0 4px rgba(217, 70, 166, 0.1);
-  background: rgba(217, 70, 166, 0.02);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 4px rgba(208, 96, 48, 0.1);
+  background: rgba(208, 96, 48, 0.02);
 }
 
 .modal-textarea {
@@ -161,14 +161,14 @@
 }
 
 .btn-submit {
-  background: linear-gradient(135deg, #d946a6 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
-  box-shadow: 0 4px 12px rgba(217, 70, 166, 0.3);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
 }
 
 .btn-submit:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(217, 70, 166, 0.4);
+  box-shadow: 0 6px 16px rgba(208, 96, 48, 0.4);
 }
 
 .radio-label {
@@ -192,7 +192,7 @@
   margin-top: 0.2rem;
   cursor: pointer;
   flex-shrink: 0;
-  accent-color: #667eea;
+  accent-color: var(--dh-logo-copper, #d06030);
 }
 
 .radio-label-text {
@@ -232,7 +232,7 @@
 }
 
 .btn-primary {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
 }
 
@@ -314,7 +314,7 @@
 
 .chatroom-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .chatroom-card-header {
@@ -335,7 +335,7 @@
   padding: 0.25rem 0.5rem;
   border-radius: 12px;
   background: #e8eef9;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   white-space: nowrap;
 }
 
@@ -392,7 +392,7 @@
   font-size: 0.75rem;
   padding: 0.3rem 0.6rem;
   background: #f0f0f0;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s;
@@ -460,7 +460,7 @@
 
 .btn-pagination:hover:not(:disabled) {
   background: #f0f0f0;
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .btn-pagination:disabled {
@@ -542,12 +542,12 @@
 }
 
 .tab-btn:hover {
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .tab-btn.active {
-  color: #667eea;
-  border-bottom-color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
+  border-bottom-color: var(--dh-logo-copper, #d06030);
 }
 
 .chatroom-panel-content {
@@ -762,7 +762,7 @@
 
 .badge-admin {
   background: #e8eef9;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .empty-state-text {

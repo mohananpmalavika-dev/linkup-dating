@@ -46,7 +46,7 @@
 }
 
 .age-badge {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 0.5rem 1rem;
   border-radius: 20px;
@@ -102,7 +102,7 @@
 .your-value strong,
 .industry-value strong {
   font-size: 1.5rem;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .unit {

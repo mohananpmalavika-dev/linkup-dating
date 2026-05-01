@@ -65,7 +65,7 @@
 .stat-label {
   font-size: 11px;
   font-weight: 600;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -73,7 +73,7 @@
 .stat-value {
   font-size: 18px;
   font-weight: 700;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 /* Empty State */
@@ -146,13 +146,13 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 20px rgba(208, 96, 48, 0.4);
 }
 
 .btn-secondary {
@@ -234,7 +234,7 @@
 .not-eligible-content h3 {
   margin: 0 0 12px 0;
   font-size: 20px;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   font-weight: 600;
 }
 
@@ -395,7 +395,7 @@
 
   .btn-secondary:hover {
     background: #333344;
-    border-color: #667eea;
+    border-color: var(--dh-logo-copper, #d06030);
   }
 
   .intro-error {

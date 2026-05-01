@@ -457,7 +457,7 @@ const CheckoutModal = ({ plan, currentSubscription, prorationInfo, discountCode,
           email: localStorage.getItem('userEmail') || ''
         },
         theme: {
-          color: '#667eea'
+          color: '#d06030'
         },
         modal: {
           ondismiss: () => {

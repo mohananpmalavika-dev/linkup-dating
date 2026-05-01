@@ -54,7 +54,7 @@
 
 .public-resource-link:hover,
 .public-resource-link:focus-visible {
-  color: #7c3aed;
+  color: var(--dh-logo-ink, #102030);
 }
 
 .public-resource-links-pills .public-resource-link:hover,
@@ -64,13 +64,13 @@
 }
 
 .public-resource-link.is-active {
-  color: #7c3aed;
+  color: var(--dh-logo-ink, #102030);
 }
 
 .public-resource-links-pills .public-resource-link.is-active {
-  border-color: rgba(124, 58, 237, 0.28);
-  background: linear-gradient(135deg, rgba(244, 114, 182, 0.12), rgba(124, 58, 237, 0.12));
-  box-shadow: 0 8px 18px rgba(124, 58, 237, 0.08);
+  border-color: rgba(16, 32, 48, 0.28);
+  background: linear-gradient(135deg, rgba(244, 114, 182, 0.12), rgba(16, 32, 48, 0.12));
+  box-shadow: 0 8px 18px rgba(16, 32, 48, 0.08);
 }
 
 @media (max-width: 640px) {

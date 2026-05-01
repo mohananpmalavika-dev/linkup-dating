@@ -60,7 +60,7 @@
   background: white;
   border-radius: 10px;
   overflow: hidden;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
@@ -137,7 +137,7 @@
 
 .expand-icon.expanded {
   transform: rotate(180deg);
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 /* Suggestion Content */
@@ -167,13 +167,13 @@
   color: #333;
   font-style: italic;
   line-height: 1.5;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .use-suggestion-btn {
   width: 100%;
   padding: 10px 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -185,7 +185,7 @@
 
 .use-suggestion-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 2px 8px rgba(208, 96, 48, 0.4);
 }
 
 .use-suggestion-btn:active {

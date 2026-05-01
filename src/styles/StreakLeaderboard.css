@@ -6,7 +6,7 @@
 .streak-leaderboard {
   width: 100%;
   background: linear-gradient(135deg, #fff5e6 0%, #ffe6f0 100%);
-  border: 2px solid #ff6b9d;
+  border: 2px solid var(--dh-logo-copper-light, #f1a06f);
   border-radius: 16px;
   padding: 20px;
   margin: 16px 0;
@@ -21,7 +21,7 @@
   margin: 0 0 8px 0;
   font-size: 24px;
   font-weight: 700;
-  background: linear-gradient(135deg, #ff6b9d 0%, #ff9d00 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f) 0%, #ff9d00 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -55,7 +55,7 @@
 .leaderboard-item:hover {
   transform: translateX(4px);
   box-shadow: 0 4px 12px rgba(255, 107, 157, 0.2);
-  border-color: #ff6b9d;
+  border-color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 /* Rank display */
@@ -177,7 +177,7 @@
 .flame-days {
   font-size: 12px;
   font-weight: 700;
-  color: #ff6b9d;
+  color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 /* Empty state */
@@ -331,7 +331,7 @@
 .stat-value {
   font-size: 18px;
   font-weight: 700;
-  color: #ff6b9d;
+  color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 /* Achievements section */
@@ -408,7 +408,7 @@
 @media (prefers-color-scheme: dark) {
   .streak-leaderboard {
     background: linear-gradient(135deg, #3a3a2e 0%, #3a2e3a 100%);
-    border-color: #ff6b9d;
+    border-color: var(--dh-logo-copper-light, #f1a06f);
   }
 
   .leaderboard-item {
@@ -417,7 +417,7 @@
   }
 
   .leaderboard-item:hover {
-    border-color: #ff6b9d;
+    border-color: var(--dh-logo-copper-light, #f1a06f);
   }
 
   .item-match-names {
