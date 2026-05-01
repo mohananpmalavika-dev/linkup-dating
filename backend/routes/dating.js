@@ -17117,6 +17117,8 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       ? DHANYA_COUPON_CALL_CREDITS
       : coupon.call_credits_value || 0;
 
+    console.log(`[DHANYA DEBUG] isDhanyaCoupon=${isDhanyaCoupon}, callCreditsValue=${callCreditsValue}, coupon.call_credits_value=${coupon.call_credits_value}, DHANYA_COUPON_CALL_CREDITS=${DHANYA_COUPON_CALL_CREDITS}`);
+
     // Handle call credits if this is a call credits coupon
     if (callCreditsValue > 0) {
       // Get or create call wallet
@@ -17213,6 +17215,7 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
         couponSuperlikeCredits: updatedLimits.couponSuperlikeCredits
       }
     });
+    console.log(`[DHANYA RESPONSE] Sent response with creditsGranted=${callCreditsValue}, callCreditsBalance=${callCreditsBalance}`);
   } catch (err) {
     console.error('Error redeeming coupon:', err);
     res.status(500).json({ error: 'Failed to redeem coupon' });
