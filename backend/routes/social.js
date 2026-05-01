@@ -1653,14 +1653,15 @@ router.patch('/integrations/:integrationId', async (req, res) => {
 
     await integration.update(updates);
 
+    const plain = integration.get({ plain: true });
     res.json(
       serializeIntegration({
-        ...integration.get({ plain: true }),
-        profileUrl: buildPublicProfileUrl(integration.platform, integration.username)
+        ...plain,
+        profileUrl: buildPublicProfileUrl(plain.platform, plain.username)
       })
     );
   } catch (error) {
-    console.error('Update social integration error:', error);
+    console.error('Update social integration error:', err);
     res.status(500).json({ error: 'Failed to update social integration' });
   }
 });
@@ -1700,12 +1701,13 @@ router.get('/integrations/:userId/public', async (req, res) => {
     });
 
     res.json(
-      integrations.map((integration) =>
-        serializeIntegration({
-          ...integration.get({ plain: true }),
-          profileUrl: buildPublicProfileUrl(integration.platform, integration.username)
-        })
-      )
+      integrations.map((integration) => {
+        const plain = integration.get({ plain: true });
+        return serializeIntegration({
+          ...plain,
+          profileUrl: buildPublicProfileUrl(plain.platform, plain.username)
+        });
+      })
     );
   } catch (error) {
     console.error('Get public social profiles error:', error);
