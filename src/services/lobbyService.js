@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { getStoredAuthToken } from '../utils/auth';
 
 const API_URL = `${API_BASE_URL}/lobby`;
 
@@ -24,11 +25,17 @@ const lobbyService = {
         throw new Error('Message must be a non-empty string');
       }
 
+      const authToken = getStoredAuthToken();
+      if (!authToken) {
+        throw new Error('Authentication required. Please log in.');
+      }
+
       const response = await axios.post(`${API_URL}/messages`, {
         message: message.trim()
       }, {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
         }
       });
 
@@ -58,7 +65,12 @@ const lobbyService = {
   // Get online users count
   getOnlineUsers: async () => {
     try {
-      const response = await axios.get(`${API_URL}/online-users`);
+      const authToken = getStoredAuthToken();
+      const response = await axios.get(`${API_URL}/online-users`, {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      });
       return response.data;
     } catch (error) {
       console.error('Failed to get online status:', error);
