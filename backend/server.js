@@ -680,6 +680,20 @@ db.init()
             stack: err.stack
           });
         }
+
+        // Run FRND calling system migration
+        try {
+          logger.info('Initializing FRND calling system tables...');
+          const runFrndMigration = require('./migrations/20250601_frnd_calling_system');
+          await runFrndMigration();
+          logger.info('✓ FRND calling system initialized');
+        } catch (err) {
+          logger.warn('Failed to initialize FRND calling system', {
+            message: err.message,
+            code: err.code
+          });
+          // Don't fail startup if calling system init fails
+        }
       }).catch(err => {
         logger.error('Sequelize sync error', {
           message: err.message,
