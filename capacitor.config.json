@@ -1,6 +1,6 @@
 {
-  "appId": "com.linkup.dating",
-  "appName": "LinkUp",
+  "appId": "com.datinghub.app",
+  "appName": "DatingHub",
   "webDir": "build",
   "bundledWebRuntime": false,
   "server": {
@@ -9,7 +9,7 @@
   },
   "android": {
     "buildOptions": {
-      "signingAlias": "linkup",
+      "signingAlias": "datinghub",
       "signingAliasPassword": "",
       "signingKeyPassword": "",
       "signingKeystorePath": "",
