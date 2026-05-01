@@ -515,8 +515,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     }
 
     try {
-      // Use searchProfiles with no filters to get all accounts
-      const data = await datingProfileService.searchProfiles({});
+      // Use searchProfiles with showAll flag to bypass visibility filters
+      const data = await datingProfileService.searchProfiles({ showAll: true });
       const newProfiles = Array.isArray(data.profiles) ? data.profiles : [];
 
       if (cursor) {

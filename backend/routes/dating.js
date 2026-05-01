@@ -3709,7 +3709,8 @@ router.post('/search', authenticateToken, async (req, res) => {
       pincode,
       keralaRegion,
       onlyVerifiedProfiles,
-      communityPreference
+      communityPreference,
+      showAll = false
     } = req.body;
     const normalizedInterests = Array.isArray(interests)
       ? interests.map((interest) => normalizeOptionalText(interest)).filter(Boolean)
@@ -3758,12 +3759,18 @@ router.post('/search', authenticateToken, async (req, res) => {
       WHERE dp.user_id != $1
         AND dp.is_active = true
         AND COALESCE(up.show_my_profile, true) = true
-        AND COALESCE((up.preference_flexibility->'safetyControls'->>'quietMode')::boolean, false) = false
-        AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'hidden'
     `;
 
-    if (!viewerTrustEligible) {
-      query += ` AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'limited'`;
+    // Only apply visibility filters if NOT showing all accounts
+    if (!showAll) {
+      query += `
+        AND COALESCE((up.preference_flexibility->'safetyControls'->>'quietMode')::boolean, false) = false
+        AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'hidden'
+      `;
+
+      if (!viewerTrustEligible) {
+        query += ` AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'limited'`;
+      }
     }
 
     const params = [userId];
@@ -3937,22 +3944,11 @@ const buildDiscoveryQuery = ({
     );
   }
 
-  // Exclude profiles the user passed on (user said no)
+  // Exclude already interacted users using NOT EXISTS (faster than NOT IN)
   conditions.push(`NOT EXISTS (
     SELECT 1 FROM interactions i
-    WHERE i.from_user_id = $1 
-      AND i.to_user_id = dp.user_id
-      AND i.interaction_type = 'pass'
-  )`);
-  
-  // Exclude mutual matches (both users liked each other - already matched)
-  conditions.push(`NOT EXISTS (
-    SELECT 1 FROM interactions i1
-    JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
-    WHERE i1.from_user_id = $1 
-      AND i1.to_user_id = dp.user_id
-      AND i1.interaction_type IN ('like', 'superlike')
-      AND i2.interaction_type IN ('like', 'superlike')
+    WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
+       OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
   )`);
 
   // Exclude blocked users using NOT EXISTS
@@ -4481,17 +4477,8 @@ router.get('/trending', authenticateToken, async (req, res) => {
          AND dp.is_active = true
          AND NOT EXISTS (
            SELECT 1 FROM interactions i
-           WHERE i.from_user_id = $1 
-             AND i.to_user_id = dp.user_id
-             AND i.interaction_type = 'pass'
-         )
-         AND NOT EXISTS (
-           SELECT 1 FROM interactions i1
-           JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
-           WHERE i1.from_user_id = $1 
-             AND i1.to_user_id = dp.user_id
-             AND i1.interaction_type IN ('like', 'superlike')
-             AND i2.interaction_type IN ('like', 'superlike')
+           WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
+              OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
          )
          AND NOT EXISTS (
            SELECT 1 FROM user_blocks ub
@@ -4572,17 +4559,8 @@ router.get('/new-profiles', authenticateToken, async (req, res) => {
          AND dp.created_at >= $2
          AND NOT EXISTS (
            SELECT 1 FROM interactions i
-           WHERE i.from_user_id = $1 
-             AND i.to_user_id = dp.user_id
-             AND i.interaction_type = 'pass'
-         )
-         AND NOT EXISTS (
-           SELECT 1 FROM interactions i1
-           JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
-           WHERE i1.from_user_id = $1 
-             AND i1.to_user_id = dp.user_id
-             AND i1.interaction_type IN ('like', 'superlike')
-             AND i2.interaction_type IN ('like', 'superlike')
+           WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
+              OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
          )
          AND NOT EXISTS (
            SELECT 1 FROM user_blocks ub
@@ -4598,52 +4576,9 @@ router.get('/new-profiles', authenticateToken, async (req, res) => {
     const hasMore = result.rows.length > limit;
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
-    let profiles = rows.map((row) =>
+    const profiles = rows.map((row) =>
       applyDiscoveryPresentationControls(normalizeProfileRow(row), row.preferences)
     );
-
-    // Fallback: if no new profiles in last 14 days, return recently updated profiles
-    if (profiles.length === 0) {
-      const fallbackResult = await db.query(
-        `SELECT dp.*,
-                row_to_json(up) as preferences,
-                (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
-                 FROM profile_photos WHERE user_id = dp.user_id) as photos
-         FROM dating_profiles dp
-         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
-         WHERE dp.user_id != $1
-           AND dp.is_active = true
-           AND NOT EXISTS (
-             SELECT 1 FROM interactions i
-             WHERE i.from_user_id = $1 
-               AND i.to_user_id = dp.user_id
-               AND i.interaction_type = 'pass'
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM interactions i1
-             JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
-             WHERE i1.from_user_id = $1 
-               AND i1.to_user_id = dp.user_id
-               AND i1.interaction_type IN ('like', 'superlike')
-               AND i2.interaction_type IN ('like', 'superlike')
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM user_blocks ub
-             WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id)
-                OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id)
-           )
-           ${cursorCondition}
-         ORDER BY dp.updated_at DESC, dp.id DESC
-         LIMIT $2`,
-        [userId, limit + 1]
-      );
-      const fbHasMore = fallbackResult.rows.length > limit;
-      const fbRows = fbHasMore ? fallbackResult.rows.slice(0, limit) : fallbackResult.rows;
-      profiles = fbRows.map((row) =>
-        applyDiscoveryPresentationControls(normalizeProfileRow(row), row.preferences)
-      );
-      rows.push(...fbRows);
-    }
 
     const lastRow = rows[rows.length - 1];
     const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.created_at, lastRow.id) : null;
@@ -6131,7 +6066,7 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
 });
 
 // 32. GET TOP PICKS (Most Compatible Profiles) — using smart discovery query
-router.get('/top-picks', authenticateToken, async (req, res) => {
+router.get('/top-picks', async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
@@ -6177,7 +6112,7 @@ router.get('/top-picks', authenticateToken, async (req, res) => {
 
     const result = await db.query(query.text, query.params);
 
-    let scoredProfiles = result.rows
+    const scoredProfiles = result.rows
       .map((profileRow) => {
         const normalizedProfile = applyDiscoveryPresentationControls(
           normalizeProfileRow(profileRow),
@@ -6203,47 +6138,6 @@ router.get('/top-picks', authenticateToken, async (req, res) => {
       .filter(Boolean)
       .sort((leftProfile, rightProfile) => rightProfile.topPickScore - leftProfile.topPickScore)
       .slice(0, limit);
-
-    // Fallback: if no compatible top picks, return regular discovery profiles
-    if (scoredProfiles.length === 0) {
-      const fallbackQuery = buildDiscoveryQuery({
-        userId,
-        currentLat: toFiniteNumber(currentProfile?.location?.lat),
-        currentLng: toFiniteNumber(currentProfile?.location?.lng),
-        radiusKm: currentPreferences.locationRadius,
-        ageMin: currentPreferences.ageRangeMin,
-        ageMax: currentPreferences.ageRangeMax,
-        genderPreferences: currentPreferences.genderPreferences,
-        relationshipGoals: currentPreferences.relationshipGoals,
-        interests: currentPreferences.interests,
-        heightRangeMin: currentPreferences.heightRangeMin,
-        heightRangeMax: currentPreferences.heightRangeMax,
-        bodyTypes: currentPreferences.bodyTypes,
-        excludeShown: false,
-        viewerTrustEligible:
-          Boolean(currentProfile?.profileVerified) ||
-          Number(currentProfile?.profileCompletionPercent || 0) >= 80,
-        limit,
-        offset: 0
-      });
-      const fallbackResult = await db.query(fallbackQuery.text, fallbackQuery.params);
-      scoredProfiles = fallbackResult.rows
-        .map((profileRow) => {
-          const normalizedProfile = applyDiscoveryPresentationControls(
-            normalizeProfileRow(profileRow),
-            profileRow.preferences
-          );
-          return {
-            ...normalizedProfile,
-            compatibilityScore: 50,
-            compatibilityLabel: 'Discover',
-            compatibilityColor: '#3b82f6',
-            topPickScore: 50,
-            isFallback: true
-          };
-        })
-        .slice(0, limit);
-    }
 
     const requestMetadata = getRequestMetadata(req);
     spamFraudService.trackUserActivity({
@@ -6422,7 +6316,7 @@ const DAILY_PROMPTS = [
   }
 ];
 
-router.get('/daily-prompts', authenticateToken, async (req, res) => {
+router.get('/daily-prompts', async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -6510,7 +6404,7 @@ router.delete('/daily-prompts/:promptId/answer', async (req, res) => {
 });
 
 // 37. GET USER ANSWERED PROMPTS (for profile display)
-router.get('/profiles/me/prompts', authenticateToken, async (req, res) => {
+router.get('/profiles/me/prompts', async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -7730,7 +7624,7 @@ router.post('/profiles/:userId/view', async (req, res) => {
 });
 
 // 54. GET PROFILE ANALYTICS (for own profile)
-router.get('/profiles/me/analytics', authenticateToken, async (req, res) => {
+router.get('/profiles/me/analytics', async (req, res) => {
   try {
     const userId = req.user.id;
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -10586,6 +10480,75 @@ router.post('/filter-presets/:presetId/apply', async (req, res) => {
 });
 
 // 32. GET TOP PICKS (AI/ML Enhanced Matching)
+router.get('/top-picks', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(normalizeInteger(req.query.limit) || 10, 30);
+
+    // Get current user profile and preferences
+    const currentResult = await db.query(
+      `SELECT dp.*, row_to_json(up) as preferences
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       WHERE dp.user_id = $1`,
+      [userId]
+    );
+
+    if (currentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Complete your profile first' });
+    }
+
+    const currentProfile = normalizeProfileRow(currentResult.rows[0]);
+    const currentPreferences = normalizePreferenceRow(currentResult.rows[0].preferences);
+
+    // Get top matches based on multiple factors
+    const result = await db.query(
+      `SELECT dp.*, 
+              row_to_json(up) as preferences,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       WHERE dp.user_id != $1
+         AND dp.is_active = true
+         AND NOT EXISTS (SELECT 1 FROM interactions i WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id) OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id))
+         AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id) OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id))
+       ORDER BY dp.profile_verified DESC, dp.profile_completion_percent DESC
+       LIMIT $2`,
+      [userId, limit]
+    );
+
+    const profiles = result.rows
+      .map(profileRow => {
+        const normalizedProfile = normalizeProfileRow(profileRow);
+        const compatibility = buildCompatibilitySuggestion({
+          currentProfile,
+          currentPreferences,
+          candidateProfile: normalizedProfile,
+          candidatePreferences: profileRow.preferences
+        });
+
+        if (compatibility.isExcluded) return null;
+
+        return {
+          ...normalizedProfile,
+          ...compatibility,
+          isPick: true
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.compatibilityScore - a.compatibilityScore)
+      .slice(0, limit);
+
+    res.json({
+      topPicks: profiles,
+      message: `${profiles.length} top picks selected for you based on compatibility`
+    });
+  } catch (err) {
+    console.error('Get top picks error:', err);
+    res.status(500).json({ error: 'Failed to get top picks' });
+  }
+});
 
 // 33. GET SUPERLIKES RECEIVED
 router.get('/superlikes-received', async (req, res) => {
@@ -12285,6 +12248,54 @@ router.post('/verify/run-fraud-check', async (req, res) => {
   } catch (err) {
     console.error('Run fraud check error:', err);
     res.status(500).json({ error: 'Failed to run fraud check' });
+  }
+});
+
+// 88. GET PROFILE TRUST SCORE (view own or another user's trust score)
+router.get('/profile-trust-score/:targetUserId', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const targetUserId = parseInt(req.params.targetUserId);
+
+    // Can only view own score, or if viewing another's (future feature)
+    if (userId !== targetUserId) {
+      return res.status(403).json({ error: 'Can only view your own trust score' });
+    }
+
+    const result = await db.query(
+      `SELECT 
+        overall_trust_score,
+        fraud_risk_level,
+        is_verified_photo,
+        is_verified_email,
+        is_verified_phone,
+        red_flags
+       FROM profile_verification_scores
+       WHERE user_id = $1`,
+      [targetUserId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Trust score not available' });
+    }
+
+    const score = result.rows[0];
+
+    res.json({
+      trustScore: {
+        overallScore: score.overall_trust_score,
+        riskLevel: score.fraud_risk_level,
+        verifications: {
+          photoVerified: score.is_verified_photo,
+          emailVerified: score.is_verified_email,
+          phoneVerified: score.is_verified_phone
+        },
+        redFlags: score.red_flags || []
+      }
+    });
+  } catch (err) {
+    console.error('Get profile trust score error:', err);
+    res.status(500).json({ error: 'Failed to fetch trust score' });
   }
 });
 
@@ -14576,7 +14587,7 @@ router.get('/goals/statistics', authenticateToken, async (req, res) => {
 // ========== AI-POWERED PROFILE SUGGESTIONS (TIER 3) ==========
 
 // AI.1. GET SMART SUGGESTIONS - AI-ranked profiles with compatibility explanations
-router.get('/smart-suggestions', async (req, res) => {
+router.get('/smart-suggestions', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
@@ -15831,7 +15842,7 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
       include: [
         {
           model: dbModels.User,
-          as: 'profileUser',
+          as: 'profile_user',
           attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
           include: [
             {
@@ -15841,7 +15852,7 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
             },
             {
               model: dbModels.ProfilePhoto,
-              as: 'photos',
+              as: 'profilePhotos',
               attributes: ['id', 'photo_url', 'position'],
               limit: 1,
               order: [['position', 'ASC']]
@@ -15862,16 +15873,16 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
       passReason: decision.pass_reason,
       passReasonLabel: rewindService.getReasonLabel(decision.pass_reason),
       passReasonIcon: rewindService.getReasonIcon(decision.pass_reason),
-      profile: decision.profileUser ? {
-        id: decision.profileUser.id,
-        firstName: decision.profileUser.firstName,
-        age: decision.profileUser.age,
-        bio: decision.profileUser.bio,
-        verified: decision.profileUser.profileVerified,
-        interests: decision.profileUser.datingProfile?.interests || [],
-        goals: decision.profileUser.datingProfile?.relationshipGoals,
-        location: decision.profileUser.datingProfile?.location,
-        photoUrl: decision.profileUser.photos?.[0]?.photo_url
+      profile: decision.profile_user ? {
+        id: decision.profile_user.id,
+        firstName: decision.profile_user.firstName,
+        age: decision.profile_user.age,
+        bio: decision.profile_user.bio,
+        verified: decision.profile_user.profileVerified,
+        interests: decision.profile_user.datingProfile?.interests || [],
+        goals: decision.profile_user.datingProfile?.relationshipGoals,
+        location: decision.profile_user.datingProfile?.location,
+        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
       } : null
     }));
     
@@ -15924,7 +15935,7 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
       include: [
         {
           model: dbModels.User,
-          as: 'profileUser',
+          as: 'profile_user',
           attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
           include: [
             {
@@ -15934,7 +15945,7 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
             },
             {
               model: dbModels.ProfilePhoto,
-              as: 'photos',
+              as: 'profilePhotos',
               attributes: ['id', 'photo_url', 'position'],
               limit: 1,
               order: [['position', 'ASC']]
@@ -15951,16 +15962,16 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
       profileId: decision.profile_user_id,
       passedAt: decision.decision_timestamp,
       reason: decision.pass_reason || 'other',
-      profile: decision.profileUser ? {
-        id: decision.profileUser.id,
-        firstName: decision.profileUser.firstName,
-        age: decision.profileUser.age,
-        bio: decision.profileUser.bio,
-        verified: decision.profileUser.profileVerified,
-        interests: decision.profileUser.datingProfile?.interests || [],
-        goals: decision.profileUser.datingProfile?.relationshipGoals,
-        location: decision.profileUser.datingProfile?.location,
-        photoUrl: decision.profileUser.photos?.[0]?.photo_url
+      profile: decision.profile_user ? {
+        id: decision.profile_user.id,
+        firstName: decision.profile_user.firstName,
+        age: decision.profile_user.age,
+        bio: decision.profile_user.bio,
+        verified: decision.profile_user.profileVerified,
+        interests: decision.profile_user.datingProfile?.interests || [],
+        goals: decision.profile_user.datingProfile?.relationshipGoals,
+        location: decision.profile_user.datingProfile?.location,
+        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
       } : null
     }));
     
