@@ -1026,6 +1026,16 @@
   color: #ffffff;
 }
 
+.btn-like.already-liked {
+  background: #10b981;
+  color: #ffffff;
+  opacity: 0.8;
+}
+
+.btn-like.already-liked:hover {
+  background: #059669;
+}
+
 .btn-action:disabled {
   opacity: 0.5;
   cursor: not-allowed;

@@ -217,6 +217,7 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
   const [appliedFilters, setAppliedFilters] = useState(DEFAULT_FILTERS);
   const [showFilters, setShowFilters] = useState(false);
   const [favoriteUserIds, setFavoriteUserIds] = useState(new Set());
+  const [likedUserIds, setLikedUserIds] = useState(new Set());
   const [remainingLikes, setRemainingLikes] = useState(50);
   const [remainingSuperlikes, setRemainingSuperlikes] = useState(1);
   const [remainingRewinds, setRemainingRewinds] = useState(3);
@@ -269,6 +270,18 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     datingProfileService
       .getFavorites()
       .then((data) => setFavoriteUserIds(new Set((data.favorites || []).map((favorite) => String(favorite.userId)))))
+      .catch(() => {});
+
+    datingProfileService
+      .getInteractionHistory(100)
+      .then((data) => {
+        if (data.interactions) {
+          const liked = data.interactions
+            .filter((interaction) => interaction.type === 'like')
+            .map((interaction) => String(interaction.targetUserId || interaction.toUserId));
+          setLikedUserIds(new Set(liked));
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -598,6 +611,13 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
     const profile = getCurrentProfile();
     if (!profile) return;
 
+    const userId = String(profile.userId);
+    if (likedUserIds.has(userId)) {
+      showFeedback('info', `You already liked ${profile.firstName}.`);
+      moveToNextCard();
+      return;
+    }
+
     if (remainingLikes <= 0) {
       showFeedback('error', 'Daily like limit reached.');
       return;
@@ -610,6 +630,8 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
       } else {
         setRemainingLikes((currentLikes) => Math.max(0, currentLikes - 1));
       }
+
+      setLikedUserIds((prev) => new Set([...prev, userId]));
 
       if (response.isMatch) {
         onMatch?.({ ...profile, matchId: response.match?.id || null });
@@ -681,12 +703,14 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
 
   const handleQuickViewLike = useCallback(async (profile) => {
     try {
+      const userId = String(profile.id);
       const response = await datingProfileService.likeProfile(profile.id);
       if (response.remainingLikes !== undefined) {
         setRemainingLikes(response.remainingLikes);
       } else {
         setRemainingLikes((likes) => Math.max(0, likes - 1));
       }
+      setLikedUserIds((prev) => new Set([...prev, userId]));
       if (response.isMatch) {
         onMatch?.({ ...profile, matchId: response.match?.id || null });
       }
@@ -1385,7 +1409,15 @@ const DiscoveryCards = ({ onMatch, onProfileView }) => {
         <button onClick={handleRewind} className="btn-action btn-rewind" title="Undo last pass" aria-label="Rewind" disabled={remainingRewinds <= 0}>Undo</button>
         <button onClick={() => onProfileView?.(currentProfile)} className="btn-action btn-view" title="Open full profile" aria-label="Open profile">Profile</button>
         <button onClick={handleSuperlike} className="btn-action btn-superlike" title="Send a star" aria-label="Send a star" disabled={remainingSuperlikes <= 0}>Star</button>
-        <button onClick={handleLike} className="btn-action btn-like" title="Like this profile" aria-label="Like" disabled={remainingLikes <= 0}>Like</button>
+        <button 
+          onClick={handleLike} 
+          className={`btn-action btn-like ${likedUserIds.has(String(currentProfile.userId)) ? 'already-liked' : ''}`} 
+          title={likedUserIds.has(String(currentProfile.userId)) ? 'You already liked this profile' : 'Like this profile'} 
+          aria-label="Like" 
+          disabled={remainingLikes <= 0 || likedUserIds.has(String(currentProfile.userId))}
+        >
+          {likedUserIds.has(String(currentProfile.userId)) ? '❤️ Liked' : 'Like'}
+        </button>
       </div>
 
       <div className="card-counter">{currentIndex + 1} of {profiles.length}{nextCursor ? ' +' : ''}</div>
