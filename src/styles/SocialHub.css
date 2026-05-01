@@ -202,10 +202,23 @@
   border-radius: 8px;
   padding: 14px;
   background: #f8fafc;
+  overflow: hidden;
 }
 
 .social-list-item.compact {
   padding-block: 12px;
+}
+
+/* Content container inside list item - allow text truncation */
+.social-list-item > div:first-child {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* Button inside list item - prevent shrinking */
+.social-list-item > button {
+  flex-shrink: 0;
 }
 
 .social-person {

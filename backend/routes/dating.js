@@ -17040,7 +17040,7 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
           target_user_ids,
           created_at,
           updated_at
-        ) VALUES ($1, $2, 0, 0, NULL, 0, NULL, CURRENT_TIMESTAMP, true, $3, $4, 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+) VALUES ($1, $2, 0, 0, $5, 0, NULL, CURRENT_TIMESTAMP, true, $3, $4, 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT (code) DO UPDATE
         SET max_redemptions = NULL,
             expiry_date = NULL,
