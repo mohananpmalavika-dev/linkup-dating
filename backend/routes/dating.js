@@ -887,8 +887,8 @@ const ensureActiveMatch = async (firstUserId, secondUserId) => {
   }
 
   const result = await db.query(
-    `INSERT INTO matches (user_id_1, user_id_2, status, matched_at)
-     VALUES ($1, $2, 'active', CURRENT_TIMESTAMP)
+    `INSERT INTO matches (user_id_1, user_id_2, status, matched_at, created_at)
+     VALUES ($1, $2, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
      ON CONFLICT (user_id_1, user_id_2) DO UPDATE
      SET status = 'active',
          matched_at = CURRENT_TIMESTAMP
