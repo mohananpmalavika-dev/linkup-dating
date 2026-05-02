@@ -355,6 +355,16 @@ router.post('/accept/:requestId', async (req, res) => {
 
       await client.query('COMMIT');
 
+      // Emit socket event to notify caller that their call was accepted
+      req.app.emitToUser(request.caller_id, 'call:accepted', {
+        callId: request.request_id || request.session_id,
+        fromUserId: receiverId,
+        targetUserId: request.caller_id,
+        sessionId: request.session_id,
+        callType: request.call_type,
+        message: 'Your call was accepted'
+      });
+
       res.json({
         success: true,
         message: 'Call request accepted',

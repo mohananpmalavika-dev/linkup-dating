@@ -183,8 +183,9 @@ const CallDashboard = () => {
     loadAvailability();
   }, [loadAvailability, loadBalance, loadCallingMarket, loadPackages]);
 
-  // Initialize real-time connection for incoming calls
+  // Initialize real-time connection for incoming calls and call acceptance
   const realTimeConnectionRef = useRef(false);
+  const pendingRequestRef = useRef(null);
 
   useEffect(() => {
     if (!currentUser?.id && !currentUser?.userId) {
@@ -205,6 +206,7 @@ const CallDashboard = () => {
         if (realTimeService.socket?.connected) {
           console.log('CallingDashboard: Real-time service already connected');
           realTimeConnectionRef.current = true;
+          setupSocketListeners(userId);
           return;
         }
 
@@ -213,6 +215,7 @@ const CallDashboard = () => {
         realTimeConnectionRef.current = true;
         console.log('CallingDashboard: Real-time service connected successfully');
         showNotice('Connected to call notifications.', 'success');
+        setupSocketListeners(userId);
       } catch (err) {
         console.error('CallingDashboard: Failed to connect to real-time service:', err);
         showNotice(
@@ -222,12 +225,66 @@ const CallDashboard = () => {
       }
     };
 
+    const setupSocketListeners = (userId) => {
+      // Listen for call acceptance from receiver
+      realTimeService.socket?.on('call:accepted', (data) => {
+        console.log('CallingDashboard: Call accepted by receiver', data);
+        if (data?.callId === pendingRequestRef.current?.callId) {
+          // Clear pending request
+          setPendingRequest(null);
+          showNotice('Call accepted! Connecting...', 'success');
+          
+          // Navigate caller to video room
+          const receiverUserId = data.fromUserId || data.targetUserId;
+          navigate(`/calls/${receiverUserId}/video`, {
+            state: {
+              callMode: 'outgoing',
+              autoAccepted: false,
+              callData: data,
+              targetUserId: receiverUserId,
+              returnPath: '/call'
+            }
+          });
+        }
+      });
+
+      // Listen for call rejection
+      realTimeService.socket?.on('call:rejected', (data) => {
+        console.log('CallingDashboard: Call rejected by receiver', data);
+        if (data?.callId === pendingRequestRef.current?.callId) {
+          setPendingRequest(null);
+          showNotice('Call was rejected.', 'info');
+        }
+      });
+
+      // Listen for call timeout
+      realTimeService.socket?.on('call:timeout', (data) => {
+        console.log('CallingDashboard: Call timed out', data);
+        if (data?.callId === pendingRequestRef.current?.callId) {
+          setPendingRequest(null);
+          showNotice('Call request expired.', 'info');
+        }
+      });
+
+      // Listen for call ended
+      realTimeService.socket?.on('call:ended', (data) => {
+        console.log('CallingDashboard: Call ended', data);
+        if (data?.callId === pendingRequestRef.current?.callId) {
+          setPendingRequest(null);
+        }
+      });
+    };
+
     connectToRealTime();
 
     return () => {
-      // Don't disconnect on unmount - user may navigate but want to stay connected
+      // Clean up socket listeners
+      realTimeService.socket?.off('call:accepted');
+      realTimeService.socket?.off('call:rejected');
+      realTimeService.socket?.off('call:timeout');
+      realTimeService.socket?.off('call:ended');
     };
-  }, [currentUser?.id, currentUser?.userId, showNotice]);
+  }, [currentUser?.id, currentUser?.userId, showNotice, navigate]);
 
   const handleToggleAvailability = async () => {
     if (!currentUser || updatingAvailability) {
@@ -339,11 +396,15 @@ const CallDashboard = () => {
       });
 
       if (response?.success) {
-        setPendingRequest({
+        const pendingRequestData = {
           ...response,
+          callId: response.callId || response.id,
           userName: user.name,
-          userId: callerId
-        });
+          userId: callerId,
+          callType: normalizedCallType
+        };
+        setPendingRequest(pendingRequestData);
+        pendingRequestRef.current = pendingRequestData;
         showNotice(
           `${CALL_TYPES[normalizedCallType].label} call request sent to ${user.name}. Credits are reserved only when they accept.`,
           'success'
@@ -377,12 +438,14 @@ const CallDashboard = () => {
   // Handle accepting incoming call request
   const handleAcceptIncomingCall = async (callData) => {
     try {
-      // Emit socket event to notify caller
+      // First, emit socket event to notify caller before API call
       if (callData?.callId && callData?.fromUserId) {
-        realTimeService.socket?.emit('call:accept', {
+        realTimeService.socket?.emit('call:accepted', {
           callId: callData.callId,
+          fromUserId: currentUser?.id || currentUser?.userId,
+          targetUserId: callData.fromUserId,
           matchId: callData.matchId,
-          targetUserId: callData.fromUserId
+          callType: callData.callType || 'voice'
         });
       }
 
@@ -400,7 +463,7 @@ const CallDashboard = () => {
         
         const returnPath = hasMatchId
           ? `/matches/${callData.matchId}/chat`
-          : `/calls/${callData.fromUserId}`;
+          : `/call`;
 
         navigate(videoCallRoute, {
           state: {
@@ -425,12 +488,13 @@ const CallDashboard = () => {
   // Handle declining incoming call request
   const handleDeclineIncomingCall = async (callData) => {
     try {
-      // Emit socket event to notify caller
+      // Emit socket event to notify caller BEFORE the API call
       if (callData?.callId && callData?.fromUserId) {
-        realTimeService.socket?.emit('call:decline', {
+        realTimeService.socket?.emit('call:rejected', {
           callId: callData.callId,
-          matchId: callData.matchId,
-          targetUserId: callData.fromUserId
+          fromUserId: currentUser?.id || currentUser?.userId,
+          targetUserId: callData.fromUserId,
+          matchId: callData.matchId
         });
       }
 
