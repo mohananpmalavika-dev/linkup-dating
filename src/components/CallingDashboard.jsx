@@ -201,7 +201,6 @@ const CallDashboard = () => {
   };
 
   const handlePaymentError = (error) => {
-    setPaymentError(error);
     showNotice(error, 'error');
   };
 
