@@ -392,13 +392,24 @@ const CallDashboard = () => {
         dismissIncomingCall();
         
         // Navigate to video call interface
-        const videoCallRoute = `/matches/${callData.matchId}/video`;
+        // If matchId exists, use match-based route; otherwise use userId-based route
+        const hasMatchId = callData?.matchId;
+        const videoCallRoute = hasMatchId 
+          ? `/matches/${callData.matchId}/video`
+          : `/calls/${callData.fromUserId}/video`;
+        
+        const returnPath = hasMatchId
+          ? `/matches/${callData.matchId}/chat`
+          : `/calls/${callData.fromUserId}`;
+
         navigate(videoCallRoute, {
           state: {
             callMode: 'incoming',
             autoAccepted: true,
             incomingCall: callData,
-            returnPath: `/matches/${callData.matchId}/chat`
+            returnPath: returnPath,
+            callType: callData.callType || 'voice',
+            targetUserId: callData.fromUserId
           }
         });
       }

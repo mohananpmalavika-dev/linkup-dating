@@ -299,6 +299,47 @@ const MatchVideoRoute = ({
   );
 };
 
+// Route for direct calls initiated from CallingDashboard (not matched-based)
+const CallVideoRoute = ({
+  onNavigateToPath
+}) => {
+  const location = useLocation();
+  const userId = location.pathname.match(/^\/calls\/([^/]+)\/video$/)?.[1] || null;
+  
+  // Create a match-like object from incomingCall data for direct calls
+  const createMatchFromCall = (callData, targetUserId) => {
+    if (!callData) {
+      return null;
+    }
+    
+    return {
+      userId: targetUserId || callData.fromUserId,
+      firstName: callData.fromUserName || callData.callerName || 'Caller',
+      matchId: null, // No match ID for direct calls
+      otherUserPhoto: callData.photoUrl,
+      photos: callData.photoUrl ? [callData.photoUrl] : []
+    };
+  };
+
+  const matchFromCall = createMatchFromCall(location.state?.incomingCall, userId);
+
+  return (
+    <VideoDating
+      matchId={null}
+      matchedProfile={matchFromCall}
+      callMode={location.state?.callMode || 'incoming'}
+      autoAccepted={Boolean(location.state?.autoAccepted)}
+      callerName={location.state?.incomingCall?.fromUserName || location.state?.callerName || ''}
+      incomingCall={location.state?.incomingCall || null}
+      startImmediately={location.state?.startImmediately !== false}
+      focusSchedule={Boolean(location.state?.focusSchedule)}
+      scheduledVideoDateId={location.state?.scheduledVideoDateId || null}
+      onBack={() => onNavigateToPath(location.state?.returnPath || '/call')}
+      onOpenMessages={(profile) => onOpenMessages?.(profile, location.state?.returnPath || '/call')}
+    />
+  );
+};
+
 const ChatRoomDetailRoute = ({
   onNavigateToChatrooms
 }) => {
@@ -1031,6 +1072,15 @@ const AppContent = () => {
               path="matches/:matchId/video"
               element={
                 <MatchVideoRoute
+                  onNavigateToPath={(path) => navigate(path)}
+                  onOpenMessages={handleOpenMessages}
+                />
+              }
+            />
+            <Route
+              path="calls/:userId/video"
+              element={
+                <CallVideoRoute
                   onNavigateToPath={(path) => navigate(path)}
                   onOpenMessages={handleOpenMessages}
                 />
