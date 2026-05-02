@@ -187,7 +187,11 @@ router.get('/availability', async (req, res) => {
     
     res.json({
       success: true,
-      isAvailable: result.rows[0]?.is_available_for_calls || false
+      isAvailable: result.rows[0]?.is_available_for_calls || false,
+      availableFor: {
+        voice: true,
+        video: true
+      }
     });
   } catch (error) {
     console.error('Get availability error:', error);
