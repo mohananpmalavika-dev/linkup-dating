@@ -4,6 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { buildApiUrl } from '../utils/api';
+import { getStoredAuthToken } from '../utils/auth';
 import '../styles/RazorpayPayment.css';
 
 const RazorpayPayment = ({
@@ -47,12 +49,18 @@ const RazorpayPayment = ({
     setLoading(true);
 
     try {
+      const authToken = getStoredAuthToken();
+      const headers = {
+        'Content-Type': 'application/json'
+      };
+      if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`;
+      }
+
       // Step 1: Initiate purchase and get order details from backend
-      const response = await fetch('/calling/wallet/purchase/initiate', {
+      const response = await fetch(buildApiUrl('/calling/wallet/purchase/initiate'), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers,
         credentials: 'include',
         body: JSON.stringify({
           packageId: creditPackage.id
@@ -109,12 +117,18 @@ const RazorpayPayment = ({
         },
         handler: async (response) => {
           try {
+            const authToken = getStoredAuthToken();
+            const verifyHeaders = {
+              'Content-Type': 'application/json'
+            };
+            if (authToken) {
+              verifyHeaders.Authorization = `Bearer ${authToken}`;
+            }
+
             // Step 3: Verify payment on backend
-            const verifyResponse = await fetch('/calling/wallet/purchase/verify', {
+            const verifyResponse = await fetch(buildApiUrl('/calling/wallet/purchase/verify'), {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
+              headers: verifyHeaders,
               credentials: 'include',
               body: JSON.stringify({
                 orderId,
