@@ -2,7 +2,7 @@
  * Calling Dashboard - paid voice/video calling marketplace.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate } from '../router';
 import { useApp } from '../contexts/AppContext';
 import callWalletService from '../services/callWalletService';
@@ -199,9 +199,16 @@ const CallDashboard = () => {
   }, [loadAvailability, loadBalance, loadCallingMarket, loadPackages]);
 
   // Initialize real-time connection for incoming calls
+  const realTimeConnectionRef = useRef(false);
+
   useEffect(() => {
     if (!currentUser?.id && !currentUser?.userId) {
       console.warn('CallingDashboard: No user ID available');
+      return;
+    }
+
+    if (realTimeConnectionRef.current) {
+      console.log('CallingDashboard: Real-time connection already initialized');
       return;
     }
 
@@ -210,27 +217,21 @@ const CallDashboard = () => {
 
     const connectToRealTime = async () => {
       try {
-        await import('../services/realTimeService').then(module => {
-          const realTimeService = module.default;
-          if (!realTimeService.socket?.connected) {
-            realTimeService.connect(userId, { device: 'web' })
-              .then(() => {
-                console.log('CallingDashboard: Real-time service connected successfully');
-                showNotice('Connected to call notifications.', 'success');
-              })
-              .catch(err => {
-                console.error('CallingDashboard: Failed to connect to real-time service:', err);
-                showNotice(
-                  'Could not connect to call notifications. You can still receive calls, but notifications may be delayed.',
-                  'warning'
-                );
-              });
-          }
-        });
-      } catch (error) {
-        console.error('CallingDashboard: Error initializing real-time connection:', error);
+        if (realTimeService.socket?.connected) {
+          console.log('CallingDashboard: Real-time service already connected');
+          realTimeConnectionRef.current = true;
+          return;
+        }
+
+        console.log('CallingDashboard: Establishing real-time connection...');
+        await realTimeService.connect(userId, { device: 'web' });
+        realTimeConnectionRef.current = true;
+        console.log('CallingDashboard: Real-time service connected successfully');
+        showNotice('Connected to call notifications.', 'success');
+      } catch (err) {
+        console.error('CallingDashboard: Failed to connect to real-time service:', err);
         showNotice(
-          'There was an issue connecting to real-time notifications.',
+          'Could not connect to call notifications. You can still receive calls, but notifications may be delayed.',
           'warning'
         );
       }
