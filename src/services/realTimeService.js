@@ -4,7 +4,19 @@
  */
 import io from 'socket.io-client';
 
-const SOCKET_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// Use BACKEND_URL for socket.io (base URL without /api path)
+// Fall back to REACT_APP_API_URL if BACKEND_URL not available, stripping /api
+const getSocketURL = () => {
+  if (process.env.REACT_APP_BACKEND_URL) {
+    return process.env.REACT_APP_BACKEND_URL;
+  }
+  
+  const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  // Remove /api suffix if present
+  return apiUrl.replace(/\/api\/?$/, '') || 'http://localhost:5000';
+};
+
+const SOCKET_URL = getSocketURL();
 
 class RealTimeService {
   constructor() {
@@ -30,6 +42,8 @@ class RealTimeService {
       try {
         this.userId = userId;
 
+        console.log(`[RealTimeService] Connecting to socket.io at: ${SOCKET_URL}`);
+
         this.socket = io(SOCKET_URL, {
           reconnection: true,
           reconnectionDelay: this.reconnectDelay,
@@ -44,7 +58,7 @@ class RealTimeService {
 
         // Connection established
         this.socket.on('connect', () => {
-          console.log('Connected to real-time server');
+          console.log('[RealTimeService] Connected to real-time server');
           this.reconnectAttempts = 0;
 
           // Register all pending socket listeners for subscribed events
@@ -58,7 +72,7 @@ class RealTimeService {
 
         // Connection lost
         this.socket.on('disconnect', (reason) => {
-          console.warn('Disconnected from real-time server:', reason);
+          console.warn('[RealTimeService] Disconnected from real-time server:', reason);
           this._emit('disconnected', { reason });
         });
 
@@ -66,23 +80,24 @@ class RealTimeService {
         this.socket.on('reconnect_attempt', () => {
           this.reconnectAttempts++;
           console.log(
-            `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
+            `[RealTimeService] Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
           );
         });
 
         // Connection error
         this.socket.on('connect_error', (error) => {
-          console.error('Connection error:', error);
+          console.error('[RealTimeService] Connection error:', error);
           this._emit('connection_error', { error: error.message });
           reject(error);
         });
 
         // Generic error
         this.socket.on('error', (error) => {
-          console.error('Socket error:', error);
+          console.error('[RealTimeService] Socket error:', error);
           this._emit('error', { error });
         });
       } catch (error) {
+        console.error('[RealTimeService] Error during connection setup:', error);
         reject(error);
       }
     });

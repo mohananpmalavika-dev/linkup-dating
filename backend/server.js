@@ -73,8 +73,12 @@ const io = socketIO(server, {
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  pingInterval: 25000,
+  pingTimeout: 5000
 });
 
 // Category B: Register real-time event handlers (presence, typing, activity, match notifications, profile changes)
@@ -179,10 +183,20 @@ const markUserOffline = (socketId) => {
 
 // WebSocket Connection
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  console.log('[Socket.io] User connected:', socket.id);
+
+  // Handle connection errors
+  socket.on('error', (error) => {
+    console.error('[Socket.io] Error on socket:', socket.id, error);
+  });
+
+  socket.on('connect_error', (error) => {
+    console.error('[Socket.io] Connection error on socket:', socket.id, error);
+  });
 
   socket.on('user_online', (userId) => {
     if (!userId) {
+      console.warn('[Socket.io] user_online called without userId');
       return;
     }
 
@@ -191,7 +205,7 @@ io.on('connection', (socket) => {
 
     // Join user-specific room for targeted notifications (calls, messages, etc)
     socket.join(`user_${userId}`);
-    console.log(`User ${userId} joined room: user_${userId}`);
+    console.log(`[Socket.io] User ${userId} joined room: user_${userId}`);
 
     if (wasOffline) {
       io.emit('user_status', { userId, online: true });

@@ -174,13 +174,26 @@ const CallDashboard = () => {
         await import('../services/realTimeService').then(module => {
           const realTimeService = module.default;
           if (!realTimeService.socket?.connected) {
-            realTimeService.connect(userId, { device: 'web' }).catch(err => {
-              console.error('Failed to connect to real-time service:', err);
-            });
+            realTimeService.connect(userId, { device: 'web' })
+              .then(() => {
+                console.log('CallingDashboard: Real-time service connected successfully');
+                showNotice('Connected to call notifications.', 'success');
+              })
+              .catch(err => {
+                console.error('CallingDashboard: Failed to connect to real-time service:', err);
+                showNotice(
+                  'Could not connect to call notifications. You can still receive calls, but notifications may be delayed.',
+                  'warning'
+                );
+              });
           }
         });
       } catch (error) {
-        console.error('Error initializing real-time connection:', error);
+        console.error('CallingDashboard: Error initializing real-time connection:', error);
+        showNotice(
+          'There was an issue connecting to real-time notifications.',
+          'warning'
+        );
       }
     };
 
@@ -189,7 +202,7 @@ const CallDashboard = () => {
     return () => {
       // Don't disconnect on unmount - user may navigate but want to stay connected
     };
-  }, [currentUser?.id, currentUser?.userId]);
+  }, [currentUser?.id, currentUser?.userId, showNotice]);
 
   const handleToggleAvailability = async () => {
     if (!currentUser || updatingAvailability) {
