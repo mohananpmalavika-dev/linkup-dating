@@ -640,9 +640,14 @@ const startServer = () => {
   });
 };
 
-// Initialize database and start server
-db.init()
-  .then(async () => {
+// Start server immediately on port (don't wait for DB init)
+startServer();
+
+// Initialize database and sync models in background
+(async () => {
+  try {
+    await db.init();
+    
     // Sync Sequelize models with controlled order to prevent foreign key constraint errors
     try {
       const dbModels = require('./models');
@@ -735,22 +740,13 @@ db.init()
         stack: err.stack
       });
     }
-
-    startServer();
-  })
-  .catch(err => {
+  } catch (err) {
     logger.error('Failed to initialize database', {
       message: err.message,
       stack: err.stack
     });
-
-    if (process.env.NODE_ENV === 'production') {
-      logger.warn('Starting server without database initialization so the app can stay online.');
-      startServer();
-      return;
-    }
-
-    process.exit(1);
-  });
+    logger.warn('Server is running but database is not fully initialized yet. Some features may not work until initialization completes.');
+  }
+})();
 
 module.exports = { app, server, io };
