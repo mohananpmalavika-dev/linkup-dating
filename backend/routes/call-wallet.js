@@ -3,9 +3,17 @@
  */
 
 const express = require('express');
+const crypto = require('crypto');
+const Razorpay = require('razorpay');
 const db = require('../config/database');
 
 const router = express.Router();
+
+// Initialize Razorpay instance
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_key',
+  key_secret: process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret'
+});
 
 const CREDIT_PACKAGES = [
   { id: 1, credits: 50, price: 50, bonus: 0, label: 'Starter' },
@@ -109,7 +117,7 @@ router.post('/purchase/initiate', async (req, res) => {
     const userId = req.user.id;
     const packageId = parseInteger(req.body.packageId);
     
-    console.log('Purchase initiate - userId:', userId, 'packageId:', packageId, 'body:', req.body);
+    console.log('Purchase initiate - userId:', userId, 'packageId:', packageId);
     
     if (packageId === null) {
       return res.status(400).json({ error: 'Invalid or missing package ID' });
@@ -121,18 +129,34 @@ router.post('/purchase/initiate', async (req, res) => {
     }
 
     const totalCredits = Number(pkg.credits) + Number(pkg.bonus || 0);
-    
-    // In production, create Razorpay order here
-    // For now, simulate with order ID
-    const orderId = `order_${Date.now()}_${userId}`;
-    
-    // Store pending purchase
+    const amountInPaise = pkg.price * 100; // Razorpay expects amount in paise
+
+    // Create Razorpay order
+    const razorpayOrder = await razorpay.orders.create({
+      amount: amountInPaise,
+      currency: 'INR',
+      receipt: `call_credits_${userId}_${Date.now()}`,
+      notes: {
+        userId,
+        packageId,
+        baseCredits: pkg.credits,
+        bonusCredits: pkg.bonus,
+        totalCredits,
+        packageName: pkg.label
+      }
+    });
+
+    const orderId = razorpayOrder.id;
+
+    // Store pending purchase in database
     await db.query(
       `INSERT INTO call_earnings (user_id, amount, type, status, reference_id, created_at)
        VALUES ($1, $2, 'credit_purchase', 'pending', $3, NOW())`,
       [userId, pkg.price, orderId]
     );
     
+    console.log('Razorpay order created:', orderId, 'Amount:', pkg.price);
+
     res.json({
       success: true,
       orderId,
@@ -140,12 +164,14 @@ router.post('/purchase/initiate', async (req, res) => {
       credits: totalCredits,
       baseCredits: pkg.credits,
       bonusCredits: pkg.bonus,
-      // In production, add Razorpay public key here
-      key: 'razorpay_key'
+      key: process.env.RAZORPAY_KEY_ID || 'rzp_test_key'
     });
   } catch (error) {
     console.error('Purchase initiate error:', error);
-    res.status(500).json({ error: 'Failed to initiate purchase', details: error.message });
+    res.status(500).json({ 
+      error: 'Failed to initiate purchase', 
+      details: error.message 
+    });
   }
 });
 
@@ -157,7 +183,7 @@ router.post('/purchase/verify', async (req, res) => {
     }
 
     const userId = req.user.id;
-    const { orderId, paymentId, credits } = req.body;
+    const { orderId, paymentId, signatureId, credits } = req.body;
     
     if (!orderId || !paymentId || !credits) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -167,32 +193,78 @@ router.post('/purchase/verify', async (req, res) => {
     if (!creditsAmount || creditsAmount < 10) {
       return res.status(400).json({ error: 'Invalid credits amount' });
     }
-    
-    // Update wallet balance
-    const wallet = await getOrCreateWallet(userId);
-    const newBalance = Number(wallet.credits_balance) + creditsAmount;
-    const newPurchased = Number(wallet.total_purchased) + creditsAmount;
-    
-    await db.query(
-      `UPDATE call_credits 
-       SET credits_balance = $2, total_purchased = $3, updated_at = CURRENT_TIMESTAMP
-       WHERE user_id = $1`,
-      [userId, newBalance, newPurchased]
-    );
-    
-    // Update earning record
-    await db.query(
-      `UPDATE call_earnings 
-       SET status = 'completed'
-       WHERE reference_id = $1 AND user_id = $2 AND type = 'credit_purchase'`,
-      [orderId, userId]
-    );
-    
-    res.json({
-      success: true,
-      balance: newBalance,
-      creditsAdded: creditsAmount
-    });
+
+    try {
+      // Verify payment signature
+      const sign = `${orderId}|${paymentId}`;
+      const expectedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'rzp_test_secret')
+        .update(sign)
+        .digest('hex');
+
+      // Verify signature (if provided)
+      if (signatureId && signatureId !== expectedSignature) {
+        console.warn('Signature verification failed for payment:', paymentId);
+        return res.status(400).json({ error: 'Payment signature verification failed' });
+      }
+
+      // Get payment details from Razorpay
+      const payment = await razorpay.payments.fetch(paymentId);
+      
+      if (payment.status !== 'captured') {
+        return res.status(400).json({ 
+          error: 'Payment not captured', 
+          status: payment.status 
+        });
+      }
+
+      // Get the package info from order notes
+      const order = await razorpay.orders.fetch(orderId);
+      const packageInfo = order.notes || {};
+
+      // Get or create wallet
+      const wallet = await getOrCreateWallet(userId);
+      const newBalance = Number(wallet.credits_balance) + creditsAmount;
+      const newPurchased = Number(wallet.total_purchased) + creditsAmount;
+      
+      // Update wallet balance
+      await db.query(
+        `UPDATE call_credits 
+         SET credits_balance = $2, total_purchased = $3, updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $1`,
+        [userId, newBalance, newPurchased]
+      );
+      
+      // Update earning record with payment details
+      await db.query(
+        `UPDATE call_earnings 
+         SET status = 'completed', reference_id = $1
+         WHERE reference_id = $2 AND user_id = $3 AND type = 'credit_purchase'`,
+        [paymentId, orderId, userId]
+      );
+
+      // Log the transaction
+      console.log('Payment verified and credits added:', {
+        userId,
+        orderId,
+        paymentId,
+        creditsAdded: creditsAmount,
+        newBalance
+      });
+      
+      res.json({
+        success: true,
+        balance: newBalance,
+        creditsAdded: creditsAmount,
+        message: `${creditsAmount} credits added to your account!`
+      });
+    } catch (razorpayError) {
+      console.error('Razorpay verification error:', razorpayError.message);
+      return res.status(400).json({ 
+        error: 'Could not verify payment with Razorpay', 
+        details: razorpayError.message 
+      });
+    }
   } catch (error) {
     console.error('Purchase verify error:', error);
     res.status(500).json({ error: 'Failed to verify payment', details: error.message });

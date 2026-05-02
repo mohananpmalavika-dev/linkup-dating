@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import callWalletService from '../services/callWalletService';
 import CouponRedemption from './CouponRedemption';
+import RazorpayPayment from './RazorpayPayment';
 import '../styles/CallingDashboard.css';
 
 const ESTIMATED_CALL_MINUTES = 5;
@@ -73,7 +74,6 @@ const CallDashboard = () => {
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [packages, setPackages] = useState(FALLBACK_CREDIT_PACKAGES);
   const [selectedPackage, setSelectedPackage] = useState(null);
-  const [purchasing, setPurchasing] = useState(false);
   const [callingUsers, setCallingUsers] = useState([]);
   const [loadingMarket, setLoadingMarket] = useState(false);
   const [marketEnabled, setMarketEnabled] = useState(true);
@@ -84,6 +84,7 @@ const CallDashboard = () => {
   const [pendingRequest, setPendingRequest] = useState(null);
   const [notice, setNotice] = useState(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   const normalizedPackages = useMemo(
     () => packages.map(normalizePackage),
@@ -179,32 +180,29 @@ const CallDashboard = () => {
     }
   };
 
-  const handlePurchase = async (pkg) => {
+  const handlePurchase = (pkg) => {
     if (!currentUser) {
       showNotice('Please log in to buy call credits.', 'error');
       return;
     }
 
     setSelectedPackage(pkg);
-    setPurchasing(true);
+    setShowPaymentModal(true);
+  };
 
-    try {
-      const initiate = await callWalletService.initiatePurchase(pkg.id);
-      if (initiate.checkoutUrl) {
-        window.location.href = initiate.checkoutUrl;
-        return;
-      }
+  const handlePaymentSuccess = (paymentData) => {
+    setShowPaymentModal(false);
+    setBalance(paymentData.balance);
+    showNotice(
+      `Success! ${paymentData.creditsAdded} credits added to your account.`,
+      'success'
+    );
+    loadBalance();
+  };
 
-      showNotice(
-        `Payment order created for ${pkg.credits + pkg.bonus} credits. Checkout is not connected yet, so credits are added after payment is enabled.`,
-        'success'
-      );
-    } catch (error) {
-      console.error('Purchase failed:', error);
-      showNotice(error?.response?.data?.error || 'Could not start the credit purchase.', 'error');
-    } finally {
-      setPurchasing(false);
-    }
+  const handlePaymentError = (error) => {
+    setPaymentError(error);
+    showNotice(error, 'error');
   };
 
   const handleStartCall = async (user, callType = 'voice') => {
@@ -348,9 +346,9 @@ const CallDashboard = () => {
             <button
               type="button"
               key={pkg.id}
-              className={`package-card ${selectedPackage?.id === pkg.id ? 'selected' : ''}`}
+              className={`package-card ${selectedPackage?.id === pkg.id && showPaymentModal ? 'selected' : ''}`}
               onClick={() => handlePurchase(pkg)}
-              disabled={purchasing}
+              disabled={showPaymentModal}
             >
               <span className="package-badge">{pkg.name}</span>
               <span className="package-credits">{pkg.credits + pkg.bonus} credits</span>
@@ -359,7 +357,7 @@ const CallDashboard = () => {
               ) : null}
               <span className="package-price">INR {pkg.price}</span>
               <span className="btn-buy-package">
-                {purchasing && selectedPackage?.id === pkg.id ? 'Processing...' : 'Buy'}
+                {showPaymentModal && selectedPackage?.id === pkg.id ? 'Processing...' : 'Buy'}
               </span>
             </button>
           ))}
@@ -480,6 +478,14 @@ const CallDashboard = () => {
         isOpen={showCouponModal}
         onClose={() => setShowCouponModal(false)}
         onRedemptionSuccess={handleRedemptionSuccess}
+      />
+
+      <RazorpayPayment
+        isOpen={showPaymentModal}
+        package={selectedPackage}
+        onClose={() => setShowPaymentModal(false)}
+        onSuccess={handlePaymentSuccess}
+        onError={handlePaymentError}
       />
     </div>
   );
