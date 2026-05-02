@@ -79,6 +79,7 @@ const normalizeCaller = (user) => {
 const CallDashboard = () => {
   const navigate = useNavigate();
   const { currentUser, apiCall } = useApp();
+  const { incomingCall, dismissIncomingCall } = useIncomingCall();
   const [balance, setBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [packages, setPackages] = useState(FALLBACK_CREDIT_PACKAGES);
