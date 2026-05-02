@@ -98,8 +98,12 @@ const CallDashboard = () => {
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
+  // Define showNotice first since it's used by other callbacks
+  const showNotice = useCallback((message, tone = 'info') => {
+    setNotice({ message, tone });
+  }, []);
+
   // Auto-decline incoming calls that don't match user's call type availability
-  // Note: handleDeclineIncomingCall is defined later, but we need it in dependency array
   const handleDeclineIncomingCall = useCallback(async (callData) => {
     try {
       // Emit socket event to notify caller
@@ -156,10 +160,6 @@ const CallDashboard = () => {
     
     return isCallTypeAvailable ? incomingCall : null;
   }, [incomingCall, availability, callTypes]);
-
-  const showNotice = useCallback((message, tone = 'info') => {
-    setNotice({ message, tone });
-  }, []);
 
   const loadBalance = useCallback(async () => {
     setLoadingBalance(true);
