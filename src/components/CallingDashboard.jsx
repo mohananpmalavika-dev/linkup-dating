@@ -79,7 +79,8 @@ const normalizeCaller = (user) => {
 const CallDashboard = () => {
   const navigate = useNavigate();
   const { currentUser, apiCall } = useApp();
-  const { incomingCall, dismissIncomingCall } = useIncomingCall();
+  const userId = currentUser?.id || currentUser?.userId;
+  const { incomingCall, dismissIncomingCall } = useIncomingCall(userId);
   const [balance, setBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
   const [packages, setPackages] = useState(FALLBACK_CREDIT_PACKAGES);
@@ -273,7 +274,7 @@ const CallDashboard = () => {
     }
   };
 
-  const handleCallTypeChange = (type) => {
+  const handleCallTypeChange = async (type) => {
     const newCallTypes = { ...callTypes, [type]: !callTypes[type] };
     // Ensure at least one call type is selected
     if (!newCallTypes.voice && !newCallTypes.video) {
@@ -281,6 +282,24 @@ const CallDashboard = () => {
       return;
     }
     setCallTypes(newCallTypes);
+
+    // If user is currently available, update the preferences on the server
+    if (availability) {
+      try {
+        await apiCall('/calling/earnings/availability', 'POST', {
+          available: true,
+          availableFor: newCallTypes
+        });
+        showNotice('Call type preferences updated.', 'success');
+        // Reload market to reflect the change
+        await loadCallingMarket();
+      } catch (error) {
+        console.error('Failed to update call type preferences:', error);
+        showNotice('Could not update call type preferences.', 'error');
+        // Revert the change
+        setCallTypes(callTypes);
+      }
+    }
   };
 
   const handlePurchase = (pkg) => {
