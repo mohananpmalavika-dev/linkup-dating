@@ -98,78 +98,15 @@ const CallDashboard = () => {
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Define showNotice first since it's used by other callbacks
-  const showNotice = useCallback((message, tone = 'info') => {
-    setNotice({ message, tone });
-  }, []);
-
-  // Handle accepting incoming call request
-  const handleAcceptIncomingCall = useCallback(async (callData) => {
-    try {
-      // Emit socket event to notify caller
-      if (callData?.callId && callData?.fromUserId) {
-        realTimeService.socket?.emit('call:accept', {
-          callId: callData.callId,
-          matchId: callData.matchId,
-          targetUserId: callData.fromUserId
-        });
-      }
-
-      const response = await apiCall(`/calling/market/accept/${callData.requestId}`, 'POST');
-      if (response?.success) {
-        showNotice('Call accepted! Connecting...', 'success');
-        dismissIncomingCall();
-        
-        // Navigate to video call interface
-        const videoCallRoute = `/matches/${callData.matchId}/video`;
-        navigate(videoCallRoute, {
-          state: {
-            callMode: 'incoming',
-            autoAccepted: true,
-            incomingCall: callData,
-            returnPath: `/matches/${callData.matchId}/chat`
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error accepting call:', error);
-      showNotice(
-        error?.response?.data?.error || 'Failed to accept the call. Please try again.',
-        'error'
-      );
-    }
-  }, [apiCall, dismissIncomingCall, navigate, showNotice]);
-
-  // Handle declining incoming call request
-  const handleDeclineIncomingCall = useCallback(async (callData) => {
-    try {
-      // Emit socket event to notify caller
-      if (callData?.callId && callData?.fromUserId) {
-        realTimeService.socket?.emit('call:decline', {
-          callId: callData.callId,
-          matchId: callData.matchId,
-          targetUserId: callData.fromUserId
-        });
-      }
-
-      const response = await apiCall(`/calling/market/decline/${callData.requestId}`, 'POST');
-      if (response?.success) {
-        showNotice('Call request declined.', 'info');
-        dismissIncomingCall();
-      }
-    } catch (error) {
-      console.error('Error declining call:', error);
-      showNotice(
-        error?.response?.data?.error || 'Failed to decline the call.',
-        'error'
-      );
-    }
-  }, [apiCall, dismissIncomingCall, showNotice]);
-
   const normalizedPackages = useMemo(
     () => packages.map(normalizePackage),
     [packages]
   );
+
+  // Define showNotice callback
+  const showNotice = useCallback((message, tone = 'info') => {
+    setNotice({ message, tone });
+  }, []);
 
   // Filter incoming call based on user's call type availability
   const filteredIncomingCall = useMemo(() => {
@@ -435,6 +372,69 @@ const CallDashboard = () => {
     }
     await loadBalance();
     showNotice(`Coupon redeemed! ${creditsAdded} credits added to your account.`, 'success');
+  };
+
+  // Handle accepting incoming call request
+  const handleAcceptIncomingCall = async (callData) => {
+    try {
+      // Emit socket event to notify caller
+      if (callData?.callId && callData?.fromUserId) {
+        realTimeService.socket?.emit('call:accept', {
+          callId: callData.callId,
+          matchId: callData.matchId,
+          targetUserId: callData.fromUserId
+        });
+      }
+
+      const response = await apiCall(`/calling/market/accept/${callData.requestId}`, 'POST');
+      if (response?.success) {
+        showNotice('Call accepted! Connecting...', 'success');
+        dismissIncomingCall();
+        
+        // Navigate to video call interface
+        const videoCallRoute = `/matches/${callData.matchId}/video`;
+        navigate(videoCallRoute, {
+          state: {
+            callMode: 'incoming',
+            autoAccepted: true,
+            incomingCall: callData,
+            returnPath: `/matches/${callData.matchId}/chat`
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error accepting call:', error);
+      showNotice(
+        error?.response?.data?.error || 'Failed to accept the call. Please try again.',
+        'error'
+      );
+    }
+  };
+
+  // Handle declining incoming call request
+  const handleDeclineIncomingCall = async (callData) => {
+    try {
+      // Emit socket event to notify caller
+      if (callData?.callId && callData?.fromUserId) {
+        realTimeService.socket?.emit('call:decline', {
+          callId: callData.callId,
+          matchId: callData.matchId,
+          targetUserId: callData.fromUserId
+        });
+      }
+
+      const response = await apiCall(`/calling/market/decline/${callData.requestId}`, 'POST');
+      if (response?.success) {
+        showNotice('Call request declined.', 'info');
+        dismissIncomingCall();
+      }
+    } catch (error) {
+      console.error('Error declining call:', error);
+      showNotice(
+        error?.response?.data?.error || 'Failed to decline the call.',
+        'error'
+      );
+    }
   };
 
   return (
