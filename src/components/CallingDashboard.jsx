@@ -99,6 +99,32 @@ const CallDashboard = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Auto-decline incoming calls that don't match user's call type availability
+  // Note: handleDeclineIncomingCall is defined later, but we need it in dependency array
+  const handleDeclineIncomingCall = useCallback(async (callData) => {
+    try {
+      // Emit socket event to notify caller
+      if (callData?.callId && callData?.fromUserId) {
+        realTimeService.socket?.emit('call:decline', {
+          callId: callData.callId,
+          matchId: callData.matchId,
+          targetUserId: callData.fromUserId
+        });
+      }
+
+      const response = await apiCall(`/calling/market/decline/${callData.requestId}`, 'POST');
+      if (response?.success) {
+        showNotice('Call request declined.', 'info');
+        dismissIncomingCall();
+      }
+    } catch (error) {
+      console.error('Error declining call:', error);
+      showNotice(
+        error?.response?.data?.error || 'Failed to decline the call.',
+        'error'
+      );
+    }
+  }, [apiCall, dismissIncomingCall, showNotice]);
+
   useEffect(() => {
     if (!incomingCall || !availability) {
       return;
@@ -112,7 +138,7 @@ const CallDashboard = () => {
       console.log(`Auto-declining ${callType} call - user not available for this type`);
       handleDeclineIncomingCall(incomingCall);
     }
-  }, [incomingCall, availability, callTypes]);
+  }, [incomingCall, availability, callTypes, handleDeclineIncomingCall]);
 
   const normalizedPackages = useMemo(
     () => packages.map(normalizePackage),
@@ -426,31 +452,6 @@ const CallDashboard = () => {
     }
   };
 
-  // Handle declining incoming call request
-  const handleDeclineIncomingCall = async (callData) => {
-    try {
-      // Emit socket event to notify caller
-      if (callData?.callId && callData?.fromUserId) {
-        realTimeService.socket?.emit('call:decline', {
-          callId: callData.callId,
-          matchId: callData.matchId,
-          targetUserId: callData.fromUserId
-        });
-      }
-
-      const response = await apiCall(`/calling/market/decline/${callData.requestId}`, 'POST');
-      if (response?.success) {
-        showNotice('Call request declined.', 'info');
-        dismissIncomingCall();
-      }
-    } catch (error) {
-      console.error('Error declining call:', error);
-      showNotice(
-        error?.response?.data?.error || 'Failed to decline the call.',
-        'error'
-      );
-    }
-  };
 
   return (
     <div className="calling-dashboard">
