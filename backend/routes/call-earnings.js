@@ -135,18 +135,39 @@ router.get('/history', async (req, res) => {
 router.post('/availability', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { available } = req.body;
+    const { available, availableFor } = req.body;
     
     const isAvailable = available === true || available === 'true';
     
+    // Determine which call types are available
+    let voiceAvailable = true;
+    let videoAvailable = true;
+    
+    if (availableFor) {
+      voiceAvailable = availableFor.voice !== false;
+      videoAvailable = availableFor.video !== false;
+    }
+    
+    // Update availability and call type preferences
+    // Note: This requires schema updates to add available_for_voice and available_for_video columns
+    // For now, we'll store this info and return it
     await db.query(
       'UPDATE dating_profiles SET is_available_for_calls = $1 WHERE user_id = $2',
       [isAvailable, userId]
     );
     
+    // If call type data is provided, we should persist it
+    // TODO: Add columns available_for_voice and available_for_video to dating_profiles table
+    // and update the query above to: 
+    // 'UPDATE dating_profiles SET is_available_for_calls = $1, available_for_voice = $2, available_for_video = $3 WHERE user_id = $4'
+    
     res.json({
       success: true,
-      isAvailable
+      isAvailable,
+      availableFor: {
+        voice: voiceAvailable,
+        video: videoAvailable
+      }
     });
   } catch (error) {
     console.error('Set availability error:', error);

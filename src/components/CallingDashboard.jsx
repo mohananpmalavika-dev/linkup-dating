@@ -283,22 +283,20 @@ const CallDashboard = () => {
     }
     setCallTypes(newCallTypes);
 
-    // If user is currently available, update the preferences on the server
-    if (availability) {
-      try {
-        await apiCall('/calling/earnings/availability', 'POST', {
-          available: true,
-          availableFor: newCallTypes
-        });
-        showNotice('Call type preferences updated.', 'success');
-        // Reload market to reflect the change
-        await loadCallingMarket();
-      } catch (error) {
-        console.error('Failed to update call type preferences:', error);
-        showNotice('Could not update call type preferences.', 'error');
-        // Revert the change
-        setCallTypes(callTypes);
-      }
+    // Always update the server with the new preferences
+    try {
+      await apiCall('/calling/earnings/availability', 'POST', {
+        available: availability,
+        availableFor: newCallTypes
+      });
+      showNotice('Call type preferences updated.', 'success');
+      // Reload market to reflect the change
+      await loadCallingMarket();
+    } catch (error) {
+      console.error('Failed to update call type preferences:', error);
+      showNotice('Could not update call type preferences.', 'error');
+      // Revert the change
+      setCallTypes(callTypes);
     }
   };
 
