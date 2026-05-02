@@ -103,7 +103,44 @@ const CallDashboard = () => {
     setNotice({ message, tone });
   }, []);
 
-  // Auto-decline incoming calls that don't match user's call type availability
+  // Handle accepting incoming call request
+  const handleAcceptIncomingCall = useCallback(async (callData) => {
+    try {
+      // Emit socket event to notify caller
+      if (callData?.callId && callData?.fromUserId) {
+        realTimeService.socket?.emit('call:accept', {
+          callId: callData.callId,
+          matchId: callData.matchId,
+          targetUserId: callData.fromUserId
+        });
+      }
+
+      const response = await apiCall(`/calling/market/accept/${callData.requestId}`, 'POST');
+      if (response?.success) {
+        showNotice('Call accepted! Connecting...', 'success');
+        dismissIncomingCall();
+        
+        // Navigate to video call interface
+        const videoCallRoute = `/matches/${callData.matchId}/video`;
+        navigate(videoCallRoute, {
+          state: {
+            callMode: 'incoming',
+            autoAccepted: true,
+            incomingCall: callData,
+            returnPath: `/matches/${callData.matchId}/chat`
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error accepting call:', error);
+      showNotice(
+        error?.response?.data?.error || 'Failed to accept the call. Please try again.',
+        'error'
+      );
+    }
+  }, [apiCall, dismissIncomingCall, navigate, showNotice]);
+
+  // Handle declining incoming call request
   const handleDeclineIncomingCall = useCallback(async (callData) => {
     try {
       // Emit socket event to notify caller
@@ -128,21 +165,6 @@ const CallDashboard = () => {
       );
     }
   }, [apiCall, dismissIncomingCall, showNotice]);
-
-  useEffect(() => {
-    if (!incomingCall || !availability) {
-      return;
-    }
-
-    const callType = incomingCall.callType?.toLowerCase() || 'voice';
-    const isCallTypeAvailable = callType === 'voice' ? callTypes.voice : callTypes.video;
-
-    if (!isCallTypeAvailable) {
-      // Auto-decline this call since user is not available for this type
-      console.log(`Auto-declining ${callType} call - user not available for this type`);
-      handleDeclineIncomingCall(incomingCall);
-    }
-  }, [incomingCall, availability, callTypes, handleDeclineIncomingCall]);
 
   const normalizedPackages = useMemo(
     () => packages.map(normalizePackage),
@@ -414,44 +436,6 @@ const CallDashboard = () => {
     await loadBalance();
     showNotice(`Coupon redeemed! ${creditsAdded} credits added to your account.`, 'success');
   };
-
-  // Handle accepting incoming call request
-  const handleAcceptIncomingCall = async (callData) => {
-    try {
-      // Emit socket event to notify caller
-      if (callData?.callId && callData?.fromUserId) {
-        realTimeService.socket?.emit('call:accept', {
-          callId: callData.callId,
-          matchId: callData.matchId,
-          targetUserId: callData.fromUserId
-        });
-      }
-
-      const response = await apiCall(`/calling/market/accept/${callData.requestId}`, 'POST');
-      if (response?.success) {
-        showNotice('Call accepted! Connecting...', 'success');
-        dismissIncomingCall();
-        
-        // Navigate to video call interface
-        const videoCallRoute = `/matches/${callData.matchId}/video`;
-        navigate(videoCallRoute, {
-          state: {
-            callMode: 'incoming',
-            autoAccepted: true,
-            incomingCall: callData,
-            returnPath: `/matches/${callData.matchId}/chat`
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Error accepting call:', error);
-      showNotice(
-        error?.response?.data?.error || 'Failed to accept the call. Please try again.',
-        'error'
-      );
-    }
-  };
-
 
   return (
     <div className="calling-dashboard">
