@@ -114,7 +114,7 @@ async function syncModelsInOrder(sequelize, dbModels, logger) {
       try {
         const model = dbModels[modelName];
         if (model && model.sync) {
-          await model.sync({ alter: true });
+          await model.sync({ alter: { drop: false } });
           logger.info(`✓ Synced model: ${modelName}`);
         }
       } catch (err) {
