@@ -11,6 +11,7 @@ class RealTimeService {
     this.socket = null;
     this.userId = null;
     this.listeners = new Map(); // { eventName: [callbacks] }
+    this.socketListeners = new Set(); // Track which events have socket listeners registered
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 1000;
@@ -45,6 +46,9 @@ class RealTimeService {
         this.socket.on('connect', () => {
           console.log('Connected to real-time server');
           this.reconnectAttempts = 0;
+
+          // Register all pending socket listeners for subscribed events
+          this._registerAllSocketListeners();
 
           // Send online status
           this.socket.emit('user_online', userId, deviceInfo);
@@ -99,18 +103,16 @@ class RealTimeService {
    * Subscribe to event
    */
   on(eventName, callback) {
+    // Add to listeners map
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, []);
-
-      // Set up socket listener if not already done
-      if (this.socket && !this.socket._events?.[eventName]) {
-        this.socket.on(eventName, (data) => {
-          this._emit(eventName, data);
-        });
-      }
     }
-
     this.listeners.get(eventName).push(callback);
+
+    // Register socket listener if socket is connected
+    if (this.socket?.connected) {
+      this._registerSocketListener(eventName);
+    }
 
     // Return unsubscribe function
     return () => this.off(eventName, callback);
@@ -125,6 +127,39 @@ class RealTimeService {
       const index = callbacks.indexOf(callback);
       if (index > -1) {
         callbacks.splice(index, 1);
+      }
+    }
+  }
+
+  /**
+   * Register a socket listener for a specific event
+   */
+  _registerSocketListener(eventName) {
+    if (!this.socket || this.socketListeners.has(eventName)) {
+      return; // Already registered or no socket
+    }
+
+    this.socketListeners.add(eventName);
+    console.log(`Registering socket listener for event: ${eventName}`);
+    
+    this.socket.on(eventName, (data) => {
+      console.log(`Received event: ${eventName}`, data);
+      this._emit(eventName, data);
+    });
+  }
+
+  /**
+   * Register all socket listeners for events that have active subscribers
+   */
+  _registerAllSocketListeners() {
+    if (!this.socket?.connected) {
+      return;
+    }
+
+    // Register listeners for all events that have callbacks
+    for (const eventName of this.listeners.keys()) {
+      if (!this.socketListeners.has(eventName)) {
+        this._registerSocketListener(eventName);
       }
     }
   }

@@ -189,6 +189,10 @@ io.on('connection', (socket) => {
     socket.data.userId = normalizeUserKey(userId);
     const wasOffline = markUserOnline(userId, socket.id);
 
+    // Join user-specific room for targeted notifications (calls, messages, etc)
+    socket.join(`user_${userId}`);
+    console.log(`User ${userId} joined room: user_${userId}`);
+
     if (wasOffline) {
       io.emit('user_status', { userId, online: true });
     }

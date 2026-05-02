@@ -268,8 +268,9 @@ router.post('/request', async (req, res) => {
     const callerName = callerInfo.first_name || 'Someone';
     
     // Emit real-time notification to receiver via Socket.io
-    if (req.io) {
-      req.io.to(`user_${targetUserId}`).emit('incoming_call_request', {
+    const ioInstance = req.app?.io;
+    if (ioInstance) {
+      ioInstance.to(`user_${targetUserId}`).emit('incoming_call_request', {
         requestId,
         sessionId,
         callerId,

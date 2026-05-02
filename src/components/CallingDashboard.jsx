@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import callWalletService from '../services/callWalletService';
+import realTimeService from '../services/realTimeService';
 import useIncomingCall from '../hooks/useIncomingCall';
 import CouponRedemption from './CouponRedemption';
 import RazorpayPayment from './RazorpayPayment';
@@ -157,6 +158,38 @@ const CallDashboard = () => {
     loadCallingMarket();
     loadAvailability();
   }, [loadAvailability, loadBalance, loadCallingMarket, loadPackages]);
+
+  // Initialize real-time connection for incoming calls
+  useEffect(() => {
+    if (!currentUser?.id && !currentUser?.userId) {
+      console.warn('CallingDashboard: No user ID available');
+      return;
+    }
+
+    const userId = currentUser.id || currentUser.userId;
+    console.log('CallingDashboard: Connecting to real-time service for user:', userId);
+
+    const connectToRealTime = async () => {
+      try {
+        await import('../services/realTimeService').then(module => {
+          const realTimeService = module.default;
+          if (!realTimeService.socket?.connected) {
+            realTimeService.connect(userId, { device: 'web' }).catch(err => {
+              console.error('Failed to connect to real-time service:', err);
+            });
+          }
+        });
+      } catch (error) {
+        console.error('Error initializing real-time connection:', error);
+      }
+    };
+
+    connectToRealTime();
+
+    return () => {
+      // Don't disconnect on unmount - user may navigate but want to stay connected
+    };
+  }, [currentUser?.id, currentUser?.userId]);
 
   const handleToggleAvailability = async () => {
     if (!currentUser || updatingAvailability) {
