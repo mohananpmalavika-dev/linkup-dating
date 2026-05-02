@@ -5,8 +5,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import callWalletService from '../services/callWalletService';
+import useIncomingCall from '../hooks/useIncomingCall';
 import CouponRedemption from './CouponRedemption';
 import RazorpayPayment from './RazorpayPayment';
+import IncomingCallNotification from './IncomingCallNotification';
 import '../styles/CallingDashboard.css';
 
 const ESTIMATED_CALL_MINUTES = 5;
@@ -85,6 +87,9 @@ const CallDashboard = () => {
   const [notice, setNotice] = useState(null);
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+
+  // Incoming call notification
+  const { incomingCall, dismissIncomingCall } = useIncomingCall(currentUser?.id || currentUser?.userId, true);
 
   const normalizedPackages = useMemo(
     () => packages.map(normalizePackage),
@@ -266,6 +271,42 @@ const CallDashboard = () => {
     }
     await loadBalance();
     showNotice(`Coupon redeemed! ${creditsAdded} credits added to your account.`, 'success');
+  };
+
+  // Handle accepting incoming call request
+  const handleAcceptIncomingCall = async (callData) => {
+    try {
+      const response = await apiCall(`/calling/market/accept/${callData.requestId}`, 'POST');
+      if (response?.success) {
+        showNotice('Call accepted! Connecting...', 'success');
+        dismissIncomingCall();
+        // Here you would redirect to the actual call interface
+        // For now, just show success message
+      }
+    } catch (error) {
+      console.error('Error accepting call:', error);
+      showNotice(
+        error?.response?.data?.error || 'Failed to accept the call. Please try again.',
+        'error'
+      );
+    }
+  };
+
+  // Handle declining incoming call request
+  const handleDeclineIncomingCall = async (callData) => {
+    try {
+      const response = await apiCall(`/calling/market/decline/${callData.requestId}`, 'POST');
+      if (response?.success) {
+        showNotice('Call request declined.', 'info');
+        dismissIncomingCall();
+      }
+    } catch (error) {
+      console.error('Error declining call:', error);
+      showNotice(
+        error?.response?.data?.error || 'Failed to decline the call.',
+        'error'
+      );
+    }
   };
 
   return (
@@ -485,6 +526,13 @@ const CallDashboard = () => {
         onClose={() => setShowPaymentModal(false)}
         onSuccess={handlePaymentSuccess}
         onError={handlePaymentError}
+      />
+
+      <IncomingCallNotification
+        incomingCall={incomingCall}
+        onDismiss={dismissIncomingCall}
+        onAccept={handleAcceptIncomingCall}
+        onDecline={handleDeclineIncomingCall}
       />
     </div>
   );

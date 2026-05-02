@@ -256,6 +256,33 @@ router.post('/request', async (req, res) => {
       VALUES ($1, $2, $3, $4, $5, 'requested', NOW())
     `, [sessionId, callerId, targetUserId, callTypeFinal, rate]);
     
+    // Get caller profile info for notification
+    const callerResult = await db.query(`
+      SELECT u.id, dp.first_name, dp.age
+      FROM users u
+      LEFT JOIN dating_profiles dp ON dp.user_id = u.id
+      WHERE u.id = $1
+    `, [callerId]);
+    
+    const callerInfo = callerResult.rows[0] || {};
+    const callerName = callerInfo.first_name || 'Someone';
+    
+    // Emit real-time notification to receiver via Socket.io
+    if (req.io) {
+      req.io.to(`user_${targetUserId}`).emit('incoming_call_request', {
+        requestId,
+        sessionId,
+        callerId,
+        callerName,
+        callerAge: callerInfo.age,
+        callType: callTypeFinal,
+        ratePerMinute: rate,
+        estimatedCost,
+        expiresAt: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
+        receivedAt: new Date().toISOString()
+      });
+    }
+    
     res.json({
       success: true,
       requestId,

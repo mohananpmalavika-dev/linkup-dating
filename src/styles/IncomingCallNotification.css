@@ -1,0 +1,296 @@
+/**
+ * Incoming Call Notification Styles
+ */
+
+.incoming-call-notification {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.incoming-call-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+}
+
+.incoming-call-modal {
+  position: relative;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 90%;
+  padding: 24px;
+  animation: modalSlideUp 0.3s ease-out;
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.call-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 12px;
+}
+
+.call-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover:not(:disabled) {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.close-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.call-details {
+  background: #f8f8f8;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.caller-info {
+  margin-bottom: 16px;
+}
+
+.caller-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.caller-age {
+  color: #666;
+  font-weight: normal;
+}
+
+.call-type-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.call-terms {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.term-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.term-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.term-value {
+  color: #1a1a1a;
+  font-weight: 600;
+}
+
+.expiry-timer {
+  color: #ff6b6b;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+}
+
+.call-note {
+  margin: 0;
+  font-size: 12px;
+  color: #666;
+  background: rgba(255, 107, 107, 0.05);
+  padding: 8px;
+  border-radius: 6px;
+  border-left: 3px solid #ff6b6b;
+}
+
+.call-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-decline,
+.btn-accept {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.btn-decline {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.btn-decline:hover:not(:disabled) {
+  background: #d0d0d0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.btn-accept {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.btn-accept:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+}
+
+.btn-decline:disabled,
+.btn-accept:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+  .incoming-call-modal {
+    width: 95%;
+    padding: 20px;
+  }
+
+  .call-title {
+    font-size: 18px;
+  }
+
+  .call-actions {
+    flex-direction: column;
+  }
+
+  .btn-decline,
+  .btn-accept {
+    width: 100%;
+    min-width: unset;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .incoming-call-modal {
+    background: #1a1a1a;
+    color: #fff;
+  }
+
+  .call-title {
+    color: #fff;
+  }
+
+  .call-details {
+    background: #2a2a2a;
+  }
+
+  .caller-name {
+    color: #fff;
+  }
+
+  .caller-age {
+    color: #aaa;
+  }
+
+  .term-label {
+    color: #aaa;
+  }
+
+  .term-value {
+    color: #fff;
+  }
+
+  .close-btn {
+    color: #666;
+  }
+
+  .close-btn:hover:not(:disabled) {
+    background: #2a2a2a;
+    color: #fff;
+  }
+
+  .btn-decline {
+    background: #333;
+    color: #fff;
+  }
+
+  .btn-decline:hover:not(:disabled) {
+    background: #444;
+  }
+
+  .call-note {
+    background: rgba(255, 107, 107, 0.1);
+    color: #ff9b9b;
+  }
+}

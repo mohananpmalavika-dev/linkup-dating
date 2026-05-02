@@ -109,6 +109,13 @@ app.use((req, res, next) => {
   next();
 });
 
+// Attach socket.io instance to app for use in routes
+app.use((req, res, next) => {
+  req.app.io = io;
+  req.app.emitToUser = emitToUser;
+  next();
+});
+
 // Apply general API rate limiting
 app.use('/api/', apiLimiter);
 
