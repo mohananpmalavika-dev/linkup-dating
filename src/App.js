@@ -307,22 +307,37 @@ const CallVideoRoute = ({
   const location = useLocation();
   const userId = location.pathname.match(/^\/calls\/([^/]+)\/video$/)?.[1] || null;
   
-  // Create a match-like object from incomingCall data for direct calls
+  // Create a match-like object from call data for direct calls
   const createMatchFromCall = (callData, targetUserId) => {
-    if (!callData) {
-      return null;
+    // If we have callData, use it; otherwise create a minimal profile from userId
+    if (callData) {
+      return {
+        userId: targetUserId || callData.fromUserId || callData.targetUserId,
+        firstName: callData.fromUserName || callData.callerName || callData.userName || 'Caller',
+        matchId: null, // No match ID for direct calls
+        otherUserPhoto: callData.photoUrl,
+        photos: callData.photoUrl ? [callData.photoUrl] : []
+      };
     }
     
-    return {
-      userId: targetUserId || callData.fromUserId,
-      firstName: callData.fromUserName || callData.callerName || 'Caller',
-      matchId: null, // No match ID for direct calls
-      otherUserPhoto: callData.photoUrl,
-      photos: callData.photoUrl ? [callData.photoUrl] : []
-    };
+    // Fallback: create a minimal match object from userId alone
+    // This handles the case where we're navigating directly to /calls/:userId/video
+    if (targetUserId) {
+      return {
+        userId: targetUserId,
+        firstName: 'Caller',
+        matchId: null,
+        otherUserPhoto: null,
+        photos: []
+      };
+    }
+    
+    return null;
   };
 
-  const matchFromCall = createMatchFromCall(location.state?.incomingCall, userId);
+  // Accept both incomingCall and callData keys since caller and receiver use different keys
+  const callData = location.state?.incomingCall || location.state?.callData;
+  const matchFromCall = createMatchFromCall(callData, userId);
 
   return (
     <VideoDating
@@ -330,8 +345,8 @@ const CallVideoRoute = ({
       matchedProfile={matchFromCall}
       callMode={location.state?.callMode || 'incoming'}
       autoAccepted={Boolean(location.state?.autoAccepted)}
-      callerName={location.state?.incomingCall?.fromUserName || location.state?.callerName || ''}
-      incomingCall={location.state?.incomingCall || null}
+      callerName={callData?.fromUserName || callData?.callerName || callData?.userName || location.state?.callerName || 'Caller'}
+      incomingCall={callData || null}
       startImmediately={location.state?.startImmediately !== false}
       focusSchedule={Boolean(location.state?.focusSchedule)}
       scheduledVideoDateId={location.state?.scheduledVideoDateId || null}
