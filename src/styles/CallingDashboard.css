@@ -187,6 +187,65 @@
   opacity: 0.56;
 }
 
+.call-types-selector {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f3f4f6;
+  border-radius: 8px;
+}
+
+.call-types-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 10px;
+}
+
+.call-types-options {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.call-type-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.call-type-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #667eea;
+}
+
+.call-type-option input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.call-type-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.call-type-icon {
+  font-size: 16px;
+}
+
+.call-types-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
 .credits-section,
 .market-section,
 .pricing-section {
@@ -399,6 +458,30 @@
   color: #475467;
 }
 
+.call-type-available {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1.5px solid;
+}
+
+.call-type-available.voice {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  color: #1e40af;
+}
+
+.call-type-available.video {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: #8b5cf6;
+  color: #5b21b6;
+}
+
 .caller-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -534,6 +617,15 @@
   .availability-toggle,
   .btn-refresh {
     width: 100%;
+  }
+
+  .call-types-selector {
+    margin-top: 12px;
+  }
+
+  .call-types-options {
+    flex-direction: column;
+    gap: 10px;
   }
 
   .packages-grid,

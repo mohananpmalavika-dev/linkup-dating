@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from '../router';
 import { useApp } from '../contexts/AppContext';
 import callWalletService from '../services/callWalletService';
 import realTimeService from '../services/realTimeService';
@@ -63,6 +64,10 @@ const normalizeCaller = (user) => {
     photoUrl: user.photoUrl || user.photo_url,
     callRating: toNumber(user.callRating),
     totalCalls: toNumber(user.totalCalls),
+    availableFor: {
+      voice: user.availableFor?.voice !== false,
+      video: user.availableFor?.video !== false
+    },
     rates: {
       voice: toNumber(user.voiceRate ?? rates.voice, 5),
       video: toNumber(user.videoRate ?? rates.video, 10)
@@ -72,6 +77,7 @@ const normalizeCaller = (user) => {
 };
 
 const CallDashboard = () => {
+  const navigate = useNavigate();
   const { currentUser, apiCall } = useApp();
   const [balance, setBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
@@ -81,6 +87,7 @@ const CallDashboard = () => {
   const [loadingMarket, setLoadingMarket] = useState(false);
   const [marketEnabled, setMarketEnabled] = useState(true);
   const [availability, setAvailability] = useState(false);
+  const [callTypes, setCallTypes] = useState({ voice: true, video: true }); // Track call types user is available for
   const [loadingAvailability, setLoadingAvailability] = useState(true);
   const [updatingAvailability, setUpdatingAvailability] = useState(false);
   const [activeCallAction, setActiveCallAction] = useState(null);
@@ -89,13 +96,38 @@ const CallDashboard = () => {
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Incoming call notification
-  const { incomingCall, dismissIncomingCall } = useIncomingCall(currentUser?.id || currentUser?.userId, true);
+  // Auto-decline incoming calls that don't match user's call type availability
+  useEffect(() => {
+    if (!incomingCall || !availability) {
+      return;
+    }
+
+    const callType = incomingCall.callType?.toLowerCase() || 'voice';
+    const isCallTypeAvailable = callType === 'voice' ? callTypes.voice : callTypes.video;
+
+    if (!isCallTypeAvailable) {
+      // Auto-decline this call since user is not available for this type
+      console.log(`Auto-declining ${callType} call - user not available for this type`);
+      handleDeclineIncomingCall(incomingCall);
+    }
+  }, [incomingCall, availability, callTypes]);
 
   const normalizedPackages = useMemo(
     () => packages.map(normalizePackage),
     [packages]
   );
+
+  // Filter incoming call based on user's call type availability
+  const filteredIncomingCall = useMemo(() => {
+    if (!incomingCall || !availability) {
+      return null;
+    }
+    
+    const callType = incomingCall.callType?.toLowerCase() || 'voice';
+    const isCallTypeAvailable = callType === 'voice' ? callTypes.voice : callTypes.video;
+    
+    return isCallTypeAvailable ? incomingCall : null;
+  }, [incomingCall, availability, callTypes]);
 
   const showNotice = useCallback((message, tone = 'info') => {
     setNotice({ message, tone });
@@ -145,6 +177,11 @@ const CallDashboard = () => {
     try {
       const data = await apiCall('/calling/earnings/availability', 'GET');
       setAvailability(Boolean(data.isAvailable));
+      // Load call type preferences
+      setCallTypes({
+        voice: data.availableFor?.voice !== false,
+        video: data.availableFor?.video !== false
+      });
     } catch (error) {
       console.error('Failed to load availability:', error);
     } finally {
@@ -213,12 +250,16 @@ const CallDashboard = () => {
     setUpdatingAvailability(true);
     try {
       const data = await apiCall('/calling/earnings/availability', 'POST', {
-        available: nextAvailability
+        available: nextAvailability,
+        availableFor: nextAvailability ? callTypes : { voice: false, video: false }
       });
       setAvailability(Boolean(data.isAvailable));
+      const typesList = nextAvailability && callTypes.voice && callTypes.video ? 'voice and video' : 
+                       nextAvailability && callTypes.voice ? 'voice only' :
+                       nextAvailability && callTypes.video ? 'video only' : '';
       showNotice(
         data.isAvailable
-          ? 'You are available for incoming paid calls.'
+          ? `You are available for incoming ${typesList} calls.`
           : 'You are offline for paid calls.',
         'success'
       );
@@ -229,6 +270,16 @@ const CallDashboard = () => {
     } finally {
       setUpdatingAvailability(false);
     }
+  };
+
+  const handleCallTypeChange = (type) => {
+    const newCallTypes = { ...callTypes, [type]: !callTypes[type] };
+    // Ensure at least one call type is selected
+    if (!newCallTypes.voice && !newCallTypes.video) {
+      showNotice('You must select at least one call type.', 'warning');
+      return;
+    }
+    setCallTypes(newCallTypes);
   };
 
   const handlePurchase = (pkg) => {
@@ -322,12 +373,30 @@ const CallDashboard = () => {
   // Handle accepting incoming call request
   const handleAcceptIncomingCall = async (callData) => {
     try {
+      // Emit socket event to notify caller
+      if (callData?.callId && callData?.fromUserId) {
+        realTimeService.socket?.emit('call:accept', {
+          callId: callData.callId,
+          matchId: callData.matchId,
+          targetUserId: callData.fromUserId
+        });
+      }
+
       const response = await apiCall(`/calling/market/accept/${callData.requestId}`, 'POST');
       if (response?.success) {
         showNotice('Call accepted! Connecting...', 'success');
         dismissIncomingCall();
-        // Here you would redirect to the actual call interface
-        // For now, just show success message
+        
+        // Navigate to video call interface
+        const videoCallRoute = `/matches/${callData.matchId}/video`;
+        navigate(videoCallRoute, {
+          state: {
+            callMode: 'incoming',
+            autoAccepted: true,
+            incomingCall: callData,
+            returnPath: `/matches/${callData.matchId}/chat`
+          }
+        });
       }
     } catch (error) {
       console.error('Error accepting call:', error);
@@ -341,6 +410,15 @@ const CallDashboard = () => {
   // Handle declining incoming call request
   const handleDeclineIncomingCall = async (callData) => {
     try {
+      // Emit socket event to notify caller
+      if (callData?.callId && callData?.fromUserId) {
+        realTimeService.socket?.emit('call:decline', {
+          callId: callData.callId,
+          matchId: callData.matchId,
+          targetUserId: callData.fromUserId
+        });
+      }
+
       const response = await apiCall(`/calling/market/decline/${callData.requestId}`, 'POST');
       if (response?.success) {
         showNotice('Call request declined.', 'info');
@@ -408,6 +486,38 @@ const CallDashboard = () => {
               : 'Turn this on when you are ready to receive paid calls.'}
           </p>
         </div>
+
+        {availability && (
+          <div className="call-types-selector">
+            <div className="call-types-title">Available for:</div>
+            <div className="call-types-options">
+              <label className="call-type-option">
+                <input
+                  type="checkbox"
+                  checked={callTypes.voice}
+                  onChange={() => handleCallTypeChange('voice')}
+                  disabled={updatingAvailability}
+                />
+                <span className="call-type-label">
+                  <span className="call-type-icon">🎤</span> Voice Calls
+                </span>
+              </label>
+              <label className="call-type-option">
+                <input
+                  type="checkbox"
+                  checked={callTypes.video}
+                  onChange={() => handleCallTypeChange('video')}
+                  disabled={updatingAvailability}
+                />
+                <span className="call-type-label">
+                  <span className="call-type-icon">📹</span> Video Calls
+                </span>
+              </label>
+            </div>
+            <p className="call-types-hint">Callers will only see you for the types you select above.</p>
+          </div>
+        )}
+
         <button
           type="button"
           className={`availability-toggle ${availability ? 'active' : ''}`}
@@ -488,6 +598,8 @@ const CallDashboard = () => {
                   <h3>{user.name}{user.age ? `, ${user.age}` : ''}</h3>
                   <p className="caller-bio">{user.bio}</p>
                   <div className="caller-tags">
+                    {user.availableFor?.voice && <span className="call-type-available voice">🎤 Voice</span>}
+                    {user.availableFor?.video && <span className="call-type-available video">📹 Video</span>}
                     <span className="caller-rate">Voice INR {user.rates.voice}/min</span>
                     <span className="caller-rate video-rate">Video INR {user.rates.video}/min</span>
                     {user.interests.slice(0, 2).map((tag, i) => (
@@ -575,7 +687,7 @@ const CallDashboard = () => {
       />
 
       <IncomingCallNotification
-        incomingCall={incomingCall}
+        incomingCall={filteredIncomingCall}
         onDismiss={dismissIncomingCall}
         onAccept={handleAcceptIncomingCall}
         onDecline={handleDeclineIncomingCall}
