@@ -6,7 +6,9 @@ const pool = new Pool(
   process.env.DATABASE_URL
     ? {
         connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false }
+        ssl: process.env.NODE_ENV === 'production' 
+          ? { rejectUnauthorized: false }
+          : false
       }
     : {
         host: process.env.DB_HOST || 'localhost',
@@ -14,7 +16,7 @@ const pool = new Pool(
         database: process.env.DB_NAME || 'linkup_dating',
         user: process.env.DB_USER || 'postgres',
         password: process.env.DB_PASSWORD || 'postgres',
-        ssl: { rejectUnauthorized: false }
+        ssl: false
       }
 );
 
@@ -1379,25 +1381,35 @@ await client.query(`
       END $$;
     `);
 
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_video_dates_match_id ON video_dates(match_id);
-      CREATE INDEX IF NOT EXISTS idx_video_dates_status ON video_dates(status);
-      CREATE INDEX IF NOT EXISTS idx_video_dates_scheduled_at ON video_dates(scheduled_at);
-      CREATE INDEX IF NOT EXISTS idx_video_dates_session_type ON video_dates(session_type);
-      CREATE INDEX IF NOT EXISTS idx_video_dates_user_1 ON video_dates(user_id_1);
-      CREATE INDEX IF NOT EXISTS idx_video_dates_user_2 ON video_dates(user_id_2);
-      CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id);
-      CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status);
-      CREATE INDEX IF NOT EXISTS idx_user_reward_balances_user_id ON user_reward_balances(user_id);
-      CREATE INDEX IF NOT EXISTS idx_profile_boosts_user_id ON profile_boosts(user_id);
-      CREATE INDEX IF NOT EXISTS idx_profile_boosts_expires_at ON profile_boosts(boost_expires_at);
-      CREATE INDEX IF NOT EXISTS idx_date_proposals_match_id ON date_proposals(match_id);
-      CREATE INDEX IF NOT EXISTS idx_date_proposals_proposer_id ON date_proposals(proposer_id);
-      CREATE INDEX IF NOT EXISTS idx_date_proposals_recipient_id ON date_proposals(recipient_id);
-      CREATE INDEX IF NOT EXISTS idx_date_proposals_status ON date_proposals(status);
-      CREATE INDEX IF NOT EXISTS idx_date_completion_feedback_proposal_id ON date_completion_feedback(date_proposal_id);
-      CREATE INDEX IF NOT EXISTS idx_date_completion_feedback_rater_id ON date_completion_feedback(rater_user_id);
-    `);
+    // Create indexes with error handling
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_video_dates_match_id ON video_dates(match_id)',
+      'CREATE INDEX IF NOT EXISTS idx_video_dates_status ON video_dates(status)',
+      'CREATE INDEX IF NOT EXISTS idx_video_dates_scheduled_at ON video_dates(scheduled_at)',
+      'CREATE INDEX IF NOT EXISTS idx_video_dates_session_type ON video_dates(session_type)',
+      'CREATE INDEX IF NOT EXISTS idx_video_dates_user_1 ON video_dates(user_id_1)',
+      'CREATE INDEX IF NOT EXISTS idx_video_dates_user_2 ON video_dates(user_id_2)',
+      'CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions(status)',
+      'CREATE INDEX IF NOT EXISTS idx_user_reward_balances_user_id ON user_reward_balances(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_profile_boosts_user_id ON profile_boosts(user_id)',
+      'CREATE INDEX IF NOT EXISTS idx_profile_boosts_expires_at ON profile_boosts(boost_expires_at)',
+      'CREATE INDEX IF NOT EXISTS idx_date_proposals_match_id ON date_proposals(match_id)',
+      'CREATE INDEX IF NOT EXISTS idx_date_proposals_proposer_id ON date_proposals(proposer_id)',
+      'CREATE INDEX IF NOT EXISTS idx_date_proposals_recipient_id ON date_proposals(recipient_id)',
+      'CREATE INDEX IF NOT EXISTS idx_date_proposals_status ON date_proposals(status)',
+      'CREATE INDEX IF NOT EXISTS idx_date_completion_feedback_proposal_id ON date_completion_feedback(date_proposal_id)',
+      'CREATE INDEX IF NOT EXISTS idx_date_completion_feedback_rater_id ON date_completion_feedback(rater_user_id)'
+    ];
+
+    for (const indexQuery of indexes) {
+      try {
+        await client.query(indexQuery);
+      } catch (indexErr) {
+        // Log but don't fail on index creation errors - the table/column might not exist yet
+        console.warn(`Index creation warning: ${indexErr.message}`);
+      }
+    }
     // Create chatrooms table for group chats
     await client.query(`
       CREATE TABLE IF NOT EXISTS chatrooms (

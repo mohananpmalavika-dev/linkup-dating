@@ -16,6 +16,11 @@ const ensureChatroomMemberCompatibility = () => {
       ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'active',
       ADD COLUMN IF NOT EXISTS left_at TIMESTAMP;
 
+      ALTER TABLE chatroom_members
+      ALTER COLUMN joined_at SET DEFAULT CURRENT_TIMESTAMP,
+      ALTER COLUMN role SET DEFAULT 'member',
+      ALTER COLUMN status SET DEFAULT 'active';
+
       UPDATE chatroom_members
       SET joined_at = COALESCE(joined_at, CURRENT_TIMESTAMP),
           role = COALESCE(role, 'member'),
@@ -485,42 +490,66 @@ router.post('/:chatroomId/messages', async (req, res) => {
     }
 
     // Verify user is a member
-    const memberCheck = await db.query(
-      'SELECT * FROM chatroom_members WHERE chatroom_id = $1 AND user_id = $2',
-      [chatroomId, userId]
-    );
+    let memberCheck;
+    try {
+      memberCheck = await db.query(
+        'SELECT * FROM chatroom_members WHERE chatroom_id = $1 AND user_id = $2',
+        [chatroomId, userId]
+      );
+    } catch (dbErr) {
+      console.error('Chatroom member check error:', dbErr.message);
+      return res.status(500).json({ error: 'Failed to verify chatroom membership', details: dbErr.message });
+    }
 
     if (memberCheck.rows.length === 0) {
       return res.status(403).json({ error: 'Not a member of this chatroom' });
     }
 
     // Insert message
-    const result = await db.query(
-      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type, created_at)
-       VALUES ($1, $2, $3, 'text', NOW())
-       RETURNING *`,
-      [chatroomId, userId, message]
-    );
+    let result;
+    try {
+      result = await db.query(
+        `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type, created_at)
+         VALUES ($1, $2, $3, 'text', NOW())
+         RETURNING *`,
+        [chatroomId, userId, message]
+      );
+    } catch (insertErr) {
+      console.error('Message insert error:', insertErr.message);
+      return res.status(500).json({ error: 'Failed to insert message', details: insertErr.message });
+    }
 
     // Update chatroom updated_at
-    await db.query(
-      `UPDATE chatrooms SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-      [chatroomId]
-    );
+    try {
+      await db.query(
+        `UPDATE chatrooms SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [chatroomId]
+      );
+    } catch (updateErr) {
+      console.error('Chatroom update error:', updateErr.message);
+      // Don't fail the request if update fails
+    }
 
     // Get message details with user info
-    const messageResult = await db.query(
-      `SELECT cm.*,
-              COALESCE(NULLIF(dp.first_name, ''), dp.username, SPLIT_PART(u.email, '@', 1), 'Member') AS first_name,
-              dp.username,
-              profile_photos.photo_url
-       FROM chatroom_messages cm
-       LEFT JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
-       LEFT JOIN users u ON cm.from_user_id = u.id
-       LEFT JOIN profile_photos ON cm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
-       WHERE cm.id = $1`,
-      [result.rows[0].id]
-    );
+    let messageResult;
+    try {
+      messageResult = await db.query(
+        `SELECT cm.*,
+                COALESCE(NULLIF(dp.first_name, ''), dp.username, SPLIT_PART(u.email, '@', 1), 'Member') AS first_name,
+                dp.username,
+                profile_photos.photo_url
+         FROM chatroom_messages cm
+         LEFT JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
+         LEFT JOIN users u ON cm.from_user_id = u.id
+         LEFT JOIN profile_photos ON cm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
+         WHERE cm.id = $1`,
+        [result.rows[0].id]
+      );
+    } catch (fetchErr) {
+      console.error('Message fetch error:', fetchErr.message);
+      // Return the basic message if fetching details fails
+      messageResult = { rows: [result.rows[0]] };
+    }
 
     // Emit via WebSocket if available
     if (req.io) {
@@ -529,8 +558,9 @@ router.post('/:chatroomId/messages', async (req, res) => {
 
     res.status(201).json(messageResult.rows[0]);
   } catch (err) {
-    console.error('Send message error:', err);
-    res.status(500).json({ error: 'Failed to send message' });
+    console.error('Send message error:', err.message || err);
+    console.error('Full error:', err);
+    res.status(500).json({ error: 'Failed to send message', details: err.message });
   }
 });
 
