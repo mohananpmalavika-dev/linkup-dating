@@ -57,31 +57,46 @@ const IncomingCallNotification = ({
 
   const handleAccept = async () => {
     setResponding(true);
+    const timeoutId = setTimeout(() => {
+      console.warn('Accept call timed out - resetting responding state');
+      setResponding(false);
+    }, 15000); // 15 second timeout
+
     try {
-      await onAccept?.(incomingCall);
+      console.log('IncomingCallNotification: Accepting call', incomingCall);
+      const result = await onAccept?.(incomingCall);
+      console.log('IncomingCallNotification: Accept result:', result);
     } catch (error) {
-      console.error('Error accepting call:', error);
+      console.error('IncomingCallNotification: Error accepting call:', error);
     } finally {
+      clearTimeout(timeoutId);
       setResponding(false);
     }
   };
 
   const handleDecline = async () => {
     setResponding(true);
+    const timeoutId = setTimeout(() => {
+      console.warn('Decline call timed out - resetting responding state');
+      setResponding(false);
+    }, 15000); // 15 second timeout
+
     try {
-      await onDecline?.(incomingCall);
+      console.log('IncomingCallNotification: Declining call', incomingCall);
+      const result = await onDecline?.(incomingCall);
+      console.log('IncomingCallNotification: Decline result:', result);
       onDismiss?.();
     } catch (error) {
-      console.error('Error declining call:', error);
+      console.error('IncomingCallNotification: Error declining call:', error);
     } finally {
+      clearTimeout(timeoutId);
       setResponding(false);
     }
   };
 
   return (
-    <div className="incoming-call-notification">
-      <div className="incoming-call-overlay" onClick={onDismiss}></div>
-      <div className="incoming-call-modal">
+    <div className="incoming-call-notification" onClick={onDismiss}>
+      <div className="incoming-call-modal" onClick={(e) => e.stopPropagation()}>
         <div className="call-header">
           <h2 className="call-title">
             {callTypeLabel} Call Request

@@ -12,7 +12,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
   animation: slideIn 0.3s ease-out;
+  cursor: pointer;
 }
 
 @keyframes slideIn {
@@ -26,19 +29,9 @@
   }
 }
 
-.incoming-call-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
-  cursor: pointer;
-}
-
 .incoming-call-modal {
   position: relative;
+  z-index: 1;
   background: white;
   border-radius: 16px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
@@ -46,6 +39,8 @@
   width: 90%;
   padding: 24px;
   animation: modalSlideUp 0.3s ease-out;
+  pointer-events: auto;
+  cursor: auto;
 }
 
 @keyframes modalSlideUp {
