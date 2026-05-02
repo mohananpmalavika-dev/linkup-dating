@@ -301,7 +301,8 @@ const MatchVideoRoute = ({
 
 // Route for direct calls initiated from CallingDashboard (not matched-based)
 const CallVideoRoute = ({
-  onNavigateToPath
+  onNavigateToPath,
+  onOpenMessages
 }) => {
   const location = useLocation();
   const userId = location.pathname.match(/^\/calls\/([^/]+)\/video$/)?.[1] || null;
