@@ -1,0 +1,38 @@
+.dating-app {
+  --dating-nav-base-height: 65px;
+  --dating-nav-safe-area: env(safe-area-inset-bottom, 0px);
+  --dating-nav-height: calc(var(--dating-nav-base-height) + var(--dating-nav-safe-area));
+  --dating-nav-clearance: calc(var(--dating-nav-height) + 24px);
+}
+
+.dating-app .app-content {
+  padding-bottom: var(--dating-nav-clearance);
+  scroll-padding-bottom: var(--dating-nav-clearance);
+}
+
+.dating-app .app-content > :is(
+  .analytics-dashboard,
+  .catfish-detection-dashboard,
+  .conversation-quality-container,
+  .double-date-groups,
+  .events-list-container,
+  .moments-feed-container,
+  .photo-ab-dashboard,
+  .profile-reset-panel,
+  .referral-dashboard,
+  .streak-leaderboard,
+  .subscription-container,
+  .template-performance,
+  .video-verification-container,
+  .boost-panel,
+  .priority-panel
+) {
+  padding-bottom: calc(var(--dating-nav-clearance) + 24px);
+  scroll-padding-bottom: var(--dating-nav-clearance);
+}
+
+@media (max-width: 480px) {
+  .dating-app {
+    --dating-nav-base-height: 60px;
+  }
+}

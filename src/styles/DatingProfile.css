@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  padding-bottom: 80px;
+  padding-bottom: calc(var(--dating-nav-clearance, 89px) + 16px);
   background: #f5f5f5;
 }
 

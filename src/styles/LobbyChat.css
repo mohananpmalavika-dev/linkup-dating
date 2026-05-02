@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100%;
   background: linear-gradient(135deg, rgba(208, 96, 48, 0.05) 0%, rgba(16, 32, 48, 0.05) 100%);
-  padding-bottom: 60px;
+  padding-bottom: calc(var(--dating-nav-clearance, 89px) + 16px);
 }
 
 /* Header */
@@ -199,7 +199,7 @@
   background: white;
   border-top: 1px solid #eee;
   position: sticky;
-  bottom: 0;
+  bottom: var(--dating-nav-height, 65px);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
 }
 

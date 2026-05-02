@@ -1,10 +1,10 @@
 .dating-messaging-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 65px);
-  height: calc(100dvh - 65px);
-  max-height: calc(100vh - 65px);
-  max-height: calc(100dvh - 65px);
+  height: calc(100vh - var(--dating-nav-height, 65px));
+  height: calc(100dvh - var(--dating-nav-height, 65px));
+  max-height: calc(100vh - var(--dating-nav-height, 65px));
+  max-height: calc(100dvh - var(--dating-nav-height, 65px));
   min-height: 0;
   background: #f7faf9;
   color: #172033;
@@ -942,10 +942,10 @@
 
 @media (max-width: 480px) {
   .dating-messaging-container {
-    height: calc(100vh - 60px);
-    height: calc(100dvh - 60px);
-    max-height: calc(100vh - 60px);
-    max-height: calc(100dvh - 60px);
+    height: calc(100vh - var(--dating-nav-height, 60px));
+    height: calc(100dvh - var(--dating-nav-height, 60px));
+    max-height: calc(100vh - var(--dating-nav-height, 60px));
+    max-height: calc(100dvh - var(--dating-nav-height, 60px));
   }
 
   .messaging-journey-card,

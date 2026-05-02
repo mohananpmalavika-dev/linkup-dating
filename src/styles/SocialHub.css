@@ -1,6 +1,6 @@
 .social-hub-page {
   min-height: 100%;
-  padding: 18px 18px 92px;
+  padding: 18px 18px calc(var(--dating-nav-clearance, 89px) + 24px);
   background: #f6f8fb;
   color: #111827;
 }

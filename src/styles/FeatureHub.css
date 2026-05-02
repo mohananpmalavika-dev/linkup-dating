@@ -2,7 +2,7 @@
   padding: 16px;
   max-width: 600px;
   margin: 0 auto;
-  padding-bottom: 100px;
+  padding-bottom: calc(var(--dating-nav-clearance, 89px) + 24px);
 }
 
 .feature-hub-header {

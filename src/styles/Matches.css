@@ -454,6 +454,8 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  padding-bottom: var(--dating-nav-clearance, 89px);
+  scroll-padding-bottom: var(--dating-nav-clearance, 89px);
 }
 
 .match-item {

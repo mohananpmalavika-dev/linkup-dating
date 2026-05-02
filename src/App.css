@@ -50,14 +50,31 @@
 
 /* ── App Layout ── */
 .dating-app {
+  --dating-nav-base-height: 65px;
+  --dating-nav-safe-area: env(safe-area-inset-bottom, 0px);
+  --dating-nav-height: calc(var(--dating-nav-base-height) + var(--dating-nav-safe-area));
+  --dating-nav-clearance: calc(var(--dating-nav-height) + 24px);
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--lu-bg-primary);
   font-family: var(--lu-font-sans);
 }
 
 .app-content {
-  min-height: calc(100vh - 65px);
-  padding-bottom: var(--lu-space-4);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-bottom: var(--dating-nav-clearance);
+  scroll-padding-bottom: var(--dating-nav-clearance);
+}
+
+.app-content > * {
+  scroll-margin-bottom: var(--dating-nav-clearance);
+}
+
+@media (max-width: 480px) {
+  .dating-app {
+    --dating-nav-base-height: 60px;
+  }
 }
 
 /* ── Page Transition Wrapper ── */

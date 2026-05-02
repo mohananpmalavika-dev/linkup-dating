@@ -7,7 +7,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 65px;
+  height: var(--dating-nav-height, 65px);
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -20,7 +20,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   scroll-behavior: smooth;
-  padding: 0 var(--lu-space-2);
+  padding: 0 var(--lu-space-2) var(--dating-nav-safe-area, 0px);
 }
 
 .dating-navigation::-webkit-scrollbar {
@@ -191,8 +191,8 @@
 /* ── Responsive ── */
 @media (max-width: 480px) {
   .dating-navigation {
-    height: 60px;
     padding: 0 var(--lu-space-1);
+    padding-bottom: var(--dating-nav-safe-area, 0px);
   }
 
   .nav-btn {
@@ -220,22 +220,6 @@
     font-size: 9px;
     top: -3px;
     right: -5px;
-  }
-}
-
-/* ── Safe Area for Notched Devices ── */
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .dating-navigation {
-    padding-bottom: env(safe-area-inset-bottom);
-    height: calc(65px + env(safe-area-inset-bottom));
-  }
-}
-
-@media (max-width: 480px) {
-  @supports (padding-bottom: env(safe-area-inset-bottom)) {
-    .dating-navigation {
-      height: calc(60px + env(safe-area-inset-bottom));
-    }
   }
 }
 

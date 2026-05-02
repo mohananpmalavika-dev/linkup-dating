@@ -1,6 +1,6 @@
 .sos-page {
   min-height: 100vh;
-  padding: 1.5rem 1rem 3rem;
+  padding: 1.5rem 1rem calc(var(--dating-nav-clearance, 89px) + 1.5rem);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96)),
     radial-gradient(circle at top left, rgba(239, 68, 68, 0.12), transparent 30%),

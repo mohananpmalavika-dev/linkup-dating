@@ -4,6 +4,7 @@ const db = require('../config/database');
 const spamFraudService = require('../services/spamFraudService');
 const userNotificationService = require('../services/userNotificationService');
 const streakService = require('../services/streakService');
+const contentModerationService = require('../services/contentModerationService');
 const MISSING_COLUMN_ERROR_CODE = '42703';
 
 const ALLOWED_MESSAGE_REACTIONS = new Set(['❤️', '👍', '😂', '🔥', '👏']);
@@ -273,7 +274,27 @@ router.post('/matches/:matchId/messages', async (req, res) => {
       });
     }
 
-    const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : match.user_id_1;
+const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : match.user_id_1;
+
+    // Content moderation:scan text before sending
+    const moderationResult = await contentModerationService.scanText(normalizedMessage);
+    if (!moderationResult.clean) {
+      // Log the violation but don't block - just flag for review
+      await contentModerationService.flagContent(
+        userId,
+        'message',
+        null,
+        moderationResult.issues[0]?.type || 'inappropriate_content',
+        { message: normalizedMessage, issues: moderationResult.issues }
+      );
+      // Optionally block high severity content
+      if (moderationResult.severity === 'high') {
+        return res.status(422).json({
+          error: 'Message contains inappropriate content',
+          reason: moderationResult.issues[0]?.message || 'content_blocked'
+        });
+      }
+    }
 
     const result = await insertTextMessage(matchId, userId, toUserId, normalizedMessage);
 
@@ -542,8 +563,29 @@ router.post('/matches/:matchId/media', async (req, res) => {
       }
     }
 
-    if (!mediaUrl) {
+if (!mediaUrl) {
       return res.status(400).json({ error: 'Media file required' });
+    }
+
+    // Content moderation: scan images before sending (only for images, not voice/video)
+    if (mediaType === 'image') {
+      const imageModerationResult = await contentModerationService.scanImage(mediaUrl);
+      if (!imageModerationResult.clean) {
+        // Flag for review but don't block unless high severity
+        await contentModerationService.flagContent(
+          userId,
+          'media',
+          null,
+          imageModerationResult.issues[0]?.type || 'inappropriate_image',
+          { mediaUrl, issues: imageModerationResult.issues }
+        );
+        if (imageModerationResult.nsfw || imageModerationResult.severity === 'high') {
+          return res.status(422).json({
+            error: 'Image contains inappropriate content',
+            reason: imageModerationResult.issues[0]?.message || 'content_blocked'
+          });
+        }
+      }
     }
 
     // Limit base64 size

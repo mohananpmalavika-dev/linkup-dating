@@ -3,7 +3,7 @@
   flex-direction: column;
   height: 100%;
   background: #f5f5f5;
-  padding-bottom: 60px;
+  padding-bottom: calc(var(--dating-nav-clearance, 89px) + 16px);
 }
 
 /* Header */
@@ -258,7 +258,7 @@
   background: white;
   border-top: 1px solid #eee;
   position: sticky;
-  bottom: 0;
+  bottom: var(--dating-nav-height, 65px);
 }
 
 .error-message {

@@ -1,6 +1,6 @@
 .browse-container {
   min-height: 100vh;
-  padding: 20px 24px 128px;
+  padding: 20px 24px max(128px, calc(var(--dating-nav-clearance, 89px) + 24px));
   background: #f6f8fb;
   color: #172033;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

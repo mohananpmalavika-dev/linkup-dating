@@ -78,6 +78,7 @@ import {
   setPreferredLoginMethod
 } from './utils/auth';
 import './styles/logoTheme.css';
+import './styles/authenticatedLayout.css';
 
 const ADMIN_DASHBOARD_ROUTE = '/admin-dashboard';
 const DEFAULT_AUTHENTICATED_ROUTE = '/discover';

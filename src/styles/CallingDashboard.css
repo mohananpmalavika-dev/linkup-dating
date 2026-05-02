@@ -4,7 +4,7 @@
   width: min(100%, 760px);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 18px 16px 96px;
+  padding: 18px 16px calc(var(--dating-nav-clearance, 89px) + 24px);
   background: #f6f7f9;
   color: #111827;
 }

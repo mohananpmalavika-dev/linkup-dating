@@ -1,7 +1,8 @@
 .account-settings-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh - var(--dating-nav-height, 65px));
+  height: calc(100dvh - var(--dating-nav-height, 65px));
   background: #f5f5f5;
 }
 
@@ -43,7 +44,8 @@
 .settings-content {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 20px 20px calc(var(--dating-nav-clearance, 89px) + 16px);
+  scroll-padding-bottom: var(--dating-nav-clearance, 89px);
 }
 
 .settings-tabs {
@@ -884,9 +886,11 @@
 .preferences-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh - var(--dating-nav-height, 65px));
+  height: calc(100dvh - var(--dating-nav-height, 65px));
   background: #f5f5f5;
   overflow-y: auto;
+  scroll-padding-bottom: var(--dating-nav-clearance, 89px);
 }
 
 .preferences-container.loading {
@@ -909,7 +913,7 @@
   }
 
   .settings-content {
-    padding: 12px;
+    padding: 12px 12px calc(var(--dating-nav-clearance, 84px) + 16px);
   }
 
   .tab-btn {

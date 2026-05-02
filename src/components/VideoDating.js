@@ -309,11 +309,37 @@ const VideoDating = ({
     element.srcObject = stream;
     element.muted = muted;
 
+    // Ensure autoplay attribute is set (for remote video with audio)
+    if (!muted) {
+      element.setAttribute('autoplay', '');
+      element.setAttribute('playsinline', '');
+    }
+
     if (typeof element.play === 'function') {
       try {
         await element.play();
       } catch (playError) {
-        console.warn('Unable to autoplay call media:', playError);
+        console.error('Error playing media stream:', playError?.name, playError?.message);
+        
+        // If autoplay is blocked by browser policy, set the video to play muted first
+        // then unmute after getting user interaction later
+        if (playError?.name === 'NotAllowedError' && !muted) {
+          console.warn('Autoplay with audio blocked by browser policy. Retrying with muted...');
+          element.muted = true;
+          try {
+            await element.play();
+            // Try to unmute after first user interaction
+            const unmute = () => {
+              element.muted = false;
+              document.removeEventListener('click', unmute);
+              document.removeEventListener('touchstart', unmute);
+            };
+            document.addEventListener('click', unmute, { once: true });
+            document.addEventListener('touchstart', unmute, { once: true });
+          } catch (muteError) {
+            console.warn('Unable to autoplay call media even when muted:', muteError);
+          }
+        }
       }
     }
   }, []);
@@ -746,7 +772,14 @@ const VideoDating = ({
 
       remoteStreamRef.current = nextRemoteStream;
       setRemoteStreamAvailable(true);
-      void attachStreamToElement(remoteVideoRef.current, nextRemoteStream);
+      
+      // Attach stream to remote video element without muting
+      void attachStreamToElement(remoteVideoRef.current, nextRemoteStream, { muted: false }).then(() => {
+        // Ensure audio output is at reasonable volume
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.volume = 1.0;
+        }
+      });
     };
 
     peerConnection.onicecandidate = (event) => {
@@ -2545,6 +2578,7 @@ const VideoDating = ({
             className={`remote-video-element ${remoteStreamAvailable ? 'visible' : ''}`}
             playsInline
             autoPlay
+            controls={false}
           />
 
           {!remoteStreamAvailable ? (
