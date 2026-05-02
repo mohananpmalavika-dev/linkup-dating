@@ -5,9 +5,38 @@ const db = require('../config/database');
 const getMessageText = (body = {}) =>
   String(body.message ?? body.content ?? body.text ?? '').trim();
 
+let chatroomMemberCompatibilityPromise = null;
+
+const ensureChatroomMemberCompatibility = () => {
+  if (!chatroomMemberCompatibilityPromise) {
+    chatroomMemberCompatibilityPromise = db.query(`
+      ALTER TABLE chatroom_members
+      ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS role VARCHAR(30) DEFAULT 'member',
+      ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'active',
+      ADD COLUMN IF NOT EXISTS left_at TIMESTAMP;
+
+      UPDATE chatroom_members
+      SET joined_at = COALESCE(joined_at, CURRENT_TIMESTAMP),
+          role = COALESCE(role, 'member'),
+          status = COALESCE(status, 'active')
+      WHERE joined_at IS NULL
+         OR role IS NULL
+         OR status IS NULL;
+    `).catch((error) => {
+      chatroomMemberCompatibilityPromise = null;
+      throw error;
+    });
+  }
+
+  return chatroomMemberCompatibilityPromise;
+};
+
 // GET ALL PUBLIC CHATROOMS
 router.get('/', async (req, res) => {
   try {
+    await ensureChatroomMemberCompatibility();
+
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 20;
     const offset = (page - 1) * pageSize;
@@ -146,6 +175,7 @@ router.post('/', async (req, res) => {
     }
 
     console.log('CREATE CHATROOM - Attempting to create:', { userId, name: trimmedName, isPublic, maxMembers });
+    await ensureChatroomMemberCompatibility();
 
     // Validate inputs before sending to DB
     const insertParams = [userId, trimmedName, trimmedDesc, isPublic !== false, maxMembers || 100];
@@ -176,8 +206,8 @@ router.post('/', async (req, res) => {
 
     // Add creator as first member
     const memberResult = await db.query(
-      `INSERT INTO chatroom_members (chatroom_id, user_id)
-       VALUES ($1, $2)
+      `INSERT INTO chatroom_members (chatroom_id, user_id, role, status)
+       VALUES ($1, $2, 'admin', 'active')
        RETURNING *`,
       [chatroomId, userId]
     );
@@ -261,6 +291,8 @@ router.post('/:chatroomId/join', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    await ensureChatroomMemberCompatibility();
+
     // Check if user already member
     const memberCheck = await db.query(
       'SELECT * FROM chatroom_members WHERE chatroom_id = $1 AND user_id = $2',
@@ -337,6 +369,8 @@ router.post('/:chatroomId/leave', async (req, res) => {
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
+
+    await ensureChatroomMemberCompatibility();
 
     // Update member status to 'left' with timestamp (soft delete)
     const result = await db.query(
@@ -687,6 +721,8 @@ router.put('/:chatroomId/members/:memberId', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    await ensureChatroomMemberCompatibility();
+
     // Check if requester is admin
     const adminCheck = await db.query(
       `SELECT * FROM chatroom_members 
@@ -752,6 +788,8 @@ router.delete('/:chatroomId/members/:memberId', async (req, res) => {
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
+
+    await ensureChatroomMemberCompatibility();
 
     // Check if requester is admin or moderator
     const authorityCheck = await db.query(
