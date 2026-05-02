@@ -228,7 +228,11 @@ const CallDashboard = () => {
     const setupSocketListeners = (userId) => {
       // Listen for call acceptance from receiver
       realTimeService.socket?.on('call:accepted', (data) => {
-        console.log('CallingDashboard: Call accepted by receiver', data);
+        console.log('📞 CallingDashboard: Received call:accepted', {
+          receivedCallId: data?.callId,
+          pendingCallId: pendingRequestRef.current?.callId,
+          match: data?.callId === pendingRequestRef.current?.callId
+        });
         if (data?.callId === pendingRequestRef.current?.callId) {
           // Clear pending request
           setPendingRequest(null);
@@ -236,6 +240,7 @@ const CallDashboard = () => {
           
           // Navigate caller to video room
           const receiverUserId = data.fromUserId || data.targetUserId;
+          console.log('📞 CallingDashboard: Navigating caller to video room', { receiverUserId });
           navigate(`/calls/${receiverUserId}/video`, {
             state: {
               callMode: 'outgoing',
@@ -405,6 +410,11 @@ const CallDashboard = () => {
         };
         setPendingRequest(pendingRequestData);
         pendingRequestRef.current = pendingRequestData;
+        console.log('📞 CallingDashboard: Call request sent', {
+          callId: pendingRequestData.callId,
+          sessionId: pendingRequestData.sessionId,
+          targetUser: user.name
+        });
         showNotice(
           `${CALL_TYPES[normalizedCallType].label} call request sent to ${user.name}. Credits are reserved only when they accept.`,
           'success'
@@ -446,6 +456,11 @@ const CallDashboard = () => {
         callType: callData.callType || 'voice'
       };
 
+      console.log('📞 CallingDashboard: Accepting incoming call', {
+        receivedCallId: normalizedCallData.callId,
+        fromUserId: normalizedCallData.fromUserId
+      });
+
       // First, emit socket event to notify caller before API call
       if (normalizedCallData?.callId && normalizedCallData?.fromUserId) {
         realTimeService.socket?.emit('call:accepted', {
@@ -472,6 +487,11 @@ const CallDashboard = () => {
         const returnPath = hasMatchId
           ? `/matches/${normalizedCallData.matchId}/chat`
           : `/call`;
+
+        console.log('📞 CallingDashboard: Navigating receiver to video room', {
+          callId: normalizedCallData.callId,
+          route: videoCallRoute
+        });
 
         navigate(videoCallRoute, {
           state: {

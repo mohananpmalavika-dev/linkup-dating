@@ -289,6 +289,7 @@ router.post('/request', async (req, res) => {
     res.json({
       success: true,
       requestId,
+      callId: sessionId,
       sessionId,
       callType: callTypeFinal,
       ratePerMinute: rate,
@@ -359,7 +360,7 @@ router.post('/accept/:requestId', async (req, res) => {
 
       // Emit socket event to notify caller that their call was accepted
       req.app.emitToUser(request.caller_id, 'call:accepted', {
-        callId: request.request_id || request.session_id,
+        callId: request.session_id,
         fromUserId: receiverId,
         targetUserId: request.caller_id,
         sessionId: request.session_id,
