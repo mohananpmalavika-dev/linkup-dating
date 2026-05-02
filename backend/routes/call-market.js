@@ -272,7 +272,9 @@ router.post('/request', async (req, res) => {
     if (ioInstance) {
       ioInstance.to(`user_${targetUserId}`).emit('incoming_call_request', {
         requestId,
+        callId: sessionId,
         sessionId,
+        fromUserId: callerId,
         callerId,
         callerName,
         callerAge: callerInfo.age,

@@ -438,41 +438,49 @@ const CallDashboard = () => {
   // Handle accepting incoming call request
   const handleAcceptIncomingCall = async (callData) => {
     try {
+      // Normalize call data to ensure all fields are present
+      const normalizedCallData = {
+        ...callData,
+        callId: callData.callId || callData.sessionId,
+        fromUserId: callData.fromUserId || callData.callerId,
+        callType: callData.callType || 'voice'
+      };
+
       // First, emit socket event to notify caller before API call
-      if (callData?.callId && callData?.fromUserId) {
+      if (normalizedCallData?.callId && normalizedCallData?.fromUserId) {
         realTimeService.socket?.emit('call:accepted', {
-          callId: callData.callId,
+          callId: normalizedCallData.callId,
           fromUserId: currentUser?.id || currentUser?.userId,
-          targetUserId: callData.fromUserId,
-          matchId: callData.matchId,
-          callType: callData.callType || 'voice'
+          targetUserId: normalizedCallData.fromUserId,
+          matchId: normalizedCallData.matchId,
+          callType: normalizedCallData.callType
         });
       }
 
-      const response = await apiCall(`/calling/market/accept/${callData.requestId}`, 'POST');
+      const response = await apiCall(`/calling/market/accept/${normalizedCallData.requestId}`, 'POST');
       if (response?.success) {
         showNotice('Call accepted! Connecting...', 'success');
         dismissIncomingCall();
         
         // Navigate to video call interface
         // If matchId exists, use match-based route; otherwise use userId-based route
-        const hasMatchId = callData?.matchId;
+        const hasMatchId = normalizedCallData?.matchId;
         const videoCallRoute = hasMatchId 
-          ? `/matches/${callData.matchId}/video`
-          : `/calls/${callData.fromUserId}/video`;
+          ? `/matches/${normalizedCallData.matchId}/video`
+          : `/calls/${normalizedCallData.fromUserId}/video`;
         
         const returnPath = hasMatchId
-          ? `/matches/${callData.matchId}/chat`
+          ? `/matches/${normalizedCallData.matchId}/chat`
           : `/call`;
 
         navigate(videoCallRoute, {
           state: {
             callMode: 'incoming',
             autoAccepted: true,
-            incomingCall: callData,
+            incomingCall: normalizedCallData,
             returnPath: returnPath,
-            callType: callData.callType || 'voice',
-            targetUserId: callData.fromUserId
+            callType: normalizedCallData.callType,
+            targetUserId: normalizedCallData.fromUserId
           }
         });
       }
@@ -488,13 +496,20 @@ const CallDashboard = () => {
   // Handle declining incoming call request
   const handleDeclineIncomingCall = async (callData) => {
     try {
+      // Normalize call data to ensure all fields are present
+      const normalizedCallData = {
+        ...callData,
+        callId: callData.callId || callData.sessionId,
+        fromUserId: callData.fromUserId || callData.callerId
+      };
+
       // Emit socket event to notify caller BEFORE the API call
-      if (callData?.callId && callData?.fromUserId) {
+      if (normalizedCallData?.callId && normalizedCallData?.fromUserId) {
         realTimeService.socket?.emit('call:rejected', {
-          callId: callData.callId,
+          callId: normalizedCallData.callId,
           fromUserId: currentUser?.id || currentUser?.userId,
-          targetUserId: callData.fromUserId,
-          matchId: callData.matchId
+          targetUserId: normalizedCallData.fromUserId,
+          matchId: normalizedCallData.matchId
         });
       }
 
