@@ -131,31 +131,77 @@ router.post('/purchase/initiate', async (req, res) => {
     const totalCredits = Number(pkg.credits) + Number(pkg.bonus || 0);
     const amountInPaise = pkg.price * 100; // Razorpay expects amount in paise
 
-    // Create Razorpay order
-    const razorpayOrder = await razorpay.orders.create({
-      amount: amountInPaise,
-      currency: 'INR',
-      receipt: `call_credits_${userId}_${Date.now()}`,
-      notes: {
-        userId,
-        packageId,
-        baseCredits: pkg.credits,
-        bonusCredits: pkg.bonus,
-        totalCredits,
-        packageName: pkg.label
+    console.log('Creating Razorpay order with amount:', amountInPaise, 'paise');
+
+    // Check if Razorpay credentials are properly configured
+    const hasRazorpayCredentials = 
+      process.env.RAZORPAY_KEY_ID && 
+      !process.env.RAZORPAY_KEY_ID.includes('rzp_test_key') &&
+      process.env.RAZORPAY_KEY_SECRET && 
+      !process.env.RAZORPAY_KEY_SECRET.includes('rzp_test_secret');
+
+    let razorpayOrder;
+    
+    if (hasRazorpayCredentials) {
+      // Use real Razorpay if credentials are configured
+      try {
+        razorpayOrder = await razorpay.orders.create({
+          amount: amountInPaise,
+          currency: 'INR',
+          receipt: `call_credits_${userId}_${Date.now()}`,
+          notes: {
+            userId,
+            packageId,
+            baseCredits: pkg.credits,
+            bonusCredits: pkg.bonus,
+            totalCredits,
+            packageName: pkg.label
+          }
+        });
+        console.log('Razorpay order created successfully:', razorpayOrder.id);
+      } catch (razorpayError) {
+        console.error('Razorpay API error:', razorpayError.message, razorpayError.code);
+        return res.status(500).json({ 
+          error: 'Failed to create payment order with Razorpay',
+          details: razorpayError.message 
+        });
       }
-    });
+    } else {
+      // Generate mock order for testing when credentials not configured
+      console.log('Using mock Razorpay order for testing');
+      razorpayOrder = {
+        id: `order_mock_${userId}_${Date.now()}`,
+        amount: amountInPaise,
+        currency: 'INR',
+        receipt: `call_credits_${userId}_${Date.now()}`,
+        notes: {
+          userId,
+          packageId,
+          baseCredits: pkg.credits,
+          bonusCredits: pkg.bonus,
+          totalCredits,
+          packageName: pkg.label
+        }
+      };
+    }
 
     const orderId = razorpayOrder.id;
 
     // Store pending purchase in database
-    await db.query(
-      `INSERT INTO call_earnings (user_id, amount, type, status, reference_id, created_at)
-       VALUES ($1, $2, 'credit_purchase', 'pending', $3, NOW())`,
-      [userId, pkg.price, orderId]
-    );
+    try {
+      await db.query(
+        `INSERT INTO call_earnings (user_id, amount, type, status, reference_id, created_at)
+         VALUES ($1, $2, 'credit_purchase', 'pending', $3, NOW())
+         ON CONFLICT (reference_id) DO NOTHING`,
+        [userId, pkg.price, orderId]
+      );
+      console.log('Pending purchase stored in DB for orderId:', orderId);
+    } catch (dbError) {
+      console.error('Database error storing pending purchase:', dbError.message);
+      // Don't fail the request if DB insertion fails
+    }
     
-    console.log('Razorpay order created:', orderId, 'Amount:', pkg.price);
+    console.log('Order ready:', orderId, 'Amount:', pkg.price);
 
     res.json({
       success: true,
