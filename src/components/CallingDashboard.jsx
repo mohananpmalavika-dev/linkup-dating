@@ -44,6 +44,15 @@ const createDefaultMarketFilters = () => ({
   language: '',
   gender: ''
 });
+const normalizeMarketFilters = (filters = {}) => ({
+  minAge: String(filters.minAge ?? '').trim(),
+  maxAge: String(filters.maxAge ?? '').trim(),
+  language: String(filters.language ?? '').trim(),
+  gender: String(filters.gender ?? '').trim()
+});
+
+const hasAnyMarketFilters = (filters = {}) =>
+  Object.values(normalizeMarketFilters(filters)).some((value) => value !== '');
 
 const toNumber = (value, fallback = 0) => {
   const parsedValue = Number(value);
@@ -153,7 +162,7 @@ const CallDashboard = () => {
   );
 
   const hasAppliedMarketFilters = useMemo(
-    () => Object.values(appliedMarketFilters).some((value) => String(value || '').trim() !== ''),
+    () => hasAnyMarketFilters(appliedMarketFilters),
     [appliedMarketFilters]
   );
 
@@ -224,11 +233,17 @@ const CallDashboard = () => {
     setLoadingMarket(true);
     try {
       const params = {};
+      const normalizedFilters = normalizeMarketFilters(appliedMarketFilters);
+      const filtersApplied = hasAnyMarketFilters(normalizedFilters);
 
-      if (appliedMarketFilters.minAge) params.minAge = appliedMarketFilters.minAge;
-      if (appliedMarketFilters.maxAge) params.maxAge = appliedMarketFilters.maxAge;
-      if (appliedMarketFilters.language) params.language = appliedMarketFilters.language;
-      if (appliedMarketFilters.gender) params.gender = appliedMarketFilters.gender;
+      if (filtersApplied) {
+        params.filtersApplied = 'true';
+      }
+
+      if (normalizedFilters.minAge) params.minAge = normalizedFilters.minAge;
+      if (normalizedFilters.maxAge) params.maxAge = normalizedFilters.maxAge;
+      if (normalizedFilters.language) params.language = normalizedFilters.language;
+      if (normalizedFilters.gender) params.gender = normalizedFilters.gender;
 
       const data = await apiCall('/calling/market/available', 'GET', params);
       setMarketEnabled(data.enabled !== false);
@@ -470,7 +485,7 @@ const CallDashboard = () => {
   };
 
   const handleApplyMarketFilters = () => {
-    setAppliedMarketFilters({ ...marketFilters });
+    setAppliedMarketFilters(normalizeMarketFilters(marketFilters));
   };
 
   const handleClearMarketFilters = () => {

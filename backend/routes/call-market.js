@@ -196,6 +196,7 @@ router.get('/available', async (req, res) => {
     const limit = Math.min(parseInteger(req.query.limit, 20), 50);
     const offset = (page - 1) * limit;
     const requestedCallType = normalizeCallTypes(req.query.type, [])[0] || null;
+    const filtersApplied = normalizeBoolean(req.query.filtersApplied, false);
     const minAge = parseInteger(req.query.minAge, null);
     const maxAge = parseInteger(req.query.maxAge, null);
     const gender = normalizeText(req.query.gender).toLowerCase();
@@ -295,27 +296,27 @@ router.get('/available', async (req, res) => {
       params.push(requestedCallType);
     }
 
-    if (Number.isFinite(minAge)) {
+    if (filtersApplied && Number.isFinite(minAge)) {
       query += ` AND dp.age >= $${paramIndex++}`;
       params.push(minAge);
     }
 
-    if (Number.isFinite(maxAge)) {
+    if (filtersApplied && Number.isFinite(maxAge)) {
       query += ` AND dp.age <= $${paramIndex++}`;
       params.push(maxAge);
     }
 
-    if (gender) {
+    if (filtersApplied && gender) {
       query += ` AND LOWER(COALESCE(dp.gender, '')) = LOWER($${paramIndex++})`;
       params.push(gender);
     }
 
-    if (languageFilters.length > 0) {
+    if (filtersApplied && languageFilters.length > 0) {
       query += ` AND COALESCE(dp.languages, ARRAY[]::text[]) && $${paramIndex++}::text[]`;
       params.push(languageFilters);
     }
 
-    if (locationFilter) {
+    if (filtersApplied && locationFilter) {
       query += ` AND (
         (
           dp.location_city IS NULL
@@ -330,7 +331,7 @@ router.get('/available', async (req, res) => {
       paramIndex += 1;
     }
 
-    if (hasViewerCoordinates && Number.isFinite(maxDistanceKm) && maxDistanceKm > 0) {
+    if (filtersApplied && hasViewerCoordinates && Number.isFinite(maxDistanceKm) && maxDistanceKm > 0) {
       query += ` AND (
         dp.location_lat IS NULL
         OR dp.location_lng IS NULL
