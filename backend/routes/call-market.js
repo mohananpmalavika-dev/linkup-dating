@@ -18,20 +18,65 @@ const AVAILABLE_CALL_TYPES_SQL = `
     END
   )
 `;
-const ONLINE_STATUS_SQL = `
-  (
+const PRESENCE_SCHEMA_CACHE_TTL_MS = 60 * 1000;
+let presenceStatusSchemaCache = {
+  expiresAt: 0,
+  statusColumn: null
+};
+
+const getPresenceStatusColumn = async () => {
+  if (presenceStatusSchemaCache.expiresAt > Date.now()) {
+    return presenceStatusSchemaCache.statusColumn;
+  }
+
+  try {
+    const result = await db.query(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'user_presence_sessions'
+         AND column_name IN ('is_online', 'is_active')`
+    );
+
+    const availableColumns = new Set(result.rows.map((row) => row.column_name));
+    const statusColumn = availableColumns.has('is_online')
+      ? 'is_online'
+      : availableColumns.has('is_active')
+        ? 'is_active'
+        : null;
+
+    presenceStatusSchemaCache = {
+      expiresAt: Date.now() + PRESENCE_SCHEMA_CACHE_TTL_MS,
+      statusColumn
+    };
+
+    return statusColumn;
+  } catch (error) {
+    console.warn('Presence schema lookup failed:', error.message);
+
+    presenceStatusSchemaCache = {
+      expiresAt: Date.now() + 10 * 1000,
+      statusColumn: null
+    };
+
+    return null;
+  }
+};
+
+const buildOnlineStatusSql = (userAlias, statusColumn) => {
+  if (!statusColumn) {
+    return 'FALSE';
+  }
+
+  return `
     EXISTS (
       SELECT 1
       FROM user_presence_sessions ups
-      WHERE ups.user_id = u.id AND ups.is_active = true
+      WHERE ups.user_id = ${userAlias}.id
+        AND COALESCE(ups.${statusColumn}, FALSE) = TRUE
     )
-    OR EXISTS (
-      SELECT 1
-      FROM user_activities ua
-      WHERE ua.user_id = u.id AND ua.end_time IS NULL
-    )
-  )
-`;
+  `;
+};
 
 const parseInteger = (value, fallback = null) => {
   const parsedValue = Number.parseInt(value, 10);
@@ -122,29 +167,21 @@ const isCallingEnabled = async () => {
 // Check if user is online based on their presence sessions
 const isUserOnline = async (userId) => {
   try {
-    // Check if user has any active presence sessions
+    const presenceStatusColumn = await getPresenceStatusColumn();
+    if (!presenceStatusColumn) {
+      return false;
+    }
+
+    // Check if user has any active presence sessions using the live schema.
     const presenceResult = await db.query(
       `SELECT COUNT(*) as active_sessions 
        FROM user_presence_sessions 
-       WHERE user_id = $1 AND is_active = true 
+       WHERE user_id = $1 AND COALESCE(${presenceStatusColumn}, FALSE) = TRUE
        LIMIT 1`,
       [userId]
     );
 
-    if (presenceResult.rows[0]?.active_sessions > 0) {
-      return true;
-    }
-
-    // Also check if user has any ongoing activities
-    const activityResult = await db.query(
-      `SELECT COUNT(*) as active_activities 
-       FROM user_activities 
-       WHERE user_id = $1 AND end_time IS NULL 
-       LIMIT 1`,
-      [userId]
-    );
-
-    return activityResult.rows[0]?.active_activities > 0;
+    return Number.parseInt(presenceResult.rows[0]?.active_sessions || '0', 10) > 0;
   } catch (error) {
     console.error('Error checking user online status:', error);
     return false;
@@ -177,6 +214,23 @@ router.get('/available', async (req, res) => {
     const voiceRate = parseFloat(await getCallSetting('voice_rate_per_minute', '5'));
     const videoRate = parseFloat(await getCallSetting('video_rate_per_minute', '10'));
     const rate = requestedCallType === 'video' ? videoRate : voiceRate;
+    const presenceStatusColumn = await getPresenceStatusColumn();
+
+    if (!presenceStatusColumn) {
+      console.warn('Call market availability skipped: user_presence_sessions has no supported online status column');
+      return res.json({
+        success: true,
+        enabled: true,
+        callType: requestedCallType,
+        ratePerMinute: rate,
+        page,
+        limit,
+        total: 0,
+        users: []
+      });
+    }
+
+    const onlineStatusSql = buildOnlineStatusSql('u', presenceStatusColumn);
 
     const currentProfileResult = await db.query(
       `SELECT location_lat, location_lng
@@ -224,7 +278,7 @@ router.get('/available', async (req, res) => {
         ) as photo_url,
         dp.call_earnings,
         ${AVAILABLE_CALL_TYPES_SQL} as available_call_types,
-        ${ONLINE_STATUS_SQL} as is_online,
+        ${onlineStatusSql} as is_online,
         ${distanceExpression} as distance_km,
         COUNT(*) OVER() as total_count
       FROM users u
@@ -233,7 +287,7 @@ router.get('/available', async (req, res) => {
         AND u.id != $1
         AND COALESCE(dp.is_active, TRUE) = TRUE
         AND COALESCE(array_length(${AVAILABLE_CALL_TYPES_SQL}, 1), 0) > 0
-        AND ${ONLINE_STATUS_SQL}
+        AND ${onlineStatusSql}
     `;
 
     if (requestedCallType) {
