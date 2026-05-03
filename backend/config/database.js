@@ -114,7 +114,7 @@ const init = async () => {
       await client.query(`
       ALTER TABLE dating_profiles
       ADD COLUMN IF NOT EXISTS is_available_for_calls BOOLEAN DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS available_call_types TEXT[] DEFAULT '{"voice","video"}',
+      ADD COLUMN IF NOT EXISTS available_call_types TEXT[] DEFAULT ARRAY['voice', 'video'],
       ADD COLUMN IF NOT EXISTS call_earnings DECIMAL(12,2) DEFAULT 0.00,
       ADD COLUMN IF NOT EXISTS pending_payout DECIMAL(12,2) DEFAULT 0.00,
       ADD COLUMN IF NOT EXISTS total_calls_taken INTEGER DEFAULT 0,
@@ -129,8 +129,8 @@ const init = async () => {
             available_call_types,
             CASE
               WHEN COALESCE(is_available_for_calls, FALSE)
-                THEN '{"voice","video"}'::text[]
-              ELSE '{}'::text[]
+                THEN ARRAY['voice', 'video']::text[]
+              ELSE ARRAY[]::text[]
             END
           ),
           call_earnings = COALESCE(call_earnings, 0.00),
