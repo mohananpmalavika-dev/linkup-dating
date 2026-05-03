@@ -426,22 +426,6 @@ await client.query(`
     `);
 
       await client.query(`
-      CREATE TABLE IF NOT EXISTS subscriptions (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        plan VARCHAR(50) DEFAULT 'free',
-        status VARCHAR(20) DEFAULT 'active',
-        started_at TIMESTAMP,
-        expires_at TIMESTAMP,
-        stripe_customer_id VARCHAR(255),
-        stripe_subscription_id VARCHAR(255),
-        payment_method VARCHAR(50),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-      await client.query(`
       CREATE TABLE IF NOT EXISTS user_reward_balances (
         id SERIAL PRIMARY KEY,
         user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,

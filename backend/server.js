@@ -648,6 +648,20 @@ startServer();
   try {
     await db.init();
     
+    // Run database migrations
+    try {
+      const { runMigrations } = require('./utils/runMigrations');
+      logger.info('Running database migrations...');
+      const migrationResult = await runMigrations();
+      if (migrationResult.success) {
+        logger.info(`✓ Database migrations completed. Executed: ${migrationResult.executed} migrations`);
+      } else {
+        logger.error('Migration failed:', migrationResult.error);
+      }
+    } catch (migrationError) {
+      logger.error('Error during migrations:', migrationError.message);
+    }
+    
     // Sync Sequelize models with controlled order to prevent foreign key constraint errors
     try {
       const dbModels = require('./models');
