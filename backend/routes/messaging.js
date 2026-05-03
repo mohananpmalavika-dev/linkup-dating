@@ -20,13 +20,15 @@ const isMissingColumnError = (error) =>
 const isMissingMessageTypeColumnError = (error) =>
   isMissingColumnError(error) && String(error.message || '').includes('message_type');
 
-const insertTextMessage = async (matchId, userId, toUserId, normalizedMessage) => {
+const insertTextMessage = async (matchId, userId, toUserId, normalizedMessage, messageType = 'text') => {
+  const normalizedType = ['text', 'sticker'].includes(messageType) ? messageType : 'text';
+
   try {
     return await db.query(
       `INSERT INTO messages (match_id, from_user_id, to_user_id, message, message_type, created_at)
-       VALUES ($1, $2, $3, $4, 'text', NOW())
+       VALUES ($1, $2, $3, $4, $5, NOW())
        RETURNING *`,
-      [matchId, userId, toUserId, normalizedMessage]
+      [matchId, userId, toUserId, normalizedMessage, normalizedType]
     );
   } catch (error) {
     if (!isMissingMessageTypeColumnError(error)) {
@@ -251,6 +253,7 @@ router.post('/matches/:matchId/messages', async (req, res) => {
     const { matchId } = req.params;
     const userId = req.user.id;
     const normalizedMessage = String(req.body.message || '').trim();
+    const messageType = String(req.body.messageType || 'text').trim().toLowerCase();
     const requestMetadata = getRequestMetadata(req);
 
     if (!normalizedMessage) {
@@ -296,7 +299,7 @@ const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : 
       }
     }
 
-    const result = await insertTextMessage(matchId, userId, toUserId, normalizedMessage);
+    const result = await insertTextMessage(matchId, userId, toUserId, normalizedMessage, messageType);
 
     await updateMatchMessageSummary(matchId);
 
@@ -321,6 +324,7 @@ const toUserId = Number(match.user_id_1) === Number(userId) ? match.user_id_2 : 
         fromUserId: userId,
         fromUserName,
         message: normalizedMessage,
+        messageType,
         timestamp: createdMessage.created_at,
         reactions: []
       });
