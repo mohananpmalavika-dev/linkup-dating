@@ -96,6 +96,22 @@ router.get('/available', async (req, res) => {
     const videoRate = parseFloat(await getCallSetting('video_rate_per_minute', '10'));
     const rate = callType === 'video' ? videoRate : voiceRate;
     
+    // Get count of available users matching the filter
+    const countResult = await db.query(`
+      SELECT COUNT(*) as total
+      FROM users u
+      INNER JOIN dating_profiles dp ON dp.user_id = u.id
+      WHERE dp.is_available_for_calls = TRUE
+        AND u.id != $1
+        AND COALESCE(dp.is_active, TRUE) = TRUE
+        AND (
+          ($2 = 'voice' AND COALESCE(dp.available_call_types, $3::text[]) @> ARRAY['voice'::text])
+          OR ($2 = 'video' AND COALESCE(dp.available_call_types, $3::text[]) @> ARRAY['video'::text])
+        )
+    `, [userId, callType, ['voice', 'video']]);
+    
+    const totalCount = parseInt(countResult.rows[0]?.total || 0);
+    
     // Get available users with online status, filtered by call type preference
     const result = await db.query(`
       SELECT 
@@ -107,7 +123,7 @@ router.get('/available', async (req, res) => {
         dp.interests,
         dp.call_rating,
         dp.total_calls_taken,
-        dp.available_call_types,
+        COALESCE(dp.available_call_types, $3::text[]) as available_call_types,
         (
           SELECT photo_url 
           FROM profile_photos 
@@ -124,12 +140,12 @@ router.get('/available', async (req, res) => {
         AND u.id != $1
         AND COALESCE(dp.is_active, TRUE) = TRUE
         AND (
-          ($2 = 'voice' AND dp.available_call_types @> ARRAY['voice'::text])
-          OR ($2 = 'video' AND dp.available_call_types @> ARRAY['video'::text])
+          ($2 = 'voice' AND COALESCE(dp.available_call_types, $3::text[]) @> ARRAY['voice'::text])
+          OR ($2 = 'video' AND COALESCE(dp.available_call_types, $3::text[]) @> ARRAY['video'::text])
         )
       ORDER BY dp.call_rating DESC, dp.total_calls_taken DESC
-      LIMIT $3 OFFSET $4
-    `, [userId, callType, limit, offset]);
+      LIMIT $4 OFFSET $5
+    `, [userId, callType, ['voice', 'video'], limit, offset]);
     
     const users = result.rows.map(user => ({
       userId: user.user_id,
@@ -142,7 +158,7 @@ router.get('/available', async (req, res) => {
       callRating: Number(user.call_rating) || 0,
       totalCalls: user.total_calls_taken || 0,
       isOnline: user.is_online,
-      availableCallTypes: user.available_call_types || ['voice', 'video'],
+      availableCallTypes: (user.available_call_types && user.available_call_types.length > 0) ? user.available_call_types : ['voice', 'video'],
       rates: {
         voice: voiceRate,
         video: videoRate
@@ -154,6 +170,9 @@ router.get('/available', async (req, res) => {
       enabled: true,
       callType,
       ratePerMinute: rate,
+      page,
+      limit,
+      total: totalCount,
       users
     });
   } catch (error) {
@@ -187,7 +206,7 @@ router.get('/user/:userId', async (req, res) => {
         dp.total_call_minutes,
         dp.call_earnings,
         dp.is_available_for_calls,
-        dp.available_call_types,
+        COALESCE(dp.available_call_types, ARRAY['voice', 'video']::text[]) as available_call_types,
         (
           SELECT photo_url 
           FROM profile_photos 
@@ -221,7 +240,7 @@ router.get('/user/:userId', async (req, res) => {
         totalMinutes: user.total_call_minutes || 0,
         totalEarnings: Number(user.call_earnings) || 0,
         isAvailable: user.is_available_for_calls,
-        availableCallTypes: user.available_call_types || ['voice', 'video'],
+        availableCallTypes: (user.available_call_types && user.available_call_types.length > 0) ? user.available_call_types : ['voice', 'video'],
         rates: {
           voice: voiceRate,
           video: videoRate
@@ -273,8 +292,10 @@ router.post('/request', async (req, res) => {
     
     // Check target is available and accepts this call type
     const targetResult = await db.query(
-      'SELECT is_available_for_calls, available_call_types FROM dating_profiles WHERE user_id = $1 AND COALESCE(is_active, TRUE) = TRUE',
-      [targetUserId]
+      `SELECT is_available_for_calls, COALESCE(available_call_types, $2::text[]) as available_call_types 
+       FROM dating_profiles 
+       WHERE user_id = $1 AND COALESCE(is_active, TRUE) = TRUE`,
+      [targetUserId, ['voice', 'video']]
     );
     
     if (!targetResult.rows[0]) {
