@@ -695,4 +695,304 @@ if (!mediaUrl) {
   }
 });
 
+// ============ CALL ENDPOINTS ============
+
+// POST /messaging/calls/initiate - Start a call between matches
+router.post('/calls/initiate', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { chatId, recipientId, callType } = req.body;
+    const requestMetadata = getRequestMetadata(req);
+
+    if (!chatId || !recipientId || !callType) {
+      return res.status(400).json({ error: 'chatId, recipientId, and callType are required' });
+    }
+
+    // Verify it's a valid match between the two users
+    const matchResult = await db.query(
+      `SELECT id FROM matches 
+       WHERE (user_id_1 = $1 AND user_id_2 = $2 OR user_id_1 = $2 AND user_id_2 = $1)
+       AND status = 'active'`,
+      [userId, recipientId]
+    );
+
+    if (!matchResult.rows[0]) {
+      return res.status(403).json({ error: 'Invalid match or not authorized' });
+    }
+
+    const matchId = matchResult.rows[0].id;
+
+    // Create call session
+    const { v4: uuidv4 } = require('uuid');
+    const callId = uuidv4();
+    const callResult = await db.query(
+      `INSERT INTO call_sessions (session_id, caller_id, receiver_id, call_type, status, created_at)
+       VALUES ($1, $2, $3, $4, 'requested', NOW())
+       RETURNING id, session_id, caller_id, receiver_id, call_type, status, created_at`,
+      [callId, userId, recipientId, callType]
+    );
+
+    const call = callResult.rows[0];
+
+    // Emit socket notification to recipient
+    if (req.app.io) {
+      req.app.io.to(`user_${recipientId}`).emit('call:incoming', {
+        _id: call.id,
+        callId: call.session_id,
+        initiatorId: userId,
+        callType: callType,
+        matchId: matchId,
+        createdAt: call.created_at
+      });
+    }
+
+    // Send push notification to recipient
+    try {
+      await userNotificationService.sendNotification(
+        recipientId,
+        `Incoming ${callType} call`,
+        'Someone is calling you',
+        {
+          type: 'call_incoming',
+          callId: call.session_id,
+          callType: callType,
+          matchId: matchId,
+          initiatorId: userId
+        }
+      );
+    } catch (notificationError) {
+      console.warn('Failed to send call notification:', notificationError.message);
+    }
+
+    // Track activity
+    spamFraudService.trackUserActivity({
+      userId,
+      action: `call_initiated_${callType}`,
+      analyticsUpdates: { calls_initiated: 1 },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: true,
+      runFraudCheck: false
+    });
+
+    res.json({
+      call: {
+        _id: call.id,
+        callId: call.session_id,
+        initiatorId: call.caller_id,
+        recipientId: call.receiver_id,
+        callType: call.call_type,
+        status: call.status,
+        createdAt: call.created_at
+      }
+    });
+  } catch (err) {
+    console.error('Initiate call error:', err);
+    res.status(500).json({ error: 'Failed to initiate call', details: err.message });
+  }
+});
+
+// POST /messaging/calls/:callId/accept - Accept an incoming call
+router.post('/calls/:callId/accept', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { callId } = req.params;
+
+    if (!callId) {
+      return res.status(400).json({ error: 'Call ID is required' });
+    }
+
+    // Find the call session
+    const callResult = await db.query(
+      `SELECT * FROM call_sessions WHERE id = $1 OR session_id = $1`,
+      [callId]
+    );
+
+    if (!callResult.rows[0]) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    const call = callResult.rows[0];
+
+    // Verify the current user is the receiver
+    if (call.receiver_id !== userId) {
+      return res.status(403).json({ error: 'Unauthorized to accept this call' });
+    }
+
+    // Update call status to active
+    const updateResult = await db.query(
+      `UPDATE call_sessions 
+       SET status = 'active', start_time = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [call.id]
+    );
+
+    const updatedCall = updateResult.rows[0];
+
+    // Emit socket event to both users
+    if (req.app.io) {
+      req.app.io.to(`user_${call.caller_id}`).emit('call:accepted', {
+        _id: updatedCall.id,
+        callId: updatedCall.session_id,
+        status: 'active'
+      });
+      req.app.io.to(`user_${userId}`).emit('call:accepted', {
+        _id: updatedCall.id,
+        callId: updatedCall.session_id,
+        status: 'active'
+      });
+    }
+
+    res.json({
+      call: {
+        _id: updatedCall.id,
+        callId: updatedCall.session_id,
+        status: updatedCall.status,
+        startTime: updatedCall.start_time
+      }
+    });
+  } catch (err) {
+    console.error('Accept call error:', err);
+    res.status(500).json({ error: 'Failed to accept call', details: err.message });
+  }
+});
+
+// POST /messaging/calls/:callId/decline - Decline an incoming call
+router.post('/calls/:callId/decline', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { callId } = req.params;
+
+    if (!callId) {
+      return res.status(400).json({ error: 'Call ID is required' });
+    }
+
+    // Find the call session
+    const callResult = await db.query(
+      `SELECT * FROM call_sessions WHERE id = $1 OR session_id = $1`,
+      [callId]
+    );
+
+    if (!callResult.rows[0]) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    const call = callResult.rows[0];
+
+    // Verify the current user is the receiver
+    if (call.receiver_id !== userId) {
+      return res.status(403).json({ error: 'Unauthorized to decline this call' });
+    }
+
+    // Update call status to declined
+    const updateResult = await db.query(
+      `UPDATE call_sessions 
+       SET status = 'declined', ended_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [call.id]
+    );
+
+    const updatedCall = updateResult.rows[0];
+
+    // Emit socket event to caller
+    if (req.app.io) {
+      req.app.io.to(`user_${call.caller_id}`).emit('call:declined', {
+        _id: updatedCall.id,
+        callId: updatedCall.session_id,
+        status: 'declined'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Call declined'
+    });
+  } catch (err) {
+    console.error('Decline call error:', err);
+    res.status(500).json({ error: 'Failed to decline call', details: err.message });
+  }
+});
+
+// POST /messaging/calls/:callId/end - End an active call
+router.post('/calls/:callId/end', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { callId } = req.params;
+    const requestMetadata = getRequestMetadata(req);
+
+    if (!callId) {
+      return res.status(400).json({ error: 'Call ID is required' });
+    }
+
+    // Find the call session
+    const callResult = await db.query(
+      `SELECT * FROM call_sessions WHERE id = $1 OR session_id = $1`,
+      [callId]
+    );
+
+    if (!callResult.rows[0]) {
+      return res.status(404).json({ error: 'Call not found' });
+    }
+
+    const call = callResult.rows[0];
+
+    // Verify the current user is part of the call
+    if (call.caller_id !== userId && call.receiver_id !== userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    // Calculate call duration if call was active
+    let durationSeconds = 0;
+    if (call.start_time) {
+      durationSeconds = Math.floor((Date.now() - new Date(call.start_time).getTime()) / 1000);
+    }
+
+    // Update call status to completed
+    const updateResult = await db.query(
+      `UPDATE call_sessions 
+       SET status = 'completed', 
+           end_time = NOW(),
+           duration_seconds = $2
+       WHERE id = $1
+       RETURNING *`,
+      [call.id, durationSeconds]
+    );
+
+    const updatedCall = updateResult.rows[0];
+
+    // Emit socket event to both users
+    const otherUserId = call.caller_id === userId ? call.receiver_id : call.caller_id;
+    if (req.app.io) {
+      req.app.io.to(`user_${otherUserId}`).emit('call:ended', {
+        _id: updatedCall.id,
+        callId: updatedCall.session_id,
+        status: 'completed',
+        durationSeconds: updatedCall.duration_seconds
+      });
+    }
+
+    // Track activity
+    spamFraudService.trackUserActivity({
+      userId,
+      action: `call_ended_${call.call_type}`,
+      analyticsUpdates: { calls_completed: 1, call_minutes: Math.ceil(durationSeconds / 60) },
+      ipAddress: requestMetadata.ipAddress,
+      userAgent: requestMetadata.userAgent,
+      runSpamCheck: false,
+      runFraudCheck: false
+    });
+
+    res.json({
+      success: true,
+      message: 'Call ended',
+      durationSeconds: updatedCall.duration_seconds
+    });
+  } catch (err) {
+    console.error('End call error:', err);
+    res.status(500).json({ error: 'Failed to end call', details: err.message });
+  }
+});
+
 module.exports = router;
