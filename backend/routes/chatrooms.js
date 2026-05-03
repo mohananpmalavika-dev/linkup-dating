@@ -539,20 +539,16 @@ router.post('/:chatroomId/messages', async (req, res) => {
           chatroom_id, 
           from_user_id, 
           message, 
-          message_type, 
-          media_type,
-          media_url,
+          message_type,
           created_at
         )
-         VALUES ($1, $2, $3, $4, $5, $6, NOW())
+         VALUES ($1, $2, $3, $4, NOW())
          RETURNING *`,
         [
           chatroomId,
           userId,
           message || `[${messageType}]`,
-          messageType,
-          mediaType || null,
-          mediaUrl || null
+          messageType
         ]
       );
     } catch (insertErr) {
