@@ -55,19 +55,29 @@ const ChatRoomView = ({ chatroomId, onBack }) => {
   useEffect(() => {
     if (!chatroom) return;
 
-    const loadMessages = async () => {
+    const initializeChatroom = async () => {
       try {
+        // First, ensure user is a member of the chatroom (database)
+        try {
+          await chatroomService.joinChatroom(chatroomId);
+        } catch (err) {
+          // User might already be a member, continue anyway
+          console.log('Join chatroom response:', err);
+        }
+
+        // Load messages
         setLoadingMessages(true);
         const data = await chatroomService.getMessages(chatroomId, 50, 0);
         setMessages(data);
       } catch (err) {
         console.error('Failed to load messages:', err);
+        setError('Failed to initialize chatroom');
       } finally {
         setLoadingMessages(false);
       }
     };
 
-    loadMessages();
+    initializeChatroom();
 
     // Setup WebSocket connection
     socketRef.current = io(BACKEND_BASE_URL, {
@@ -78,7 +88,7 @@ const ChatRoomView = ({ chatroomId, onBack }) => {
 
     socketRef.current.emit('user_online', currentUserId);
 
-    // Join room
+    // Join WebSocket room for real-time messages
     socketRef.current.emit('join_chatroom', chatroomId);
 
     // Listen for new messages
