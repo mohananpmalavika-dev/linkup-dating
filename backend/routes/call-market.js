@@ -104,15 +104,11 @@ router.get('/available', async (req, res) => {
       WHERE dp.is_available_for_calls = TRUE
         AND u.id != $1
         AND COALESCE(dp.is_active, TRUE) = TRUE
-        AND (
-          ($2 = 'voice' AND COALESCE(dp.available_call_types, $3::text[]) @> ARRAY['voice'::text])
-          OR ($2 = 'video' AND COALESCE(dp.available_call_types, $3::text[]) @> ARRAY['video'::text])
-        )
-    `, [userId, callType, ['voice', 'video']]);
+    `, [userId]);
     
     const totalCount = parseInt(countResult.rows[0]?.total || 0);
     
-    // Get available users with online status, filtered by call type preference
+    // Get available users with online status
     const result = await db.query(`
       SELECT 
         u.id as user_id,
@@ -123,7 +119,6 @@ router.get('/available', async (req, res) => {
         dp.interests,
         dp.call_rating,
         dp.total_calls_taken,
-        COALESCE(dp.available_call_types, $3::text[]) as available_call_types,
         (
           SELECT photo_url 
           FROM profile_photos 
@@ -132,20 +127,15 @@ router.get('/available', async (req, res) => {
           LIMIT 1
         ) as photo_url,
         dp.call_earnings,
-        -- Check if user is online (you'd need a real-time status system)
         FALSE as is_online
       FROM users u
       INNER JOIN dating_profiles dp ON dp.user_id = u.id
       WHERE dp.is_available_for_calls = TRUE
         AND u.id != $1
         AND COALESCE(dp.is_active, TRUE) = TRUE
-        AND (
-          ($2 = 'voice' AND COALESCE(dp.available_call_types, $3::text[]) @> ARRAY['voice'::text])
-          OR ($2 = 'video' AND COALESCE(dp.available_call_types, $3::text[]) @> ARRAY['video'::text])
-        )
       ORDER BY dp.call_rating DESC, dp.total_calls_taken DESC
-      LIMIT $4 OFFSET $5
-    `, [userId, callType, ['voice', 'video'], limit, offset]);
+      LIMIT $2 OFFSET $3
+    `, [userId, limit, offset]);
     
     const users = result.rows.map(user => ({
       userId: user.user_id,
@@ -158,7 +148,7 @@ router.get('/available', async (req, res) => {
       callRating: Number(user.call_rating) || 0,
       totalCalls: user.total_calls_taken || 0,
       isOnline: user.is_online,
-      availableCallTypes: (user.available_call_types && user.available_call_types.length > 0) ? user.available_call_types : ['voice', 'video'],
+      availableCallTypes: ['voice', 'video'],
       rates: {
         voice: voiceRate,
         video: videoRate
@@ -206,7 +196,6 @@ router.get('/user/:userId', async (req, res) => {
         dp.total_call_minutes,
         dp.call_earnings,
         dp.is_available_for_calls,
-        COALESCE(dp.available_call_types, ARRAY['voice', 'video']::text[]) as available_call_types,
         (
           SELECT photo_url 
           FROM profile_photos 
@@ -240,7 +229,7 @@ router.get('/user/:userId', async (req, res) => {
         totalMinutes: user.total_call_minutes || 0,
         totalEarnings: Number(user.call_earnings) || 0,
         isAvailable: user.is_available_for_calls,
-        availableCallTypes: (user.available_call_types && user.available_call_types.length > 0) ? user.available_call_types : ['voice', 'video'],
+        availableCallTypes: ['voice', 'video'],
         rates: {
           voice: voiceRate,
           video: videoRate
