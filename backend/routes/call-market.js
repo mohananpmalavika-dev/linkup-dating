@@ -13,8 +13,8 @@ const AVAILABLE_CALL_TYPES_SQL = `
     dp.available_call_types,
     CASE
       WHEN COALESCE(dp.is_available_for_calls, FALSE)
-        THEN '{"voice","video"}'::text[]
-      ELSE '{}'::text[]
+        THEN ARRAY['voice', 'video']::text[]
+      ELSE ARRAY[]::text[]
     END
   )
 `;
