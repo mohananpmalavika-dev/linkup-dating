@@ -5,6 +5,16 @@ const db = require('../config/database');
 const getMessageText = (body = {}) =>
   String(body.message ?? body.content ?? body.text ?? '').trim();
 
+const getMediaData = (body = {}) => {
+  const mediaType = String(body.mediaType ?? body.media_type ?? '').trim();
+  const mediaUrl = String(body.mediaUrl ?? body.media_url ?? '').trim();
+  
+  return {
+    mediaType: mediaType || null,
+    mediaUrl: mediaUrl || null
+  };
+};
+
 // GET LOBBY MESSAGES
 router.get('/messages', async (req, res) => {
   try {

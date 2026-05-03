@@ -5,6 +5,16 @@ const db = require('../config/database');
 const getMessageText = (body = {}) =>
   String(body.message ?? body.content ?? body.text ?? '').trim();
 
+const getMediaData = (body = {}) => {
+  const mediaType = String(body.mediaType ?? body.media_type ?? '').trim();
+  const mediaUrl = String(body.mediaUrl ?? body.media_url ?? '').trim();
+  
+  return {
+    mediaType: mediaType || null,
+    mediaUrl: mediaUrl || null
+  };
+};
+
 let chatroomMemberCompatibilityPromise = null;
 
 const ensureChatroomMemberCompatibility = () => {
@@ -476,16 +486,18 @@ router.post('/:chatroomId/messages', async (req, res) => {
     const userId = req.user?.id;
     const { chatroomId } = req.params;
     const message = getMessageText(req.body);
+    const { mediaType, mediaUrl } = getMediaData(req.body);
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    if (!message) {
-      return res.status(400).json({ error: 'Message required' });
+    // Allow either text message or media message, but require at least one
+    if (!message && !mediaType) {
+      return res.status(400).json({ error: 'Message or media required' });
     }
 
-    if (message.length > 5000) {
+    if (message && message.length > 5000) {
       return res.status(400).json({ error: 'Message cannot exceed 5000 characters' });
     }
 
@@ -505,14 +517,43 @@ router.post('/:chatroomId/messages', async (req, res) => {
       return res.status(403).json({ error: 'Not a member of this chatroom' });
     }
 
+    // Determine message type
+    let messageType = 'text';
+    if (mediaType) {
+      if (mediaType === 'image' || mediaType === 'photo') {
+        messageType = 'image';
+      } else if (mediaType === 'video') {
+        messageType = 'video';
+      } else if (mediaType === 'sticker') {
+        messageType = 'sticker';
+      } else if (mediaType === 'emoji') {
+        messageType = 'emoji';
+      }
+    }
+
     // Insert message
     let result;
     try {
       result = await db.query(
-        `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type, created_at)
-         VALUES ($1, $2, $3, 'text', NOW())
+        `INSERT INTO chatroom_messages (
+          chatroom_id, 
+          from_user_id, 
+          message, 
+          message_type, 
+          media_type,
+          media_url,
+          created_at
+        )
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())
          RETURNING *`,
-        [chatroomId, userId, message]
+        [
+          chatroomId,
+          userId,
+          message || `[${messageType}]`,
+          messageType,
+          mediaType || null,
+          mediaUrl || null
+        ]
       );
     } catch (insertErr) {
       console.error('Message insert error:', insertErr.message);
