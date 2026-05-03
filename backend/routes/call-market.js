@@ -43,6 +43,38 @@ const isCallingEnabled = async () => {
   return enabled === 'true';
 };
 
+// Check if user is online based on their presence sessions
+const isUserOnline = async (userId) => {
+  try {
+    // Check if user has any active presence sessions
+    const presenceResult = await db.query(
+      `SELECT COUNT(*) as active_sessions 
+       FROM user_presence_sessions 
+       WHERE user_id = $1 AND is_active = true 
+       LIMIT 1`,
+      [userId]
+    );
+
+    if (presenceResult.rows[0]?.active_sessions > 0) {
+      return true;
+    }
+
+    // Also check if user has any ongoing activities
+    const activityResult = await db.query(
+      `SELECT COUNT(*) as active_activities 
+       FROM user_activities 
+       WHERE user_id = $1 AND end_time IS NULL 
+       LIMIT 1`,
+      [userId]
+    );
+
+    return activityResult.rows[0]?.active_activities > 0;
+  } catch (error) {
+    console.error('Error checking user online status:', error);
+    return false;
+  }
+};
+
 // Browse available callers
 router.get('/available', async (req, res) => {
   try {
@@ -237,8 +269,18 @@ router.post('/request', async (req, res) => {
       [targetUserId]
     );
     
+    if (!targetResult.rows[0]) {
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+
     if (!targetResult.rows[0]?.is_available_for_calls) {
-      return res.status(400).json({ error: 'User is not available for calls' });
+      return res.status(400).json({ error: 'User has disabled direct calling' });
+    }
+
+    // Check if target user is online
+    const targetIsOnline = await isUserOnline(targetUserId);
+    if (!targetIsOnline) {
+      return res.status(400).json({ error: 'User is offline' });
     }
     
     const requestId = `req_${Date.now()}_${callerId}_${targetUserId}`;
