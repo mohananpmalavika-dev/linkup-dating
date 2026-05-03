@@ -9,6 +9,68 @@ const db = require('../config/database');
 const { authenticateToken } = require('../middleware/auth');
 const razorpayService = require('../services/razorpayService');
 
+const DEFAULT_PLAN_FEATURES = [
+  'Unlimited swipes',
+  'Message before matching',
+  'See who liked you',
+  'Advanced filters',
+  'Premium badge',
+  'Ad-free'
+];
+
+const DEFAULT_SUBSCRIPTION_PLANS = [
+  {
+    id: 1,
+    name: 'Premium Monthly',
+    price: 99,
+    duration_months: 1,
+    description: 'Unlimited swipes, message before match, see who liked you',
+    features: DEFAULT_PLAN_FEATURES
+  },
+  {
+    id: 2,
+    name: 'Premium Quarterly',
+    price: 499,
+    duration_months: 3,
+    description: 'Save Rs 200 with quarterly billing',
+    features: [...DEFAULT_PLAN_FEATURES, 'Save 17%']
+  },
+  {
+    id: 3,
+    name: 'Premium Yearly',
+    price: 999,
+    duration_months: 12,
+    description: 'Save Rs 300 with yearly billing',
+    features: [...DEFAULT_PLAN_FEATURES, 'Annual badge', 'Save 33%']
+  }
+];
+
+const getPlanFeatures = (features) => {
+  if (Array.isArray(features) && features.length > 0) {
+    return features;
+  }
+
+  if (typeof features === 'string') {
+    try {
+      const parsedFeatures = JSON.parse(features);
+      if (Array.isArray(parsedFeatures) && parsedFeatures.length > 0) {
+        return parsedFeatures;
+      }
+    } catch (error) {
+      // Use defaults below when a stored feature payload is malformed.
+    }
+  }
+
+  return DEFAULT_PLAN_FEATURES;
+};
+
+const serializePlan = (plan) => ({
+  ...plan,
+  price: Number(plan.price),
+  duration_months: Number(plan.duration_months || plan.durationMonths || 1),
+  features: getPlanFeatures(plan.features)
+});
+
 /**
  * GET /payments/plans
  * Get all available subscription plans
@@ -16,6 +78,10 @@ const razorpayService = require('../services/razorpayService');
 router.get('/plans', async (req, res) => {
   try {
     const plans = await razorpayService.getSubscriptionPlans();
+
+    if (plans.length === 0) {
+      return res.json({ plans: DEFAULT_SUBSCRIPTION_PLANS });
+    }
 
     if (plans.length === 0) {
       return res.json({
@@ -73,21 +139,14 @@ router.get('/plans', async (req, res) => {
     }
 
     res.json({
-      plans: plans.map(p => ({
-        ...p,
-        features: [
-          'Unlimited swipes',
-          'Message before matching',
-          'See who liked you',
-          'Advanced filters',
-          'Premium badge',
-          'Ad-free'
-        ]
-      }))
+      plans: plans.map(serializePlan)
     });
   } catch (error) {
     console.error('Error getting plans:', error);
-    res.status(500).json({ error: 'Failed to get plans' });
+    res.json({
+      plans: DEFAULT_SUBSCRIPTION_PLANS,
+      fallback: true
+    });
   }
 });
 
@@ -137,7 +196,7 @@ router.post('/create-order', authenticateToken, async (req, res) => {
  */
 router.post('/verify', authenticateToken, async (req, res) => {
   try {
-    const { orderId, paymentId, signature, planId, amount } = req.body;
+    const { orderId, paymentId, signature, planId, amount, discountCode, isUpgrade } = req.body;
     const userId = req.user.id;
 
     if (!orderId || !paymentId || !signature) {
@@ -150,23 +209,34 @@ router.post('/verify', authenticateToken, async (req, res) => {
       orderId,
       paymentId,
       signature,
-      planId
+      planId,
+      discountCode,
+      isUpgrade
     );
 
     if (result.success) {
       // Get updated subscription info
       const subscription = await razorpayService.getUserSubscription(userId);
+      const subscriptionPayload = subscription
+        ? {
+            planName: subscription.name,
+            planPrice: subscription.price,
+            endDate: subscription.end_date,
+            renewalDate: subscription.renewal_date,
+            autoRenew: subscription.auto_renew
+          }
+        : {
+            planName: result.planName,
+            planPrice: result.planPrice,
+            endDate: result.subscriptionEnd,
+            renewalDate: result.subscriptionEnd,
+            autoRenew: true
+          };
 
       res.json({
         success: true,
         message: 'Payment verified and subscription activated',
-        subscription: {
-          planName: subscription.name,
-          planPrice: subscription.price,
-          endDate: subscription.end_date,
-          renewalDate: subscription.renewal_date,
-          autoRenew: subscription.auto_renew
-        }
+        subscription: subscriptionPayload
       });
     } else {
       res.status(400).json({
