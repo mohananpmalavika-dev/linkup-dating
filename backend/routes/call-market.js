@@ -78,6 +78,24 @@ const buildOnlineStatusSql = (userAlias, statusColumn) => {
   `;
 };
 
+const getSocketOnlineUserIds = (activeUsers) => {
+  if (!(activeUsers instanceof Map)) {
+    return [];
+  }
+
+  return Array.from(activeUsers.keys())
+    .map((userId) => parseInteger(userId, null))
+    .filter((userId) => Number.isFinite(userId));
+};
+
+const isUserOnlineViaSockets = (userId, activeUsers) => {
+  if (!(activeUsers instanceof Map)) {
+    return false;
+  }
+
+  return activeUsers.has(String(userId));
+};
+
 const parseInteger = (value, fallback = null) => {
   const parsedValue = Number.parseInt(value, 10);
   return Number.isFinite(parsedValue) ? parsedValue : fallback;
@@ -165,8 +183,12 @@ const isCallingEnabled = async () => {
 };
 
 // Check if user is online based on their presence sessions
-const isUserOnline = async (userId) => {
+const isUserOnline = async (userId, activeUsers = null) => {
   try {
+    if (isUserOnlineViaSockets(userId, activeUsers)) {
+      return true;
+    }
+
     const presenceStatusColumn = await getPresenceStatusColumn();
     if (!presenceStatusColumn) {
       return false;
@@ -244,6 +266,7 @@ router.get('/available', async (req, res) => {
     const currentLat = parseFloatValue(currentProfileResult.rows[0]?.location_lat);
     const currentLng = parseFloatValue(currentProfileResult.rows[0]?.location_lng);
     const hasViewerCoordinates = Number.isFinite(currentLat) && Number.isFinite(currentLng);
+    const socketOnlineUserIds = getSocketOnlineUserIds(req.activeUsers);
 
     const params = [userId];
     let paramIndex = 2;
@@ -255,6 +278,14 @@ router.get('/available', async (req, res) => {
       params.push(currentLat, currentLng);
       distanceExpression = buildDistanceExpression(latitudeParamIndex, longitudeParamIndex);
     }
+
+    let liveSocketOnlineSql = 'FALSE';
+    if (socketOnlineUserIds.length > 0) {
+      liveSocketOnlineSql = `u.id = ANY($${paramIndex++}::int[])`;
+      params.push(socketOnlineUserIds);
+    }
+
+    const candidateOnlineSql = `(${liveSocketOnlineSql} OR ${onlineStatusSql})`;
 
     let query = `
       SELECT
@@ -279,7 +310,7 @@ router.get('/available', async (req, res) => {
         ) as photo_url,
         dp.call_earnings,
         ${AVAILABLE_CALL_TYPES_SQL} as available_call_types,
-        ${onlineStatusSql} as is_online,
+        ${candidateOnlineSql} as is_online,
         ${distanceExpression} as distance_km,
         COUNT(*) OVER() as total_count
       FROM users u
@@ -288,7 +319,7 @@ router.get('/available', async (req, res) => {
         AND u.id != $1
         AND COALESCE(dp.is_active, TRUE) = TRUE
         AND COALESCE(array_length(${AVAILABLE_CALL_TYPES_SQL}, 1), 0) > 0
-        AND ${onlineStatusSql}
+        AND ${candidateOnlineSql}
     `;
 
     if (requestedCallType) {
@@ -547,7 +578,7 @@ router.post('/request', async (req, res) => {
     }
 
     // Check if target user is online
-    const targetIsOnline = await isUserOnline(targetUserId);
+    const targetIsOnline = await isUserOnline(targetUserId, req.activeUsers);
     if (!targetIsOnline) {
       return res.status(400).json({ error: 'User is offline' });
     }
