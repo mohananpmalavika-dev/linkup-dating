@@ -17,30 +17,73 @@ const getSocketURL = () => {
 };
 
 const SOCKET_URL = getSocketURL();
+const CONNECT_TIMEOUT_MS = 15000;
+const SOCKET_EVENT_ALIASES = {
+  incoming_call_request: ['incoming_call_request', 'call:incoming'],
+  'call:incoming': ['call:incoming', 'incoming_call_request'],
+  'call:rejected': ['call:rejected', 'call:declined'],
+  'call:declined': ['call:declined', 'call:rejected']
+};
+
+const getEventAliases = (eventName) => Array.from(
+  new Set([eventName, ...(SOCKET_EVENT_ALIASES[eventName] || [])])
+);
 
 class RealTimeService {
   constructor() {
     this.socket = null;
     this.userId = null;
     this.listeners = new Map(); // { eventName: [callbacks] }
-    this.socketListeners = new Set(); // Track which events have socket listeners registered
+    this.socketListeners = new Set(); // Track which socket event names are registered
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 1000;
+    this.connectPromise = null;
   }
 
   /**
    * Connect to real-time server
    */
   connect(userId, deviceInfo = {}) {
-    return new Promise((resolve, reject) => {
-      if (this.socket?.connected) {
-        resolve(this.socket);
-        return;
-      }
+    if (this.socket?.connected) {
+      return Promise.resolve(this.socket);
+    }
+
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
+
+    this.connectPromise = new Promise((resolve, reject) => {
+      let settled = false;
+      let connectTimeout = null;
+
+      const settle = (callback) => (value) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        this.connectPromise = null;
+
+        if (connectTimeout) {
+          clearTimeout(connectTimeout);
+        }
+
+        callback(value);
+      };
+
+      const resolveOnce = settle(resolve);
+      const rejectOnce = settle(reject);
 
       try {
         this.userId = userId;
+
+        if (this.socket) {
+          this.socket.removeAllListeners();
+          this.socket.close();
+        }
+
+        this.socketListeners = new Set();
 
         console.log(`[RealTimeService] Connecting to socket.io at: ${SOCKET_URL}`);
 
@@ -49,34 +92,36 @@ class RealTimeService {
           reconnectionDelay: this.reconnectDelay,
           reconnectionDelayMax: 5000,
           reconnectionAttempts: this.maxReconnectAttempts,
-          transports: ['websocket', 'polling'],
+          transports: ['polling', 'websocket'],
+          timeout: CONNECT_TIMEOUT_MS,
           query: {
             userId,
             device: deviceInfo.device || 'web'
           }
         });
 
-        // Connection established
+        connectTimeout = setTimeout(() => {
+          const timeoutError = new Error('Real-time connection timed out');
+          console.error('[RealTimeService] Connection timeout');
+          this._emit('connection_error', { error: timeoutError.message });
+          rejectOnce(timeoutError);
+        }, CONNECT_TIMEOUT_MS);
+
         this.socket.on('connect', () => {
           console.log('[RealTimeService] Connected to real-time server');
           this.reconnectAttempts = 0;
 
-          // Register all pending socket listeners for subscribed events
           this._registerAllSocketListeners();
-
-          // Send online status
           this.socket.emit('user_online', userId, deviceInfo);
           this._emit('connected', { userId });
-          resolve(this.socket);
+          resolveOnce(this.socket);
         });
 
-        // Connection lost
         this.socket.on('disconnect', (reason) => {
           console.warn('[RealTimeService] Disconnected from real-time server:', reason);
           this._emit('disconnected', { reason });
         });
 
-        // Reconnection attempt
         this.socket.on('reconnect_attempt', () => {
           this.reconnectAttempts++;
           console.log(
@@ -84,29 +129,31 @@ class RealTimeService {
           );
         });
 
-        // Connection error
         this.socket.on('connect_error', (error) => {
           console.error('[RealTimeService] Connection error:', error);
           this._emit('connection_error', { error: error.message });
-          reject(error);
         });
 
-        // Generic error
         this.socket.on('error', (error) => {
           console.error('[RealTimeService] Socket error:', error);
           this._emit('error', { error });
         });
       } catch (error) {
         console.error('[RealTimeService] Error during connection setup:', error);
-        reject(error);
+        rejectOnce(error);
       }
     });
+
+    return this.connectPromise;
   }
 
   /**
    * Disconnect from real-time server
    */
   disconnect() {
+    this.connectPromise = null;
+    this.socketListeners = new Set();
+
     if (this.socket?.connected) {
       this.socket.emit('user_offline', this.userId);
       this.socket.disconnect();
@@ -150,16 +197,26 @@ class RealTimeService {
    * Register a socket listener for a specific event
    */
   _registerSocketListener(eventName) {
-    if (!this.socket || this.socketListeners.has(eventName)) {
-      return; // Already registered or no socket
+    if (!this.socket) {
+      return;
     }
 
-    this.socketListeners.add(eventName);
-    console.log(`Registering socket listener for event: ${eventName}`);
-    
-    this.socket.on(eventName, (data) => {
-      console.log(`Received event: ${eventName}`, data);
-      this._emit(eventName, data);
+    const eventAliases = getEventAliases(eventName);
+
+    eventAliases.forEach((socketEventName) => {
+      if (this.socketListeners.has(socketEventName)) {
+        return;
+      }
+
+      this.socketListeners.add(socketEventName);
+      console.log(`Registering socket listener for event: ${socketEventName}`);
+
+      this.socket.on(socketEventName, (data) => {
+        console.log(`Received event: ${socketEventName}`, data);
+        eventAliases.forEach((aliasEventName) => {
+          this._emit(aliasEventName, data);
+        });
+      });
     });
   }
 

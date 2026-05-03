@@ -302,29 +302,81 @@ const CallDashboard = () => {
       return;
     }
 
-    if (realTimeConnectionRef.current) {
+    if (realTimeConnectionRef.current || realTimeService.isConnecting()) {
       console.log('CallingDashboard: Real-time connection already initialized');
-      return;
     }
 
     const userId = currentUser.id || currentUser.userId;
     console.log('CallingDashboard: Connecting to real-time service for user:', userId);
 
+    const unsubscribeConnected = realTimeService.on('connected', () => {
+      realTimeConnectionRef.current = true;
+      console.log('CallingDashboard: Real-time service connected successfully');
+      showNotice('Connected to call notifications.', 'success');
+    });
+
+    const unsubscribeCallAccepted = realTimeService.on('call:accepted', (data) => {
+      console.log('📞 CallingDashboard: Received call:accepted', {
+        receivedCallId: data?.callId,
+        pendingCallId: pendingRequestRef.current?.callId,
+        match: data?.callId === pendingRequestRef.current?.callId
+      });
+      if (data?.callId === pendingRequestRef.current?.callId) {
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+        showNotice('Call accepted! Connecting...', 'success');
+
+        const receiverUserId = data.fromUserId || data.targetUserId;
+        console.log('📞 CallingDashboard: Navigating caller to video room', { receiverUserId });
+        navigate(`/calls/${receiverUserId}/video`, {
+          state: {
+            callMode: 'outgoing',
+            autoAccepted: false,
+            callData: data,
+            callType: data.callType || 'video',
+            targetUserId: receiverUserId,
+            returnPath: '/call'
+          }
+        });
+      }
+    });
+
+    const unsubscribeCallRejected = realTimeService.on('call:rejected', (data) => {
+      console.log('CallingDashboard: Call rejected by receiver', data);
+      if (data?.callId === pendingRequestRef.current?.callId) {
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+        showNotice('Call was rejected.', 'info');
+      }
+    });
+
+    const unsubscribeCallTimeout = realTimeService.on('call:timeout', (data) => {
+      console.log('CallingDashboard: Call timed out', data);
+      if (data?.callId === pendingRequestRef.current?.callId) {
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+        showNotice('Call request expired.', 'info');
+      }
+    });
+
+    const unsubscribeCallEnded = realTimeService.on('call:ended', (data) => {
+      console.log('CallingDashboard: Call ended', data);
+      if (data?.callId === pendingRequestRef.current?.callId) {
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+      }
+    });
+
     const connectToRealTime = async () => {
       try {
-        if (realTimeService.socket?.connected) {
+        if (realTimeService.isConnected()) {
           console.log('CallingDashboard: Real-time service already connected');
           realTimeConnectionRef.current = true;
-          setupSocketListeners();
           return;
         }
 
         console.log('CallingDashboard: Establishing real-time connection...');
         await realTimeService.connect(userId, { device: 'web' });
-        realTimeConnectionRef.current = true;
-        console.log('CallingDashboard: Real-time service connected successfully');
-        showNotice('Connected to call notifications.', 'success');
-        setupSocketListeners();
       } catch (err) {
         console.error('CallingDashboard: Failed to connect to real-time service:', err);
         showNotice(
@@ -334,74 +386,14 @@ const CallDashboard = () => {
       }
     };
 
-    const setupSocketListeners = () => {
-      // Listen for call acceptance from receiver
-      realTimeService.socket?.on('call:accepted', (data) => {
-        console.log('📞 CallingDashboard: Received call:accepted', {
-          receivedCallId: data?.callId,
-          pendingCallId: pendingRequestRef.current?.callId,
-          match: data?.callId === pendingRequestRef.current?.callId
-        });
-        if (data?.callId === pendingRequestRef.current?.callId) {
-          // Clear pending request
-          setPendingRequest(null);
-          pendingRequestRef.current = null;
-          showNotice('Call accepted! Connecting...', 'success');
-          
-          // Navigate caller to video room
-          const receiverUserId = data.fromUserId || data.targetUserId;
-          console.log('📞 CallingDashboard: Navigating caller to video room', { receiverUserId });
-          navigate(`/calls/${receiverUserId}/video`, {
-            state: {
-              callMode: 'outgoing',
-              autoAccepted: false,
-              callData: data,
-              callType: data.callType || 'video',
-              targetUserId: receiverUserId,
-              returnPath: '/call'
-            }
-          });
-        }
-      });
-
-      // Listen for call rejection
-      realTimeService.socket?.on('call:rejected', (data) => {
-        console.log('CallingDashboard: Call rejected by receiver', data);
-        if (data?.callId === pendingRequestRef.current?.callId) {
-          setPendingRequest(null);
-          pendingRequestRef.current = null;
-          showNotice('Call was rejected.', 'info');
-        }
-      });
-
-      // Listen for call timeout
-      realTimeService.socket?.on('call:timeout', (data) => {
-        console.log('CallingDashboard: Call timed out', data);
-        if (data?.callId === pendingRequestRef.current?.callId) {
-          setPendingRequest(null);
-          pendingRequestRef.current = null;
-          showNotice('Call request expired.', 'info');
-        }
-      });
-
-      // Listen for call ended
-      realTimeService.socket?.on('call:ended', (data) => {
-        console.log('CallingDashboard: Call ended', data);
-        if (data?.callId === pendingRequestRef.current?.callId) {
-          setPendingRequest(null);
-          pendingRequestRef.current = null;
-        }
-      });
-    };
-
-    connectToRealTime();
+    void connectToRealTime();
 
     return () => {
-      // Clean up socket listeners
-      realTimeService.socket?.off('call:accepted');
-      realTimeService.socket?.off('call:rejected');
-      realTimeService.socket?.off('call:timeout');
-      realTimeService.socket?.off('call:ended');
+      unsubscribeConnected?.();
+      unsubscribeCallAccepted?.();
+      unsubscribeCallRejected?.();
+      unsubscribeCallTimeout?.();
+      unsubscribeCallEnded?.();
     };
   }, [currentUser?.id, currentUser?.userId, showNotice, navigate]);
 
