@@ -317,7 +317,12 @@ router.get('/available', async (req, res) => {
 
     if (locationFilter) {
       query += ` AND (
-        LOWER(COALESCE(dp.location_city, '')) LIKE LOWER($${paramIndex})
+        (
+          dp.location_city IS NULL
+          AND dp.location_district IS NULL
+          AND dp.location_locality IS NULL
+        )
+        OR LOWER(COALESCE(dp.location_city, '')) LIKE LOWER($${paramIndex})
         OR LOWER(COALESCE(dp.location_district, '')) LIKE LOWER($${paramIndex})
         OR LOWER(COALESCE(dp.location_locality, '')) LIKE LOWER($${paramIndex})
       )`;
@@ -326,9 +331,11 @@ router.get('/available', async (req, res) => {
     }
 
     if (hasViewerCoordinates && Number.isFinite(maxDistanceKm) && maxDistanceKm > 0) {
-      query += ` AND dp.location_lat IS NOT NULL
-        AND dp.location_lng IS NOT NULL
-        AND ${distanceExpression} <= $${paramIndex++}`;
+      query += ` AND (
+        dp.location_lat IS NULL
+        OR dp.location_lng IS NULL
+        OR ${distanceExpression} <= $${paramIndex++}
+      )`;
       params.push(maxDistanceKm);
     }
 

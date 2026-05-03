@@ -42,9 +42,7 @@ const createDefaultMarketFilters = () => ({
   minAge: '',
   maxAge: '',
   language: '',
-  gender: '',
-  location: '',
-  distanceKm: ''
+  gender: ''
 });
 
 const toNumber = (value, fallback = 0) => {
@@ -231,8 +229,6 @@ const CallDashboard = () => {
       if (appliedMarketFilters.maxAge) params.maxAge = appliedMarketFilters.maxAge;
       if (appliedMarketFilters.language) params.language = appliedMarketFilters.language;
       if (appliedMarketFilters.gender) params.gender = appliedMarketFilters.gender;
-      if (appliedMarketFilters.location) params.location = appliedMarketFilters.location;
-      if (appliedMarketFilters.distanceKm) params.distanceKm = appliedMarketFilters.distanceKm;
 
       const data = await apiCall('/calling/market/available', 'GET', params);
       setMarketEnabled(data.enabled !== false);
@@ -849,26 +845,6 @@ const CallDashboard = () => {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="market-filter-field market-filter-field-wide">
-              <span>Location</span>
-              <input
-                type="text"
-                value={marketFilters.location}
-                onChange={(event) => handleMarketFilterChange('location', event.target.value)}
-                placeholder="City, district, or area"
-              />
-            </label>
-            <label className="market-filter-field">
-              <span>Distance (km)</span>
-              <input
-                type="number"
-                min="1"
-                max="500"
-                value={marketFilters.distanceKm}
-                onChange={(event) => handleMarketFilterChange('distanceKm', event.target.value)}
-                placeholder="50"
-              />
             </label>
           </div>
           <div className="market-filters-actions">
