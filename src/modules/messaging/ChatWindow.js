@@ -412,6 +412,8 @@ const ChatWindow = ({
     }
 
     await onSendMessage(stickerValue, 'sticker', null, null);
+    setMessageInput('');
+    setReplyingToMessage(null);
     setShowStickerPicker(false);
   };
 
