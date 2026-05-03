@@ -693,16 +693,16 @@ const Login = ({
           <div className="login-fresh-methods login-simple-methods" role="group" aria-label="Choose login method">
             <button
               type="button"
-              className={`login-fresh-method-tab ${loginMethod === "firebase_phone" ? "active" : ""}`}
-              aria-pressed={loginMethod === "firebase_phone"}
+              className={`login-fresh-method-tab ${loginMethod === "mpin" ? "active" : ""}`}
+              aria-pressed={loginMethod === "mpin"}
               onClick={() => {
-                setLoginMethod("firebase_phone");
+                setLoginMethod("mpin");
                 resetOtpFlow();
-                resetMpinFlow();
+                resetFirebaseFlow();
               }}
             >
-              <span>Mobile OTP</span>
-              <small>Recommended</small>
+              <span>MPIN</span>
+              <small>4 to 6 digits</small>
             </button>
             <button
               type="button"
@@ -720,16 +720,16 @@ const Login = ({
             </button>
             <button
               type="button"
-              className={`login-fresh-method-tab ${loginMethod === "mpin" ? "active" : ""}`}
-              aria-pressed={loginMethod === "mpin"}
+              className={`login-fresh-method-tab ${loginMethod === "firebase_phone" ? "active" : ""}`}
+              aria-pressed={loginMethod === "firebase_phone"}
               onClick={() => {
-                setLoginMethod("mpin");
+                setLoginMethod("firebase_phone");
                 resetOtpFlow();
-                resetFirebaseFlow();
+                resetMpinFlow();
               }}
             >
-              <span>MPIN</span>
-              <small>4 to 6 digits</small>
+              <span>Mobile OTP</span>
+              <small>Recommended</small>
             </button>
           </div>
         )}

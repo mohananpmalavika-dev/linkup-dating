@@ -3,13 +3,14 @@ import axios from 'axios';
 import { getTranslationValue } from '../data/translations';
 import { API_BASE_URL } from '../utils/api';
 import { isValidPincode } from '../utils/ecommerceHelpers';
-import { formatPhoneForFirebase, isValidPhoneFormat, getPhoneErrorMessage } from '../utils/phoneFormatter';
+import { formatPhoneForFirebase, getPhoneErrorMessage } from '../utils/phoneFormatter';
 import {
   KERALA_REGION_OPTIONS,
   getDistrictOptionsForRegion,
   normalizePincodeInput,
   resolveKeralaLocation
 } from '../utils/keralaLocation';
+import { setPreferredLoginMethod } from '../utils/auth';
 import PublicLegalNotice from './PublicLegalNotice';
 import AgeGate from './AgeGate/AgeGate';
 import '../styles/DatingSignUp.css';
@@ -66,7 +67,8 @@ const MESSAGE_GATING_OPTIONS = [
 const SIMPLE_SIGNUP_STEPS = [
   { number: 1, label: 'Account' },
   { number: 2, label: 'Details' },
-  { number: 3, label: 'Photo' }
+  { number: 3, label: 'Photo' },
+  { number: 4, label: 'MPIN' }
 ];
 
 /**
@@ -75,7 +77,7 @@ const SIMPLE_SIGNUP_STEPS = [
  * Uses OTP-based authentication matching the Login flow
  */
 const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
-  const [step, setStep] = useState(1); // 1: contact code, 2: basic details, 3: optional photo
+  const [step, setStep] = useState(1); // 1: contact code, 2: basic details, 3: optional photo, 4: MPIN
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -132,11 +134,10 @@ const [formData, setFormData] = useState({
     photos: [],
   });
 
-  // MPIN state for optional screen lock
+  // MPIN state for the final signup security step
   const [mpin, setMpin] = useState('');
   const [confirmMpin, setConfirmMpin] = useState('');
   const [mpinError, setMpinError] = useState('');
-  const [mpinSuccess, setMpinSuccess] = useState('');
 
   const INTERESTS = [
     'Travel', 'Fitness', 'Music', 'Art', 'Cooking', 'Gaming', 'Sports',
@@ -745,7 +746,6 @@ setError('That looks like a phone number. Please use your email (like yourname@e
     setLoading(true);
     setError('');
     setMpinError('');
-    setMpinSuccess('');
     const resolvedLocation = resolveKeralaLocation(formData);
 
     if (formData.pincode && !isValidPincode(formData.pincode)) {
@@ -754,18 +754,16 @@ setError('That looks like a phone number. Please use your email (like yourname@e
       return;
     }
 
-    // Validate MPIN if provided
-    if (mpin && mpin.length > 0) {
-      if (mpin.length < 4) {
-        setLoading(false);
-        setMpinError('MPIN must be at least 4 digits');
-        return;
-      }
-      if (mpin !== confirmMpin) {
-        setLoading(false);
-        setMpinError('MPINs do not match');
-        return;
-      }
+    if (!/^\d{4,6}$/.test(mpin)) {
+      setLoading(false);
+      setMpinError('Create a 4-6 digit MPIN to continue.');
+      return;
+    }
+
+    if (mpin !== confirmMpin) {
+      setLoading(false);
+      setMpinError('MPINs do not match');
+      return;
     }
 
     try {
@@ -831,6 +829,21 @@ setError('That looks like a phone number. Please use your email (like yourname@e
         });
       }
 
+      const mpinResponse = await axios.post(
+        `${API_BASE_URL}/auth/set-mpin`,
+        {
+          mpin,
+          confirmMpin
+        },
+        {
+          headers: { Authorization: `Bearer ${verifiedToken}` }
+        }
+      );
+
+      if (!mpinResponse.data?.success) {
+        throw new Error(mpinResponse.data?.message || mpinResponse.data?.error || 'Failed to set MPIN');
+      }
+
       let referralApplied = false;
       if (referralValidated && referralCode.trim()) {
         try {
@@ -868,6 +881,7 @@ setError('That looks like a phone number. Please use your email (like yourname@e
       );
       const completedUser = {
         ...(verifiedUser || {}),
+        hasMpin: true,
         username: ensuredUsername || verifiedUser?.username,
         firstName: formData.firstName,
         name: formData.firstName,
@@ -875,10 +889,13 @@ setError('That looks like a phone number. Please use your email (like yourname@e
         profile: profileResponse.data?.profile || verifiedUser?.profile || null
       };
       setVerifiedUser(completedUser);
+      setPreferredLoginMethod('mpin');
       onSignUpSuccess?.(verifiedToken, completedUser);
     } catch (err) {
       console.error('Signup error:', err);
-      setError(err.response?.data?.error || 'Failed to create profile');
+      const fallbackError = err.message || 'Failed to create profile';
+      const responseError = err.response?.data?.error || err.response?.data?.message;
+      setError(responseError || fallbackError);
     } finally {
       setLoading(false);
     }
@@ -1315,7 +1332,13 @@ setError('That looks like a phone number. Please use your email (like yourname@e
 
         {/* Step 3: Optional photo */}
         {step === 3 && (
-          <form className="signup-step simplified-step" onSubmit={handleSubmit}>
+          <form
+            className="signup-step simplified-step"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setStep(4);
+            }}
+          >
             <h2>Add a photo</h2>
             <p className="signup-step-note">A photo helps trust, but you can add it later.</p>
 
@@ -1351,9 +1374,9 @@ setError('That looks like a phone number. Please use your email (like yourname@e
             </div>
 
             <button type="submit" className="btn-submit" disabled={loading}>
-              {loading ? 'Creating profile...' : 'Create my profile'}
+              Continue to MPIN
             </button>
-            <button type="button" className="btn-outline" onClick={handleSubmit} disabled={loading}>
+            <button type="button" className="btn-outline" onClick={() => setStep(4)} disabled={loading}>
               Skip photo for now
             </button>
           </form>
@@ -1546,8 +1569,8 @@ setError('That looks like a phone number. Please use your email (like yourname@e
           </form>
         )}
 
-        {/* Step 3: Profile Info */}
-        {step === 3 && (
+        {/* Legacy full profile step retained for reference */}
+        {false && step === 3 && (
           <div className="signup-step">
             <h2>Tell Us About Yourself</h2>
             <p>We use these answers to make your profile clearer and your first matches more relevant.</p>
@@ -1921,15 +1944,23 @@ setError('That looks like a phone number. Please use your email (like yourname@e
           </form>
         )}
 
-        {/* Step 5: Security (MPIN - Optional) */}
-        {false && step === 5 && (
+        {/* Step 4: Security */}
+        {step === 4 && (
           <form className="signup-step" onSubmit={handleSubmit}>
-            <h2>Secure Your Account</h2>
-            <p className="helper-text">Add an MPIN for quick login instead of password</p>
-            
+            <h2>Create your MPIN</h2>
+            <p className="signup-step-note">
+              This 4-6 digit MPIN becomes your faster sign-in option for future logins.
+            </p>
+
+            <div className="mpin-info-card">
+              <strong>Why we collect it</strong>
+              <span>Use your email or mobile number with this MPIN instead of waiting for OTP every time.</span>
+            </div>
+
             <div className="form-group">
-              <label>MPIN (4-6 digits)</label>
+              <label htmlFor="signup-mpin">MPIN (4-6 digits)</label>
               <input
+                id="signup-mpin"
                 type="password"
                 inputMode="numeric"
                 value={mpin}
@@ -1937,18 +1968,19 @@ setError('That looks like a phone number. Please use your email (like yourname@e
                   const value = e.target.value.replace(/\D/g, '').slice(0, 6);
                   setMpin(value);
                   setMpinError('');
-                  setMpinSuccess('');
                 }}
                 placeholder="Enter 4-6 digit MPIN"
                 maxLength="6"
                 disabled={loading}
+                autoComplete="new-password"
               />
-              <small className="helper-text">Optional - you can always add this later</small>
+              <small className="helper-text">Digits only. Avoid using repeated or obvious numbers.</small>
             </div>
 
             <div className="form-group">
-              <label>Confirm MPIN</label>
+              <label htmlFor="signup-confirm-mpin">Confirm MPIN</label>
               <input
+                id="signup-confirm-mpin"
                 type="password"
                 inputMode="numeric"
                 value={confirmMpin}
@@ -1956,36 +1988,31 @@ setError('That looks like a phone number. Please use your email (like yourname@e
                   const value = e.target.value.replace(/\D/g, '').slice(0, 6);
                   setConfirmMpin(value);
                   setMpinError('');
-                  setMpinSuccess('');
                 }}
                 placeholder="Re-enter MPIN"
                 maxLength="6"
                 disabled={loading}
+                autoComplete="new-password"
               />
             </div>
 
             {mpinError && <div className="error-message">{mpinError}</div>}
-            {mpinSuccess && <div className="success-message">{mpinSuccess}</div>}
 
-            <button 
-              type="submit" 
-              className="btn-submit" 
-              disabled={loading || (mpin !== '' && mpin !== confirmMpin)}
+            <button
+              type="submit"
+              className="btn-submit"
+              disabled={loading || !mpin || !confirmMpin || mpin !== confirmMpin}
             >
-              {loading ? 'Creating Account...' : (mpin ? 'Create Account with MPIN' : 'Create Account (No MPIN)')}
+              {loading ? 'Creating profile...' : 'Create my profile'}
             </button>
-            
-            <button 
-              type="button" 
-              className="btn-outline" 
-              onClick={() => {
-                setMpin('');
-                setConfirmMpin('');
-                handleSubmit(new Event('submit'));
-              }}
+
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => setStep(3)}
               disabled={loading}
             >
-              Skip MPIN
+              Back to photo step
             </button>
           </form>
         )}

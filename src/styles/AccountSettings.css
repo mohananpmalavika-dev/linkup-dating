@@ -485,6 +485,30 @@
   margin-left: 16px;
 }
 
+.btn-manage-security {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+  margin-left: 16px;
+}
+
+.btn-manage-security:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 32, 48, 0.25);
+}
+
+.btn-manage-security:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-delete-account:hover:not(:disabled) {
   background: #c82333;
   transform: translateY(-2px);
@@ -952,6 +976,11 @@
   }
 
   .btn-delete-account {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .btn-manage-security {
     width: 100%;
     margin-left: 0;
   }

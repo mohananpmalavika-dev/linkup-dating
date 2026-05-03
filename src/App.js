@@ -74,8 +74,7 @@ import {
   getStoredAuthToken,
   getStoredUserData,
   storeAuthToken,
-  storeUserData,
-  setPreferredLoginMethod
+  storeUserData
 } from './utils/auth';
 import './styles/logoTheme.css';
 import './styles/authenticatedLayout.css';
@@ -175,6 +174,7 @@ const inferNavigationPage = (pathname, returnPath = '') => {
   if (
     targetPath.startsWith('/more') ||
     targetPath.startsWith('/account-settings') ||
+    targetPath.startsWith('/mpin-setup') ||
     targetPath.startsWith('/subscription') ||
     targetPath.startsWith('/boost') ||
     targetPath.startsWith('/analytics') ||
@@ -430,6 +430,18 @@ const StatusPreferencesRoute = ({ onNavigateToPath }) => {
       matchId={matchId}
       isOpen
       onClose={() => onNavigateToPath(location.state?.returnPath || '/messages')}
+    />
+  );
+};
+
+const MpinSetupRoute = ({ onNavigateToPath }) => {
+  const location = useLocation();
+  const returnPath = location.state?.returnPath || '/account-settings';
+
+  return (
+    <MPINSetup
+      onComplete={() => onNavigateToPath(returnPath)}
+      onCancel={() => onNavigateToPath(returnPath)}
     />
   );
 };
@@ -1182,12 +1194,7 @@ const AppContent = () => {
             />
             <Route
               path="mpin-setup"
-              element={
-                <MPINSetup
-                  onComplete={() => navigate('/profile')}
-                  onCancel={() => navigate('/profile')}
-                />
-              }
+              element={<MpinSetupRoute onNavigateToPath={(path) => navigate(path)} />}
             />
             <Route path="legal/privacy" element={<PrivacyPolicyPage />} />
             <Route path="legal/terms" element={<TermsOfServicePage />} />

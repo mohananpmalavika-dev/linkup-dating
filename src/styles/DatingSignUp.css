@@ -90,7 +90,7 @@
 
 .step-indicators {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -260,6 +260,21 @@
   flex-direction: column;
   gap: 16px;
   padding: 0 16px 16px;
+}
+
+.mpin-info-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid #cfe0ec;
+  background: #f3f9fc;
+  color: #365063;
+}
+
+.mpin-info-card strong {
+  color: #102030;
 }
 
 .photo-preview {

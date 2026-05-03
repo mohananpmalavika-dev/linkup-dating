@@ -984,6 +984,23 @@ const AccountSettings = ({ onBack, onLogout }) => {
     <div className="security-section">
       <div className="settings-item">
         <div className="setting-info">
+          <h3>{currentUser?.hasMpin ? 'Reset MPIN' : 'Set MPIN'}</h3>
+          <p>
+            {currentUser?.hasMpin
+              ? 'Change your quick login MPIN anytime from this security screen.'
+              : 'Create a 4-6 digit MPIN for faster login with your email or mobile number.'}
+          </p>
+        </div>
+        <button
+          className="btn-manage-security"
+          onClick={() => navigate('/mpin-setup', { state: { returnPath: '/account-settings' } })}
+        >
+          {currentUser?.hasMpin ? 'Manage MPIN' : 'Create MPIN'}
+        </button>
+      </div>
+
+      <div className="settings-item">
+        <div className="setting-info">
           <h3>Password Reset</h3>
           <p>Send a reset code to {currentUser?.email || 'your email'} and choose a new password.</p>
         </div>
