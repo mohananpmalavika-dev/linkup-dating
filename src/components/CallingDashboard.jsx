@@ -36,12 +36,52 @@ const CALL_TYPES = {
   }
 };
 
+const MARKET_LANGUAGE_OPTIONS = ['English', 'Hindi', 'Malayalam', 'Tamil', 'Telugu', 'Kannada', 'Bengali', 'Marathi'];
+const MARKET_GENDER_OPTIONS = ['male', 'female', 'non-binary', 'other'];
+const createDefaultMarketFilters = () => ({
+  minAge: '',
+  maxAge: '',
+  language: '',
+  gender: '',
+  location: '',
+  distanceKm: ''
+});
+
 const toNumber = (value, fallback = 0) => {
   const parsedValue = Number(value);
   return Number.isFinite(parsedValue) ? parsedValue : fallback;
 };
 
+const toNullableNumber = (value) => {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+};
+
 const getUserId = (user) => user?.userId || user?.id || user?._id;
+
+const normalizeAvailableCallTypes = (value, fallback = ['voice', 'video']) => {
+  const rawTypes = Array.isArray(value)
+    ? value
+    : value === undefined || value === null
+      ? fallback
+      : [value];
+
+  return Array.from(
+    new Set(
+      rawTypes
+        .map((type) => String(type || '').trim().toLowerCase())
+        .filter((type) => Object.prototype.hasOwnProperty.call(CALL_TYPES, type))
+    )
+  );
+};
+
+const buildCallTypeState = (availableCallTypes = []) => ({
+  voice: availableCallTypes.includes('voice'),
+  video: availableCallTypes.includes('video')
+});
+
+const buildAvailableCallTypes = (availableFor = {}) =>
+  Object.keys(CALL_TYPES).filter((type) => availableFor[type]);
 
 const normalizePackage = (pkg) => ({
   id: pkg.id,
@@ -53,26 +93,34 @@ const normalizePackage = (pkg) => ({
 
 const normalizeCaller = (user) => {
   const rates = user.rates || {};
+  const availableCallTypes = normalizeAvailableCallTypes(
+    user.availableCallTypes || user.available_call_types,
+    user.availableFor ? buildAvailableCallTypes(user.availableFor) : ['voice', 'video']
+  );
 
   return {
     ...user,
     userId: getUserId(user),
     name: user.name || user.firstName || 'DatingHub user',
     age: user.age,
+    gender: user.gender || '',
     location: user.location,
     bio: user.bio || 'Available for a friendly call.',
     photoUrl: user.photoUrl || user.photo_url,
     callRating: toNumber(user.callRating),
     totalCalls: toNumber(user.totalCalls),
+    availableCallTypes,
     availableFor: {
-      voice: user.availableFor?.voice !== false,
-      video: user.availableFor?.video !== false
+      voice: availableCallTypes.includes('voice'),
+      video: availableCallTypes.includes('video')
     },
     rates: {
       voice: toNumber(user.voiceRate ?? rates.voice, 5),
       video: toNumber(user.videoRate ?? rates.video, 10)
     },
-    interests: Array.isArray(user.interests) ? user.interests : []
+    interests: Array.isArray(user.interests) ? user.interests : [],
+    languages: Array.isArray(user.languages) ? user.languages : [],
+    distanceKm: toNullableNumber(user.distanceKm ?? user.distance_km)
   };
 };
 
@@ -88,6 +136,9 @@ const CallDashboard = () => {
   const [callingUsers, setCallingUsers] = useState([]);
   const [loadingMarket, setLoadingMarket] = useState(false);
   const [marketEnabled, setMarketEnabled] = useState(true);
+  const [marketTotal, setMarketTotal] = useState(0);
+  const [marketFilters, setMarketFilters] = useState(createDefaultMarketFilters);
+  const [appliedMarketFilters, setAppliedMarketFilters] = useState(createDefaultMarketFilters);
   const [availability, setAvailability] = useState(false);
   const [callTypes, setCallTypes] = useState({ voice: true, video: true }); // Track call types user is available for
   const [loadingAvailability, setLoadingAvailability] = useState(true);
@@ -101,6 +152,11 @@ const CallDashboard = () => {
   const normalizedPackages = useMemo(
     () => packages.map(normalizePackage),
     [packages]
+  );
+
+  const hasAppliedMarketFilters = useMemo(
+    () => Object.values(appliedMarketFilters).some((value) => String(value || '').trim() !== ''),
+    [appliedMarketFilters]
   );
 
   // Define showNotice callback
@@ -145,47 +201,89 @@ const CallDashboard = () => {
     }
   }, []);
 
+  const syncAvailabilityState = useCallback((preferences = {}) => {
+    const isAvailableForCalls = Boolean(preferences?.isAvailableForCalls ?? preferences?.isAvailable);
+    const availableCallTypes = normalizeAvailableCallTypes(
+      preferences?.availableCallTypes,
+      isAvailableForCalls ? ['voice', 'video'] : []
+    );
+
+    setAvailability(isAvailableForCalls);
+    setCallTypes(buildCallTypeState(availableCallTypes));
+  }, []);
+
+  const updateMyCallPreferences = useCallback(async (nextAvailability, nextCallTypes) => {
+    const response = await apiCall('/calling/preferences/my-preferences', 'PUT', {
+      isAvailableForCalls: nextAvailability,
+      availableCallTypes: nextAvailability ? buildAvailableCallTypes(nextCallTypes) : []
+    });
+
+    syncAvailabilityState(response?.preferences);
+    return response;
+  }, [apiCall, syncAvailabilityState]);
+
   const loadCallingMarket = useCallback(async () => {
     setLoadingMarket(true);
     try {
-      const data = await apiCall('/calling/market/available', 'GET');
+      const params = {};
+
+      if (appliedMarketFilters.minAge) params.minAge = appliedMarketFilters.minAge;
+      if (appliedMarketFilters.maxAge) params.maxAge = appliedMarketFilters.maxAge;
+      if (appliedMarketFilters.language) params.language = appliedMarketFilters.language;
+      if (appliedMarketFilters.gender) params.gender = appliedMarketFilters.gender;
+      if (appliedMarketFilters.location) params.location = appliedMarketFilters.location;
+      if (appliedMarketFilters.distanceKm) params.distanceKm = appliedMarketFilters.distanceKm;
+
+      const data = await apiCall('/calling/market/available', 'GET', params);
       setMarketEnabled(data.enabled !== false);
+      setMarketTotal(toNumber(data.total));
       setCallingUsers((data.users || []).map(normalizeCaller).filter((user) => user.userId));
     } catch (error) {
       console.error('Failed to load market:', error);
+      setCallingUsers([]);
+      setMarketTotal(0);
       showNotice('Could not load people available for calls.', 'error');
     } finally {
       setLoadingMarket(false);
     }
-  }, [apiCall, showNotice]);
+  }, [apiCall, appliedMarketFilters, showNotice]);
 
   const loadAvailability = useCallback(async () => {
     setLoadingAvailability(true);
     try {
-      const data = await apiCall('/calling/earnings/availability', 'GET');
-      setAvailability(Boolean(data.isAvailable));
-      // Load call type preferences
-      setCallTypes({
-        voice: data.availableFor?.voice !== false,
-        video: data.availableFor?.video !== false
-      });
+      const data = await apiCall('/calling/preferences/my-preferences', 'GET');
+      syncAvailabilityState(data?.preferences);
     } catch (error) {
       console.error('Failed to load availability:', error);
     } finally {
       setLoadingAvailability(false);
     }
-  }, [apiCall]);
+  }, [apiCall, syncAvailabilityState]);
 
   useEffect(() => {
     loadBalance();
     loadPackages();
-    loadCallingMarket();
     loadAvailability();
-  }, [loadAvailability, loadBalance, loadCallingMarket, loadPackages]);
+  }, [loadAvailability, loadBalance, loadPackages]);
+
+  useEffect(() => {
+    loadCallingMarket();
+  }, [loadCallingMarket]);
 
   // Initialize real-time connection for incoming calls and call acceptance
   const realTimeConnectionRef = useRef(false);
   const pendingRequestRef = useRef(null);
+  const marketRefreshTimeoutRef = useRef(null);
+
+  const scheduleMarketRefresh = useCallback(() => {
+    if (marketRefreshTimeoutRef.current) {
+      window.clearTimeout(marketRefreshTimeoutRef.current);
+    }
+
+    marketRefreshTimeoutRef.current = window.setTimeout(() => {
+      void loadCallingMarket();
+    }, 150);
+  }, [loadCallingMarket]);
 
   useEffect(() => {
     if (!currentUser?.id && !currentUser?.userId) {
@@ -206,7 +304,7 @@ const CallDashboard = () => {
         if (realTimeService.socket?.connected) {
           console.log('CallingDashboard: Real-time service already connected');
           realTimeConnectionRef.current = true;
-          setupSocketListeners(userId);
+          setupSocketListeners();
           return;
         }
 
@@ -215,7 +313,7 @@ const CallDashboard = () => {
         realTimeConnectionRef.current = true;
         console.log('CallingDashboard: Real-time service connected successfully');
         showNotice('Connected to call notifications.', 'success');
-        setupSocketListeners(userId);
+        setupSocketListeners();
       } catch (err) {
         console.error('CallingDashboard: Failed to connect to real-time service:', err);
         showNotice(
@@ -225,7 +323,7 @@ const CallDashboard = () => {
       }
     };
 
-    const setupSocketListeners = (userId) => {
+    const setupSocketListeners = () => {
       // Listen for call acceptance from receiver
       realTimeService.socket?.on('call:accepted', (data) => {
         console.log('📞 CallingDashboard: Received call:accepted', {
@@ -236,6 +334,7 @@ const CallDashboard = () => {
         if (data?.callId === pendingRequestRef.current?.callId) {
           // Clear pending request
           setPendingRequest(null);
+          pendingRequestRef.current = null;
           showNotice('Call accepted! Connecting...', 'success');
           
           // Navigate caller to video room
@@ -246,6 +345,7 @@ const CallDashboard = () => {
               callMode: 'outgoing',
               autoAccepted: false,
               callData: data,
+              callType: data.callType || 'video',
               targetUserId: receiverUserId,
               returnPath: '/call'
             }
@@ -258,6 +358,7 @@ const CallDashboard = () => {
         console.log('CallingDashboard: Call rejected by receiver', data);
         if (data?.callId === pendingRequestRef.current?.callId) {
           setPendingRequest(null);
+          pendingRequestRef.current = null;
           showNotice('Call was rejected.', 'info');
         }
       });
@@ -267,6 +368,7 @@ const CallDashboard = () => {
         console.log('CallingDashboard: Call timed out', data);
         if (data?.callId === pendingRequestRef.current?.callId) {
           setPendingRequest(null);
+          pendingRequestRef.current = null;
           showNotice('Call request expired.', 'info');
         }
       });
@@ -276,6 +378,7 @@ const CallDashboard = () => {
         console.log('CallingDashboard: Call ended', data);
         if (data?.callId === pendingRequestRef.current?.callId) {
           setPendingRequest(null);
+          pendingRequestRef.current = null;
         }
       });
     };
@@ -291,6 +394,25 @@ const CallDashboard = () => {
     };
   }, [currentUser?.id, currentUser?.userId, showNotice, navigate]);
 
+  useEffect(() => {
+    const unsubscribePreferenceUpdates = realTimeService.on('user_call_preference_updated', () => {
+      scheduleMarketRefresh();
+    });
+
+    const unsubscribeOwnPreferenceUpdates = realTimeService.on('your_call_preference_updated', (data) => {
+      syncAvailabilityState(data);
+      scheduleMarketRefresh();
+    });
+
+    return () => {
+      unsubscribePreferenceUpdates?.();
+      unsubscribeOwnPreferenceUpdates?.();
+      if (marketRefreshTimeoutRef.current) {
+        window.clearTimeout(marketRefreshTimeoutRef.current);
+      }
+    };
+  }, [scheduleMarketRefresh, syncAvailabilityState]);
+
   const handleToggleAvailability = async () => {
     if (!currentUser || updatingAvailability) {
       return;
@@ -299,16 +421,15 @@ const CallDashboard = () => {
     const nextAvailability = !availability;
     setUpdatingAvailability(true);
     try {
-      const data = await apiCall('/calling/earnings/availability', 'POST', {
-        available: nextAvailability,
-        availableFor: nextAvailability ? callTypes : { voice: false, video: false }
-      });
-      setAvailability(Boolean(data.isAvailable));
+      await updateMyCallPreferences(
+        nextAvailability,
+        nextAvailability ? callTypes : { voice: false, video: false }
+      );
       const typesList = nextAvailability && callTypes.voice && callTypes.video ? 'voice and video' : 
                        nextAvailability && callTypes.voice ? 'voice only' :
                        nextAvailability && callTypes.video ? 'video only' : '';
       showNotice(
-        data.isAvailable
+        nextAvailability
           ? `You are available for incoming ${typesList} calls.`
           : 'You are offline for paid calls.',
         'success'
@@ -333,10 +454,7 @@ const CallDashboard = () => {
 
     // Always update the server with the new preferences
     try {
-      await apiCall('/calling/earnings/availability', 'POST', {
-        available: availability,
-        availableFor: newCallTypes
-      });
+      await updateMyCallPreferences(availability, newCallTypes);
       showNotice('Call type preferences updated.', 'success');
       // Reload market to reflect the change
       await loadCallingMarket();
@@ -346,6 +464,23 @@ const CallDashboard = () => {
       // Revert the change
       setCallTypes(callTypes);
     }
+  };
+
+  const handleMarketFilterChange = (field, value) => {
+    setMarketFilters((currentFilters) => ({
+      ...currentFilters,
+      [field]: value
+    }));
+  };
+
+  const handleApplyMarketFilters = () => {
+    setAppliedMarketFilters({ ...marketFilters });
+  };
+
+  const handleClearMarketFilters = () => {
+    const clearedFilters = createDefaultMarketFilters();
+    setMarketFilters(clearedFilters);
+    setAppliedMarketFilters(clearedFilters);
   };
 
   const handlePurchase = (pkg) => {
@@ -375,11 +510,17 @@ const CallDashboard = () => {
   const handleStartCall = async (user, callType = 'voice') => {
     const callerId = getUserId(user);
     const normalizedCallType = callType === 'video' ? 'video' : 'voice';
+    const callerSupportsRequestedType = user.availableCallTypes?.includes(normalizedCallType);
     const rate = toNumber(user?.rates?.[normalizedCallType], normalizedCallType === 'video' ? 10 : 5);
     const requiredCredits = rate * ESTIMATED_CALL_MINUTES;
 
     if (!callerId) {
       showNotice('This caller profile is missing a valid ID.', 'error');
+      return;
+    }
+
+    if (!callerSupportsRequestedType) {
+      showNotice(`This person is currently available for ${user.availableCallTypes?.join(' and ') || 'other'} calls only.`, 'warning');
       return;
     }
 
@@ -461,17 +602,6 @@ const CallDashboard = () => {
         fromUserId: normalizedCallData.fromUserId
       });
 
-      // First, emit socket event to notify caller before API call
-      if (normalizedCallData?.callId && normalizedCallData?.fromUserId) {
-        realTimeService.socket?.emit('call:accepted', {
-          callId: normalizedCallData.callId,
-          fromUserId: currentUser?.id || currentUser?.userId,
-          targetUserId: normalizedCallData.fromUserId,
-          matchId: normalizedCallData.matchId,
-          callType: normalizedCallData.callType
-        });
-      }
-
       const response = await apiCall(`/calling/market/accept/${normalizedCallData.requestId}`, 'POST');
       if (response?.success) {
         showNotice('Call accepted! Connecting...', 'success');
@@ -493,7 +623,7 @@ const CallDashboard = () => {
           route: videoCallRoute
         });
 
-        navigate(videoCallRoute, {
+          navigate(videoCallRoute, {
           state: {
             callMode: 'incoming',
             autoAccepted: true,
@@ -516,23 +646,6 @@ const CallDashboard = () => {
   // Handle declining incoming call request
   const handleDeclineIncomingCall = async (callData) => {
     try {
-      // Normalize call data to ensure all fields are present
-      const normalizedCallData = {
-        ...callData,
-        callId: callData.callId || callData.sessionId,
-        fromUserId: callData.fromUserId || callData.callerId
-      };
-
-      // Emit socket event to notify caller BEFORE the API call
-      if (normalizedCallData?.callId && normalizedCallData?.fromUserId) {
-        realTimeService.socket?.emit('call:rejected', {
-          callId: normalizedCallData.callId,
-          fromUserId: currentUser?.id || currentUser?.userId,
-          targetUserId: normalizedCallData.fromUserId,
-          matchId: normalizedCallData.matchId
-        });
-      }
-
       const response = await apiCall(`/calling/market/decline/${callData.requestId}`, 'POST');
       if (response?.success) {
         showNotice('Call request declined.', 'info');
@@ -685,6 +798,104 @@ const CallDashboard = () => {
           </button>
         </div>
 
+        <div className="market-filters-card">
+          <div className="market-filters-grid">
+            <label className="market-filter-field">
+              <span>Min age</span>
+              <input
+                type="number"
+                min="18"
+                max="99"
+                value={marketFilters.minAge}
+                onChange={(event) => handleMarketFilterChange('minAge', event.target.value)}
+                placeholder="18"
+              />
+            </label>
+            <label className="market-filter-field">
+              <span>Max age</span>
+              <input
+                type="number"
+                min="18"
+                max="99"
+                value={marketFilters.maxAge}
+                onChange={(event) => handleMarketFilterChange('maxAge', event.target.value)}
+                placeholder="45"
+              />
+            </label>
+            <label className="market-filter-field">
+              <span>Language</span>
+              <select
+                value={marketFilters.language}
+                onChange={(event) => handleMarketFilterChange('language', event.target.value)}
+              >
+                <option value="">Any language</option>
+                {MARKET_LANGUAGE_OPTIONS.map((language) => (
+                  <option key={language} value={language}>
+                    {language}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="market-filter-field">
+              <span>Gender</span>
+              <select
+                value={marketFilters.gender}
+                onChange={(event) => handleMarketFilterChange('gender', event.target.value)}
+              >
+                <option value="">Any gender</option>
+                {MARKET_GENDER_OPTIONS.map((genderOption) => (
+                  <option key={genderOption} value={genderOption}>
+                    {genderOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="market-filter-field market-filter-field-wide">
+              <span>Location</span>
+              <input
+                type="text"
+                value={marketFilters.location}
+                onChange={(event) => handleMarketFilterChange('location', event.target.value)}
+                placeholder="City, district, or area"
+              />
+            </label>
+            <label className="market-filter-field">
+              <span>Distance (km)</span>
+              <input
+                type="number"
+                min="1"
+                max="500"
+                value={marketFilters.distanceKm}
+                onChange={(event) => handleMarketFilterChange('distanceKm', event.target.value)}
+                placeholder="50"
+              />
+            </label>
+          </div>
+          <div className="market-filters-actions">
+            <button
+              type="button"
+              className="btn-market-filter"
+              onClick={handleApplyMarketFilters}
+              disabled={loadingMarket}
+            >
+              Apply filters
+            </button>
+            <button
+              type="button"
+              className="btn-market-filter secondary"
+              onClick={handleClearMarketFilters}
+              disabled={loadingMarket}
+            >
+              Clear
+            </button>
+            <span className="market-filter-summary">
+              {hasAppliedMarketFilters
+                ? `${marketTotal} people match your filters.`
+                : `${marketTotal} people are available right now.`}
+            </span>
+          </div>
+        </div>
+
         {loadingMarket ? (
           <div className="loading-market">Loading available people...</div>
         ) : !marketEnabled ? (
@@ -714,15 +925,26 @@ const CallDashboard = () => {
                   <div className="caller-tags">
                     {user.availableFor?.voice && <span className="call-type-available voice">🎤 Voice</span>}
                     {user.availableFor?.video && <span className="call-type-available video">📹 Video</span>}
-                    <span className="caller-rate">Voice INR {user.rates.voice}/min</span>
-                    <span className="caller-rate video-rate">Video INR {user.rates.video}/min</span>
+                    {user.availableFor?.voice ? (
+                      <span className="caller-rate">Voice INR {user.rates.voice}/min</span>
+                    ) : null}
+                    {user.availableFor?.video ? (
+                      <span className="caller-rate video-rate">Video INR {user.rates.video}/min</span>
+                    ) : null}
+                    {user.distanceKm !== null ? (
+                      <span className="caller-tag">{user.distanceKm} km away</span>
+                    ) : null}
+                    {user.languages.slice(0, 1).map((language) => (
+                      <span key={language} className="caller-tag">{language}</span>
+                    ))}
                     {user.interests.slice(0, 2).map((tag, i) => (
                       <span key={i} className="caller-tag">{tag}</span>
                     ))}
                   </div>
                 </div>
-                <div className="caller-actions">
-                  {Object.entries(CALL_TYPES).map(([callType, config]) => {
+                <div className={`caller-actions ${user.availableCallTypes.length === 1 ? 'single' : ''}`}>
+                  {user.availableCallTypes.map((callType) => {
+                    const config = CALL_TYPES[callType];
                     const requiredCredits = user.rates[callType] * ESTIMATED_CALL_MINUTES;
                     const actionId = `${user.userId}:${callType}`;
                     const disabled = activeCallAction !== null || balance < requiredCredits;

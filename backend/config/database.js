@@ -114,6 +114,7 @@ const init = async () => {
       await client.query(`
       ALTER TABLE dating_profiles
       ADD COLUMN IF NOT EXISTS is_available_for_calls BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS available_call_types TEXT[] DEFAULT '{"voice","video"}',
       ADD COLUMN IF NOT EXISTS call_earnings DECIMAL(12,2) DEFAULT 0.00,
       ADD COLUMN IF NOT EXISTS pending_payout DECIMAL(12,2) DEFAULT 0.00,
       ADD COLUMN IF NOT EXISTS total_calls_taken INTEGER DEFAULT 0,
@@ -124,12 +125,21 @@ const init = async () => {
       await client.query(`
       UPDATE dating_profiles
       SET is_available_for_calls = COALESCE(is_available_for_calls, FALSE),
+          available_call_types = COALESCE(
+            available_call_types,
+            CASE
+              WHEN COALESCE(is_available_for_calls, FALSE)
+                THEN '{"voice","video"}'::text[]
+              ELSE '{}'::text[]
+            END
+          ),
           call_earnings = COALESCE(call_earnings, 0.00),
           pending_payout = COALESCE(pending_payout, 0.00),
           total_calls_taken = COALESCE(total_calls_taken, 0),
           total_call_minutes = COALESCE(total_call_minutes, 0),
           call_rating = COALESCE(call_rating, 0.00)
       WHERE is_available_for_calls IS NULL
+         OR available_call_types IS NULL
          OR call_earnings IS NULL
          OR pending_payout IS NULL
          OR total_calls_taken IS NULL

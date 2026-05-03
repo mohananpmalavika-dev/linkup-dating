@@ -6,6 +6,7 @@ const express = require('express');
 const db = require('../config/database');
 
 const router = express.Router();
+const VALID_CALL_TYPES = ['voice', 'video'];
 
 const parseInteger = (value, fallback = null) => {
   const parsedValue = Number.parseInt(value, 10);
@@ -19,6 +20,54 @@ const getCallSetting = async (key, defaultValue = null) => {
     [key]
   );
   return result.rows[0]?.value ?? defaultValue;
+};
+
+const normalizeCallTypes = ({ availableFor, availableCallTypes, isAvailable }) => {
+  if (!isAvailable) {
+    return [];
+  }
+
+  let rawTypes = availableCallTypes;
+
+  if (!rawTypes && availableFor && typeof availableFor === 'object') {
+    rawTypes = Object.entries(availableFor)
+      .filter(([, enabled]) => enabled !== false)
+      .map(([type]) => String(type).toLowerCase());
+  }
+
+  if (!Array.isArray(rawTypes)) {
+    rawTypes = rawTypes ? [rawTypes] : [...VALID_CALL_TYPES];
+  }
+
+  const normalized = rawTypes
+    .map((type) => String(type || '').trim().toLowerCase())
+    .filter((type) => VALID_CALL_TYPES.includes(type));
+
+  return Array.from(new Set(normalized));
+};
+
+const toAvailableFor = (availableCallTypes = []) => ({
+  voice: availableCallTypes.includes('voice'),
+  video: availableCallTypes.includes('video')
+});
+
+const emitPreferenceUpdate = (req, userId, isAvailableForCalls, availableCallTypes = []) => {
+  const ioInstance = req.app?.io;
+
+  if (!ioInstance) {
+    return;
+  }
+
+  const payload = {
+    userId,
+    isAvailableForCalls,
+    availableCallTypes,
+    availableFor: toAvailableFor(availableCallTypes),
+    updatedAt: new Date().toISOString()
+  };
+
+  ioInstance.emit('user_call_preference_updated', payload);
+  ioInstance.to(`user_${userId}`).emit('your_call_preference_updated', payload);
 };
 
 // Get earnings summary for user
@@ -135,39 +184,48 @@ router.get('/history', async (req, res) => {
 router.post('/availability', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { available, availableFor } = req.body;
+    const { available, availableFor, availableCallTypes } = req.body;
     
     const isAvailable = available === true || available === 'true';
-    
-    // Determine which call types are available
-    let voiceAvailable = true;
-    let videoAvailable = true;
-    
-    if (availableFor) {
-      voiceAvailable = availableFor.voice !== false;
-      videoAvailable = availableFor.video !== false;
+
+    const nextCallTypes = normalizeCallTypes({
+      availableFor,
+      availableCallTypes,
+      isAvailable
+    });
+
+    if (isAvailable && nextCallTypes.length === 0) {
+      return res.status(400).json({
+        error: 'Select at least one call type when you are available for calls'
+      });
     }
-    
-    // Update availability and call type preferences
-    // Note: This requires schema updates to add available_for_voice and available_for_video columns
-    // For now, we'll store this info and return it
-    await db.query(
-      'UPDATE dating_profiles SET is_available_for_calls = $1 WHERE user_id = $2',
-      [isAvailable, userId]
+
+    const result = await db.query(
+      `UPDATE dating_profiles
+       SET is_available_for_calls = $2,
+           available_call_types = $3,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1
+       RETURNING is_available_for_calls, available_call_types`,
+      [userId, isAvailable, nextCallTypes]
     );
-    
-    // If call type data is provided, we should persist it
-    // TODO: Add columns available_for_voice and available_for_video to dating_profiles table
-    // and update the query above to: 
-    // 'UPDATE dating_profiles SET is_available_for_calls = $1, available_for_voice = $2, available_for_video = $3 WHERE user_id = $4'
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const updated = result.rows[0];
+    const savedCallTypes = Array.isArray(updated.available_call_types)
+      ? updated.available_call_types
+      : [];
+
+    emitPreferenceUpdate(req, userId, Boolean(updated.is_available_for_calls), savedCallTypes);
     
     res.json({
       success: true,
-      isAvailable,
-      availableFor: {
-        voice: voiceAvailable,
-        video: videoAvailable
-      }
+      isAvailable: Boolean(updated.is_available_for_calls),
+      availableCallTypes: savedCallTypes,
+      availableFor: toAvailableFor(savedCallTypes)
     });
   } catch (error) {
     console.error('Set availability error:', error);
@@ -181,17 +239,35 @@ router.get('/availability', async (req, res) => {
     const userId = req.user.id;
     
     const result = await db.query(
-      'SELECT is_available_for_calls FROM dating_profiles WHERE user_id = $1',
+      `SELECT
+         is_available_for_calls,
+         COALESCE(
+           available_call_types,
+           CASE
+             WHEN COALESCE(is_available_for_calls, FALSE)
+               THEN '{"voice","video"}'::text[]
+             ELSE '{}'::text[]
+           END
+         ) as available_call_types
+       FROM dating_profiles
+       WHERE user_id = $1`,
       [userId]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const profile = result.rows[0];
+    const savedCallTypes = Array.isArray(profile.available_call_types)
+      ? profile.available_call_types
+      : [];
     
     res.json({
       success: true,
-      isAvailable: result.rows[0]?.is_available_for_calls || false,
-      availableFor: {
-        voice: true,
-        video: true
-      }
+      isAvailable: Boolean(profile.is_available_for_calls),
+      availableCallTypes: savedCallTypes,
+      availableFor: toAvailableFor(savedCallTypes)
     });
   } catch (error) {
     console.error('Get availability error:', error);

@@ -6,6 +6,57 @@ const express = require('express');
 const db = require('../config/database');
 
 const router = express.Router();
+const VALID_CALL_TYPES = ['voice', 'video'];
+
+const normalizeCallTypes = ({ availableCallTypes, availableFor, isAvailable }) => {
+  if (!isAvailable) {
+    return [];
+  }
+
+  let rawTypes = availableCallTypes;
+
+  if (!rawTypes && availableFor && typeof availableFor === 'object') {
+    rawTypes = Object.entries(availableFor)
+      .filter(([, enabled]) => enabled !== false)
+      .map(([type]) => String(type).toLowerCase());
+  }
+
+  if (!Array.isArray(rawTypes)) {
+    rawTypes = rawTypes ? [rawTypes] : [...VALID_CALL_TYPES];
+  }
+
+  return Array.from(
+    new Set(
+      rawTypes
+        .map((type) => String(type || '').trim().toLowerCase())
+        .filter((type) => VALID_CALL_TYPES.includes(type))
+    )
+  );
+};
+
+const toAvailableFor = (availableCallTypes = []) => ({
+  voice: availableCallTypes.includes('voice'),
+  video: availableCallTypes.includes('video')
+});
+
+const emitPreferenceUpdate = (req, userId, isAvailableForCalls, availableCallTypes = []) => {
+  const ioInstance = req.app?.io;
+
+  if (!ioInstance) {
+    return;
+  }
+
+  const payload = {
+    userId,
+    isAvailableForCalls,
+    availableCallTypes,
+    availableFor: toAvailableFor(availableCallTypes),
+    updatedAt: new Date().toISOString()
+  };
+
+  ioInstance.emit('user_call_preference_updated', payload);
+  ioInstance.to(`user_${userId}`).emit('your_call_preference_updated', payload);
+};
 
 /**
  * Get current call preferences for the authenticated user
@@ -21,7 +72,14 @@ router.get('/my-preferences', async (req, res) => {
     const result = await db.query(`
       SELECT 
         is_available_for_calls,
-        available_call_types,
+        COALESCE(
+          available_call_types,
+          CASE
+            WHEN COALESCE(is_available_for_calls, FALSE)
+              THEN '{"voice","video"}'::text[]
+            ELSE '{}'::text[]
+          END
+        ) as available_call_types,
         call_rating,
         total_calls_taken,
         call_earnings
@@ -40,6 +98,7 @@ router.get('/my-preferences', async (req, res) => {
       preferences: {
         isAvailableForCalls: profile.is_available_for_calls,
         availableCallTypes: profile.available_call_types || ['voice', 'video'],
+        availableFor: toAvailableFor(profile.available_call_types || ['voice', 'video']),
         callStats: {
           rating: Number(profile.call_rating) || 0,
           totalCalls: profile.total_calls_taken || 0,
@@ -65,23 +124,18 @@ router.put('/my-preferences', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { isAvailableForCalls, availableCallTypes } = req.body;
+    const { isAvailableForCalls, availableCallTypes, availableFor } = req.body;
 
     // Validate input
     if (typeof isAvailableForCalls !== 'boolean') {
       return res.status(400).json({ error: 'isAvailableForCalls must be a boolean' });
     }
 
-    let callTypes = availableCallTypes || ['voice', 'video'];
-
-    // Ensure it's an array
-    if (!Array.isArray(callTypes)) {
-      callTypes = [callTypes];
-    }
-
-    // Filter to only valid types
-    const validTypes = ['voice', 'video'];
-    callTypes = callTypes.filter(type => validTypes.includes(String(type).toLowerCase()));
+    let callTypes = normalizeCallTypes({
+      availableCallTypes,
+      availableFor,
+      isAvailable: isAvailableForCalls
+    });
 
     // If user is disabling calls, clear the available types
     if (!isAvailableForCalls) {
@@ -108,31 +162,15 @@ router.put('/my-preferences', async (req, res) => {
     }
 
     const updated = result.rows[0];
-
-    // Emit WebSocket event to broadcast preference change to all connected users
-    const ioInstance = req.app?.io;
-    if (ioInstance) {
-      // Broadcast to all users that this user's preference has changed
-      ioInstance.emit('user_call_preference_updated', {
-        userId,
-        isAvailableForCalls: updated.is_available_for_calls,
-        availableCallTypes: updated.available_call_types || [],
-        updatedAt: new Date().toISOString()
-      });
-
-      // Also emit to a user-specific room for their own apps
-      ioInstance.to(`user_${userId}`).emit('your_call_preference_updated', {
-        isAvailableForCalls: updated.is_available_for_calls,
-        availableCallTypes: updated.available_call_types || [],
-        updatedAt: new Date().toISOString()
-      });
-    }
+    const savedCallTypes = updated.available_call_types || [];
+    emitPreferenceUpdate(req, userId, updated.is_available_for_calls, savedCallTypes);
 
     res.json({
       success: true,
       preferences: {
         isAvailableForCalls: updated.is_available_for_calls,
-        availableCallTypes: updated.available_call_types || [],
+        availableCallTypes: savedCallTypes,
+        availableFor: toAvailableFor(savedCallTypes),
         updatedAt: new Date().toISOString()
       }
     });

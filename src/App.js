@@ -288,6 +288,7 @@ const MatchVideoRoute = ({
       matchId={matchId}
       matchedProfile={normalizeProfileContext(location.state?.match)}
       callMode={location.state?.callMode || 'outgoing'}
+      callType={location.state?.callType || location.state?.incomingCall?.callType || 'video'}
       autoAccepted={Boolean(location.state?.autoAccepted)}
       callerName={location.state?.incomingCall?.fromUserName || ''}
       incomingCall={location.state?.incomingCall || null}
@@ -339,12 +340,14 @@ const CallVideoRoute = ({
   // Accept both incomingCall and callData keys since caller and receiver use different keys
   const callData = location.state?.incomingCall || location.state?.callData;
   const matchFromCall = createMatchFromCall(callData, userId);
+  const resolvedCallType = location.state?.callType || callData?.callType || 'video';
 
   return (
     <VideoDating
       matchId={null}
       matchedProfile={matchFromCall}
       callMode={location.state?.callMode || 'incoming'}
+      callType={resolvedCallType}
       autoAccepted={Boolean(location.state?.autoAccepted)}
       callerName={callData?.fromUserName || callData?.callerName || callData?.userName || location.state?.callerName || 'Caller'}
       incomingCall={callData || null}

@@ -6,6 +6,32 @@ const express = require('express');
 const db = require('../config/database');
 
 const router = express.Router();
+const VALID_CALL_TYPES = ['voice', 'video'];
+const DEFAULT_CALL_TYPES = ['voice', 'video'];
+const AVAILABLE_CALL_TYPES_SQL = `
+  COALESCE(
+    dp.available_call_types,
+    CASE
+      WHEN COALESCE(dp.is_available_for_calls, FALSE)
+        THEN '{"voice","video"}'::text[]
+      ELSE '{}'::text[]
+    END
+  )
+`;
+const ONLINE_STATUS_SQL = `
+  (
+    EXISTS (
+      SELECT 1
+      FROM user_presence_sessions ups
+      WHERE ups.user_id = u.id AND ups.is_active = true
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM user_activities ua
+      WHERE ua.user_id = u.id AND ua.end_time IS NULL
+    )
+  )
+`;
 
 const parseInteger = (value, fallback = null) => {
   const parsedValue = Number.parseInt(value, 10);
@@ -18,6 +44,56 @@ const normalizeBoolean = (value, fallbackValue = false) => {
   if (typeof value === 'string') return value.trim().toLowerCase() === 'true';
   return Boolean(value);
 };
+
+const parseFloatValue = (value, fallback = null) => {
+  const parsedValue = Number.parseFloat(value);
+  return Number.isFinite(parsedValue) ? parsedValue : fallback;
+};
+
+const normalizeText = (value) => String(value || '').trim();
+
+const normalizeCallTypes = (value, fallback = DEFAULT_CALL_TYPES) => {
+  const rawValues = Array.isArray(value)
+    ? value
+    : value === undefined || value === null || value === ''
+      ? fallback
+      : [value];
+
+  return Array.from(
+    new Set(
+      rawValues
+        .map((type) => String(type || '').trim().toLowerCase())
+        .filter((type) => VALID_CALL_TYPES.includes(type))
+    )
+  );
+};
+
+const normalizeArrayFilter = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => normalizeText(entry))
+      .filter(Boolean);
+  }
+
+  const normalizedValue = normalizeText(value);
+  return normalizedValue ? [normalizedValue] : [];
+};
+
+const buildDistanceExpression = (latitudeParamIndex, longitudeParamIndex) => `
+  CASE
+    WHEN dp.location_lat IS NOT NULL AND dp.location_lng IS NOT NULL
+      THEN (
+        6371 * acos(
+          LEAST(1, GREATEST(-1,
+            cos(radians($${latitudeParamIndex})) * cos(radians(dp.location_lat)) *
+            cos(radians(dp.location_lng) - radians($${longitudeParamIndex})) +
+            sin(radians($${latitudeParamIndex})) * sin(radians(dp.location_lat))
+          ))
+        )
+      )
+    ELSE NULL
+  END
+`;
 
 // Get call settings
 const getCallSetting = async (key, defaultValue = null) => {
@@ -82,7 +158,13 @@ router.get('/available', async (req, res) => {
     const page = parseInteger(req.query.page, 1);
     const limit = Math.min(parseInteger(req.query.limit, 20), 50);
     const offset = (page - 1) * limit;
-    const callType = req.query.type || 'voice';
+    const requestedCallType = normalizeCallTypes(req.query.type, [])[0] || null;
+    const minAge = parseInteger(req.query.minAge, null);
+    const maxAge = parseInteger(req.query.maxAge, null);
+    const gender = normalizeText(req.query.gender).toLowerCase();
+    const languageFilters = normalizeArrayFilter(req.query.language || req.query.languages);
+    const locationFilter = normalizeText(req.query.location);
+    const maxDistanceKm = parseInteger(req.query.distanceKm ?? req.query.distance, null);
     
     if (!(await isCallingEnabled())) {
       return res.json({
@@ -94,71 +176,152 @@ router.get('/available', async (req, res) => {
     
     const voiceRate = parseFloat(await getCallSetting('voice_rate_per_minute', '5'));
     const videoRate = parseFloat(await getCallSetting('video_rate_per_minute', '10'));
-    const rate = callType === 'video' ? videoRate : voiceRate;
-    
-    // Get count of available users matching the filter
-    const countResult = await db.query(`
-      SELECT COUNT(*) as total
-      FROM users u
-      INNER JOIN dating_profiles dp ON dp.user_id = u.id
-      WHERE dp.is_available_for_calls = TRUE
-        AND u.id != $1
-        AND COALESCE(dp.is_active, TRUE) = TRUE
-    `, [userId]);
-    
-    const totalCount = parseInt(countResult.rows[0]?.total || 0);
-    
-    // Get available users with online status
-    const result = await db.query(`
-      SELECT 
+    const rate = requestedCallType === 'video' ? videoRate : voiceRate;
+
+    const currentProfileResult = await db.query(
+      `SELECT location_lat, location_lng
+       FROM dating_profiles
+       WHERE user_id = $1
+       LIMIT 1`,
+      [userId]
+    );
+
+    const currentLat = parseFloatValue(currentProfileResult.rows[0]?.location_lat);
+    const currentLng = parseFloatValue(currentProfileResult.rows[0]?.location_lng);
+    const hasViewerCoordinates = Number.isFinite(currentLat) && Number.isFinite(currentLng);
+
+    const params = [userId];
+    let paramIndex = 2;
+    let distanceExpression = 'NULL::numeric';
+
+    if (hasViewerCoordinates) {
+      const latitudeParamIndex = paramIndex++;
+      const longitudeParamIndex = paramIndex++;
+      params.push(currentLat, currentLng);
+      distanceExpression = buildDistanceExpression(latitudeParamIndex, longitudeParamIndex);
+    }
+
+    let query = `
+      SELECT
         u.id as user_id,
         dp.first_name,
         dp.age,
+        dp.gender,
         dp.location_city as location,
+        dp.location_district,
+        dp.location_locality,
         dp.bio,
         dp.interests,
+        dp.languages,
         dp.call_rating,
         dp.total_calls_taken,
         (
-          SELECT photo_url 
-          FROM profile_photos 
-          WHERE user_id = u.id 
-          ORDER BY is_primary DESC 
+          SELECT photo_url
+          FROM profile_photos
+          WHERE user_id = u.id
+          ORDER BY is_primary DESC
           LIMIT 1
         ) as photo_url,
         dp.call_earnings,
-        FALSE as is_online
+        ${AVAILABLE_CALL_TYPES_SQL} as available_call_types,
+        ${ONLINE_STATUS_SQL} as is_online,
+        ${distanceExpression} as distance_km,
+        COUNT(*) OVER() as total_count
       FROM users u
       INNER JOIN dating_profiles dp ON dp.user_id = u.id
       WHERE dp.is_available_for_calls = TRUE
         AND u.id != $1
         AND COALESCE(dp.is_active, TRUE) = TRUE
-      ORDER BY dp.call_rating DESC, dp.total_calls_taken DESC
-      LIMIT $2 OFFSET $3
-    `, [userId, limit, offset]);
+        AND COALESCE(array_length(${AVAILABLE_CALL_TYPES_SQL}, 1), 0) > 0
+        AND ${ONLINE_STATUS_SQL}
+    `;
+
+    if (requestedCallType) {
+      query += ` AND $${paramIndex++} = ANY(${AVAILABLE_CALL_TYPES_SQL})`;
+      params.push(requestedCallType);
+    }
+
+    if (Number.isFinite(minAge)) {
+      query += ` AND dp.age >= $${paramIndex++}`;
+      params.push(minAge);
+    }
+
+    if (Number.isFinite(maxAge)) {
+      query += ` AND dp.age <= $${paramIndex++}`;
+      params.push(maxAge);
+    }
+
+    if (gender) {
+      query += ` AND LOWER(COALESCE(dp.gender, '')) = LOWER($${paramIndex++})`;
+      params.push(gender);
+    }
+
+    if (languageFilters.length > 0) {
+      query += ` AND COALESCE(dp.languages, ARRAY[]::text[]) && $${paramIndex++}::text[]`;
+      params.push(languageFilters);
+    }
+
+    if (locationFilter) {
+      query += ` AND (
+        LOWER(COALESCE(dp.location_city, '')) LIKE LOWER($${paramIndex})
+        OR LOWER(COALESCE(dp.location_district, '')) LIKE LOWER($${paramIndex})
+        OR LOWER(COALESCE(dp.location_locality, '')) LIKE LOWER($${paramIndex})
+      )`;
+      params.push(`%${locationFilter}%`);
+      paramIndex += 1;
+    }
+
+    if (hasViewerCoordinates && Number.isFinite(maxDistanceKm) && maxDistanceKm > 0) {
+      query += ` AND dp.location_lat IS NOT NULL
+        AND dp.location_lng IS NOT NULL
+        AND ${distanceExpression} <= $${paramIndex++}`;
+      params.push(maxDistanceKm);
+    }
+
+    query += `
+      ORDER BY is_online DESC, distance_km ASC NULLS LAST, dp.call_rating DESC, dp.total_calls_taken DESC
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+    `;
+    params.push(limit, offset);
+
+    const result = await db.query(query, params);
+    const totalCount = parseInt(result.rows[0]?.total_count || 0, 10);
     
-    const users = result.rows.map(user => ({
-      userId: user.user_id,
-      name: user.first_name,
-      age: user.age,
-      location: user.location,
-      bio: user.bio,
-      interests: user.interests || [],
-      photoUrl: user.photo_url,
-      callRating: Number(user.call_rating) || 0,
-      totalCalls: user.total_calls_taken || 0,
-      isOnline: user.is_online,
-      availableCallTypes: ['voice', 'video'],
-      rates: {
-        voice: voiceRate,
-        video: videoRate
-      }
-    }));
+    const users = result.rows.map((user) => {
+      const availableCallTypes = normalizeCallTypes(user.available_call_types);
+
+      return {
+        availableCallTypes,
+        availableFor: {
+          voice: availableCallTypes.includes('voice'),
+          video: availableCallTypes.includes('video')
+        },
+        userId: user.user_id,
+        name: user.first_name,
+        age: user.age,
+        gender: user.gender,
+        location: user.location,
+        bio: user.bio,
+        interests: user.interests || [],
+        languages: user.languages || [],
+        photoUrl: user.photo_url,
+        callRating: Number(user.call_rating) || 0,
+        totalCalls: user.total_calls_taken || 0,
+        isOnline: Boolean(user.is_online),
+        distanceKm: Number.isFinite(Number(user.distance_km))
+          ? Math.round(Number(user.distance_km) * 10) / 10
+          : null,
+        rates: {
+          voice: voiceRate,
+          video: videoRate
+        }
+      };
+    });
     
     res.json({
       success: true,
       enabled: true,
-      callType,
+      callType: requestedCallType,
       ratePerMinute: rate,
       page,
       limit,
@@ -189,13 +352,23 @@ router.get('/user/:userId', async (req, res) => {
         u.id as user_id,
         dp.first_name,
         dp.age,
+        dp.gender,
         dp.location_city as location,
         dp.bio,
+        dp.languages,
         dp.call_rating,
         dp.total_calls_taken,
         dp.total_call_minutes,
         dp.call_earnings,
         dp.is_available_for_calls,
+        COALESCE(
+          dp.available_call_types,
+          CASE
+            WHEN COALESCE(dp.is_available_for_calls, FALSE)
+              THEN '{"voice","video"}'::text[]
+            ELSE '{}'::text[]
+          END
+        ) as available_call_types,
         (
           SELECT photo_url 
           FROM profile_photos 
@@ -214,6 +387,7 @@ router.get('/user/:userId', async (req, res) => {
     
     const user = result.rows[0];
     const myBalance = await getWalletBalance(currentUserId);
+    const availableCallTypes = normalizeCallTypes(user.available_call_types);
     
     res.json({
       success: true,
@@ -221,6 +395,7 @@ router.get('/user/:userId', async (req, res) => {
         userId: user.user_id,
         name: user.first_name,
         age: user.age,
+        gender: user.gender,
         location: user.location,
         bio: user.bio,
         photoUrl: user.photo_url,
@@ -229,7 +404,12 @@ router.get('/user/:userId', async (req, res) => {
         totalMinutes: user.total_call_minutes || 0,
         totalEarnings: Number(user.call_earnings) || 0,
         isAvailable: user.is_available_for_calls,
-        availableCallTypes: ['voice', 'video'],
+        availableCallTypes,
+        availableFor: {
+          voice: availableCallTypes.includes('voice'),
+          video: availableCallTypes.includes('video')
+        },
+        languages: user.languages || [],
         rates: {
           voice: voiceRate,
           video: videoRate
@@ -472,7 +652,7 @@ router.post('/decline/:requestId', async (req, res) => {
         WHERE request_id = $1
           AND receiver_id = $2
           AND status = 'pending'
-        RETURNING session_id
+        RETURNING session_id, caller_id, call_type
       `, [requestId, receiverId]);
 
       if (requestResult.rows.length === 0) {
@@ -487,6 +667,15 @@ router.post('/decline/:requestId', async (req, res) => {
       `, [requestResult.rows[0].session_id]);
 
       await client.query('COMMIT');
+
+      req.app.emitToUser(requestResult.rows[0].caller_id, 'call:rejected', {
+        callId: requestResult.rows[0].session_id,
+        fromUserId: receiverId,
+        targetUserId: requestResult.rows[0].caller_id,
+        sessionId: requestResult.rows[0].session_id,
+        callType: requestResult.rows[0].call_type,
+        message: 'Your call was declined'
+      });
 
       res.json({
         success: true,

@@ -342,6 +342,84 @@
   line-height: 1.45;
 }
 
+.market-filters-card {
+  margin-bottom: 12px;
+  border: 1px solid #e4e7ec;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+}
+
+.market-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.market-filter-field {
+  display: grid;
+  gap: 6px;
+}
+
+.market-filter-field span {
+  color: #344054;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.market-filter-field input,
+.market-filter-field select {
+  min-height: 38px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.market-filter-field-wide {
+  grid-column: span 2;
+}
+
+.market-filters-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.btn-market-filter {
+  min-height: 38px;
+  border: 1px solid var(--dh-logo-ink, #102030);
+  border-radius: 8px;
+  background: var(--dh-logo-ink, #102030);
+  color: #ffffff;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.btn-market-filter.secondary {
+  border-color: #d0d5dd;
+  background: #ffffff;
+  color: #344054;
+}
+
+.btn-market-filter:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.market-filter-summary {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .loading-market,
 .empty-market,
 .pending-call-card {
@@ -488,6 +566,10 @@
   gap: 8px;
 }
 
+.caller-actions.single {
+  grid-template-columns: 1fr;
+}
+
 .btn-call-action {
   display: flex;
   min-height: 52px;
@@ -588,6 +670,14 @@
 }
 
 @media (max-width: 720px) {
+  .market-filters-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .market-filter-field-wide {
+    grid-column: span 2;
+  }
+
   .caller-card {
     grid-template-columns: 58px minmax(0, 1fr);
   }
@@ -626,6 +716,14 @@
   .call-types-options {
     flex-direction: column;
     gap: 10px;
+  }
+
+  .market-filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .market-filter-field-wide {
+    grid-column: span 1;
   }
 
   .packages-grid,

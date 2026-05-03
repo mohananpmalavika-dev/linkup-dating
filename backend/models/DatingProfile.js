@@ -291,6 +291,12 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: false,
       field: 'is_available_for_calls'
     },
+    availableCallTypes: {
+      type: DataTypes.ARRAY(DataTypes.STRING),
+      allowNull: false,
+      defaultValue: ['voice', 'video'],
+      field: 'available_call_types'
+    },
     callEarnings: {
       type: DataTypes.DECIMAL(12, 2),
       allowNull: false,
