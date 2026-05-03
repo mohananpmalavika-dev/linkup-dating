@@ -96,7 +96,7 @@ router.get('/available', async (req, res) => {
     const videoRate = parseFloat(await getCallSetting('video_rate_per_minute', '10'));
     const rate = callType === 'video' ? videoRate : voiceRate;
     
-    // Get available users with online status
+    // Get available users with online status, filtered by call type preference
     const result = await db.query(`
       SELECT 
         u.id as user_id,
@@ -107,6 +107,7 @@ router.get('/available', async (req, res) => {
         dp.interests,
         dp.call_rating,
         dp.total_calls_taken,
+        dp.available_call_types,
         (
           SELECT photo_url 
           FROM profile_photos 
@@ -122,9 +123,13 @@ router.get('/available', async (req, res) => {
       WHERE dp.is_available_for_calls = TRUE
         AND u.id != $1
         AND COALESCE(dp.is_active, TRUE) = TRUE
+        AND (
+          ($2 = 'voice' AND dp.available_call_types @> ARRAY['voice'::text])
+          OR ($2 = 'video' AND dp.available_call_types @> ARRAY['video'::text])
+        )
       ORDER BY dp.call_rating DESC, dp.total_calls_taken DESC
-      LIMIT $2 OFFSET $3
-    `, [userId, limit, offset]);
+      LIMIT $3 OFFSET $4
+    `, [userId, callType, limit, offset]);
     
     const users = result.rows.map(user => ({
       userId: user.user_id,
@@ -137,6 +142,7 @@ router.get('/available', async (req, res) => {
       callRating: Number(user.call_rating) || 0,
       totalCalls: user.total_calls_taken || 0,
       isOnline: user.is_online,
+      availableCallTypes: user.available_call_types || ['voice', 'video'],
       rates: {
         voice: voiceRate,
         video: videoRate
@@ -181,6 +187,7 @@ router.get('/user/:userId', async (req, res) => {
         dp.total_call_minutes,
         dp.call_earnings,
         dp.is_available_for_calls,
+        dp.available_call_types,
         (
           SELECT photo_url 
           FROM profile_photos 
@@ -214,6 +221,7 @@ router.get('/user/:userId', async (req, res) => {
         totalMinutes: user.total_call_minutes || 0,
         totalEarnings: Number(user.call_earnings) || 0,
         isAvailable: user.is_available_for_calls,
+        availableCallTypes: user.available_call_types || ['voice', 'video'],
         rates: {
           voice: voiceRate,
           video: videoRate
@@ -263,9 +271,9 @@ router.post('/request', async (req, res) => {
       });
     }
     
-    // Check target is available
+    // Check target is available and accepts this call type
     const targetResult = await db.query(
-      'SELECT is_available_for_calls FROM dating_profiles WHERE user_id = $1 AND COALESCE(is_active, TRUE) = TRUE',
+      'SELECT is_available_for_calls, available_call_types FROM dating_profiles WHERE user_id = $1 AND COALESCE(is_active, TRUE) = TRUE',
       [targetUserId]
     );
     
@@ -275,6 +283,15 @@ router.post('/request', async (req, res) => {
 
     if (!targetResult.rows[0]?.is_available_for_calls) {
       return res.status(400).json({ error: 'User has disabled direct calling' });
+    }
+
+    // Check if target user accepts this specific call type
+    const availableTypes = targetResult.rows[0]?.available_call_types || ['voice', 'video'];
+    if (!availableTypes.includes(callTypeFinal)) {
+      return res.status(400).json({ 
+        error: `User does not accept ${callTypeFinal} calls`,
+        availableCallTypes: availableTypes
+      });
     }
 
     // Check if target user is online
