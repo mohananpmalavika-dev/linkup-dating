@@ -2,6 +2,16 @@ const admin = require('firebase-admin');
 
 let firebaseApp = null;
 
+const cleanFirebaseEnvValue = (value = '') => {
+  if (typeof value !== 'string') return '';
+  let result = value.trim();
+  if (result.startsWith('"') && result.endsWith('"')) {
+    result = result.slice(1, -1);
+  }
+  result = result.replace(/\\n/g, '\n');
+  return result;
+};
+
 const isFirebaseConfigured = () => {
   return Boolean(
     process.env.FIREBASE_PROJECT_ID &&
@@ -23,9 +33,9 @@ const initializeFirebase = () => {
   try {
     firebaseApp = admin.initializeApp({
       credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL
+        projectId: cleanFirebaseEnvValue(process.env.FIREBASE_PROJECT_ID),
+        privateKey: cleanFirebaseEnvValue(process.env.FIREBASE_PRIVATE_KEY),
+        clientEmail: cleanFirebaseEnvValue(process.env.FIREBASE_CLIENT_EMAIL)
       })
     });
 
@@ -52,8 +62,16 @@ const verifyFirebaseIdToken = async (idToken) => {
     };
   }
 
+  const token = String(idToken || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token) {
+    return {
+      success: false,
+      error: 'Firebase ID token is required'
+    };
+  }
+
   try {
-    const decodedToken = await auth.verifyIdToken(idToken);
+    const decodedToken = await auth.verifyIdToken(token);
     return {
       success: true,
       uid: decodedToken.uid,
@@ -63,7 +81,7 @@ const verifyFirebaseIdToken = async (idToken) => {
       decodedToken
     };
   } catch (error) {
-    console.error('Firebase ID token verification error:', error.message);
+    console.error('Firebase ID token verification error:', error.code, error.message);
     return {
       success: false,
       error: error.message,
