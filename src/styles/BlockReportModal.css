@@ -49,7 +49,7 @@
   align-items: center;
   padding: 20px;
   border-bottom: 1px solid #e5e5e5;
-  background: linear-gradient(135deg, #d946a6 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
@@ -133,7 +133,7 @@
 
 .btn-block {
   background: #e0e7ff;
-  color: #4f46e5;
+  color: var(--dh-logo-ink, #102030);
   border: 2px solid #818cf8;
 }
 
@@ -260,8 +260,8 @@
 .form-select:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: #d946a6;
-  box-shadow: 0 0 0 3px rgba(217, 70, 166, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .form-textarea {
@@ -295,13 +295,13 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #d946a6 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(217, 70, 166, 0.3);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
 }
 
 .btn-secondary {

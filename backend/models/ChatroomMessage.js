@@ -27,6 +27,28 @@ module.exports = (sequelize, DataTypes) => {
     message: {
       type: DataTypes.TEXT,
       allowNull: false
+    },
+    messageType: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: 'text',
+      field: 'message_type'
+    },
+    reactions: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: []
+    },
+    isEdited: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_edited'
+    },
+    editedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'edited_at'
     }
   }, {
     tableName: 'chatroom_messages',
@@ -38,7 +60,8 @@ module.exports = (sequelize, DataTypes) => {
       { fields: ['chatroom_id'] },
       { fields: ['from_user_id'] },
       { fields: ['created_at'] },
-      { fields: ['chatroom_id', 'created_at'] }
+      { fields: ['chatroom_id', 'created_at'] },
+      { fields: ['message_type'] }
     ]
   });
 

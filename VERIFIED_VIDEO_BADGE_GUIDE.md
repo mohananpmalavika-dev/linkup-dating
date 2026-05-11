@@ -2,7 +2,7 @@
 
 ## 📋 Overview
 
-The **Verified Video Badge** feature provides AI-powered identity verification for LinkUp users. Users complete a one-time video call where AI checks if their face matches their profile photos. Verified users get a prominent ✅ "Video Verified" badge on their profile, boosting trust and reducing fraud.
+The **Verified Video Badge** feature provides AI-powered identity verification for DatingHub users. Users complete a one-time video call where AI checks if their face matches their profile photos. Verified users get a prominent ✅ "Video Verified" badge on their profile, boosting trust and reducing fraud.
 
 **Key Benefits:**
 - ✅ Real-time face verification using AI

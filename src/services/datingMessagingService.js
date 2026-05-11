@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_URL } from '../utils/api';
+import { getStoredAuthToken } from '../utils/auth';
 
 const API_URL = `${API_BASE_URL}/messaging`;
 
@@ -11,6 +12,17 @@ const fileToDataUrl = (fileOrBlob) => new Promise((resolve, reject) => {
   reader.readAsDataURL(fileOrBlob);
 });
 
+const getAuthHeaders = () => {
+  const authToken = getStoredAuthToken();
+  if (!authToken) {
+    throw new Error('Authentication required. Please log in.');
+  }
+  return {
+    'Authorization': `Bearer ${authToken}`,
+    'Content-Type': 'application/json'
+  };
+};
+
 const datingMessagingService = {
   getMessages: async (matchId, options = {}) => {
     try {
@@ -18,7 +30,8 @@ const datingMessagingService = {
         params: {
           limit: options.limit || 50,
           offset: options.offset || 0
-        }
+        },
+        headers: getAuthHeaders()
       });
       return response.data;
     } catch (error) {
@@ -30,6 +43,8 @@ const datingMessagingService = {
     try {
       const response = await axios.post(`${API_URL}/matches/${matchId}/messages`, {
         message
+      }, {
+        headers: getAuthHeaders()
       });
       return response.data;
     } catch (error) {
@@ -41,6 +56,8 @@ const datingMessagingService = {
     try {
       const response = await axios.post(`${API_URL}/messages/${messageId}/reactions`, {
         emoji
+      }, {
+        headers: getAuthHeaders()
       });
       return response.data;
     } catch (error) {
@@ -50,7 +67,9 @@ const datingMessagingService = {
 
   getUnreadCount: async () => {
     try {
-      const response = await axios.get(`${API_URL}/unread-count`);
+      const response = await axios.get(`${API_URL}/unread-count`, {
+        headers: getAuthHeaders()
+      });
       return response.data;
     } catch (error) {
       throw error.response?.data?.error || 'Failed to load unread count';
@@ -64,6 +83,8 @@ const datingMessagingService = {
         mediaBase64,
         mediaType,
         duration: options.duration || null
+      }, {
+        headers: getAuthHeaders()
       });
       return response.data;
     } catch (error) {

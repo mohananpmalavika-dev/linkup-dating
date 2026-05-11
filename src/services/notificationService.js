@@ -54,7 +54,7 @@ class NotificationService {
     }
 
     const {
-      title = 'LinkUp',
+      title = 'DatingHub',
       body = '',
       icon = this.resolveAssetPath('/icon-192.png'),
       badge = this.resolveAssetPath('/icon-192.png'),

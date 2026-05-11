@@ -37,7 +37,7 @@
   color: #2c3e50;
   font-size: 24px;
   margin: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -65,11 +65,11 @@
 
 .nav-item:hover {
   background: #f0f0f0;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .nav-item.active {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
@@ -93,7 +93,7 @@
   border-radius: 50%;
   margin-bottom: 10px;
   object-fit: cover;
-  border: 3px solid #667eea;
+  border: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .profile-card h4 {
@@ -110,7 +110,7 @@
 .profile-btn {
   width: 100%;
   padding: 10px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -121,7 +121,7 @@
 
 .profile-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.4);
 }
 
 /* Main Content */
@@ -180,7 +180,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -207,7 +207,7 @@
 
 .socialmedia-container .follow-btn {
   padding: 6px 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -219,7 +219,7 @@
 
 .socialmedia-container .follow-btn:hover {
   transform: scale(1.05);
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 8px rgba(208, 96, 48, 0.3);
 }
 
 .socialmedia-container .trending-list {

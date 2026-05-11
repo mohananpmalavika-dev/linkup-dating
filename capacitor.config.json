@@ -1,5 +1,5 @@
 {
-  "appId": "com.datinghub.app",
+  "appId": "com.linkup.datinghub",
   "appName": "DatingHub",
   "webDir": "build",
   "bundledWebRuntime": false,

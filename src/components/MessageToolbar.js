@@ -95,45 +95,55 @@ const MessageToolbar = ({
         <div className="toolbar-actions">
           <button
             type="button"
-            className="toolbar-btn templates-btn"
+            className={`toolbar-btn templates-btn ${showTemplates ? 'active' : ''}`}
             onClick={() => togglePanel('templates')}
             title="Quick reply templates"
+            aria-label="Open message ideas"
+            aria-expanded={showTemplates}
           >
-            Tpl
+            Ideas
           </button>
 
           <button
             type="button"
-            className="toolbar-btn search-btn"
+            className={`toolbar-btn search-btn ${showSearch ? 'active' : ''}`}
             onClick={() => togglePanel('search')}
             title="Search messages"
+            aria-label="Search messages"
+            aria-expanded={showSearch}
           >
-            Find
+            Search
           </button>
 
           <button
             type="button"
-            className="toolbar-btn attachment-btn"
+            className={`toolbar-btn attachment-btn ${showAttachments ? 'active' : ''}`}
             onClick={() => togglePanel('attachments')}
             title="Attach files"
+            aria-label="Attach files"
+            aria-expanded={showAttachments}
           >
-            File
+            Attach
           </button>
 
           <button
             type="button"
-            className="toolbar-btn location-btn"
+            className={`toolbar-btn location-btn ${showLocation ? 'active' : ''}`}
             onClick={() => togglePanel('location')}
             title="Share location"
+            aria-label="Share location"
+            aria-expanded={showLocation}
           >
-            Map
+            Location
           </button>
 
           <button
             type="button"
-            className="toolbar-btn menu-btn"
+            className={`toolbar-btn menu-btn ${showMenu ? 'active' : ''}`}
             onClick={() => togglePanel('menu')}
             title="More options"
+            aria-label="Open more message tools"
+            aria-expanded={showMenu}
           >
             More
           </button>
@@ -156,7 +166,7 @@ const MessageToolbar = ({
                 closePanels();
               }}
             >
-              Security setup
+              Secure chat
             </button>
             <button
               type="button"
@@ -166,7 +176,7 @@ const MessageToolbar = ({
                 closePanels();
               }}
             >
-              Disappearing mode
+              Disappearing messages
             </button>
             <button
               type="button"

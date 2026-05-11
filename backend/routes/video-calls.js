@@ -301,7 +301,7 @@ const updateSettingsSnapshot = async (videoDateId, settingsPatch = {}) => {
 
   await db.query(
     `UPDATE video_dates
-     SET settings_snapshot = COALESCE(settings_snapshot, '{}'::jsonb) || $2::jsonb
+     SET settings_snapshot = COALESCE(settings_snapshot::jsonb, '{}'::jsonb) || $2::jsonb
      WHERE id = $1`,
     [videoDateId, JSON.stringify(normalizedPatch)]
   );
@@ -457,10 +457,10 @@ router.post('/match/:matchId/live', async (req, res) => {
              session_type = COALESCE(session_type, $2),
              room_id = COALESCE(room_id, $3),
              call_quality_preset = $4,
-             recording_requested = CASE WHEN $5 THEN TRUE ELSE recording_requested END,
-             recording_requested_by = CASE WHEN $5 THEN $1 ELSE recording_requested_by END,
-             virtual_background_user_1 = CASE WHEN $6 = 1 THEN $7 ELSE virtual_background_user_1 END,
-             virtual_background_user_2 = CASE WHEN $6 = 2 THEN $7 ELSE virtual_background_user_2 END
+             recording_requested = CASE WHEN $5::boolean THEN TRUE ELSE recording_requested END,
+             recording_requested_by = CASE WHEN $5::boolean THEN $1::integer ELSE recording_requested_by END,
+             virtual_background_user_1 = CASE WHEN $6::integer = 1 THEN $7::text ELSE virtual_background_user_1 END,
+             virtual_background_user_2 = CASE WHEN $6::integer = 2 THEN $7::text ELSE virtual_background_user_2 END
          WHERE id = $8`,
         [
           userId,
@@ -497,10 +497,10 @@ router.post('/match/:matchId/live', async (req, res) => {
          )
          VALUES (
            $1, $2, $3, $4, 'ringing', $5, $6, $7,
-           CASE WHEN $7 THEN $8 ELSE NULL END,
-           CASE WHEN $9 = 1 THEN $10 ELSE 'none' END,
-           CASE WHEN $9 = 2 THEN $10 ELSE 'none' END,
-           $11
+           CASE WHEN $7::boolean THEN $8::integer ELSE NULL END,
+           CASE WHEN $9::integer = 1 THEN $10::text ELSE 'none' END,
+           CASE WHEN $9::integer = 2 THEN $10::text ELSE 'none' END,
+           $11::jsonb
          )
          RETURNING id`,
         [
@@ -596,10 +596,10 @@ router.post('/match/:matchId/schedule', async (req, res) => {
        )
        VALUES (
          $1, $2, $3, 'scheduled', $4, $5, $6, $7, $8, 'scheduled', $9, $10, $11,
-         CASE WHEN $11 THEN $4 ELSE NULL END,
-         CASE WHEN $12 = 1 THEN $13 ELSE 'none' END,
-         CASE WHEN $12 = 2 THEN $13 ELSE 'none' END,
-         $14
+         CASE WHEN $11::boolean THEN $4::integer ELSE NULL END,
+         CASE WHEN $12::integer = 1 THEN $13::text ELSE 'none' END,
+         CASE WHEN $12::integer = 2 THEN $13::text ELSE 'none' END,
+         $14::jsonb
        )
        RETURNING id`,
       [
@@ -1027,9 +1027,9 @@ router.post('/:videoDateId/feedback', async (req, res) => {
     await db.query(
       `UPDATE video_dates
        SET settings_snapshot = jsonb_set(
-         COALESCE(settings_snapshot, '{}'::jsonb),
+         COALESCE(settings_snapshot::jsonb, '{}'::jsonb),
          '{privateFeedback}',
-         COALESCE(settings_snapshot->'privateFeedback', '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb),
+         COALESCE(settings_snapshot::jsonb->'privateFeedback', '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb),
          true
        )
        WHERE id = $1`,

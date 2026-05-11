@@ -1,7 +1,7 @@
 # Firebase SMS Integration - Implementation Complete ✅
 
 ## Summary
-Successfully replaced Twilio SMS with **Firebase Cloud Messaging (FCM)** for OTP delivery on the LinkUp dating app.
+Successfully replaced Twilio SMS with **Firebase Cloud Messaging (FCM)** for OTP delivery on the DatingHub dating app.
 
 ---
 

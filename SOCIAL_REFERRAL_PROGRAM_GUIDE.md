@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Social Referral Program enables users to invite friends to LinkUp and earn premium rewards for both the referrer and referred user. This creates a viral growth mechanism with leaderboards, social sharing, and comprehensive tracking.
+The Social Referral Program enables users to invite friends to DatingHub and earn premium rewards for both the referrer and referred user. This creates a viral growth mechanism with leaderboards, social sharing, and comprehensive tracking.
 
 **Key Benefits:**
 - 💎 Both parties receive: +7 days premium, +5 superlikes
@@ -80,7 +80,7 @@ Result: { success, code, link, expiresAt }
 
 Code Format: LINK{userId}{8-hex-random}
 Example: LINK123abc4d5e6f7g8h
-Link Format: https://linkup.dating/?referral=LINK123abc4d5e6f7g8h
+Link Format: https://datinghub.app/?referral=LINK123abc4d5e6f7g8h
 ```
 
 #### 2. **submitReferralCode(userId, referralCode)**
@@ -217,7 +217,7 @@ Description: Get or generate referral code
 Response: {
   success: true,
   code: 'LINK123abc4d5e6f7g8h',
-  link: 'https://linkup.dating/?referral=...',
+  link: 'https://datinghub.app/?referral=...',
   createdAt: '2026-04-28T10:00:00Z'
 }
 ```
@@ -840,4 +840,4 @@ Monitor these metrics:
 
 ## Conclusion
 
-The Social Referral Program provides a complete, production-ready viral growth mechanism for LinkUp. With comprehensive tracking, attractive UI, and multiple sharing channels, it creates strong incentives for users to invite their friends while maintaining data integrity through atomic transactions and fraud prevention measures.
+The Social Referral Program provides a complete, production-ready viral growth mechanism for DatingHub. With comprehensive tracking, attractive UI, and multiple sharing channels, it creates strong incentives for users to invite their friends while maintaining data integrity through atomic transactions and fraud prevention measures.

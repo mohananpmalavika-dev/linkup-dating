@@ -26,7 +26,7 @@
 
 .insights-loading .spinner {
   border: 3px solid #f3f3f3;
-  border-top: 3px solid #667eea;
+  border-top: 3px solid var(--dh-logo-copper, #d06030);
   width: 30px;
   height: 30px;
   animation: spin 1s linear infinite;
@@ -101,7 +101,7 @@
 }
 
 .insight-engagement {
-  border-left-color: #667eea;
+  border-left-color: var(--dh-logo-copper, #d06030);
   background: #f5f7ff;
 }
 
@@ -116,7 +116,7 @@
   border-radius: 10px;
   padding: 12px;
   margin-top: 12px;
-  border-top: 3px solid #667eea;
+  border-top: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .summary-row {

@@ -3,7 +3,7 @@
   padding: 2rem 1rem 4rem;
   background:
     radial-gradient(circle at top left, rgba(245, 158, 11, 0.2), transparent 28%),
-    radial-gradient(circle at top right, rgba(59, 130, 246, 0.18), transparent 30%),
+    radial-gradient(circle at top right, rgba(208, 96, 48, 0.18), transparent 30%),
     linear-gradient(180deg, #f6efe4 0%, #eef4fb 55%, #f9fbfd 100%);
   color: #14213d;
   position: relative;
@@ -331,9 +331,9 @@
 }
 
 .reminderalert-alert-info {
-  background: rgba(59, 130, 246, 0.12);
+  background: rgba(208, 96, 48, 0.12);
   color: #1d4ed8;
-  border: 1px solid rgba(59, 130, 246, 0.18);
+  border: 1px solid rgba(208, 96, 48, 0.18);
 }
 
 .reminderalert-editor-form {
@@ -573,7 +573,7 @@
   align-items: center;
   padding: 0.45rem 0.75rem;
   border-radius: 999px;
-  background: rgba(249, 115, 22, 0.12);
+  background: rgba(208, 96, 48, 0.12);
   color: #c2410c;
   font-weight: 700;
   font-size: 0.86rem;
@@ -586,7 +586,7 @@
 
 /* COUNTDOWN PANEL */
 .reminderalert-countdown-panel {
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(59, 130, 246, 0.08));
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(208, 96, 48, 0.08));
   border: 2px solid rgba(15, 118, 110, 0.25);
 }
 
@@ -914,11 +914,11 @@
 }
 
 .reminderalert-action-btn.edit {
-  color: #3b82f6;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .reminderalert-action-btn.edit:hover {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(208, 96, 48, 0.1);
 }
 
 .reminderalert-action-btn.delete {

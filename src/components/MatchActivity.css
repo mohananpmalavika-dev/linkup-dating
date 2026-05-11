@@ -118,7 +118,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #2196f3;
+  background-color: var(--dh-logo-copper, #d06030);
   animation: typing-pulse 1.4s infinite;
 }
 

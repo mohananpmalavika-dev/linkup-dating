@@ -36,7 +36,7 @@ cat .env
 # Check PostgreSQL is running
 psql -U postgres -l  # Should list databases
 
-# If LinkUp database doesn't exist, create it:
+# If DatingHub database doesn't exist, create it:
 createdb linkup
 
 # Run migrations
@@ -209,7 +209,7 @@ netlify deploy --prod --dir=build
 **Option B: Deploy to Your Own Server**
 ```bash
 # SSH into server
-ssh user@staging.linkup.com
+ssh user@staging.datinghub.app
 
 # Pull latest code
 cd /var/www/linkup
@@ -257,7 +257,7 @@ jarsigner -verify -verbose android/app/build/outputs/bundle/release/app-release.
 1. https://play.google.com/console
 2. Click "Create App"
 3. Fill in:
-   - **App name:** LinkUp - Dating & Connections
+   - **App name:** DatingHub - Dating & Connections
    - **Type:** Application
    - **Category:** Social
    - **Content rating:** 17+
@@ -266,7 +266,7 @@ jarsigner -verify -verbose android/app/build/outputs/bundle/release/app-release.
 **Fill App Details:**
 1. **Description:**
    ```
-   LinkUp is a safe, verified dating and connection platform 
+   DatingHub is a safe, verified dating and connection platform 
    where real people find genuine matches. Connect, chat, 
    video date, and meet amazing people in your area.
    

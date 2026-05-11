@@ -1,9 +1,9 @@
 @echo off
-REM Quick Start Script for LinkUp Dating App (Windows)
+REM Quick Start Script for DatingHub App (Windows)
 REM This script sets up and starts both frontend and backend
 
 echo.
-echo 🚀 LinkUp Dating App - Quick Start (Windows)
+echo 🚀 DatingHub App - Quick Start (Windows)
 echo =========================================
 echo.
 
@@ -56,14 +56,14 @@ echo.
 
 REM Start backend in new window
 echo 🔧 Starting backend server in new window...
-start "LinkUp Backend" cmd /k "cd backend && npm run dev"
+start "DatingHub Backend" cmd /k "cd backend && npm run dev"
 echo ✓ Backend starting...
 timeout /t 2 >nul
 echo.
 
 REM Start frontend in new window
 echo 🎨 Starting frontend development server...
-start "LinkUp Frontend" cmd /k "npm start"
+start "DatingHub Frontend" cmd /k "npm start"
 echo ✓ Frontend starting...
 echo.
 

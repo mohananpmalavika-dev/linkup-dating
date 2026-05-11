@@ -389,7 +389,7 @@ git push origin main
 ## 📚 File Navigation
 
 ```
-LinkUp/
+DatingHub/
 ├── backend/
 │   ├── routes/
 │   │   ├── dpdpaCompliance.js          👈 10 endpoints

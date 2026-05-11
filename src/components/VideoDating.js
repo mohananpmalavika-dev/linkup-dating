@@ -102,6 +102,7 @@ const VideoDating = ({
   matchedProfile,
   matchId,
   callMode = 'outgoing',
+  callType = 'video',
   autoAccepted = false,
   callerName = '',
   incomingCall = null,
@@ -115,6 +116,11 @@ const VideoDating = ({
   const currentUserId = currentUser?.id;
   const currentUserName =
     currentUser?.firstName || currentUser?.username || currentUser?.email || 'Someone';
+  const normalizedCallType =
+    String(callType || incomingCall?.callType || 'video').trim().toLowerCase() === 'voice'
+      ? 'voice'
+      : 'video';
+  const isVoiceOnlyCall = normalizedCallType === 'voice';
   const [conversationMatch, setConversationMatch] = useState(normalizeMatch(matchedProfile));
   const [loadingMatch, setLoadingMatch] = useState(Boolean(matchId) && !matchedProfile);
   const [matchError, setMatchError] = useState('');
@@ -147,7 +153,7 @@ const VideoDating = ({
   const [scheduleTitle, setScheduleTitle] = useState('');
   const [scheduleNote, setScheduleNote] = useState('');
   const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOn, setIsVideoOn] = useState(true);
+  const [isVideoOn, setIsVideoOn] = useState(!isVoiceOnlyCall);
   const [mediaReady, setMediaReady] = useState(false);
   const [remoteStreamAvailable, setRemoteStreamAvailable] = useState(false);
   const [otherUserOnline, setOtherUserOnline] = useState(false);
@@ -204,6 +210,8 @@ const VideoDating = ({
   const isCaller = callMode !== 'incoming';
   const hubBusy = callActionPending !== '';
   const endedSession = completedSession || activeSession;
+  const remoteVideoVisible = !isVoiceOnlyCall && remoteStreamAvailable;
+  const localVideoVisible = !isVoiceOnlyCall && mediaReady && (isVideoOn || isScreenSharing);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -309,11 +317,37 @@ const VideoDating = ({
     element.srcObject = stream;
     element.muted = muted;
 
+    // Ensure autoplay attribute is set (for remote video with audio)
+    if (!muted) {
+      element.setAttribute('autoplay', '');
+      element.setAttribute('playsinline', '');
+    }
+
     if (typeof element.play === 'function') {
       try {
         await element.play();
       } catch (playError) {
-        console.warn('Unable to autoplay call media:', playError);
+        console.error('Error playing media stream:', playError?.name, playError?.message);
+        
+        // If autoplay is blocked by browser policy, set the video to play muted first
+        // then unmute after getting user interaction later
+        if (playError?.name === 'NotAllowedError' && !muted) {
+          console.warn('Autoplay with audio blocked by browser policy. Retrying with muted...');
+          element.muted = true;
+          try {
+            await element.play();
+            // Try to unmute after first user interaction
+            const unmute = () => {
+              element.muted = false;
+              document.removeEventListener('click', unmute);
+              document.removeEventListener('touchstart', unmute);
+            };
+            document.addEventListener('click', unmute, { once: true });
+            document.addEventListener('touchstart', unmute, { once: true });
+          } catch (muteError) {
+            console.warn('Unable to autoplay call media even when muted:', muteError);
+          }
+        }
       }
     }
   }, []);
@@ -350,6 +384,57 @@ const VideoDating = ({
       return session;
     },
     [mergeActiveSession]
+  );
+
+  const buildDirectCallSession = useCallback(
+    ({ existingVideoDateId = null, sessionType = 'instant', incoming = false } = {}) => {
+      const roomId =
+        callRoomIdRef.current ||
+        incomingCall?.callId ||
+        existingVideoDateId ||
+        `direct-call-${Date.now()}-${currentUserId || 'self'}-${activeMatchUserId || 'peer'}`;
+
+      callRoomIdRef.current = roomId;
+      currentVideoDateIdRef.current = null;
+
+      return {
+        id: null,
+        roomId,
+        sessionType,
+        startedAt: new Date().toISOString(),
+        status: incoming ? 'accepted' : 'ringing',
+        title:
+          sessionType === 'scheduled'
+            ? scheduleTitle.trim() || 'Scheduled call'
+            : normalizedCallType === 'voice'
+              ? 'Voice call'
+              : 'Video call',
+        note: scheduleNote.trim() || '',
+        reminderMinutes,
+        recording: {
+          requested: recordingRequestedRef.current,
+          currentUserConsented: recordingConsentRef.current,
+          otherUserConsented: false,
+          enabled: false
+        },
+        liveSettings: {
+          qualityPreset: qualityPresetRef.current,
+          currentUserBackground: virtualBackgroundRef.current,
+          otherUserBackground: 'none',
+          screenShareEnabled: false,
+          callType: normalizedCallType
+        }
+      };
+    },
+    [
+      activeMatchUserId,
+      currentUserId,
+      incomingCall?.callId,
+      normalizedCallType,
+      reminderMinutes,
+      scheduleNote,
+      scheduleTitle
+    ]
   );
 
   const resetNegotiationState = useCallback(() => {
@@ -406,6 +491,23 @@ const VideoDating = ({
     setIsScreenSharing(false);
   }, []);
 
+  useEffect(() => {
+    if (!isVoiceOnlyCall) {
+      return;
+    }
+
+    const localVideoTracks = localStreamRef.current?.getVideoTracks?.() || [];
+    localVideoTracks.forEach((track) => {
+      track.enabled = false;
+    });
+
+    if (screenStreamRef.current) {
+      stopScreenShare();
+    }
+
+    setIsVideoOn(false);
+  }, [isVoiceOnlyCall, stopScreenShare]);
+
   const cleanupPeerConnection = useCallback(() => {
     if (peerConnectionRef.current) {
       peerConnectionRef.current.onicecandidate = null;
@@ -445,7 +547,7 @@ const VideoDating = ({
 
     socket.emit('call:invite', {
       callId: pendingInvite.callId,
-      callType: 'video',
+      callType: normalizedCallType,
       matchId: activeMatchId,
       targetUserId: activeMatchUserId,
       fromUserName: currentUserName,
@@ -454,7 +556,7 @@ const VideoDating = ({
 
     pendingInviteRef.current = null;
     return true;
-  }, [activeMatchId, activeMatchUserId, currentUserName]);
+  }, [activeMatchId, activeMatchUserId, currentUserName, normalizedCallType]);
 
   const emitReadySignal = useCallback(() => {
     const socket = socketRef.current;
@@ -575,7 +677,7 @@ const VideoDating = ({
 
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: getVideoConstraintsForQuality(qualityPresetRef.current)
+      video: isVoiceOnlyCall ? false : getVideoConstraintsForQuality(qualityPresetRef.current)
     });
 
     localStreamRef.current = stream;
@@ -584,7 +686,7 @@ const VideoDating = ({
     setIsMuted(false);
     setIsVideoOn(Boolean(stream.getVideoTracks()[0]?.enabled));
     return stream;
-  }, [attachStreamToElement]);
+  }, [attachStreamToElement, isVoiceOnlyCall]);
 
   const completeSessionOnServer = useCallback(async ({ sessionId, reason, connected }) => {
     const resolvedSessionId = sessionId || activeSessionRef.current?.id;
@@ -714,7 +816,7 @@ const VideoDating = ({
         return;
       }
 
-      setError(message || 'The video connection failed.');
+      setError(message || 'The call connection failed.');
       void finalizeCall({
         reason: 'connection_timeout',
         connected: false,
@@ -746,7 +848,14 @@ const VideoDating = ({
 
       remoteStreamRef.current = nextRemoteStream;
       setRemoteStreamAvailable(true);
-      void attachStreamToElement(remoteVideoRef.current, nextRemoteStream);
+      
+      // Attach stream to remote video element without muting
+      void attachStreamToElement(remoteVideoRef.current, nextRemoteStream, { muted: false }).then(() => {
+        // Ensure audio output is at reasonable volume
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.volume = 1.0;
+        }
+      });
     };
 
     peerConnection.onicecandidate = (event) => {
@@ -774,7 +883,7 @@ const VideoDating = ({
           setCallStatus('connecting');
           break;
         case 'failed':
-          handleConnectionFailure('The video connection failed.');
+          handleConnectionFailure('The call connection failed.');
           break;
         case 'disconnected':
           if (!callEndedRef.current) {
@@ -959,6 +1068,11 @@ const VideoDating = ({
       return;
     }
 
+    if (isVoiceOnlyCall) {
+      setError('Screen sharing is unavailable during voice-only calls.');
+      return;
+    }
+
     try {
       if (isScreenSharing) {
         await restoreCameraTrack();
@@ -1002,6 +1116,7 @@ const VideoDating = ({
     }
   }, [
     attachStreamToElement,
+    isVoiceOnlyCall,
     isScreenSharing,
     persistLiveSettings,
     pushLiveNotice,
@@ -1042,7 +1157,7 @@ const VideoDating = ({
       if (remoteVideoElement?.videoWidth && remoteVideoElement?.videoHeight && remoteStreamAvailable) {
         context.drawImage(remoteVideoElement, 0, 0, canvas.width, canvas.height);
       } else {
-        drawPlaceholder(0, 0, canvas.width, canvas.height, remoteLabel, '#8b5cf6');
+        drawPlaceholder(0, 0, canvas.width, canvas.height, remoteLabel, '#d06030');
       }
 
       const pipWidth = 300;
@@ -1056,7 +1171,7 @@ const VideoDating = ({
       if (localVideoElement?.videoWidth && localVideoElement?.videoHeight && mediaReady) {
         context.drawImage(localVideoElement, pipX, pipY, pipWidth, pipHeight);
       } else {
-        drawPlaceholder(pipX, pipY, pipWidth, pipHeight, localLabel, '#f97316');
+        drawPlaceholder(pipX, pipY, pipWidth, pipHeight, localLabel, '#f1a06f');
       }
       context.fillStyle = 'rgba(3, 7, 18, 0.78)';
       context.fillRect(pipX + 14, pipY + pipHeight - 42, 130, 28);
@@ -1153,7 +1268,7 @@ const VideoDating = ({
         if (recordingShouldDownloadRef.current && blob.size > 0) {
           downloadBlob(
             blob,
-            `linkup-video-call-${currentVideoDateIdRef.current || Date.now()}.webm`
+            `datinghub-video-call-${currentVideoDateIdRef.current || Date.now()}.webm`
           );
           setRecordingMessage('Recording saved to your device.');
         } else {
@@ -1308,7 +1423,7 @@ const VideoDating = ({
     defaultsHydratedRef.current = false;
     autoStartAttemptedRef.current = false;
     resetNegotiationState();
-  }, [activeMatchId, resetNegotiationState]);
+  }, [activeMatchId, activeMatchUserId, incomingCall?.callId, resetNegotiationState]);
 
   useEffect(() => {
     void refreshSessionSummary();
@@ -1320,7 +1435,7 @@ const VideoDating = ({
       sessionType = 'instant',
       incoming = false
     } = {}) => {
-      if (!activeMatchId || !activeMatchUserId) {
+      if (!activeMatchUserId || (!activeMatchId && !incomingCall?.callId)) {
         return null;
       }
 
@@ -1336,7 +1451,13 @@ const VideoDating = ({
         await prepareLocalMedia();
         let session = null;
 
-        if (incoming) {
+        if (!activeMatchId) {
+          session = buildDirectCallSession({
+            existingVideoDateId,
+            sessionType,
+            incoming
+          });
+        } else if (incoming) {
           let incomingSessionId = existingVideoDateId || currentVideoDateIdRef.current;
 
           if (!incomingSessionId) {
@@ -1392,12 +1513,18 @@ const VideoDating = ({
         }
 
         applySessionToState(session);
-        await applyQualityPresetToLiveTrack(session.liveSettings?.qualityPreset || qualityPresetRef.current);
+        if (!isVoiceOnlyCall) {
+          await applyQualityPresetToLiveTrack(
+            session.liveSettings?.qualityPreset || qualityPresetRef.current
+          );
+        }
 
         callRoomIdRef.current = session.roomId;
-        currentVideoDateIdRef.current = session.id;
+        currentVideoDateIdRef.current = session.id || null;
 
-        emitInviteIfPossible();
+        if (activeMatchId) {
+          emitInviteIfPossible();
+        }
         emitReadySignal();
 
         if (!incoming && remotePeerReadyRef.current) {
@@ -1408,7 +1535,11 @@ const VideoDating = ({
         pushLiveNotice(
           incoming
             ? 'Joining the call now.'
-            : sessionType === 'scheduled'
+            : !activeMatchId
+              ? normalizedCallType === 'voice'
+                ? 'Starting the voice call now.'
+                : 'Starting the video call now.'
+              : sessionType === 'scheduled'
               ? 'Inviting your match to the scheduled call.'
               : 'Calling your match now.'
         );
@@ -1422,7 +1553,7 @@ const VideoDating = ({
         setError(
           typeof sessionError === 'string'
             ? sessionError
-            : 'Unable to start the video call right now.'
+            : 'Unable to start the call right now.'
         );
         setScreenMode('ended');
         return null;
@@ -1435,10 +1566,13 @@ const VideoDating = ({
       activeMatchUserId,
       applyQualityPresetToLiveTrack,
       applySessionToState,
+      buildDirectCallSession,
       cleanupMediaOnly,
       emitInviteIfPossible,
       emitReadySignal,
       incomingCall?.callId,
+      isVoiceOnlyCall,
+      normalizedCallType,
       prepareLocalMedia,
       pushLiveNotice,
       refreshSessionSummary,
@@ -1517,7 +1651,7 @@ const VideoDating = ({
           await startOutgoingOffer();
         } catch (offerError) {
           console.error('Failed to create outgoing offer:', offerError);
-          handleConnectionFailure('Unable to start the video connection.');
+          handleConnectionFailure('Unable to start the call connection.');
         }
       }
     };
@@ -1564,7 +1698,7 @@ const VideoDating = ({
         }
       } catch (signalError) {
         console.error('Failed to process call signal:', signalError);
-        handleConnectionFailure('Unable to continue the video call connection.');
+        handleConnectionFailure('Unable to continue the call connection.');
       }
     };
 
@@ -1674,20 +1808,22 @@ const VideoDating = ({
       socket.off('call:signal', handleCallSignal);
       socket.off('call:settings', handleCallSettings);
 
-      if (activeSessionRef.current?.id && !callEndedRef.current) {
+      if (activeSessionRef.current?.roomId && !callEndedRef.current) {
         socket.emit('call:end', {
           callId: callRoomIdRef.current,
           matchId: activeMatchId,
           targetUserId: activeMatchUserId,
           reason: 'left_call_screen'
         });
-        void videoCallService.completeSession(activeSessionRef.current.id, {
-          reason: 'left_call_screen',
-          connected: callStatusRef.current === 'connected',
-          durationSeconds: callDurationRef.current
-        }).catch((unmountError) => {
-          console.error('Failed to finalize call during unmount:', unmountError);
-        });
+        if (activeSessionRef.current?.id) {
+          void videoCallService.completeSession(activeSessionRef.current.id, {
+            reason: 'left_call_screen',
+            connected: callStatusRef.current === 'connected',
+            durationSeconds: callDurationRef.current
+          }).catch((unmountError) => {
+            console.error('Failed to finalize call during unmount:', unmountError);
+          });
+        }
       }
 
       socket.disconnect();
@@ -1714,7 +1850,13 @@ const VideoDating = ({
   ]);
 
   useEffect(() => {
-    if (!autoAccepted || !activeMatchId || !activeMatchUserId || loadingMatch || loadingSessions) {
+    if (
+      !autoAccepted ||
+      !activeMatchUserId ||
+      (!activeMatchId && !incomingCall?.callId) ||
+      loadingMatch ||
+      loadingSessions
+    ) {
       return;
     }
 
@@ -1732,6 +1874,7 @@ const VideoDating = ({
     activeMatchId,
     activeMatchUserId,
     autoAccepted,
+    incomingCall?.callId,
     incomingCall?.videoDateId,
     loadingMatch,
     loadingSessions,
@@ -1743,8 +1886,8 @@ const VideoDating = ({
     if (
       autoAccepted ||
       !startImmediately ||
-      !activeMatchId ||
       !activeMatchUserId ||
+      (!activeMatchId && !incomingCall?.callId) ||
       loadingMatch ||
       loadingSessions
     ) {
@@ -1769,6 +1912,7 @@ const VideoDating = ({
     activeMatchId,
     activeMatchUserId,
     autoAccepted,
+    incomingCall?.callId,
     loadingMatch,
     loadingSessions,
     prepareSessionAndJoin,
@@ -1783,7 +1927,7 @@ const VideoDating = ({
 
     if (
       screenMode !== 'call' ||
-      !activeSessionRef.current?.id ||
+      !activeSessionRef.current?.roomId ||
       callEndedRef.current ||
       ['connected', 'ended', 'declined', 'missed', 'failed'].includes(callStatus)
     ) {
@@ -1887,7 +2031,7 @@ const VideoDating = ({
     setQualityPreset(nextPreset);
     setFeedbackMessage('');
 
-    if (screenMode === 'call' && activeSessionRef.current?.id) {
+    if (screenMode === 'call' && activeSessionRef.current?.roomId && !isVoiceOnlyCall) {
       await applyQualityPresetToLiveTrack(nextPreset);
       await persistLiveSettings({ qualityPreset: nextPreset });
     }
@@ -1897,7 +2041,7 @@ const VideoDating = ({
     setVirtualBackground(nextPreset);
     setFeedbackMessage('');
 
-    if (screenMode === 'call' && activeSessionRef.current?.id) {
+    if (screenMode === 'call' && activeSessionRef.current?.roomId && !isVoiceOnlyCall) {
       await persistLiveSettings({ virtualBackground: nextPreset });
       pushLiveNotice(`Background changed to ${getBackgroundOption(nextPreset).label}.`);
     }
@@ -1956,6 +2100,10 @@ const VideoDating = ({
   };
 
   const toggleVideo = () => {
+    if (isVoiceOnlyCall) {
+      return;
+    }
+
     const videoTrack = localStreamRef.current?.getVideoTracks?.()[0];
 
     if (!videoTrack) {
@@ -1971,7 +2119,7 @@ const VideoDating = ({
       return;
     }
 
-    if (screenMode === 'call' && activeSessionRef.current?.id && !callEndedRef.current) {
+    if (screenMode === 'call' && activeSessionRef.current?.roomId && !callEndedRef.current) {
       void finalizeCall({
         reason: 'switched_to_messages',
         connected: callStatusRef.current === 'connected',
@@ -2513,10 +2661,17 @@ const VideoDating = ({
       ) : null}
 
       <div className="call-info-strip">
-        <span className="video-status-chip">{getQualityOption(qualityPreset).label}</span>
         <span className="video-status-chip">
-          {getBackgroundOption(virtualBackground).label}
+          {isVoiceOnlyCall ? 'Voice only' : 'Video call'}
         </span>
+        {!isVoiceOnlyCall ? (
+          <span className="video-status-chip">{getQualityOption(qualityPreset).label}</span>
+        ) : null}
+        {!isVoiceOnlyCall ? (
+          <span className="video-status-chip">
+            {getBackgroundOption(virtualBackground).label}
+          </span>
+        ) : null}
         <span className={`video-status-chip ${recordingRequested ? 'accent' : ''}`}>
           {activeSession?.recording?.enabled
             ? 'Recording consented'
@@ -2525,7 +2680,7 @@ const VideoDating = ({
               : 'Recording off'}
         </span>
         <span className={`video-status-chip ${otherUserOnline ? 'accent' : ''}`}>
-          {otherUserOnline ? 'Match online' : 'Match offline'}
+          {otherUserOnline ? 'Other person online' : 'Other person offline'}
         </span>
         {activeSession?.liveSettings?.screenShareEnabled ? (
           <span className="video-status-chip accent">
@@ -2542,12 +2697,13 @@ const VideoDating = ({
         >
           <video
             ref={remoteVideoRef}
-            className={`remote-video-element ${remoteStreamAvailable ? 'visible' : ''}`}
+            className={`remote-video-element ${remoteVideoVisible ? 'visible' : ''}`}
             playsInline
             autoPlay
+            controls={false}
           />
 
-          {!remoteStreamAvailable ? (
+          {!remoteVideoVisible ? (
             <div className="video-placeholder video-placeholder-remote">
               {partnerPhoto ? <img src={partnerPhoto} alt={partnerName} /> : null}
               <div className="placeholder-avatar">{partnerName.charAt(0) || '?'}</div>
@@ -2565,56 +2721,66 @@ const VideoDating = ({
         <div className={`local-video local-theme-${virtualBackground}`}>
           <video
             ref={localVideoRef}
-            className={`local-video-element ${mediaReady && (isVideoOn || isScreenSharing) ? 'visible' : ''}`}
+            className={`local-video-element ${localVideoVisible ? 'visible' : ''}`}
             playsInline
             autoPlay
             muted
           />
-          {(!mediaReady || (!isVideoOn && !isScreenSharing)) ? (
+          {!localVideoVisible ? (
             <div className="video-placeholder video-placeholder-local">
               <div className="placeholder-avatar">
                 {currentUserName.charAt(0).toUpperCase()}
               </div>
-              <p>{mediaReady ? 'Camera off' : 'Starting camera'}</p>
+              <p>
+                {mediaReady
+                  ? isVoiceOnlyCall
+                    ? 'Voice only call'
+                    : 'Camera off'
+                  : isVoiceOnlyCall
+                    ? 'Joining audio'
+                    : 'Starting camera'}
+              </p>
             </div>
           ) : null}
           <p className="local-video-label">{isScreenSharing ? 'Sharing screen' : 'You'}</p>
         </div>
       </div>
 
-      <div className="call-toolbar">
-        <label className="call-toolbar-field">
-          <span>Quality</span>
-          <select
-            value={qualityPreset}
-            onChange={(event) => {
-              void handleChangeQualityPreset(event.target.value);
-            }}
-          >
-            {CALL_QUALITY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+      {!isVoiceOnlyCall ? (
+        <div className="call-toolbar">
+          <label className="call-toolbar-field">
+            <span>Quality</span>
+            <select
+              value={qualityPreset}
+              onChange={(event) => {
+                void handleChangeQualityPreset(event.target.value);
+              }}
+            >
+              {CALL_QUALITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="call-toolbar-field">
-          <span>Background</span>
-          <select
-            value={virtualBackground}
-            onChange={(event) => {
-              void handleChangeVirtualBackground(event.target.value);
-            }}
-          >
-            {BACKGROUND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+          <label className="call-toolbar-field">
+            <span>Background</span>
+            <select
+              value={virtualBackground}
+              onChange={(event) => {
+                void handleChangeVirtualBackground(event.target.value);
+              }}
+            >
+              {BACKGROUND_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
 
       <div className="call-controls">
         <button
@@ -2625,23 +2791,27 @@ const VideoDating = ({
           {isMuted ? 'Unmute' : 'Mute'}
         </button>
 
-        <button
-          type="button"
-          className={`control-btn ${!isVideoOn ? 'off' : ''}`}
-          onClick={toggleVideo}
-        >
-          {isVideoOn ? 'Camera On' : 'Camera Off'}
-        </button>
+        {!isVoiceOnlyCall ? (
+          <button
+            type="button"
+            className={`control-btn ${!isVideoOn ? 'off' : ''}`}
+            onClick={toggleVideo}
+          >
+            {isVideoOn ? 'Camera On' : 'Camera Off'}
+          </button>
+        ) : null}
 
-        <button
-          type="button"
-          className={`control-btn ${isScreenSharing ? 'chat' : ''}`}
-          onClick={() => {
-            void toggleScreenShare();
-          }}
-        >
-          {isScreenSharing ? 'Stop Share' : 'Share Screen'}
-        </button>
+        {!isVoiceOnlyCall ? (
+          <button
+            type="button"
+            className={`control-btn ${isScreenSharing ? 'chat' : ''}`}
+            onClick={() => {
+              void toggleScreenShare();
+            }}
+          >
+            {isScreenSharing ? 'Stop Share' : 'Share Screen'}
+          </button>
+        ) : null}
 
         <button
           type="button"

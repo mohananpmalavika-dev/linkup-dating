@@ -3,7 +3,7 @@
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   padding: 20px;
 }
 
@@ -24,7 +24,7 @@
 .app-logo {
   font-size: 36px;
   font-weight: 700;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   margin-bottom: 15px;
 }
 
@@ -68,8 +68,8 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .form-group input:disabled {
@@ -88,7 +88,7 @@
 
 .login-button {
   padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   border-radius: 6px;
@@ -101,7 +101,7 @@
 
 .login-button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 5px 20px rgba(208, 96, 48, 0.4);
 }
 
 .login-button:disabled {
@@ -119,7 +119,7 @@
 .toggle-mode {
   background: none;
   border: none;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   cursor: pointer;
   font-weight: 600;
   text-decoration: none;
@@ -127,14 +127,14 @@
 }
 
 .toggle-mode:hover {
-  color: #764ba2;
+  color: var(--dh-logo-ink, #102030);
   text-decoration: underline;
 }
 
 .signup-link {
   background: none;
   border: none;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   cursor: pointer;
   font-weight: 600;
   text-decoration: none;
@@ -144,7 +144,7 @@
 }
 
 .signup-link:hover:not(:disabled) {
-  color: #764ba2;
+  color: var(--dh-logo-ink, #102030);
   text-decoration: underline;
 }
 

@@ -70,7 +70,7 @@ const ContactsList = ({
       <div className="contacts-header">
         <div className="contacts-header-copy">
           <h2>Contacts</h2>
-          <p className="contacts-subtitle">People you can reach in LinkUp</p>
+          <p className="contacts-subtitle">People you can reach in DatingHub</p>
         </div>
         <div className="contacts-filters">
           <button

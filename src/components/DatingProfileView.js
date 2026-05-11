@@ -811,7 +811,7 @@ const DatingProfileView = ({
           ) : null}
           {showFriendAction && friendshipState === 'accepted' ? (
             <button type="button" className="btn-cancel" disabled>
-              Friends on LinkUp
+              Friends on DatingHub
             </button>
           ) : null}
           {canMessage ? (

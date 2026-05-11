@@ -28,6 +28,21 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
       field: 'joined_at'
+    },
+    role: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'member'
+    },
+    status: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'active'
+    },
+    leftAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'left_at'
     }
   }, {
     tableName: 'chatroom_members',
@@ -36,7 +51,9 @@ module.exports = (sequelize, DataTypes) => {
     indexes: [
       { fields: ['chatroom_id', 'user_id'], unique: true },
       { fields: ['chatroom_id'] },
-      { fields: ['user_id'] }
+      { fields: ['user_id'] },
+      { fields: ['status'] },
+      { fields: ['role'] }
     ]
   });
 

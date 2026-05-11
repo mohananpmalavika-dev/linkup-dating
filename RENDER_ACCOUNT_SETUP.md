@@ -42,7 +42,7 @@ After login, you'll see Render Dashboard:
 ### Step 1: Create GitHub Repository
 
 ```bash
-cd LinkUp
+cd DatingHub
 
 # Initialize Git
 git init
@@ -55,7 +55,7 @@ git config user.name "Your Name"
 git add .
 
 # Commit
-git commit -m "LinkUp dating app - production ready"
+git commit -m "DatingHub dating app - production ready"
 
 # Create repo on GitHub.com
 # Then:

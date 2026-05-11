@@ -9,7 +9,10 @@ import { API_BASE_URL } from '../utils/api';
 
 const API_URL = `${API_BASE_URL}/streaks`;
 
-const useStreaks = (matchId = null) => {
+const useStreaks = (matchId = null, options = {}) => {
+  const shouldFetchUserStreaks = options.fetchUserStreaks ?? !matchId;
+  const shouldFetchStats = options.fetchStats ?? !matchId;
+  const shouldFetchLeaderboard = options.fetchLeaderboard ?? !matchId;
   const [currentStreak, setCurrentStreak] = useState(null);
   const [userStreaks, setUserStreaks] = useState([]);
   const [streakStats, setStreakStats] = useState(null);
@@ -94,10 +97,25 @@ const useStreaks = (matchId = null) => {
     if (matchId) {
       fetchMatchStreak(matchId);
     }
-    fetchUserStreaks();
-    fetchStreakStats();
-    fetchLeaderboard();
-  }, [matchId, fetchMatchStreak, fetchUserStreaks, fetchStreakStats, fetchLeaderboard]);
+    if (shouldFetchUserStreaks) {
+      fetchUserStreaks();
+    }
+    if (shouldFetchStats) {
+      fetchStreakStats();
+    }
+    if (shouldFetchLeaderboard) {
+      fetchLeaderboard();
+    }
+  }, [
+    matchId,
+    fetchMatchStreak,
+    fetchUserStreaks,
+    fetchStreakStats,
+    fetchLeaderboard,
+    shouldFetchUserStreaks,
+    shouldFetchStats,
+    shouldFetchLeaderboard
+  ]);
 
   /**
    * Refresh all streak data
@@ -106,10 +124,25 @@ const useStreaks = (matchId = null) => {
     if (matchId) {
       fetchMatchStreak(matchId);
     }
-    fetchUserStreaks();
-    fetchStreakStats();
-    fetchLeaderboard();
-  }, [matchId, fetchMatchStreak, fetchUserStreaks, fetchStreakStats, fetchLeaderboard]);
+    if (shouldFetchUserStreaks) {
+      fetchUserStreaks();
+    }
+    if (shouldFetchStats) {
+      fetchStreakStats();
+    }
+    if (shouldFetchLeaderboard) {
+      fetchLeaderboard();
+    }
+  }, [
+    matchId,
+    fetchMatchStreak,
+    fetchUserStreaks,
+    fetchStreakStats,
+    fetchLeaderboard,
+    shouldFetchUserStreaks,
+    shouldFetchStats,
+    shouldFetchLeaderboard
+  ]);
 
   return {
     currentStreak,

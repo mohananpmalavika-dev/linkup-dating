@@ -203,7 +203,7 @@ Modified POST `/api/auth/verify-age` endpoint:
 {
   status: 403,
   json: {
-    error: 'You must be at least 18 years old to use LinkUp',
+    error: 'You must be at least 18 years old to use DatingHub',
     code: 'UNDERAGE_USER',
     age: 15,
     message: 'Your IP address has been blocked for 2 hours due to underage signup attempt.'
@@ -612,38 +612,38 @@ All admin actions are logged:
 ```bash
 # Check if IP is blocked
 curl -H "Authorization: Bearer TOKEN" \
-  https://api.linkup.com/api/admin/ip-blocking/check/192.168.1.100
+  https://api.datinghub.app/api/admin/ip-blocking/check/192.168.1.100
 
 # Get current settings
 curl -H "Authorization: Bearer TOKEN" \
-  https://api.linkup.com/api/admin/ip-blocking/settings
+  https://api.datinghub.app/api/admin/ip-blocking/settings
 
 # Update block duration
 curl -X POST \
   -H "Authorization: Bearer TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"key":"underage_ip_block_duration_hours","value":"24","type":"integer"}' \
-  https://api.linkup.com/api/admin/ip-blocking/settings/update
+  https://api.datinghub.app/api/admin/ip-blocking/settings/update
 
 # List blocked IPs
 curl -H "Authorization: Bearer TOKEN" \
-  https://api.linkup.com/api/admin/ip-blocking/blocked-ips?page=1&limit=50
+  https://api.datinghub.app/api/admin/ip-blocking/blocked-ips?page=1&limit=50
 
 # Manually block IP
 curl -X POST \
   -H "Authorization: Bearer TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"ipAddress":"192.168.1.100","reason":"spam","durationHours":48}' \
-  https://api.linkup.com/api/admin/ip-blocking/block-ip
+  https://api.datinghub.app/api/admin/ip-blocking/block-ip
 
 # Unblock IP
 curl -X DELETE \
   -H "Authorization: Bearer TOKEN" \
-  https://api.linkup.com/api/admin/ip-blocking/unblock-ip/192.168.1.100
+  https://api.datinghub.app/api/admin/ip-blocking/unblock-ip/192.168.1.100
 
 # Get statistics
 curl -H "Authorization: Bearer TOKEN" \
-  https://api.linkup.com/api/admin/ip-blocking/stats
+  https://api.datinghub.app/api/admin/ip-blocking/stats
 ```
 
 ---

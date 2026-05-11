@@ -29,14 +29,14 @@ const PUBLIC_RESOURCE_LABELS = {
 
 const PUBLIC_UI_COPY = {
   en: {
-    openApp: 'Open LinkUp',
+    openApp: 'Open DatingHub',
     navAriaLabel: 'Public legal and support resources',
-    audienceLabel: 'Public page for LinkUp Dating users and reviewers'
+    audienceLabel: 'Public page for DatingHub users and reviewers'
   },
   ml: {
-    openApp: 'LinkUp തുറക്കുക',
+    openApp: 'DatingHub തുറക്കുക',
     navAriaLabel: 'പൊതു നിയമ, സുരക്ഷ, സഹായ സ്രോതസ്സുകൾ',
-    audienceLabel: 'LinkUp Dating ഉപയോക്താക്കളും വിലയിരുത്തുന്നവരും ഉപയോഗിക്കുന്ന പൊതുപേജ്'
+    audienceLabel: 'DatingHub ഉപയോക്താക്കളും വിലയിരുത്തുന്നവരും ഉപയോഗിക്കുന്ന പൊതുപേജ്'
   }
 };
 
@@ -49,13 +49,13 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
       title: 'Privacy Policy',
       eyebrow: 'Privacy & Data Use',
       summary:
-        'This policy explains what LinkUp collects, why we collect it, and how we handle sensitive features such as ID verification, location sharing, and audio or video dating tools.',
+        'This policy explains what DatingHub collects, why we collect it, and how we handle sensitive features such as ID verification, location sharing, and audio or video dating tools.',
       lastUpdated: EN_LAST_UPDATED,
       sections: [
         {
           title: 'Scope',
           paragraphs: [
-            'This Privacy Policy applies to LinkUp Dating on the web and in mobile builds. It covers account creation, onboarding, messaging, matching, moderation, verification, location sharing, and video-date features.'
+            'This Privacy Policy applies to DatingHub on the web and in mobile builds. It covers account creation, onboarding, messaging, matching, moderation, verification, location sharing, and video-date features.'
           ]
         },
         {
@@ -96,7 +96,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'Children and Sensitive Features',
           paragraphs: [
-            'LinkUp is intended only for adults who are at least 18 years old. Do not use the service if you are under 18.',
+            'DatingHub is intended only for adults who are at least 18 years old. Do not use the service if you are under 18.',
             'Government ID uploads, device location, camera, microphone, and recording-related controls are optional. Use them only when you are comfortable doing so and only for lawful, consensual interactions.'
           ]
         }
@@ -121,9 +121,9 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
     },
     terms: {
       title: 'Terms of Service',
-      eyebrow: 'Rules for Using LinkUp',
+      eyebrow: 'Rules for Using DatingHub',
       summary:
-        'These Terms govern your use of LinkUp Dating, including account creation, matching, messaging, verification, and safety-focused media or location features.',
+        'These Terms govern your use of DatingHub, including account creation, matching, messaging, verification, and safety-focused media or location features.',
       lastUpdated: EN_LAST_UPDATED,
       sections: [
         {
@@ -144,7 +144,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'Safety, Location, and Recording',
           bullets: [
-            'Only share locations with people you trust. If you send location details, you are directing LinkUp to show that information to the selected recipient.',
+            'Only share locations with people you trust. If you send location details, you are directing DatingHub to show that information to the selected recipient.',
             'Only enable camera or microphone access when you intend to use media features such as video intros or video dates.',
             'Do not record or distribute another person’s audio, video, or personal information without all required consent.'
           ]
@@ -152,21 +152,21 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'Verification and Moderation',
           paragraphs: [
-            'LinkUp may review profiles, photos, verification submissions, reports, and other activity to keep the service safe. We may warn, limit, suspend, or permanently remove accounts that violate these Terms or create safety risks.',
+            'DatingHub may review profiles, photos, verification submissions, reports, and other activity to keep the service safe. We may warn, limit, suspend, or permanently remove accounts that violate these Terms or create safety risks.',
             'Verification features improve trust signals but do not guarantee the identity, intent, or conduct of any other user.'
           ]
         },
         {
           title: 'Your Content and Our License',
           paragraphs: [
-            'You keep ownership of the content you submit, but you grant LinkUp a limited license to host, process, display, and distribute that content as needed to operate the service, enforce safety controls, and improve product quality.',
+            'You keep ownership of the content you submit, but you grant DatingHub a limited license to host, process, display, and distribute that content as needed to operate the service, enforce safety controls, and improve product quality.',
             'You are responsible for making sure you have the right to upload every photo, document, recording, or other item you submit.'
           ]
         },
         {
           title: 'Termination and Contact',
           paragraphs: [
-            'You may stop using LinkUp at any time. We may suspend or terminate access when needed for safety, fraud prevention, legal compliance, or repeated misuse of the service.',
+            'You may stop using DatingHub at any time. We may suspend or terminate access when needed for safety, fraud prevention, legal compliance, or repeated misuse of the service.',
             'Questions about these Terms can be sent to the contact listed on the Support and Grievance pages.'
           ]
         }
@@ -176,7 +176,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
           title: 'Contact',
           items: [
             { label: 'Support and legal email', value: PUBLIC_CONTACT_EMAIL, href: mailtoLink },
-            { label: 'Applies to', value: 'LinkUp Dating web experience, mobile builds, and related moderation tools' }
+            { label: 'Applies to', value: 'DatingHub web experience, mobile builds, and related moderation tools' }
           ]
         },
         {
@@ -193,26 +193,26 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
       title: 'Delete Account',
       eyebrow: 'Account Deletion Resource',
       summary:
-        'This public page explains how LinkUp users can delete their account, what information is removed, and what limited records may be retained for safety, fraud prevention, or legal compliance.',
+        'This public page explains how DatingHub users can delete their account, what information is removed, and what limited records may be retained for safety, fraud prevention, or legal compliance.',
       lastUpdated: EN_LAST_UPDATED,
       heroActions: [
         { label: 'Open Login', path: '/login', tone: 'primary' },
-        { label: 'Email Deletion Request', href: `${mailtoLink}?subject=LinkUp%20Account%20Deletion%20Request`, tone: 'secondary' }
+        { label: 'Email Deletion Request', href: `${mailtoLink}?subject=DatingHub%20Account%20Deletion%20Request`, tone: 'secondary' }
       ],
       sections: [
         {
-          title: 'Delete Your Account in LinkUp',
+          title: 'Delete Your Account in DatingHub',
           paragraphs: [
-            'If you can still access your LinkUp account, sign in on the web, open your profile, go to Account Settings, and use the Delete Account action.',
+            'If you can still access your DatingHub account, sign in on the web, open your profile, go to Account Settings, and use the Delete Account action.',
             'The confirmation flow requires the word DELETE before the account is removed.'
           ]
         },
         {
           title: 'Request Deletion Without App Access',
           bullets: [
-            `Email ${PUBLIC_CONTACT_EMAIL} from the address linked to your LinkUp account with the subject line "LinkUp Account Deletion Request".`,
+            `Email ${PUBLIC_CONTACT_EMAIL} from the address linked to your DatingHub account with the subject line "DatingHub Account Deletion Request".`,
             'Include your account email, username if known, and whether you can still access the account.',
-            'If you lost access to the inbox used for LinkUp, include enough detail for support to verify ownership before deletion is processed.'
+            'If you lost access to the inbox used for DatingHub, include enough detail for support to verify ownership before deletion is processed.'
           ]
         },
         {
@@ -243,8 +243,8 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'Deletion Contact',
           items: [
-            { label: 'Email', value: PUBLIC_CONTACT_EMAIL, href: `${mailtoLink}?subject=LinkUp%20Account%20Deletion%20Request` },
-            { label: 'Best subject line', value: 'LinkUp Account Deletion Request' },
+            { label: 'Email', value: PUBLIC_CONTACT_EMAIL, href: `${mailtoLink}?subject=DatingHub%20Account%20Deletion%20Request` },
+            { label: 'Best subject line', value: 'DatingHub Account Deletion Request' },
             { label: 'Use for', value: 'Deletion requests when you cannot complete the process from Account Settings' }
           ]
         },
@@ -253,7 +253,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
           items: [
             { label: 'Required', value: 'Registered account email' },
             { label: 'Helpful', value: 'Username, device details, and whether you still have account access' },
-            { label: 'Note', value: 'For security, LinkUp may verify ownership before deleting an account requested by email.' }
+            { label: 'Note', value: 'For security, DatingHub may verify ownership before deleting an account requested by email.' }
           ]
         }
       ]
@@ -262,7 +262,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
       title: 'Grievance Redressal',
       eyebrow: 'Public Complaint Channel',
       summary:
-        'LinkUp provides a public grievance and abuse-reporting channel for user safety, privacy requests, and intermediary or platform complaints.',
+        'DatingHub provides a public grievance and abuse-reporting channel for user safety, privacy requests, and intermediary or platform complaints.',
       lastUpdated: EN_LAST_UPDATED,
       sections: [
         {
@@ -293,7 +293,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'Emergency Situations',
           paragraphs: [
-            'If you believe someone is in immediate danger, contact local emergency services or law enforcement first. Then send LinkUp the report details so we can preserve relevant evidence, restrict accounts, and support follow-up actions where appropriate.'
+            'If you believe someone is in immediate danger, contact local emergency services or law enforcement first. Then send DatingHub the report details so we can preserve relevant evidence, restrict accounts, and support follow-up actions where appropriate.'
           ]
         }
       ],
@@ -301,7 +301,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'Grievance Contact',
           items: [
-            { label: 'Role', value: 'LinkUp Grievance and Safety Desk' },
+            { label: 'Role', value: 'DatingHub Grievance and Safety Desk' },
             { label: 'Email', value: PUBLIC_CONTACT_EMAIL, href: mailtoLink },
             { label: 'Use for', value: 'User complaints, abuse reports, privacy issues, access disputes, and policy violations' }
           ]
@@ -320,7 +320,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
       title: 'Support',
       eyebrow: 'Help & Safety Support',
       summary:
-        'Use this page if you need help with login, verification, media permissions, safety tools, or a request related to your LinkUp account.',
+        'Use this page if you need help with login, verification, media permissions, safety tools, or a request related to your DatingHub account.',
       lastUpdated: EN_LAST_UPDATED,
       sections: [
         {
@@ -373,13 +373,13 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
       title: 'സ്വകാര്യതാ നയം',
       eyebrow: 'സ്വകാര്യതയും ഡാറ്റ ഉപയോഗവും',
       summary:
-        'LinkUp എന്ത് വിവരങ്ങൾ ശേഖരിക്കുന്നു, എന്തിനാണ് ശേഖരിക്കുന്നത്, ഐഡി സ്ഥിരീകരണം, ലൊക്കേഷൻ പങ്കിടൽ, ഓഡിയോ അല്ലെങ്കിൽ വീഡിയോ ഡേറ്റിംഗ് ഉപകരണങ്ങൾ പോലുള്ള സങ്കീർണ്ണ സവിശേഷതകൾ എങ്ങനെ കൈകാര്യം ചെയ്യുന്നു എന്നതിനെക്കുറിച്ച് ഈ നയം വിശദീകരിക്കുന്നു.',
+        'DatingHub എന്ത് വിവരങ്ങൾ ശേഖരിക്കുന്നു, എന്തിനാണ് ശേഖരിക്കുന്നത്, ഐഡി സ്ഥിരീകരണം, ലൊക്കേഷൻ പങ്കിടൽ, ഓഡിയോ അല്ലെങ്കിൽ വീഡിയോ ഡേറ്റിംഗ് ഉപകരണങ്ങൾ പോലുള്ള സങ്കീർണ്ണ സവിശേഷതകൾ എങ്ങനെ കൈകാര്യം ചെയ്യുന്നു എന്നതിനെക്കുറിച്ച് ഈ നയം വിശദീകരിക്കുന്നു.',
       lastUpdated: ML_LAST_UPDATED,
       sections: [
         {
           title: 'പ്രാബല്യ പരിധി',
           paragraphs: [
-            'വെബിലും മൊബൈൽ ബിൽഡുകളിലും ഉള്ള LinkUp Dating-ന് ഈ സ്വകാര്യതാ നയം ബാധകമാണ്. അക്കൗണ്ട് സൃഷ്ടിക്കൽ, ഓൺബോർഡിംഗ്, സന്ദേശവിനിമയം, മാച്ചിംഗ്, മോഡറേഷൻ, സ്ഥിരീകരണം, ലൊക്കേഷൻ പങ്കിടൽ, വീഡിയോ ഡേറ്റ് സവിശേഷതകൾ എന്നിവയെ ഇത് ഉൾക്കൊള്ളുന്നു.'
+            'വെബിലും മൊബൈൽ ബിൽഡുകളിലും ഉള്ള DatingHub-ന് ഈ സ്വകാര്യതാ നയം ബാധകമാണ്. അക്കൗണ്ട് സൃഷ്ടിക്കൽ, ഓൺബോർഡിംഗ്, സന്ദേശവിനിമയം, മാച്ചിംഗ്, മോഡറേഷൻ, സ്ഥിരീകരണം, ലൊക്കേഷൻ പങ്കിടൽ, വീഡിയോ ഡേറ്റ് സവിശേഷതകൾ എന്നിവയെ ഇത് ഉൾക്കൊള്ളുന്നു.'
           ]
         },
         {
@@ -420,7 +420,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'കുട്ടികളും സങ്കീർണ്ണ സവിശേഷതകളും',
           paragraphs: [
-            'LinkUp 18 വയസോ അതിലധികമോ പ്രായമുള്ളവർക്കുള്ള സേവനമാണ്. 18 വയസിന് താഴെയുള്ളവർ സേവനം ഉപയോഗിക്കരുത്.',
+            'DatingHub 18 വയസോ അതിലധികമോ പ്രായമുള്ളവർക്കുള്ള സേവനമാണ്. 18 വയസിന് താഴെയുള്ളവർ സേവനം ഉപയോഗിക്കരുത്.',
             'സർക്കാർ ഐഡി അപ്ലോഡുകൾ, ഉപകരണ ലൊക്കേഷൻ, ക്യാമറ, മൈക്രോഫോൺ, റെക്കോർഡിംഗ് നിയന്ത്രണങ്ങൾ എന്നിവ ഐച്ഛികമാണ്. നിങ്ങൾക്ക് സൗകര്യമുള്ളപ്പോൾ മാത്രം, നിയമാനുസൃതവും പരസ്പര സമ്മതത്തോടെയുള്ള ഇടപെടലുകൾക്കായി മാത്രം ഉപയോഗിക്കുക.'
           ]
         }
@@ -445,9 +445,9 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
     },
     terms: {
       title: 'സേവന നിബന്ധനകൾ',
-      eyebrow: 'LinkUp ഉപയോഗിക്കുന്നതിനുള്ള ചട്ടങ്ങൾ',
+      eyebrow: 'DatingHub ഉപയോഗിക്കുന്നതിനുള്ള ചട്ടങ്ങൾ',
       summary:
-        'അക്കൗണ്ട് സൃഷ്ടിക്കൽ, മാച്ചിംഗ്, സന്ദേശവിനിമയം, സ്ഥിരീകരണം, സുരക്ഷകേന്ദ്രിതമായ മീഡിയ അല്ലെങ്കിൽ ലൊക്കേഷൻ സവിശേഷതകൾ എന്നിവ ഉൾപ്പെടെ LinkUp Dating ഉപയോഗിക്കുന്നതിനെ ഈ നിബന്ധനകൾ നിയന്ത്രിക്കുന്നു.',
+        'അക്കൗണ്ട് സൃഷ്ടിക്കൽ, മാച്ചിംഗ്, സന്ദേശവിനിമയം, സ്ഥിരീകരണം, സുരക്ഷകേന്ദ്രിതമായ മീഡിയ അല്ലെങ്കിൽ ലൊക്കേഷൻ സവിശേഷതകൾ എന്നിവ ഉൾപ്പെടെ DatingHub ഉപയോഗിക്കുന്നതിനെ ഈ നിബന്ധനകൾ നിയന്ത്രിക്കുന്നു.',
       lastUpdated: ML_LAST_UPDATED,
       sections: [
         {
@@ -468,7 +468,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'സുരക്ഷ, ലൊക്കേഷൻ, റെക്കോർഡിംഗ്',
           bullets: [
-            'നിങ്ങൾ വിശ്വസിക്കുന്ന ആളുകളുമായേ ലൊക്കേഷൻ പങ്കിടൂ. ലൊക്കേഷൻ അയയ്ക്കുമ്പോൾ അതത് വ്യക്തിയിലേക്ക് ആ വിവരം കാണിക്കാൻ LinkUp-നെ നിങ്ങൾ നിർദ്ദേശിക്കുന്നതാണ്.',
+            'നിങ്ങൾ വിശ്വസിക്കുന്ന ആളുകളുമായേ ലൊക്കേഷൻ പങ്കിടൂ. ലൊക്കേഷൻ അയയ്ക്കുമ്പോൾ അതത് വ്യക്തിയിലേക്ക് ആ വിവരം കാണിക്കാൻ DatingHub-നെ നിങ്ങൾ നിർദ്ദേശിക്കുന്നതാണ്.',
             'വീഡിയോ ഇൻട്രോകൾ, വീഡിയോ ഡേറ്റുകൾ പോലുള്ള മീഡിയ സവിശേഷതകൾ ഉപയോഗിക്കാനാണ് നിങ്ങൾ ഉദ്ദേശിക്കുന്നതെങ്കിൽ മാത്രം ക്യാമറയോ മൈക്രോഫോണോ പ്രവർത്തനക്ഷമമാക്കുക.',
             'മറ്റൊരാളുടെ ഓഡിയോ, വീഡിയോ, വ്യക്തിഗത വിവരങ്ങൾ എന്നിവ ആവശ്യമായ മുഴുവൻ സമ്മതമില്ലാതെ റെക്കോർഡ് ചെയ്യുകയോ വിതരണം ചെയ്യുകയോ അരുത്.'
           ]
@@ -476,7 +476,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'സ്ഥിരീകരണവും മോഡറേഷനും',
           paragraphs: [
-            'സേവനം സുരക്ഷിതമായി നിലനിർത്താൻ LinkUp പ്രൊഫൈലുകൾ, ഫോട്ടോകൾ, സ്ഥിരീകരണ സമർപ്പണങ്ങൾ, റിപ്പോർട്ടുകൾ, മറ്റ് പ്രവർത്തനങ്ങൾ എന്നിവ പരിശോധിക്കാം. ഈ നിബന്ധനകൾ ലംഘിക്കുന്നതോ സുരക്ഷാ അപകടം സൃഷ്ടിക്കുന്നതോ ആയ അക്കൗണ്ടുകൾക്ക് മുന്നറിയിപ്പ് നൽകുകയോ, പരിമിതപ്പെടുത്തുകയോ, സസ്പെൻഡ് ചെയ്യുകയോ, സ്ഥിരമായി നീക്കം ചെയ്യുകയോ ചെയ്യാം.',
+            'സേവനം സുരക്ഷിതമായി നിലനിർത്താൻ DatingHub പ്രൊഫൈലുകൾ, ഫോട്ടോകൾ, സ്ഥിരീകരണ സമർപ്പണങ്ങൾ, റിപ്പോർട്ടുകൾ, മറ്റ് പ്രവർത്തനങ്ങൾ എന്നിവ പരിശോധിക്കാം. ഈ നിബന്ധനകൾ ലംഘിക്കുന്നതോ സുരക്ഷാ അപകടം സൃഷ്ടിക്കുന്നതോ ആയ അക്കൗണ്ടുകൾക്ക് മുന്നറിയിപ്പ് നൽകുകയോ, പരിമിതപ്പെടുത്തുകയോ, സസ്പെൻഡ് ചെയ്യുകയോ, സ്ഥിരമായി നീക്കം ചെയ്യുകയോ ചെയ്യാം.',
             'സ്ഥിരീകരണ സവിശേഷതകൾ വിശ്വാസ സൂചനകൾ മെച്ചപ്പെടുത്തുന്നു. എന്നാൽ മറ്റൊരാളുടെ തിരിച്ചറിയൽ, ഉദ്ദേശ്യം, പെരുമാറ്റം എന്നിവയ്ക്ക് പൂർണ്ണ ഉറപ്പ് നൽകുന്നില്ല.'
           ]
         }
@@ -486,7 +486,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
           title: 'ബന്ധപ്പെടുക',
           items: [
             { label: 'സഹായവും നിയമ ഇമെയിലും', value: PUBLIC_CONTACT_EMAIL, href: mailtoLink },
-            { label: 'ബാധകമാകുന്നത്', value: 'LinkUp Dating വെബ് അനുഭവം, മൊബൈൽ ബിൽഡുകൾ, അനുബന്ധ മോഡറേഷൻ ഉപകരണങ്ങൾ' }
+            { label: 'ബാധകമാകുന്നത്', value: 'DatingHub വെബ് അനുഭവം, മൊബൈൽ ബിൽഡുകൾ, അനുബന്ധ മോഡറേഷൻ ഉപകരണങ്ങൾ' }
           ]
         },
         {
@@ -503,26 +503,26 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
       title: 'അക്കൗണ്ട് ഇല്ലാതാക്കൽ',
       eyebrow: 'അക്കൗണ്ട് നീക്കംചെയ്യൽ സഹായം',
       summary:
-        'LinkUp അക്കൗണ്ട് എങ്ങനെ ഇല്ലാതാക്കാം, എന്ത് വിവരങ്ങളാണ് നീക്കം ചെയ്യപ്പെടുന്നത്, സുരക്ഷ, തട്ടിപ്പ് തടയൽ, നിയമാനുസരണം എന്നിവയ്ക്കായി എന്തെല്ലാം പരിമിത രേഖകൾ നിലനിർത്തേണ്ടിവരും എന്നീ കാര്യങ്ങൾ ഈ പൊതു പേജ് വിശദീകരിക്കുന്നു.',
+        'DatingHub അക്കൗണ്ട് എങ്ങനെ ഇല്ലാതാക്കാം, എന്ത് വിവരങ്ങളാണ് നീക്കം ചെയ്യപ്പെടുന്നത്, സുരക്ഷ, തട്ടിപ്പ് തടയൽ, നിയമാനുസരണം എന്നിവയ്ക്കായി എന്തെല്ലാം പരിമിത രേഖകൾ നിലനിർത്തേണ്ടിവരും എന്നീ കാര്യങ്ങൾ ഈ പൊതു പേജ് വിശദീകരിക്കുന്നു.',
       lastUpdated: ML_LAST_UPDATED,
       heroActions: [
         { label: 'ലോഗിൻ തുറക്കുക', path: '/login', tone: 'primary' },
-        { label: 'ഇമെയിൽ വഴി ഇല്ലാതാക്കൽ അഭ്യർത്ഥിക്കുക', href: `${mailtoLink}?subject=LinkUp%20Account%20Deletion%20Request`, tone: 'secondary' }
+        { label: 'ഇമെയിൽ വഴി ഇല്ലാതാക്കൽ അഭ്യർത്ഥിക്കുക', href: `${mailtoLink}?subject=DatingHub%20Account%20Deletion%20Request`, tone: 'secondary' }
       ],
       sections: [
         {
-          title: 'LinkUp-ൽ നിന്ന് അക്കൗണ്ട് ഇല്ലാതാക്കൽ',
+          title: 'DatingHub-ൽ നിന്ന് അക്കൗണ്ട് ഇല്ലാതാക്കൽ',
           paragraphs: [
-            'നിങ്ങൾക്ക് ഇപ്പോഴും LinkUp അക്കൗണ്ടിൽ പ്രവേശിക്കാനാകുന്നുവെങ്കിൽ, വെബിൽ ലോഗിൻ ചെയ്ത് പ്രൊഫൈലിലേക്ക് പോകുകയും Account Settings-ൽ Delete Account പ്രവർത്തനം ഉപയോഗിക്കുകയും ചെയ്യുന്നതാണ് ഏറ്റവും വേഗത്തിലുള്ള മാർഗം.',
+            'നിങ്ങൾക്ക് ഇപ്പോഴും DatingHub അക്കൗണ്ടിൽ പ്രവേശിക്കാനാകുന്നുവെങ്കിൽ, വെബിൽ ലോഗിൻ ചെയ്ത് പ്രൊഫൈലിലേക്ക് പോകുകയും Account Settings-ൽ Delete Account പ്രവർത്തനം ഉപയോഗിക്കുകയും ചെയ്യുന്നതാണ് ഏറ്റവും വേഗത്തിലുള്ള മാർഗം.',
             'അക്കൗണ്ട് സ്ഥിരമായി ഇല്ലാതാക്കുന്നതിന് മുമ്പ് DELETE എന്ന വാക്ക് ഉറപ്പായി നൽകണം.'
           ]
         },
         {
           title: 'ആപ്പ് ആക്സസ് ഇല്ലാതെ അഭ്യർത്ഥിക്കുക',
           bullets: [
-            `നിങ്ങളുടെ LinkUp അക്കൗണ്ടുമായി ബന്ധിപ്പിച്ചിരിക്കുന്ന ഇമെയിൽ വിലാസത്തിൽ നിന്ന് "${PUBLIC_CONTACT_EMAIL}" എന്ന വിലാസത്തിലേക്ക് "LinkUp Account Deletion Request" എന്ന വിഷയം ചേർത്ത് മെയിൽ അയയ്ക്കൂ.`,
+            `നിങ്ങളുടെ DatingHub അക്കൗണ്ടുമായി ബന്ധിപ്പിച്ചിരിക്കുന്ന ഇമെയിൽ വിലാസത്തിൽ നിന്ന് "${PUBLIC_CONTACT_EMAIL}" എന്ന വിലാസത്തിലേക്ക് "DatingHub Account Deletion Request" എന്ന വിഷയം ചേർത്ത് മെയിൽ അയയ്ക്കൂ.`,
             'നിങ്ങളുടെ അക്കൗണ്ട് ഇമെയിലും, അറിയുന്നുവെങ്കിൽ ഉപയോക്തൃനാമവും, ഇപ്പോഴും അക്കൗണ്ടിൽ പ്രവേശിക്കാനാകുന്നുണ്ടോ എന്ന വിവരവും ഉൾപ്പെടുത്തൂ.',
-            'LinkUp-യ്ക്കായി ഉപയോഗിച്ച ഇൻബോക്സിൽ പ്രവേശനം നഷ്ടപ്പെട്ടിട്ടുണ്ടെങ്കിൽ, ഇല്ലാതാക്കൽ നടപടിക്ക് മുമ്പ് ഉടമസ്ഥാവകാശം പരിശോധിക്കാൻ മതിയായ വിവരങ്ങൾ നൽകണം.'
+            'DatingHub-യ്ക്കായി ഉപയോഗിച്ച ഇൻബോക്സിൽ പ്രവേശനം നഷ്ടപ്പെട്ടിട്ടുണ്ടെങ്കിൽ, ഇല്ലാതാക്കൽ നടപടിക്ക് മുമ്പ് ഉടമസ്ഥാവകാശം പരിശോധിക്കാൻ മതിയായ വിവരങ്ങൾ നൽകണം.'
           ]
         },
         {
@@ -546,8 +546,8 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'ഇല്ലാതാക്കൽ ബന്ധപ്പെടൽ',
           items: [
-            { label: 'ഇമെയിൽ', value: PUBLIC_CONTACT_EMAIL, href: `${mailtoLink}?subject=LinkUp%20Account%20Deletion%20Request` },
-            { label: 'വിഷയ വരി', value: 'LinkUp Account Deletion Request' },
+            { label: 'ഇമെയിൽ', value: PUBLIC_CONTACT_EMAIL, href: `${mailtoLink}?subject=DatingHub%20Account%20Deletion%20Request` },
+            { label: 'വിഷയ വരി', value: 'DatingHub Account Deletion Request' },
             { label: 'ഉപയോഗിക്കുക', value: 'Account Settings വഴി പ്രക്രിയ പൂർത്തിയാക്കാൻ കഴിയാത്തപ്പോൾ' }
           ]
         }
@@ -557,7 +557,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
       title: 'പരാതി പരിഹാരം',
       eyebrow: 'പൊതു പരാതി ചാനൽ',
       summary:
-        'ഉപയോക്തൃ സുരക്ഷ, സ്വകാര്യത അഭ്യർത്ഥനകൾ, ദുരുപയോഗ റിപ്പോർട്ടുകൾ, പ്ലാറ്റ്ഫോം പരാതികൾ എന്നിവയ്ക്കായി LinkUp ഒരു പൊതു പരാതി ചാനൽ നൽകുന്നു.',
+        'ഉപയോക്തൃ സുരക്ഷ, സ്വകാര്യത അഭ്യർത്ഥനകൾ, ദുരുപയോഗ റിപ്പോർട്ടുകൾ, പ്ലാറ്റ്ഫോം പരാതികൾ എന്നിവയ്ക്കായി DatingHub ഒരു പൊതു പരാതി ചാനൽ നൽകുന്നു.',
       lastUpdated: ML_LAST_UPDATED,
       sections: [
         {
@@ -590,7 +590,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
         {
           title: 'പരാതി ബന്ധപ്പെടൽ',
           items: [
-            { label: 'പങ്ക്', value: 'LinkUp പരാതി & സുരക്ഷാ ഡെസ്ക്' },
+            { label: 'പങ്ക്', value: 'DatingHub പരാതി & സുരക്ഷാ ഡെസ്ക്' },
             { label: 'ഇമെയിൽ', value: PUBLIC_CONTACT_EMAIL, href: mailtoLink },
             { label: 'ഉപയോഗിക്കുക', value: 'ഉപയോക്തൃ പരാതികൾ, ദുരുപയോഗ റിപ്പോർട്ടുകൾ, സ്വകാര്യത പ്രശ്നങ്ങൾ, ആക്സസ് തർക്കങ്ങൾ' }
           ]
@@ -601,7 +601,7 @@ const PUBLIC_PAGE_CONTENT_BY_LANGUAGE = {
       title: 'സഹായം',
       eyebrow: 'സഹായവും സുരക്ഷാ പിന്തുണയും',
       summary:
-        'ലോഗിൻ, സ്ഥിരീകരണം, മീഡിയ അനുമതികൾ, സുരക്ഷാ ഉപകരണങ്ങൾ, അല്ലെങ്കിൽ നിങ്ങളുടെ LinkUp അക്കൗണ്ടുമായി ബന്ധപ്പെട്ട അഭ്യർത്ഥനകൾ എന്നിവയ്ക്ക് സഹായം ആവശ്യമാണെങ്കിൽ ഈ പേജ് ഉപയോഗിക്കൂ.',
+        'ലോഗിൻ, സ്ഥിരീകരണം, മീഡിയ അനുമതികൾ, സുരക്ഷാ ഉപകരണങ്ങൾ, അല്ലെങ്കിൽ നിങ്ങളുടെ DatingHub അക്കൗണ്ടുമായി ബന്ധപ്പെട്ട അഭ്യർത്ഥനകൾ എന്നിവയ്ക്ക് സഹായം ആവശ്യമാണെങ്കിൽ ഈ പേജ് ഉപയോഗിക്കൂ.',
       lastUpdated: ML_LAST_UPDATED,
       sections: [
         {

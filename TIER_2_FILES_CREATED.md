@@ -186,7 +186,7 @@
 ## 💾 File Organization
 
 ```
-LinkUp/
+DatingHub/
 ├── backend/
 │   ├── models/
 │   │   ├── ProfileAnalytics.js ✅ (NEW)

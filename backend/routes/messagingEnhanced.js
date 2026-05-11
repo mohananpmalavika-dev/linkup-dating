@@ -8,9 +8,32 @@ const db = require('../config/database');
 const EncryptionService = require('../services/encryptionService');
 const MessageExportService = require('../services/messageExportService');
 
+const MISSING_COLUMN_ERROR_CODE = '42703';
+
+const isMissingColumnError = (error) =>
+  (error?.code || error?.parent?.code || error?.original?.code) === MISSING_COLUMN_ERROR_CODE;
+
 const parseInteger = (value, fallbackValue = 0) => {
   const parsedValue = Number.parseInt(value, 10);
   return Number.isFinite(parsedValue) ? parsedValue : fallbackValue;
+};
+
+const updateMatchMessageSummary = async (matchId) => {
+  try {
+    await db.query(
+      `UPDATE matches
+       SET last_message_at = CURRENT_TIMESTAMP,
+           message_count = COALESCE(message_count, 0) + 1
+       WHERE id = $1`,
+      [matchId]
+    );
+  } catch (error) {
+    if (!isMissingColumnError(error)) {
+      throw error;
+    }
+
+    console.warn('matches message summary columns missing; disappearing message was saved without updating match summary');
+  }
 };
 
 const getMatchForUser = async (matchId, userId) => {
@@ -453,20 +476,15 @@ router.post('/disappearing', async (req, res) => {
          message_type,
          is_disappearing,
          disappears_at,
-         disappear_after_seconds
+         disappear_after_seconds,
+         created_at
        )
-       VALUES ($1, $2, $3, $4, 'text', TRUE, $5, $6)
+       VALUES ($1, $2, $3, $4, 'text', TRUE, $5, $6, NOW())
        RETURNING *`,
       [matchId, userId, toUserId, message, disappearsAt, disappearAfterSeconds]
     );
 
-    await db.query(
-      `UPDATE matches
-       SET last_message_at = CURRENT_TIMESTAMP,
-           message_count = message_count + 1
-       WHERE id = $1`,
-      [matchId]
-    );
+    await updateMatchMessageSummary(matchId);
 
     const createdMessage = {
       ...result.rows[0],

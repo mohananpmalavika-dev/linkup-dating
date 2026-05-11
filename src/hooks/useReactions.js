@@ -4,6 +4,21 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import io from 'socket.io-client';
+import { BACKEND_BASE_URL, buildApiUrl } from '../utils/api';
+import { getStoredAuthToken } from '../utils/auth';
+
+const apiFetch = (path, options = {}) => {
+  const token = getStoredAuthToken();
+  const headers = {
+    ...(options.headers || {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  };
+
+  return fetch(buildApiUrl(path), {
+    ...options,
+    headers
+  });
+};
 
 /**
  * useMessageReactions Hook
@@ -17,7 +32,7 @@ export const useMessageReactions = (messageId, matchId) => {
 
   // Initialize socket connection
   useEffect(() => {
-    socketRef.current = io(process.env.REACT_APP_API_URL, {
+    socketRef.current = io(BACKEND_BASE_URL, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -34,7 +49,7 @@ export const useMessageReactions = (messageId, matchId) => {
     const fetchReactions = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/messages/${messageId}/reactions`);
+        const response = await apiFetch(`/messages/${messageId}/reactions`);
         const data = await response.json();
         if (data.success) {
           setReactions(data.reactions);
@@ -69,7 +84,7 @@ export const useMessageReactions = (messageId, matchId) => {
 
   const addEmojiReaction = useCallback(async (emoji) => {
     try {
-      const response = await fetch(`/api/messages/${messageId}/reactions`, {
+      const response = await apiFetch(`/messages/${messageId}/reactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ emoji })
@@ -91,7 +106,7 @@ export const useMessageReactions = (messageId, matchId) => {
 
   const addCustomReaction = useCallback(async (photoUrl, photoId, displayName) => {
     try {
-      const response = await fetch(`/api/messages/${messageId}/custom-reactions`, {
+      const response = await apiFetch(`/messages/${messageId}/custom-reactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ photoUrl, photoId, displayName })
@@ -115,8 +130,8 @@ export const useMessageReactions = (messageId, matchId) => {
 
   const removeReaction = useCallback(async (emoji) => {
     try {
-      const response = await fetch(
-        `/api/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
+      const response = await apiFetch(
+        `/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
         { method: 'DELETE' }
       );
       const data = await response.json();
@@ -155,14 +170,14 @@ export const useStreak = (matchId) => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    socketRef.current = io(process.env.REACT_APP_API_URL);
+    socketRef.current = io(BACKEND_BASE_URL);
   }, []);
 
   useEffect(() => {
     const fetchStreak = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/matches/${matchId}/streak`);
+        const response = await apiFetch(`/matches/${matchId}/streak`);
         const data = await response.json();
         if (data.success) {
           setStreak(data.streak);
@@ -216,14 +231,14 @@ export const useEngagementScore = (matchId) => {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    socketRef.current = io(process.env.REACT_APP_API_URL);
+    socketRef.current = io(BACKEND_BASE_URL);
   }, []);
 
   useEffect(() => {
     const fetchScore = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/matches/${matchId}/engagement-score`);
+        const response = await apiFetch(`/matches/${matchId}/engagement-score`);
         const data = await response.json();
         if (data.success) {
           setScore(data.engagementScore);
@@ -265,7 +280,7 @@ export const useSuggestedReactions = (matchId, userId) => {
     const fetchSuggestions = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/reactions/suggested/${matchId}`);
+        const response = await apiFetch(`/reactions/suggested/${matchId}`);
         const data = await response.json();
         if (data.success) {
           setSuggestions(data.reactions);
@@ -296,7 +311,7 @@ export const useActiveStreaks = () => {
     const fetchStreaks = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/streaks/active-streaks');
+        const response = await apiFetch('/reactions/active-streaks');
         const data = await response.json();
         if (data.success) {
           setStreaks(data.streaks);
@@ -332,7 +347,7 @@ export const useTopReactions = (matchId, limit = 5) => {
     const fetchTopReactions = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`/api/matches/${matchId}/top-reactions?limit=${limit}`);
+        const response = await apiFetch(`/reactions/top-reactions/${matchId}?limit=${limit}`);
         const data = await response.json();
         if (data.success) {
           setTopReactions(data.reactions);

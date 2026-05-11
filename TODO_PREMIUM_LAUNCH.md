@@ -1,4 +1,4 @@
-# LinkUp Premium Launch TODO — May 1 Kerala
+# DatingHub Premium Launch TODO — May 1 Kerala
 
 ## Phase 1: Premium Design System ⏳ IN PROGRESS
 - [ ] Create `src/styles/designSystem.css` — CSS variables, typography, shadows, animations

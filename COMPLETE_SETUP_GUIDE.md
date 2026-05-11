@@ -1,8 +1,8 @@
-# Complete Setup & Deployment Guide - LinkUp Dating App
+# Complete Setup & Deployment Guide - DatingHub App
 
 ## 🎯 Overview
 
-Your LinkUp dating app consists of two parts:
+Your DatingHub dating app consists of two parts:
 1. **Frontend**: React app (Port 3000)
 2. **Backend**: Node.js + Express API (Port 5000)
 

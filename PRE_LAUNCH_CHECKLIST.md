@@ -1,4 +1,4 @@
-# LinkUp Pre-Launch Checklist
+# DatingHub Pre-Launch Checklist
 
 ## Phase 1: Legal & Compliance (Week 1-2)
 
@@ -261,7 +261,7 @@
     - [ ] Payment method
 
 - [ ] **App Creation**
-  - [ ] App name: "LinkUp"
+  - [ ] App name: "DatingHub"
   - [ ] App category: Dating
   - [ ] App created in Play Console
 

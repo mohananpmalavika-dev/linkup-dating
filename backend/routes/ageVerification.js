@@ -63,12 +63,12 @@ router.post('/verify-age', async (req, res) => {
       }
 
       return res.status(403).json({
-        error: 'You must be at least 18 years old to use LinkUp',
+        error: 'You must be at least 18 years old to use DatingHub',
         code: 'UNDERAGE_USER',
         age: age,
         message: blockingEnabled 
           ? `You entered an age of ${age}. Your IP address has been blocked for 2 hours due to underage signup attempt.` 
-          : `You entered an age of ${age}. You must be 18 or older to use LinkUp.`
+          : `You entered an age of ${age}. You must be 18 or older to use DatingHub.`
       });
     }
 
@@ -124,7 +124,7 @@ router.post('/complete-signup-with-age', async (req, res) => {
     const validation = validateAgeVerification(ageVerification);
     if (!validation.valid || !validation.isOver18) {
       return res.status(403).json({
-        error: validation.isOver18 ? 'Age verification failed' : 'You must be at least 18 years old to use LinkUp',
+        error: validation.isOver18 ? 'Age verification failed' : 'You must be at least 18 years old to use DatingHub',
         code: validation.isOver18 ? 'AGE_VERIFICATION_FAILED' : 'UNDERAGE_USER',
         details: validation.errors
       });

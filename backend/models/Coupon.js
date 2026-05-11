@@ -19,7 +19,7 @@ module.exports = (sequelize, DataTypes) => {
       comment: 'Unique coupon code (uppercase alphanumeric)'
     },
     couponType: {
-      type: DataTypes.ENUM('likes', 'superlikes', 'both'),
+      type: DataTypes.ENUM('likes', 'superlikes', 'both', 'callcredits'),
       allowNull: false,
       field: 'coupon_type',
       comment: 'Type of credit this coupon provides'
@@ -35,6 +35,12 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 0,
       field: 'superlikes_value',
       comment: 'Number of superlikes credits to grant'
+    },
+    callCreditsValue: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      field: 'call_credits_value',
+      comment: 'Number of call credits to grant'
     },
     maxRedemptions: {
       type: DataTypes.INTEGER,

@@ -5,7 +5,7 @@
   max-width: 1000px;
   margin: 0 auto;
   padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   min-height: 100vh;
   border-radius: 0;
 }
@@ -54,7 +54,7 @@
 .btn-create-moment {
   padding: 12px 24px;
   background: white;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   border: none;
   border-radius: 8px;
   font-size: 1em;
@@ -90,7 +90,7 @@
   padding: 12px;
   background: #f8f9fa;
   border-radius: 8px;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
 }
 
 .stat-item .icon {
@@ -156,7 +156,7 @@
 
 .empty-state .hint {
   font-size: 0.9em;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   font-weight: 600;
   margin-top: 20px;
 }
@@ -164,7 +164,7 @@
 .btn-create-moment-large {
   padding: 12px 30px;
   margin-top: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -176,7 +176,7 @@
 
 .btn-create-moment-large:hover {
   transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 5px 20px rgba(208, 96, 48, 0.4);
 }
 
 /* ==================== MOMENTS GRID ==================== */
@@ -206,7 +206,7 @@
 }
 
 .moment-card.unviewed {
-  border: 3px solid #667eea;
+  border: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .moment-image-container {
@@ -226,7 +226,7 @@
   position: absolute;
   top: 8px;
   right: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 4px 10px;
   border-radius: 12px;
@@ -355,7 +355,7 @@
 }
 
 .fomo-hint {
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   font-weight: 600;
   margin-top: 12px !important;
 }
@@ -417,7 +417,7 @@
 }
 
 .fomo-text {
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   font-weight: 600;
   margin-top: 12px !important;
 }
@@ -482,7 +482,7 @@
 }
 
 .image-select-section:hover {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
   background: #f8f9fa;
 }
 
@@ -505,7 +505,7 @@
 .btn-select-image {
   margin-top: 20px;
   padding: 12px 30px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -517,7 +517,7 @@
 
 .btn-select-image:hover {
   transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 5px 20px rgba(208, 96, 48, 0.4);
 }
 
 .upload-hint {
@@ -604,8 +604,8 @@
 
 .caption-section textarea:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 .caption-section small {
@@ -629,7 +629,7 @@
   padding: 12px;
   background: #f8f9fa;
   border-radius: 8px;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .info-item .icon {
@@ -701,7 +701,7 @@
 .btn-upload {
   flex: 1;
   padding: 12px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -713,7 +713,7 @@
 
 .btn-upload:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 5px 20px rgba(208, 96, 48, 0.4);
 }
 
 .btn-upload:disabled {
@@ -782,7 +782,7 @@
 
 .progress-bar {
   height: 100%;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(90deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   transition: width 1s linear;
 }
 
@@ -1040,7 +1040,7 @@
   width: 50px;
   height: 50px;
   border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  border-top: 4px solid var(--dh-logo-copper, #d06030);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }

@@ -1,7 +1,7 @@
 # DPDPA & Regional Features Implementation Guide
 
 ## Overview
-Complete implementation of India's Data Protection Digital Processing Act (DPDPA) compliance and Kerala-specific regional features for LinkUp dating app.
+Complete implementation of India's Data Protection Digital Processing Act (DPDPA) compliance and Kerala-specific regional features for DatingHub dating app.
 
 ---
 

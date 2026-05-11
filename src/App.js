@@ -23,6 +23,7 @@ import Matches from './components/Matches';
 import DatingMessaging from './components/DatingMessaging';
 import DatingProfile from './components/DatingProfile';
 import DatingProfileView from './components/DatingProfileView';
+import AccountSettings from './components/AccountSettings';
 import MPINSetup from './components/MPINSetup';
 import VideoDating from './components/VideoDating';
 import ChatRooms from './components/ChatRooms';
@@ -73,9 +74,10 @@ import {
   getStoredAuthToken,
   getStoredUserData,
   storeAuthToken,
-  storeUserData,
-  setPreferredLoginMethod
+  storeUserData
 } from './utils/auth';
+import './styles/logoTheme.css';
+import './styles/authenticatedLayout.css';
 
 const ADMIN_DASHBOARD_ROUTE = '/admin-dashboard';
 const DEFAULT_AUTHENTICATED_ROUTE = '/discover';
@@ -165,11 +167,34 @@ const inferNavigationPage = (pathname, returnPath = '') => {
     return 'social';
   }
 
-  if (targetPath.startsWith('/profile')) {
+  if (targetPath === '/profile' || targetPath.startsWith('/profile/legal')) {
     return 'profile';
   }
 
-  if (targetPath.startsWith('/more')) {
+  if (
+    targetPath.startsWith('/more') ||
+    targetPath.startsWith('/account-settings') ||
+    targetPath.startsWith('/mpin-setup') ||
+    targetPath.startsWith('/subscription') ||
+    targetPath.startsWith('/boost') ||
+    targetPath.startsWith('/analytics') ||
+    targetPath.startsWith('/referrals') ||
+    targetPath.startsWith('/profile-reset') ||
+    targetPath.startsWith('/moments') ||
+    targetPath.startsWith('/icebreaker') ||
+    targetPath.startsWith('/events') ||
+    targetPath.startsWith('/double-dates') ||
+    targetPath.startsWith('/video-verification') ||
+    targetPath.startsWith('/catfish-detection') ||
+    targetPath.startsWith('/achievements') ||
+    targetPath.startsWith('/leaderboards') ||
+    targetPath.startsWith('/daily-challenges') ||
+    targetPath.startsWith('/streaks') ||
+    targetPath.startsWith('/preferences-priority') ||
+    targetPath.startsWith('/smart-rewind') ||
+    targetPath.startsWith('/opening-templates') ||
+    targetPath.startsWith('/photo-ab-testing')
+  ) {
     return 'more';
   }
 
@@ -263,6 +288,7 @@ const MatchVideoRoute = ({
       matchId={matchId}
       matchedProfile={normalizeProfileContext(location.state?.match)}
       callMode={location.state?.callMode || 'outgoing'}
+      callType={location.state?.callType || location.state?.incomingCall?.callType || 'video'}
       autoAccepted={Boolean(location.state?.autoAccepted)}
       callerName={location.state?.incomingCall?.fromUserName || ''}
       incomingCall={location.state?.incomingCall || null}
@@ -271,6 +297,65 @@ const MatchVideoRoute = ({
       scheduledVideoDateId={location.state?.scheduledVideoDateId || null}
       onBack={() => onNavigateToPath(location.state?.returnPath || buildMatchRoute(matchId))}
       onOpenMessages={(profile) => onOpenMessages(profile, location.state?.returnPath || DEFAULT_MESSAGES_ROUTE)}
+    />
+  );
+};
+
+// Route for direct calls initiated from CallingDashboard (not matched-based)
+const CallVideoRoute = ({
+  onNavigateToPath,
+  onOpenMessages
+}) => {
+  const location = useLocation();
+  const userId = location.pathname.match(/^\/calls\/([^/]+)\/video$/)?.[1] || null;
+  
+  // Create a match-like object from call data for direct calls
+  const createMatchFromCall = (callData, targetUserId) => {
+    // If we have callData, use it; otherwise create a minimal profile from userId
+    if (callData) {
+      return {
+        userId: targetUserId || callData.fromUserId || callData.targetUserId,
+        firstName: callData.fromUserName || callData.callerName || callData.userName || 'Caller',
+        matchId: null, // No match ID for direct calls
+        otherUserPhoto: callData.photoUrl,
+        photos: callData.photoUrl ? [callData.photoUrl] : []
+      };
+    }
+    
+    // Fallback: create a minimal match object from userId alone
+    // This handles the case where we're navigating directly to /calls/:userId/video
+    if (targetUserId) {
+      return {
+        userId: targetUserId,
+        firstName: 'Caller',
+        matchId: null,
+        otherUserPhoto: null,
+        photos: []
+      };
+    }
+    
+    return null;
+  };
+
+  // Accept both incomingCall and callData keys since caller and receiver use different keys
+  const callData = location.state?.incomingCall || location.state?.callData;
+  const matchFromCall = createMatchFromCall(callData, userId);
+  const resolvedCallType = location.state?.callType || callData?.callType || 'video';
+
+  return (
+    <VideoDating
+      matchId={null}
+      matchedProfile={matchFromCall}
+      callMode={location.state?.callMode || 'incoming'}
+      callType={resolvedCallType}
+      autoAccepted={Boolean(location.state?.autoAccepted)}
+      callerName={callData?.fromUserName || callData?.callerName || callData?.userName || location.state?.callerName || 'Caller'}
+      incomingCall={callData || null}
+      startImmediately={location.state?.startImmediately !== false}
+      focusSchedule={Boolean(location.state?.focusSchedule)}
+      scheduledVideoDateId={location.state?.scheduledVideoDateId || null}
+      onBack={() => onNavigateToPath(location.state?.returnPath || '/call')}
+      onOpenMessages={(profile) => onOpenMessages?.(profile, location.state?.returnPath || '/call')}
     />
   );
 };
@@ -345,6 +430,18 @@ const StatusPreferencesRoute = ({ onNavigateToPath }) => {
       matchId={matchId}
       isOpen
       onClose={() => onNavigateToPath(location.state?.returnPath || '/messages')}
+    />
+  );
+};
+
+const MpinSetupRoute = ({ onNavigateToPath }) => {
+  const location = useLocation();
+  const returnPath = location.state?.returnPath || '/account-settings';
+
+  return (
+    <MPINSetup
+      onComplete={() => onNavigateToPath(returnPath)}
+      onCancel={() => onNavigateToPath(returnPath)}
     />
   );
 };
@@ -510,7 +607,7 @@ const AppContent = () => {
       if (document.hidden && notificationService.getPermissionStatus().canNotify) {
         notificationService.notify({
           title: `New message from ${payload?.fromUserName || 'your match'}`,
-          body: payload?.message || 'Open LinkUp to reply.',
+          body: payload?.message || 'Open DatingHub to reply.',
           tag: `dating-message-${payload?.matchId || 'inbox'}`,
           requireInteraction: false
         });
@@ -522,7 +619,7 @@ const AppContent = () => {
 
       if (document.hidden && notificationService.getPermissionStatus().canNotify) {
         notificationService.notify({
-          title: 'New match on LinkUp',
+          title: 'New match on DatingHub',
           body: 'Someone liked you back. Open the app to start chatting.',
           tag: 'dating-match',
           requireInteraction: false
@@ -793,7 +890,7 @@ const AppContent = () => {
     return (
       <div className="app-loading">
         <div className="spinner"></div>
-        <p>LinkUp Dating Loading...</p>
+        <p>DatingHub Loading...</p>
       </div>
     );
   }
@@ -1013,6 +1110,15 @@ const AppContent = () => {
               }
             />
             <Route
+              path="calls/:userId/video"
+              element={
+                <CallVideoRoute
+                  onNavigateToPath={(path) => navigate(path)}
+                  onOpenMessages={handleOpenMessages}
+                />
+              }
+            />
+            <Route
               path="profiles/:userId"
               element={
                 <ProfileDetailRoute
@@ -1083,17 +1189,19 @@ const AppContent = () => {
             />
             <Route path="profile" element={<DatingProfile onLogout={handleLogout} />} />
             <Route
+              path="account-settings"
+              element={<AccountSettings onBack={() => navigate('/more')} onLogout={handleLogout} />}
+            />
+            <Route
               path="mpin-setup"
-              element={
-                <MPINSetup
-                  onComplete={() => navigate('/profile')}
-                  onCancel={() => navigate('/profile')}
-                />
-              }
+              element={<MpinSetupRoute onNavigateToPath={(path) => navigate(path)} />}
             />
             <Route path="legal/privacy" element={<PrivacyPolicyPage />} />
             <Route path="legal/terms" element={<TermsOfServicePage />} />
             <Route path="legal/refund" element={<RefundPolicyPage />} />
+            <Route path="profile/legal/privacy" element={<PrivacyPolicyPage />} />
+            <Route path="profile/legal/terms" element={<TermsOfServicePage />} />
+            <Route path="profile/legal/refund" element={<RefundPolicyPage />} />
             <Route path="achievements" element={<AchievementsPage />} />
             <Route path="leaderboards" element={<AchievementsPage defaultTab="leaderboards" />} />
             <Route

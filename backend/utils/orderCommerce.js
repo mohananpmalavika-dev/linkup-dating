@@ -624,7 +624,7 @@ const buildInvoicePdf = (order, items = []) => {
       .map(([key, value]) => `${key}: ${value}`);
 
   const lines = [
-    'LinkUp Invoice',
+    'DatingHub Invoice',
     `Invoice Number: ${order.invoiceNumber}`,
     `Order ID: ${order.orderId}`,
     `Created: ${new Date(order.createdAt).toLocaleString('en-IN')}`,

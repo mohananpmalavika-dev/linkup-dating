@@ -109,7 +109,7 @@
 .progress-bar {
   position: absolute;
   inset: 0 auto 0 0;
-  background: #2563eb;
+  background: var(--dh-logo-ink, #102030);
 }
 
 .progress-text {
@@ -152,7 +152,7 @@
 }
 
 .btn-upload {
-  background: #2563eb;
+  background: var(--dh-logo-ink, #102030);
   color: #ffffff;
 }
 

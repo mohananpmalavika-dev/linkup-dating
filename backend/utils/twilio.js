@@ -54,7 +54,7 @@ const sendSMS = async (toPhone, message) => {
 };
 
 const sendPhoneOTP = async (phone, otp) => {
-  const message = `Your LinkUp OTP is: ${otp}. It expires in 10 minutes. Do not share this code with anyone.`;
+  const message = `Your DatingHub OTP is: ${otp}. It expires in 10 minutes. Do not share this code with anyone.`;
   return sendSMS(phone, message);
 };
 

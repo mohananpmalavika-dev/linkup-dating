@@ -6,6 +6,7 @@ const express = require('express');
 const db = require('../config/database');
 
 const router = express.Router();
+const VALID_CALL_TYPES = ['voice', 'video'];
 
 const parseInteger = (value, fallback = null) => {
   const parsedValue = Number.parseInt(value, 10);
@@ -19,6 +20,54 @@ const getCallSetting = async (key, defaultValue = null) => {
     [key]
   );
   return result.rows[0]?.value ?? defaultValue;
+};
+
+const normalizeCallTypes = ({ availableFor, availableCallTypes, isAvailable }) => {
+  if (!isAvailable) {
+    return [];
+  }
+
+  let rawTypes = availableCallTypes;
+
+  if (!rawTypes && availableFor && typeof availableFor === 'object') {
+    rawTypes = Object.entries(availableFor)
+      .filter(([, enabled]) => enabled !== false)
+      .map(([type]) => String(type).toLowerCase());
+  }
+
+  if (!Array.isArray(rawTypes)) {
+    rawTypes = rawTypes ? [rawTypes] : [...VALID_CALL_TYPES];
+  }
+
+  const normalized = rawTypes
+    .map((type) => String(type || '').trim().toLowerCase())
+    .filter((type) => VALID_CALL_TYPES.includes(type));
+
+  return Array.from(new Set(normalized));
+};
+
+const toAvailableFor = (availableCallTypes = []) => ({
+  voice: availableCallTypes.includes('voice'),
+  video: availableCallTypes.includes('video')
+});
+
+const emitPreferenceUpdate = (req, userId, isAvailableForCalls, availableCallTypes = []) => {
+  const ioInstance = req.app?.io;
+
+  if (!ioInstance) {
+    return;
+  }
+
+  const payload = {
+    userId,
+    isAvailableForCalls,
+    availableCallTypes,
+    availableFor: toAvailableFor(availableCallTypes),
+    updatedAt: new Date().toISOString()
+  };
+
+  ioInstance.emit('user_call_preference_updated', payload);
+  ioInstance.to(`user_${userId}`).emit('your_call_preference_updated', payload);
 };
 
 // Get earnings summary for user
@@ -93,7 +142,7 @@ router.get('/history', async (req, res) => {
         cs.rate_per_minute,
         cs.total_cost,
         cs.status,
-        u_caller.first_name as caller_name,
+        caller_profile.first_name as caller_name,
         (
           SELECT photo_url 
           FROM profile_photos 
@@ -102,7 +151,7 @@ router.get('/history', async (req, res) => {
           LIMIT 1
         ) as caller_photo
       FROM call_sessions cs
-      LEFT JOIN users u_caller ON u_caller.id = cs.caller_id
+      LEFT JOIN dating_profiles caller_profile ON caller_profile.user_id = cs.caller_id
       WHERE cs.receiver_id = $1
         AND cs.status IN ('completed', 'declined', 'no_answer')
       ORDER BY cs.created_at DESC
@@ -135,18 +184,48 @@ router.get('/history', async (req, res) => {
 router.post('/availability', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { available } = req.body;
+    const { available, availableFor, availableCallTypes } = req.body;
     
     const isAvailable = available === true || available === 'true';
-    
-    await db.query(
-      'UPDATE dating_profiles SET is_available_for_calls = $1 WHERE user_id = $2',
-      [isAvailable, userId]
+
+    const nextCallTypes = normalizeCallTypes({
+      availableFor,
+      availableCallTypes,
+      isAvailable
+    });
+
+    if (isAvailable && nextCallTypes.length === 0) {
+      return res.status(400).json({
+        error: 'Select at least one call type when you are available for calls'
+      });
+    }
+
+    const result = await db.query(
+      `UPDATE dating_profiles
+       SET is_available_for_calls = $2,
+           available_call_types = $3,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1
+       RETURNING is_available_for_calls, available_call_types`,
+      [userId, isAvailable, nextCallTypes]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const updated = result.rows[0];
+    const savedCallTypes = Array.isArray(updated.available_call_types)
+      ? updated.available_call_types
+      : [];
+
+    emitPreferenceUpdate(req, userId, Boolean(updated.is_available_for_calls), savedCallTypes);
     
     res.json({
       success: true,
-      isAvailable
+      isAvailable: Boolean(updated.is_available_for_calls),
+      availableCallTypes: savedCallTypes,
+      availableFor: toAvailableFor(savedCallTypes)
     });
   } catch (error) {
     console.error('Set availability error:', error);
@@ -160,13 +239,35 @@ router.get('/availability', async (req, res) => {
     const userId = req.user.id;
     
     const result = await db.query(
-      'SELECT is_available_for_calls FROM dating_profiles WHERE user_id = $1',
+      `SELECT
+         is_available_for_calls,
+         COALESCE(
+           available_call_types,
+           CASE
+             WHEN COALESCE(is_available_for_calls, FALSE)
+               THEN '{"voice","video"}'::text[]
+             ELSE '{}'::text[]
+           END
+         ) as available_call_types
+       FROM dating_profiles
+       WHERE user_id = $1`,
       [userId]
     );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+
+    const profile = result.rows[0];
+    const savedCallTypes = Array.isArray(profile.available_call_types)
+      ? profile.available_call_types
+      : [];
     
     res.json({
       success: true,
-      isAvailable: result.rows[0]?.is_available_for_calls || false
+      isAvailable: Boolean(profile.is_available_for_calls),
+      availableCallTypes: savedCallTypes,
+      availableFor: toAvailableFor(savedCallTypes)
     });
   } catch (error) {
     console.error('Get availability error:', error);
@@ -209,8 +310,8 @@ router.post('/payout', async (req, res) => {
     
     // Create payout request
     const payoutResult = await db.query(`
-      INSERT INTO call_payouts (user_id, amount, method, upi_id, bank_account, bank_ifsc, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+      INSERT INTO call_payouts (user_id, amount, method, upi_id, bank_account, bank_ifsc, status, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())
       RETURNING id
     `, [userId, payoutAmount, method || 'upi', upiId || null, bankAccount || null, bankIfsc || null]);
     
@@ -319,8 +420,8 @@ router.post('/session/:sessionId/complete', async (req, res) => {
     
     // Record earnings transaction
     await db.query(`
-      INSERT INTO call_earnings (user_id, call_session_id, amount, type, status)
-      VALUES ($1, $2, $3, 'earned', 'completed')
+      INSERT INTO call_earnings (user_id, call_session_id, amount, type, status, created_at)
+      VALUES ($1, $2, $3, 'earned', 'completed', NOW())
     `, [receiverId, session.id, earnings]);
     
     // Refund remaining credits to caller
@@ -339,8 +440,8 @@ router.post('/session/:sessionId/complete', async (req, res) => {
       `, [refundAmount, callerId]);
       
       await db.query(`
-        INSERT INTO call_earnings (user_id, call_session_id, amount, type, status)
-        VALUES ($1, $2, $3, 'refund', 'completed')
+        INSERT INTO call_earnings (user_id, call_session_id, amount, type, status, created_at)
+        VALUES ($1, $2, $3, 'refund', 'completed', NOW())
       `, [callerId, session.id, refundAmount]);
     }
     

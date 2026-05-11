@@ -1,4 +1,4 @@
-# LinkUp Dating App - Render Deployment Guide
+# DatingHub App - Render Deployment Guide
 
 ## 🚀 Deploy to Render (Free Tier)
 
@@ -24,10 +24,10 @@ git init
 git add .
 
 # Commit
-git commit -m "LinkUp dating app - ready for deployment"
+git commit -m "DatingHub dating app - ready for deployment"
 
 # Add GitHub remote
-git remote add origin https://github.com/YOUR_USERNAME/linkup-dating.git
+git remote add origin https://github.com/YOUR_USERNAME/datinghub.git
 git branch -M main
 git push -u origin main
 ```
@@ -42,7 +42,7 @@ git push -u origin main
 2. Click **"New +"** → **"Web Service"**
 3. Select **"Build and deploy from a Git repository"**
 4. Connect your GitHub account
-5. Select **`linkup-dating`** repository
+5. Select **`datinghub`** repository
 6. Click **"Create Web Service"**
 
 ### Option B: Deploy Using render.yaml
@@ -298,7 +298,7 @@ GitHub is your backup! Every commit is saved.
 
 ```bash
 # Clone latest
-git clone https://github.com/YOUR_USERNAME/linkup-dating.git
+git clone https://github.com/YOUR_USERNAME/datinghub.git
 ```
 
 ---

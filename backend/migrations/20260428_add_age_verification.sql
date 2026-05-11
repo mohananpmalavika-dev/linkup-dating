@@ -1,6 +1,6 @@
 -- Migration: Add Age Verification Table
 -- Date: 2026-04-28
--- Purpose: Enforce 18+ age requirement for LinkUp dating app
+-- Purpose: Enforce 18+ age requirement for DatingHub dating app
 
 CREATE TABLE IF NOT EXISTS age_verifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -26,6 +26,6 @@ ADD COLUMN IF NOT EXISTS age_verified BOOLEAN DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS age_verification_method VARCHAR(50);
 
 -- Add comment for clarity
-COMMENT ON TABLE age_verifications IS 'Stores age verification data for LinkUp dating app users. All users must be 18+ to use the platform.';
+COMMENT ON TABLE age_verifications IS 'Stores age verification data for DatingHub dating app users. All users must be 18+ to use the platform.';
 COMMENT ON COLUMN age_verifications.verification_method IS 'Method used for age verification: dob (date of birth), id_verification (government ID), or selfie_dob (selfie + DOB)';
 COMMENT ON COLUMN age_verifications.is_verified IS 'Whether the age verification passed (confirmed user is 18+)';

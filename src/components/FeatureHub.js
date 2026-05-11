@@ -1,8 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from '../router';
+import CouponRedemption from './CouponRedemption';
 import '../styles/FeatureHub.css';
 
 const FEATURE_SECTIONS = [
+  {
+    id: 'account',
+    title: 'Account & Profile',
+    features: [
+      { key: 'editProfile', label: 'Edit Profile', emoji: 'Me', path: '/profile', description: 'Update your bio, interests, goals, and profile basics.' },
+      { key: 'accountSettings', label: 'Account Settings', emoji: 'Set', path: '/account-settings', description: 'Manage privacy, notification, legal, and account controls.' },
+      { key: 'subscription', label: 'Subscription', emoji: 'Plan', path: '/subscription', description: 'View or manage your premium plan.' },
+      { key: 'coupon', label: 'Redeem Coupon', emoji: 'Code', action: 'coupon', description: 'Apply a coupon or promotional code.' }
+    ]
+  },
   {
     id: 'social',
     title: 'Social & Events',
@@ -58,6 +69,16 @@ const FEATURE_SECTIONS = [
 
 const FeatureHub = () => {
   const navigate = useNavigate();
+  const [showCoupon, setShowCoupon] = useState(false);
+
+  const handleFeatureClick = (feature) => {
+    if (feature.action === 'coupon') {
+      setShowCoupon(true);
+      return;
+    }
+
+    navigate(feature.path);
+  };
 
   return (
     <div className="feature-hub">
@@ -76,7 +97,7 @@ const FeatureHub = () => {
                   key={feature.key}
                   type="button"
                   className="feature-card"
-                  onClick={() => navigate(feature.path)}
+                  onClick={() => handleFeatureClick(feature)}
                 >
                   <span className="feature-emoji">{feature.emoji}</span>
                   <div className="feature-card-content">
@@ -89,6 +110,12 @@ const FeatureHub = () => {
           </div>
         ))}
       </div>
+
+      <CouponRedemption
+        isOpen={showCoupon}
+        onClose={() => setShowCoupon(false)}
+        onRedemptionSuccess={() => setShowCoupon(false)}
+      />
     </div>
   );
 };

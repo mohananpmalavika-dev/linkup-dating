@@ -181,7 +181,7 @@ const LegalDocumentViewer = ({ documentType = 'privacy' }) => {
         <div className="legal-contacts">
           <p>
             <strong>Questions?</strong> Contact us at{' '}
-            <a href="mailto:support@linkupapp.com">support@linkupapp.com</a>
+            <a href="mailto:support@datinghub.app">support@datinghub.app</a>
           </p>
         </div>
       </div>

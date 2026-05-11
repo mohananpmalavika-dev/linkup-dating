@@ -1,7 +1,7 @@
 # 🇮🇳 KERALA DATING APP - MISSING FEATURES AUDIT
 ## Complete Feature Gap Analysis for Play Store Publication
 
-**Project:** LinkUp Dating App  
+**Project:** DatingHub App  
 **Target Market:** Kerala State, India  
 **Status:** Phase 2 - Requires Critical Features for Publication  
 **Last Updated:** April 28, 2026

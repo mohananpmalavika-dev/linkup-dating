@@ -1,35 +1,111 @@
-import React, { useState } from "react";
-import axios from "axios";
-import { API_BASE_URL } from "../utils/api";
-import { getStoredAuthToken } from "../utils/auth";
+import React, { useEffect, useMemo, useState } from 'react';
+import axios from 'axios';
+import { API_BASE_URL } from '../utils/api';
+import {
+  getHasMpin,
+  getStoredAuthToken,
+  getStoredUserData,
+  storeUserData
+} from '../utils/auth';
+import '../styles/MPINSetup.css';
+
+const sanitizeMpinInput = (value) => String(value || '').replace(/\D/g, '').slice(0, 6);
 
 const MPINSetup = ({ onComplete, onCancel }) => {
-  const [mpin, setMpin] = useState("");
-  const [confirmMpin, setConfirmMpin] = useState("");
-  const [oldMpin, setOldMpin] = useState("");
+  const currentUser = useMemo(() => getStoredUserData(), []);
+  const [mpin, setMpin] = useState('');
+  const [confirmMpin, setConfirmMpin] = useState('');
+  const [oldMpin, setOldMpin] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [hasExistingMpin, setHasExistingMpin] = useState(null);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [hasExistingMpin, setHasExistingMpin] = useState(() => Boolean(currentUser?.hasMpin || getHasMpin()));
+
+  useEffect(() => {
+    const identifier = currentUser?.phone || currentUser?.email;
+
+    if (!identifier) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    axios.get(`${API_BASE_URL}/auth/auth-methods`, {
+      params: { identifier }
+    }).then((response) => {
+      if (!isActive) {
+        return;
+      }
+
+      if (response.data?.exists) {
+        setHasExistingMpin(Boolean(response.data?.hasMpin));
+      }
+    }).catch(() => {
+      // Ignore this check and fall back to stored user state.
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentUser]);
+
+  const pageCopy = useMemo(() => (
+    hasExistingMpin
+      ? {
+          title: 'Reset your MPIN',
+          subtitle: 'Confirm your current MPIN, then create a new one for faster sign-in.',
+          eyebrow: 'Security',
+          submitLabel: 'Update MPIN'
+        }
+      : {
+          title: 'Create your MPIN',
+          subtitle: 'Set a 4-6 digit MPIN so you can log in faster with your email or mobile number.',
+          eyebrow: 'Quick Login',
+          submitLabel: 'Set MPIN'
+        }
+  ), [hasExistingMpin]);
 
   const clearMessages = () => {
-    setError("");
-    setSuccess("");
+    setError('');
+    setSuccess('');
   };
 
   const validateMpin = (value) => /^\d{4,6}$/.test(value);
+
+  const persistHasMpin = () => {
+    const storedUser = getStoredUserData();
+
+    if (storedUser) {
+      storeUserData({
+        ...storedUser,
+        hasMpin: true
+      });
+      return;
+    }
+
+    try {
+      localStorage.setItem('linkup_has_mpin', 'true');
+    } catch {
+      // Ignore storage issues so success flow can continue.
+    }
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     clearMessages();
 
+    if (hasExistingMpin && !validateMpin(oldMpin)) {
+      setError('Enter your current 4-6 digit MPIN first.');
+      return;
+    }
+
     if (!validateMpin(mpin)) {
-      setError("MPIN must be 4-6 digits");
+      setError('MPIN must be 4-6 digits.');
       return;
     }
 
     if (mpin !== confirmMpin) {
-      setError("MPINs do not match");
+      setError('MPINs do not match.');
       return;
     }
 
@@ -37,9 +113,12 @@ const MPINSetup = ({ onComplete, onCancel }) => {
 
     try {
       const token = getStoredAuthToken();
-      const payload = { mpin, confirmMpin: confirmMpin };
+      const payload = {
+        mpin,
+        confirmMpin
+      };
 
-      if (hasExistingMpin && oldMpin) {
+      if (hasExistingMpin) {
         payload.oldMpin = oldMpin;
       }
 
@@ -48,34 +127,30 @@ const MPINSetup = ({ onComplete, onCancel }) => {
         payload,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
-          },
+            Authorization: `Bearer ${token}`
+          }
         }
       );
 
       if (!response.data?.success) {
-        setError(response.data?.message || response.data?.error || "Failed to set MPIN");
+        setError(response.data?.message || response.data?.error || 'Failed to save MPIN.');
         return;
       }
 
-      setSuccess(response.data?.message || "MPIN set successfully");
+      persistHasMpin();
+      setSuccess(response.data?.message || 'MPIN saved successfully.');
 
-      // Store that user has MPIN
-      try {
-        localStorage.setItem("linkup_has_mpin", "true");
-      } catch {}
-
-      setTimeout(() => {
+      window.setTimeout(() => {
         onComplete?.();
-      }, 1200);
-    } catch (err) {
-      if (!err.response) {
-        setError("Backend is not running. Please start the API server and try again.");
+      }, 900);
+    } catch (requestError) {
+      if (!requestError.response) {
+        setError('Backend is not running. Please start the API server and try again.');
       } else {
         setError(
-          err.response.data?.message ||
-            err.response.data?.error ||
-            "Unable to set MPIN. Please try again."
+          requestError.response.data?.message ||
+            requestError.response.data?.error ||
+            'Unable to save MPIN. Please try again.'
         );
       }
     } finally {
@@ -85,83 +160,102 @@ const MPINSetup = ({ onComplete, onCancel }) => {
 
   return (
     <div className="mpin-setup-panel">
-      <div className="card">
-        <h3>{hasExistingMpin ? "Change MPIN" : "Set MPIN"}</h3>
-        <p className="subtitle">
-          {hasExistingMpin
-            ? "Enter your old MPIN and create a new one."
-            : "Create a 4-6 digit MPIN for quick and secure login."}
-        </p>
+      <div className="mpin-setup-shell">
+        <section className="mpin-setup-card">
+          <p className="mpin-setup-eyebrow">{pageCopy.eyebrow}</p>
+          <h1>{pageCopy.title}</h1>
+          <p className="mpin-setup-subtitle">{pageCopy.subtitle}</p>
 
-        <form onSubmit={handleSubmit}>
-          {hasExistingMpin ? (
-            <div className="form-group">
-              <label htmlFor="oldMpin">Old MPIN</label>
+          <div className="mpin-setup-tip">
+            <strong>{hasExistingMpin ? 'Current MPIN required' : 'Quick login tip'}</strong>
+            <span>
+              {hasExistingMpin
+                ? 'For security, changing an existing MPIN requires your current MPIN first.'
+                : 'After this is set, you can log in faster with your email or mobile number plus MPIN.'}
+            </span>
+          </div>
+
+          <form className="mpin-setup-form" onSubmit={handleSubmit}>
+            {hasExistingMpin ? (
+              <div className="mpin-setup-field">
+                <label htmlFor="old-mpin">Current MPIN</label>
+                <input
+                  id="old-mpin"
+                  type="password"
+                  inputMode="numeric"
+                  value={oldMpin}
+                  onChange={(event) => {
+                    setOldMpin(sanitizeMpinInput(event.target.value));
+                    clearMessages();
+                  }}
+                  placeholder="Enter current MPIN"
+                  maxLength={6}
+                  autoComplete="current-password"
+                />
+              </div>
+            ) : null}
+
+            <div className="mpin-setup-field">
+              <label htmlFor="new-mpin">{hasExistingMpin ? 'New MPIN' : 'MPIN'}</label>
               <input
+                id="new-mpin"
                 type="password"
                 inputMode="numeric"
-                id="oldMpin"
-                placeholder="Enter old MPIN"
-                value={oldMpin}
-                onChange={(e) => {
-                  setOldMpin(e.target.value.replace(/\D/g, "").slice(0, 6));
+                value={mpin}
+                onChange={(event) => {
+                  setMpin(sanitizeMpinInput(event.target.value));
                   clearMessages();
                 }}
+                placeholder="Enter 4-6 digits"
                 maxLength={6}
+                autoComplete="new-password"
               />
             </div>
-          ) : null}
 
-          <div className="form-group">
-            <label htmlFor="newMpin">New MPIN</label>
-            <input
-              type="password"
-              inputMode="numeric"
-              id="newMpin"
-              placeholder="Enter 4-6 digit MPIN"
-              value={mpin}
-              onChange={(e) => {
-                setMpin(e.target.value.replace(/\D/g, "").slice(0, 6));
-                clearMessages();
-              }}
-              maxLength={6}
-            />
-          </div>
+            <div className="mpin-setup-field">
+              <label htmlFor="confirm-mpin">Confirm MPIN</label>
+              <input
+                id="confirm-mpin"
+                type="password"
+                inputMode="numeric"
+                value={confirmMpin}
+                onChange={(event) => {
+                  setConfirmMpin(sanitizeMpinInput(event.target.value));
+                  clearMessages();
+                }}
+                placeholder="Re-enter MPIN"
+                maxLength={6}
+                autoComplete="new-password"
+              />
+            </div>
 
-          <div className="form-group">
-            <label htmlFor="confirmMpin">Confirm MPIN</label>
-            <input
-              type="password"
-              inputMode="numeric"
-              id="confirmMpin"
-              placeholder="Confirm MPIN"
-              value={confirmMpin}
-              onChange={(e) => {
-                setConfirmMpin(e.target.value.replace(/\D/g, "").slice(0, 6));
-                clearMessages();
-              }}
-              maxLength={6}
-            />
-          </div>
+            {error ? <div className="mpin-setup-message error">{error}</div> : null}
+            {success ? <div className="mpin-setup-message success">{success}</div> : null}
 
-          {error ? <div className="error-message">{error}</div> : null}
-          {success ? <div className="success-message">{success}</div> : null}
-
-          <div className="form-actions">
-            <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? "Saving..." : hasExistingMpin ? "Update MPIN" : "Set MPIN"}
-            </button>
-            {onCancel ? (
-              <button type="button" className="btn btn-outline" onClick={onCancel} disabled={loading}>
-                Cancel
+            <div className="mpin-setup-actions">
+              <button
+                type="submit"
+                className="mpin-primary-button"
+                disabled={loading || !mpin || !confirmMpin || (hasExistingMpin && !oldMpin)}
+              >
+                {loading ? 'Saving...' : pageCopy.submitLabel}
               </button>
-            ) : null}
-          </div>
-        </form>
+              {onCancel ? (
+                <button
+                  type="button"
+                  className="mpin-secondary-button"
+                  onClick={onCancel}
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+              ) : null}
+            </div>
+          </form>
+        </section>
       </div>
     </div>
   );
 };
 
 export default MPINSetup;
-

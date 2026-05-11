@@ -1,4 +1,4 @@
-# LinkUp FRND-Style Paid Calling System
+# DatingHub FRND-Style Paid Calling System
 
 **Analysis Date:** Current
 **Feature:** Dual-sided paid calling marketplace (earn + pay per call)
@@ -12,7 +12,7 @@ FRND App Model:
 - Callers pay per-minute to connect with available users
 - Real-time voice/video calling with payment integration
 
-**LinkUp Implementation:** Full paid calling system with earnings + credits.
+**DatingHub Implementation:** Full paid calling system with earnings + credits.
 
 ---
 

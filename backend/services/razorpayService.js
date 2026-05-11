@@ -1,6 +1,6 @@
 /**
  * Razorpay Payment Service
- * Handles all payment processing for LinkUp premium subscriptions
+ * Handles all payment processing for DatingHub premium subscriptions
  * Supports: order creation, payment verification, webhooks, refunds
  */
 
@@ -66,7 +66,8 @@ class RazorpayService {
         paymentId: result.rows[0].id,
         notes: {
           user_id: userId,
-          plan_id: planId
+          plan_id: planId,
+          plan_name: planName
         }
       };
     } catch (error) {
@@ -97,7 +98,7 @@ class RazorpayService {
   /**
    * Process successful payment
    */
-  async processPayment(userId, orderId, paymentId, signature, planId) {
+  async processPayment(userId, orderId, paymentId, signature, planId, discountCode, isUpgrade) {
     try {
       // Verify signature
       if (!this.verifyPaymentSignature(orderId, paymentId, signature)) {
@@ -128,7 +129,7 @@ class RazorpayService {
       }
 
       const plan = planResult.rows[0];
-      const client = await db.connect();
+      const client = await db.pool.connect();
 
       try {
         await client.query('BEGIN');
@@ -136,9 +137,13 @@ class RazorpayService {
         // Update payment record
         await client.query(
           `UPDATE payments
-           SET status = $1, razorpay_payment_id = $2, verified_at = CURRENT_TIMESTAMP
-           WHERE id = $3`,
-          ['completed', paymentId, payment.id]
+           SET status = $1,
+               razorpay_payment_id = $2,
+               discount_code = COALESCE($3, discount_code),
+               verified_at = CURRENT_TIMESTAMP,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $4`,
+          ['completed', paymentId, discountCode || null, payment.id]
         );
 
         // Create or update subscription
@@ -147,9 +152,13 @@ class RazorpayService {
           subscriptionEnd.setMonth(subscriptionEnd.getMonth() + plan.duration_months);
         }
 
+        const selectedPlanId = planId || payment.plan_id;
+        const subscriptionPlan = 'premium';
+
         const existingSubscription = await client.query(
           `SELECT id FROM subscriptions
-           WHERE user_id = $1 AND status = 'active'`,
+           WHERE user_id = $1
+           LIMIT 1`,
           [userId]
         );
 
@@ -157,16 +166,39 @@ class RazorpayService {
           // Update existing subscription
           await client.query(
             `UPDATE subscriptions
-             SET plan_id = $1, end_date = $2, renewal_date = $2, updated_at = CURRENT_TIMESTAMP
-             WHERE id = $3`,
-            [planId || payment.plan_id, subscriptionEnd, existingSubscription.rows[0].id]
+             SET plan_id = $1,
+                 plan = $2,
+                 status = 'active',
+                 start_date = COALESCE(start_date, CURRENT_TIMESTAMP),
+                 end_date = $3,
+                 renewal_date = $3,
+                 started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
+                 expires_at = $3,
+                 auto_renew = TRUE,
+                 payment_method = 'razorpay',
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = $4`,
+            [selectedPlanId, subscriptionPlan, subscriptionEnd, existingSubscription.rows[0].id]
           );
         } else {
           // Create new subscription
           await client.query(
-            `INSERT INTO subscriptions (user_id, plan_id, start_date, end_date, renewal_date, status, auto_renew, created_at)
-             VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $3, 'active', TRUE, CURRENT_TIMESTAMP)`,
-            [userId, planId || payment.plan_id, subscriptionEnd]
+            `INSERT INTO subscriptions (
+               user_id,
+               plan_id,
+               plan,
+               start_date,
+               end_date,
+               renewal_date,
+               started_at,
+               expires_at,
+               status,
+               auto_renew,
+               payment_method,
+               created_at
+             )
+             VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4, $4, CURRENT_TIMESTAMP, $4, 'active', TRUE, 'razorpay', CURRENT_TIMESTAMP)`,
+            [userId, selectedPlanId, subscriptionPlan, subscriptionEnd]
           );
         }
 
@@ -178,14 +210,14 @@ class RazorpayService {
           [subscriptionEnd, userId]
         );
 
-        // Track analytics
-        await client.query(
-          `INSERT INTO user_analytics (user_id, event_type, event_data, created_at)
-           VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`,
-          [userId, 'premium_subscription', JSON.stringify({ plan_id: planId, amount: payment.amount })]
-        );
-
         await client.query('COMMIT');
+
+        await this.trackSubscriptionConversion(userId, {
+          plan_id: selectedPlanId,
+          amount: payment.amount,
+          discount_code: discountCode || null,
+          is_upgrade: Boolean(isUpgrade)
+        });
 
         return {
           success: true,
@@ -203,6 +235,18 @@ class RazorpayService {
     } catch (error) {
       console.error('Error processing payment:', error);
       throw error;
+    }
+  }
+
+  async trackSubscriptionConversion(userId, eventData) {
+    try {
+      await db.query(
+        `INSERT INTO dating_funnel_events (user_id, event_name, context, created_at)
+         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)`,
+        [userId, 'premium_subscription', JSON.stringify(eventData)]
+      );
+    } catch (error) {
+      console.warn('Unable to track premium subscription analytics:', error.message);
     }
   }
 
@@ -452,11 +496,20 @@ class RazorpayService {
   async getUserSubscription(userId) {
     try {
       const result = await db.query(
-        `SELECT s.*, sp.name, sp.price, sp.duration_months
+        `SELECT
+           s.*,
+           COALESCE(sp.name, s.plan, 'Premium') AS name,
+           COALESCE(sp.price, 0) AS price,
+           COALESCE(sp.duration_months, 1) AS duration_months,
+           COALESCE(s.start_date, s.started_at) AS start_date,
+           COALESCE(s.end_date, s.expires_at) AS end_date,
+           COALESCE(s.renewal_date, s.expires_at, s.end_date) AS renewal_date
          FROM subscriptions s
-         JOIN subscription_plans sp ON s.plan_id = sp.id
-         WHERE s.user_id = $1 AND s.status = 'active' AND s.end_date > CURRENT_TIMESTAMP
-         ORDER BY s.start_date DESC
+         LEFT JOIN subscription_plans sp ON s.plan_id = sp.id
+         WHERE s.user_id = $1
+           AND s.status = 'active'
+           AND COALESCE(s.end_date, s.expires_at) > CURRENT_TIMESTAMP
+         ORDER BY COALESCE(s.start_date, s.started_at, s.created_at) DESC
          LIMIT 1`,
         [userId]
       );

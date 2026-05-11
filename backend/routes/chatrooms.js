@@ -2,23 +2,80 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 
+const getMessageText = (body = {}) =>
+  String(body.message ?? body.content ?? body.text ?? '').trim();
+
+const getMediaData = (body = {}) => {
+  const mediaType = String(body.mediaType ?? body.media_type ?? '').trim();
+  const mediaUrl = String(body.mediaUrl ?? body.media_url ?? '').trim();
+  
+  return {
+    mediaType: mediaType || null,
+    mediaUrl: mediaUrl || null
+  };
+};
+
+let chatroomMemberCompatibilityPromise = null;
+
+const ensureChatroomMemberCompatibility = () => {
+  if (!chatroomMemberCompatibilityPromise) {
+    chatroomMemberCompatibilityPromise = db.query(`
+      ALTER TABLE chatroom_members
+      ADD COLUMN IF NOT EXISTS joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      ADD COLUMN IF NOT EXISTS role VARCHAR(30) DEFAULT 'member',
+      ADD COLUMN IF NOT EXISTS status VARCHAR(30) DEFAULT 'active',
+      ADD COLUMN IF NOT EXISTS left_at TIMESTAMP;
+
+      ALTER TABLE chatroom_members
+      ALTER COLUMN joined_at SET DEFAULT CURRENT_TIMESTAMP,
+      ALTER COLUMN role SET DEFAULT 'member',
+      ALTER COLUMN status SET DEFAULT 'active';
+
+      UPDATE chatroom_members
+      SET joined_at = COALESCE(joined_at, CURRENT_TIMESTAMP),
+          role = COALESCE(role, 'member'),
+          status = COALESCE(status, 'active')
+      WHERE joined_at IS NULL
+         OR role IS NULL
+         OR status IS NULL;
+    `).catch((error) => {
+      chatroomMemberCompatibilityPromise = null;
+      throw error;
+    });
+  }
+
+  return chatroomMemberCompatibilityPromise;
+};
+
 // GET ALL PUBLIC CHATROOMS
 router.get('/', async (req, res) => {
   try {
+    await ensureChatroomMemberCompatibility();
+
     const page = parseInt(req.query.page) || 1;
     const pageSize = parseInt(req.query.pageSize) || 20;
     const offset = (page - 1) * pageSize;
+    const userId = req.user?.id || null;
 
     const result = await db.query(
-      `SELECT c.*, 
+      `SELECT 
+       c.id, c.created_by_user_id, c.name, c.description, c.avatar_url, 
+       c.is_public, c.max_members, c.created_at, c.updated_at,
        (SELECT COUNT(*) FROM chatroom_members WHERE chatroom_id = c.id) as member_count,
-       dp.first_name, dp.username
+       dp.first_name, dp.username,
+       EXISTS (
+         SELECT 1
+         FROM chatroom_members cm
+         WHERE cm.chatroom_id = c.id
+           AND cm.user_id = $3
+           AND COALESCE(cm.status, 'active') = 'active'
+       ) AS is_member
        FROM chatrooms c
        LEFT JOIN dating_profiles dp ON c.created_by_user_id = dp.user_id
        WHERE c.is_public = true
        ORDER BY c.updated_at DESC
        LIMIT $1 OFFSET $2`,
-      [pageSize, offset]
+      [pageSize, offset, userId]
     );
 
     const countResult = await db.query(
@@ -54,7 +111,9 @@ router.get('/:chatroomId', async (req, res) => {
     }
 
     const result = await db.query(
-      `SELECT c.*,
+      `SELECT 
+       c.id, c.created_by_user_id, c.name, c.description, c.avatar_url,
+       c.is_public, c.max_members, c.created_at, c.updated_at,
        (SELECT COUNT(*) FROM chatroom_members WHERE chatroom_id = c.id) as member_count,
        dp.first_name, dp.username
        FROM chatrooms c
@@ -131,6 +190,7 @@ router.post('/', async (req, res) => {
     }
 
     console.log('CREATE CHATROOM - Attempting to create:', { userId, name: trimmedName, isPublic, maxMembers });
+    await ensureChatroomMemberCompatibility();
 
     // Validate inputs before sending to DB
     const insertParams = [userId, trimmedName, trimmedDesc, isPublic !== false, maxMembers || 100];
@@ -161,8 +221,8 @@ router.post('/', async (req, res) => {
 
     // Add creator as first member
     const memberResult = await db.query(
-      `INSERT INTO chatroom_members (chatroom_id, user_id)
-       VALUES ($1, $2)
+      `INSERT INTO chatroom_members (chatroom_id, user_id, role, status)
+       VALUES ($1, $2, 'admin', 'active')
        RETURNING *`,
       [chatroomId, userId]
     );
@@ -246,6 +306,8 @@ router.post('/:chatroomId/join', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    await ensureChatroomMemberCompatibility();
+
     // Check if user already member
     const memberCheck = await db.query(
       'SELECT * FROM chatroom_members WHERE chatroom_id = $1 AND user_id = $2',
@@ -253,7 +315,20 @@ router.post('/:chatroomId/join', async (req, res) => {
     );
 
     if (memberCheck.rows.length > 0) {
-      return res.status(400).json({ error: 'Already a member' });
+      const existingMember = memberCheck.rows[0];
+
+      if (existingMember.status && existingMember.status !== 'active') {
+        await db.query(
+          `UPDATE chatroom_members
+           SET status = 'active',
+               left_at = NULL,
+               joined_at = COALESCE(joined_at, CURRENT_TIMESTAMP)
+           WHERE chatroom_id = $1 AND user_id = $2`,
+          [chatroomId, userId]
+        );
+      }
+
+      return res.json({ message: 'Already a member', alreadyMember: true });
     }
 
     // Check member limit
@@ -287,7 +362,7 @@ router.post('/:chatroomId/join', async (req, res) => {
     // Update member count
     await db.query(
       `UPDATE chatrooms 
-       SET member_count = member_count + 1
+       SET member_count = COALESCE(member_count, 0) + 1
        WHERE id = $1`,
       [chatroomId]
     );
@@ -310,6 +385,8 @@ router.post('/:chatroomId/leave', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    await ensureChatroomMemberCompatibility();
+
     // Update member status to 'left' with timestamp (soft delete)
     const result = await db.query(
       `UPDATE chatroom_members 
@@ -325,8 +402,8 @@ router.post('/:chatroomId/leave', async (req, res) => {
 
     // Create system message
     await db.query(
-      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type)
-       VALUES ($1, $2, $3, 'system')`,
+      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type, created_at)
+       VALUES ($1, $2, $3, 'system', NOW())`,
       [chatroomId, userId, `User left the group${reason ? `: ${reason}` : ''}`]
     );
 
@@ -382,9 +459,13 @@ router.get('/:chatroomId/messages', async (req, res) => {
     const offset = parseInt(req.query.offset) || 0;
 
     const result = await db.query(
-      `SELECT cm.*, dp.first_name, dp.username, profile_photos.photo_url
+      `SELECT cm.*,
+              COALESCE(NULLIF(dp.first_name, ''), dp.username, SPLIT_PART(u.email, '@', 1), 'Member') AS first_name,
+              dp.username,
+              profile_photos.photo_url
        FROM chatroom_messages cm
-       JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
+       LEFT JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
+       LEFT JOIN users u ON cm.from_user_id = u.id
        LEFT JOIN profile_photos ON cm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
        WHERE cm.chatroom_id = $1
        ORDER BY cm.created_at DESC
@@ -404,49 +485,112 @@ router.post('/:chatroomId/messages', async (req, res) => {
   try {
     const userId = req.user?.id;
     const { chatroomId } = req.params;
-    const { message } = req.body;
+    const message = getMessageText(req.body);
+    const { mediaType, mediaUrl } = getMediaData(req.body);
 
     if (!userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    if (!message) {
-      return res.status(400).json({ error: 'Message required' });
+    // Allow either text message or media message, but require at least one
+    if (!message && !mediaType) {
+      return res.status(400).json({ error: 'Message or media required' });
+    }
+
+    if (message && message.length > 5000) {
+      return res.status(400).json({ error: 'Message cannot exceed 5000 characters' });
     }
 
     // Verify user is a member
-    const memberCheck = await db.query(
-      'SELECT * FROM chatroom_members WHERE chatroom_id = $1 AND user_id = $2',
-      [chatroomId, userId]
-    );
+    let memberCheck;
+    try {
+      memberCheck = await db.query(
+        'SELECT * FROM chatroom_members WHERE chatroom_id = $1 AND user_id = $2',
+        [chatroomId, userId]
+      );
+    } catch (dbErr) {
+      console.error('Chatroom member check error:', dbErr.message);
+      return res.status(500).json({ error: 'Failed to verify chatroom membership', details: dbErr.message });
+    }
 
     if (memberCheck.rows.length === 0) {
       return res.status(403).json({ error: 'Not a member of this chatroom' });
     }
 
+    // Determine message type
+    let messageType = 'text';
+    if (mediaType) {
+      if (mediaType === 'image' || mediaType === 'photo') {
+        messageType = 'image';
+      } else if (mediaType === 'video') {
+        messageType = 'video';
+      } else if (mediaType === 'sticker') {
+        messageType = 'sticker';
+      } else if (mediaType === 'emoji') {
+        messageType = 'emoji';
+      }
+    }
+
     // Insert message
-    const result = await db.query(
-      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [chatroomId, userId, message]
-    );
+    let result;
+    try {
+      result = await db.query(
+        `INSERT INTO chatroom_messages (
+          chatroom_id, 
+          from_user_id, 
+          message, 
+          message_type,
+          media_type,
+          media_url,
+          created_at
+        )
+         VALUES ($1, $2, $3, $4, $5, $6, NOW())
+         RETURNING *`,
+        [
+          chatroomId,
+          userId,
+          message || `[${messageType}]`,
+          messageType,
+          mediaType || null,
+          mediaUrl || null
+        ]
+      );
+    } catch (insertErr) {
+      console.error('Message insert error:', insertErr.message);
+      return res.status(500).json({ error: 'Failed to insert message', details: insertErr.message });
+    }
 
     // Update chatroom updated_at
-    await db.query(
-      `UPDATE chatrooms SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-      [chatroomId]
-    );
+    try {
+      await db.query(
+        `UPDATE chatrooms SET updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        [chatroomId]
+      );
+    } catch (updateErr) {
+      console.error('Chatroom update error:', updateErr.message);
+      // Don't fail the request if update fails
+    }
 
     // Get message details with user info
-    const messageResult = await db.query(
-      `SELECT cm.*, dp.first_name, dp.username, profile_photos.photo_url
-       FROM chatroom_messages cm
-       JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
-       LEFT JOIN profile_photos ON cm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
-       WHERE cm.id = $1`,
-      [result.rows[0].id]
-    );
+    let messageResult;
+    try {
+      messageResult = await db.query(
+        `SELECT cm.*,
+                COALESCE(NULLIF(dp.first_name, ''), dp.username, SPLIT_PART(u.email, '@', 1), 'Member') AS first_name,
+                dp.username,
+                profile_photos.photo_url
+         FROM chatroom_messages cm
+         LEFT JOIN dating_profiles dp ON cm.from_user_id = dp.user_id
+         LEFT JOIN users u ON cm.from_user_id = u.id
+         LEFT JOIN profile_photos ON cm.from_user_id = profile_photos.user_id AND profile_photos.is_primary = true
+         WHERE cm.id = $1`,
+        [result.rows[0].id]
+      );
+    } catch (fetchErr) {
+      console.error('Message fetch error:', fetchErr.message);
+      // Return the basic message if fetching details fails
+      messageResult = { rows: [result.rows[0]] };
+    }
 
     // Emit via WebSocket if available
     if (req.io) {
@@ -455,8 +599,9 @@ router.post('/:chatroomId/messages', async (req, res) => {
 
     res.status(201).json(messageResult.rows[0]);
   } catch (err) {
-    console.error('Send message error:', err);
-    res.status(500).json({ error: 'Failed to send message' });
+    console.error('Send message error:', err.message || err);
+    console.error('Full error:', err);
+    res.status(500).json({ error: 'Failed to send message', details: err.message });
   }
 });
 
@@ -647,6 +792,8 @@ router.put('/:chatroomId/members/:memberId', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    await ensureChatroomMemberCompatibility();
+
     // Check if requester is admin
     const adminCheck = await db.query(
       `SELECT * FROM chatroom_members 
@@ -713,6 +860,8 @@ router.delete('/:chatroomId/members/:memberId', async (req, res) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    await ensureChatroomMemberCompatibility();
+
     // Check if requester is admin or moderator
     const authorityCheck = await db.query(
       `SELECT role FROM chatroom_members 
@@ -738,8 +887,8 @@ router.delete('/:chatroomId/members/:memberId', async (req, res) => {
 
     // Create system message
     await db.query(
-      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type)
-       VALUES ($1, $2, $3, 'system')`,
+      `INSERT INTO chatroom_messages (chatroom_id, from_user_id, message, message_type, created_at)
+       VALUES ($1, $2, $3, 'system', NOW())`,
       [chatroomId, userId, 'User was removed from the group']
     );
 

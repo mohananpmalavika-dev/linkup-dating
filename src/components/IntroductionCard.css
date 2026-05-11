@@ -63,7 +63,7 @@
 }
 
 .intro-badge {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 6px 12px;
   border-radius: 20px;
@@ -102,7 +102,7 @@
 
 .intro-reason-badge span {
   background: #f0e7ff;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   padding: 4px 8px;
   border-radius: 4px;
   font-size: 11px;
@@ -187,7 +187,7 @@
 }
 
 .interest-chip {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 6px 12px;
   border-radius: 20px;
@@ -206,7 +206,7 @@
   margin-bottom: 16px;
   font-size: 14px;
   color: #333;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .activity-icon {
@@ -238,13 +238,13 @@
   background: white;
   padding: 10px;
   border-radius: 6px;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .starter-title {
   font-size: 12px;
   font-weight: 600;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   margin-bottom: 4px;
 }
 
@@ -283,13 +283,13 @@
 }
 
 .intro-actions .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 
 .intro-actions .btn-primary:hover {
   transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.4);
 }
 
 /* Rate Button */
@@ -307,8 +307,8 @@
 
 .btn-rate:hover {
   background: #f9f9ff;
-  border-color: #667eea;
-  color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
+  color: var(--dh-logo-copper, #d06030);
 }
 
 /* Compact Actions */
@@ -466,7 +466,7 @@
 }
 
 .modal-actions .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
 }
 

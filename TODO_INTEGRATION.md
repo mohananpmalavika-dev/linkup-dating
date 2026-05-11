@@ -1,4 +1,4 @@
-# LinkUp Feature Integration Tracker
+# DatingHub Feature Integration Tracker
 
 > Started: June 2026  
 > Target: Wire all 21 unintegrated features, 4 socket handlers, 11 hooks  

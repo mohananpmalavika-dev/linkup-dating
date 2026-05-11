@@ -835,7 +835,7 @@ const AccountSettings = ({ onBack, onLogout }) => {
           <div className="preferences-group">
             <h3>Dealbreaker Questions</h3>
             <p className="preferences-helper">
-              Turn these on when you want LinkUp to remove profiles instead of just lowering
+              Turn these on when you want DatingHub to remove profiles instead of just lowering
               their score.
             </p>
             <div className="question-list">
@@ -858,7 +858,7 @@ const AccountSettings = ({ onBack, onLogout }) => {
           <div className="preferences-group">
             <h3>Compatibility Questions</h3>
             <p className="preferences-helper">
-              These answers help LinkUp spot emotional and lifestyle fit, not just filters.
+              These answers help DatingHub spot emotional and lifestyle fit, not just filters.
             </p>
             <div className="question-list">
               {COMPATIBILITY_QUESTIONS.map((question) => (
@@ -900,7 +900,7 @@ const AccountSettings = ({ onBack, onLogout }) => {
                   <p>
                     {learningHighlights.length > 0
                       ? 'Right now your recent activity is giving stronger signals around:'
-                      : 'LinkUp will start learning as you like, pass, and superlike profiles.'}
+                      : 'DatingHub will start learning as you like, pass, and superlike profiles.'}
                   </p>
                   {learningHighlights.length > 0 ? (
                     <div className="insight-tags">
@@ -982,6 +982,23 @@ const AccountSettings = ({ onBack, onLogout }) => {
 
   const renderSecurityTab = () => (
     <div className="security-section">
+      <div className="settings-item">
+        <div className="setting-info">
+          <h3>{currentUser?.hasMpin ? 'Reset MPIN' : 'Set MPIN'}</h3>
+          <p>
+            {currentUser?.hasMpin
+              ? 'Change your quick login MPIN anytime from this security screen.'
+              : 'Create a 4-6 digit MPIN for faster login with your email or mobile number.'}
+          </p>
+        </div>
+        <button
+          className="btn-manage-security"
+          onClick={() => navigate('/mpin-setup', { state: { returnPath: '/account-settings' } })}
+        >
+          {currentUser?.hasMpin ? 'Manage MPIN' : 'Create MPIN'}
+        </button>
+      </div>
+
       <div className="settings-item">
         <div className="setting-info">
           <h3>Password Reset</h3>

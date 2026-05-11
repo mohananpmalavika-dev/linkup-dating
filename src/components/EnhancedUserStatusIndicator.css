@@ -24,8 +24,8 @@
 }
 
 .status-indicator.last-active {
-  background: linear-gradient(135deg, rgba(33, 150, 243, 0.1), rgba(0, 188, 212, 0.1));
-  border-color: rgba(33, 150, 243, 0.3);
+  background: linear-gradient(135deg, rgba(208, 96, 48, 0.1), rgba(241, 160, 111, 0.1));
+  border-color: rgba(208, 96, 48, 0.3);
 }
 
 .status-indicator.offline {
@@ -64,7 +64,7 @@
 }
 
 .status-dot.video-dating {
-  background: #ff5722;
+  background: var(--dh-logo-copper, #d06030);
   box-shadow: 0 0 0 2px rgba(255, 87, 34, 0.3);
   animation: pulse-red 2s infinite;
 }
@@ -91,8 +91,8 @@
 }
 
 .status-dot.last-active {
-  background: #2196f3;
-  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.3);
+  background: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 2px rgba(208, 96, 48, 0.3);
 }
 
 .status-dot.skeleton {
@@ -133,7 +133,7 @@
 }
 
 .video-dating-badge {
-  background: linear-gradient(135deg, #ff5722, #ff7043);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030), var(--dh-logo-copper-light, #f1a06f));
   color: white;
   padding: 0.25rem 0.5rem;
   border-radius: 4px;

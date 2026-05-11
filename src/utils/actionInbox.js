@@ -74,7 +74,6 @@ const buildDateInboxItems = (dateProposals = []) =>
           ? proposal.proposerName || 'Your match'
           : proposal.recipientName || 'Your match';
       const isPending = proposal.status === 'pending';
-      const isAccepted = proposal.status === 'accepted';
       const isReceived = Boolean(proposal.isReceived);
       const title = isPending
         ? isReceived
@@ -121,7 +120,7 @@ export const buildActionInboxItems = ({
     subtitle: like.isRevealed
       ? 'Like back to turn this into a real conversation.'
       : 'Like back to see whether this becomes a match.',
-    meta: like.isRevealed ? like.location?.city || 'Nearby on LinkUp' : 'Premium reveal available',
+    meta: like.isRevealed ? like.location?.city || 'Nearby on DatingHub' : 'Premium reveal available',
     primaryLabel: 'Like back',
     secondaryLabel: 'View profile',
     createdAt: like.likedAt,
@@ -134,7 +133,7 @@ export const buildActionInboxItems = ({
     priority: 0,
     title: `${request.firstName} sent a message request`,
     subtitle: request.message || 'A new request is waiting for you.',
-    meta: request.location?.city || 'Nearby on LinkUp',
+    meta: request.location?.city || 'Nearby on DatingHub',
     primaryLabel: 'Accept',
     secondaryLabel: 'Decline',
     createdAt: request.createdAt,
@@ -150,10 +149,10 @@ export const buildActionInboxItems = ({
       subtitle: suggestion.description,
       meta:
         suggestion.kind === 'ready_to_plan'
-          ? 'Next best step'
+          ? 'Ready to meet'
           : suggestion.kind === 'revive'
-            ? 'Rescue nudge'
-            : 'Fresh match',
+            ? 'Check in'
+            : 'Say hello',
       preview: suggestion.prefillMessage || suggestion.secondaryPrefillMessage || '',
       primaryLabel: suggestion.ctaLabel,
       secondaryLabel: suggestion.secondaryCtaLabel || '',

@@ -45,8 +45,8 @@ const ConversationQualityInsights = ({ matchId }) => {
       good: '#74b9ff',
       developing: '#ffa500',
       caution: '#ff6b6b',
-      engagement: '#667eea',
-      variety: '#c084fc'
+      engagement: '#d06030',
+      variety: '#f1a06f'
     };
     return colors[type] || '#666';
   };

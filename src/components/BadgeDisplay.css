@@ -103,7 +103,7 @@
 }
 
 .badge-item.rarity-rare {
-  border-color: #2196F3;
+  border-color: var(--dh-logo-copper, #d06030);
   background: linear-gradient(135deg, rgba(33,150,243,0.15) 0%, rgba(33,150,243,0.05) 100%);
 }
 

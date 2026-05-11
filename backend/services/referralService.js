@@ -76,7 +76,7 @@ class ReferralService {
    * Generate full referral link
    */
   static generateReferralLink(code) {
-    const baseUrl = process.env.FRONTEND_URL || 'https://linkup.dating';
+    const baseUrl = process.env.FRONTEND_URL || 'https://datinghub.app';
     return `${baseUrl}/?referral=${code}`;
   }
 

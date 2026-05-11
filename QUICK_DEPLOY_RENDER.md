@@ -1,4 +1,4 @@
-# 🚀 Deploy LinkUp Dating App to Render
+# 🚀 Deploy DatingHub App to Render
 
 ## Quick Deploy (5 minutes)
 
@@ -6,7 +6,7 @@
 
 ```bash
 # Navigate to project root
-cd LinkUp
+cd DatingHub
 
 # Initialize git if not done
 git init
@@ -19,10 +19,10 @@ git config user.name "Your Name"
 git add .
 
 # Commit
-git commit -m "LinkUp dating app - production ready"
+git commit -m "DatingHub dating app - production ready"
 
 # Add GitHub remote
-git remote add origin https://github.com/YOUR_USERNAME/linkup-dating.git
+git remote add origin https://github.com/YOUR_USERNAME/datinghub.git
 git branch -M main
 git push -u origin main
 ```
@@ -39,7 +39,7 @@ git push -u origin main
    - Authorize Render to access your GitHub
 
 3. **Select Repository:**
-   - Find "linkup-dating" repository
+   - Find "datinghub" repository
    - Click "Connect"
 
 4. **Configure Service:**

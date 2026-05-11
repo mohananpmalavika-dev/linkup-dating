@@ -82,7 +82,7 @@
 }
 
 .message.own .message-content {
-  background: #8b5cf6;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border-radius: 12px 4px 12px 12px;
 }
@@ -159,7 +159,7 @@
 
 .message-input:focus {
   outline: none;
-  border-color: #8b5cf6;
+  border-color: var(--dh-logo-copper, #d06030);
 }
 
 .message-input:disabled {
@@ -168,7 +168,7 @@
 }
 
 .send-btn {
-  background: #8b5cf6;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border: none;
   padding: 10px 12px;
@@ -179,7 +179,7 @@
 }
 
 .send-btn:hover:not(:disabled) {
-  background: #7c3aed;
+  background: var(--dh-logo-ink, #102030);
 }
 
 .send-btn:disabled {

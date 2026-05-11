@@ -1,11 +1,11 @@
 /* Daily Challenges Widget Styles */
 
 .challenges-widget {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   border-radius: 16px;
   padding: 16px;
   color: white;
-  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 10px 30px rgba(208, 96, 48, 0.2);
   animation: slideIn 0.3s ease-out;
 }
 
@@ -305,7 +305,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper, #d06030) 0%, var(--dh-logo-ink, #102030) 100%);
   color: white;
   padding: 20px 40px;
   border-radius: 12px;

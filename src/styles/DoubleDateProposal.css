@@ -113,7 +113,7 @@
 .double-date-proposal .form-group select:focus,
 .double-date-proposal .form-group textarea:focus {
   outline: none;
-  border-color: #ff6b9d;
+  border-color: var(--dh-logo-copper-light, #f1a06f);
   box-shadow: 0 0 0 3px rgba(255, 107, 157, 0.1);
 }
 
@@ -152,7 +152,7 @@
 }
 
 .double-date-proposal .btn-primary {
-  background: linear-gradient(135deg, #ff6b9d 0%, #c44569 100%);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f) 0%, #c44569 100%);
   color: white;
 }
 

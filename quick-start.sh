@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Quick Start Script for LinkUp Dating App
+# Quick Start Script for DatingHub App
 # This script sets up and starts both frontend and backend
 
-echo "🚀 LinkUp Dating App - Quick Start"
+echo "🚀 DatingHub App - Quick Start"
 echo "===================================="
 echo ""
 

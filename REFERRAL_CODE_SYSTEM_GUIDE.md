@@ -1,7 +1,7 @@
-# 📱 LinkUp Referral Code System - Implementation Guide
+# 📱 DatingHub Referral Code System - Implementation Guide
 
 ## Overview
-This guide explains how the referral code system works for LinkUp, allowing users to invite friends and family to join the platform and earn rewards.
+This guide explains how the referral code system works for DatingHub, allowing users to invite friends and family to join the platform and earn rewards.
 
 ---
 
@@ -72,7 +72,7 @@ fetch('/api/admin/referrals/generate-all', {
       "email": "user1@example.com",
       "status": "created",
       "code": "LINK1A2B3C4D",
-      "link": "https://linkup.dating/?referral=LINK1A2B3C4D",
+      "link": "https://datinghub.app/?referral=LINK1A2B3C4D",
       "message": "Referral code created"
     }
   ]
@@ -148,7 +148,7 @@ POST /api/admin/referrals/regenerate/123
   "success": true,
   "message": "New referral code generated",
   "code": "LINK123X9Y8Z7",
-  "link": "https://linkup.dating/?referral=LINK123X9Y8Z7"
+  "link": "https://datinghub.app/?referral=LINK123X9Y8Z7"
 }
 ```
 

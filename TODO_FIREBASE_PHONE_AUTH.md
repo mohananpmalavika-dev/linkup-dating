@@ -49,7 +49,7 @@ REACT_APP_FIREBASE_APP_ID=1:123456789:web:abcdef
 4. User enters OTP → `confirmationResult.confirm()` verifies locally
 5. Firebase returns an ID token → frontend sends to backend `/api/auth/firebase-verify-phone`
 6. Backend verifies ID token with Firebase Admin SDK → extracts verified phone number
-7. Backend finds/creates user → marks `phone_verified = TRUE` → issues LinkUp JWT
+7. Backend finds/creates user → marks `phone_verified = TRUE` → issues DatingHub JWT
 8. Frontend receives token → calls existing `handleLoginSuccess()` → seamless login
 
 ---

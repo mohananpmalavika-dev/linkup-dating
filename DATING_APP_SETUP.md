@@ -1,8 +1,8 @@
-# LinkUp Dating App - Complete Setup Guide
+# DatingHub App - Complete Setup Guide
 
 ## 🎯 What Has Been Built
 
-Your LinkUp app has been **completely transformed from a messaging platform into a modern dating app** with:
+Your DatingHub app has been **completely transformed from a messaging platform into a modern dating app** with:
 
 ### ✅ Core Features Implemented
 1. **Swipe Discovery** - Like/pass on profiles with beautiful cards
@@ -432,7 +432,7 @@ Navigation:       src/components/DatingNavigation.js
 
 ## 🎉 You're All Set!
 
-Your LinkUp dating app is ready to go! 
+Your DatingHub dating app is ready to go! 
 
 **Start by**:
 1. Running `npm install`

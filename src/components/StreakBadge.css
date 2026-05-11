@@ -13,7 +13,7 @@
   position: relative;
   padding: 16px;
   background: linear-gradient(135deg, #fff5e6 0%, #ffe6f0 100%);
-  border: 2px solid #ff6b9d;
+  border: 2px solid var(--dh-logo-copper-light, #f1a06f);
   border-radius: 16px;
   margin: 12px 0;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -33,7 +33,7 @@
 
 /* Urgency states */
 .streak-badge.normal {
-  border-color: #ff6b9d;
+  border-color: var(--dh-logo-copper-light, #f1a06f);
   background: linear-gradient(135deg, #fff5e6 0%, #ffe6f0 100%);
 }
 
@@ -108,7 +108,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: #ff6b9d;
+  color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 .badge-user-info {
@@ -124,7 +124,7 @@
   height: 28px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid #ff6b9d;
+  border: 2px solid var(--dh-logo-copper-light, #f1a06f);
 }
 
 /* Content section */
@@ -173,7 +173,7 @@
 .days-count {
   font-size: 24px;
   font-weight: 700;
-  color: #ff6b9d;
+  color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 .days-label {
@@ -246,7 +246,7 @@
 }
 
 .milestone-item:hover {
-  border-color: #ff6b9d;
+  border-color: var(--dh-logo-copper-light, #f1a06f);
   background: #fffaf5;
 }
 
@@ -270,7 +270,7 @@
 .badge-progress {
   font-size: 12px;
   font-weight: 600;
-  color: #ff6b9d;
+  color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 /* Compact badge variant */
@@ -280,11 +280,11 @@
   gap: 4px;
   padding: 4px 10px;
   background: linear-gradient(135deg, #fff5e6 0%, #ffe6f0 100%);
-  border: 1px solid #ff6b9d;
+  border: 1px solid var(--dh-logo-copper-light, #f1a06f);
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
-  color: #ff6b9d;
+  color: var(--dh-logo-copper-light, #f1a06f);
   cursor: pointer;
   transition: all 0.3s ease;
   white-space: nowrap;
@@ -386,7 +386,7 @@
 .alert-content h4 {
   margin: 0 0 8px 0;
   font-size: 18px;
-  color: #ff6b9d;
+  color: var(--dh-logo-copper-light, #f1a06f);
 }
 
 .alert-content p {
@@ -428,7 +428,7 @@
 @media (prefers-color-scheme: dark) {
   .streak-badge {
     background: linear-gradient(135deg, #3a3a2e 0%, #3a2e3a 100%);
-    border-color: #ff6b9d;
+    border-color: var(--dh-logo-copper-light, #f1a06f);
   }
 
   .flame-section {

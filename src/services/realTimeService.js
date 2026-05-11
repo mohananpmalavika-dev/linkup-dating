@@ -4,90 +4,156 @@
  */
 import io from 'socket.io-client';
 
-const SOCKET_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+// Use BACKEND_URL for socket.io (base URL without /api path)
+// Fall back to REACT_APP_API_URL if BACKEND_URL not available, stripping /api
+const getSocketURL = () => {
+  if (process.env.REACT_APP_BACKEND_URL) {
+    return process.env.REACT_APP_BACKEND_URL;
+  }
+  
+  const apiUrl = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+  // Remove /api suffix if present
+  return apiUrl.replace(/\/api\/?$/, '') || 'http://localhost:5000';
+};
+
+const SOCKET_URL = getSocketURL();
+const CONNECT_TIMEOUT_MS = 15000;
+const SOCKET_EVENT_ALIASES = {
+  incoming_call_request: ['incoming_call_request', 'call:incoming'],
+  'call:incoming': ['call:incoming', 'incoming_call_request'],
+  'call:rejected': ['call:rejected', 'call:declined'],
+  'call:declined': ['call:declined', 'call:rejected']
+};
+
+const getEventAliases = (eventName) => Array.from(
+  new Set([eventName, ...(SOCKET_EVENT_ALIASES[eventName] || [])])
+);
 
 class RealTimeService {
   constructor() {
     this.socket = null;
     this.userId = null;
     this.listeners = new Map(); // { eventName: [callbacks] }
+    this.socketListeners = new Set(); // Track which socket event names are registered
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 10;
     this.reconnectDelay = 1000;
+    this.connectPromise = null;
   }
 
   /**
    * Connect to real-time server
    */
   connect(userId, deviceInfo = {}) {
-    return new Promise((resolve, reject) => {
-      if (this.socket?.connected) {
-        resolve(this.socket);
-        return;
-      }
+    if (this.socket?.connected) {
+      return Promise.resolve(this.socket);
+    }
+
+    if (this.connectPromise) {
+      return this.connectPromise;
+    }
+
+    this.connectPromise = new Promise((resolve, reject) => {
+      let settled = false;
+      let connectTimeout = null;
+
+      const settle = (callback) => (value) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        this.connectPromise = null;
+
+        if (connectTimeout) {
+          clearTimeout(connectTimeout);
+        }
+
+        callback(value);
+      };
+
+      const resolveOnce = settle(resolve);
+      const rejectOnce = settle(reject);
 
       try {
         this.userId = userId;
+
+        if (this.socket) {
+          this.socket.removeAllListeners();
+          this.socket.close();
+        }
+
+        this.socketListeners = new Set();
+
+        console.log(`[RealTimeService] Connecting to socket.io at: ${SOCKET_URL}`);
 
         this.socket = io(SOCKET_URL, {
           reconnection: true,
           reconnectionDelay: this.reconnectDelay,
           reconnectionDelayMax: 5000,
           reconnectionAttempts: this.maxReconnectAttempts,
-          transports: ['websocket', 'polling'],
+          transports: ['polling', 'websocket'],
+          timeout: CONNECT_TIMEOUT_MS,
           query: {
             userId,
             device: deviceInfo.device || 'web'
           }
         });
 
-        // Connection established
+        connectTimeout = setTimeout(() => {
+          const timeoutError = new Error('Real-time connection timed out');
+          console.error('[RealTimeService] Connection timeout');
+          this._emit('connection_error', { error: timeoutError.message });
+          rejectOnce(timeoutError);
+        }, CONNECT_TIMEOUT_MS);
+
         this.socket.on('connect', () => {
-          console.log('Connected to real-time server');
+          console.log('[RealTimeService] Connected to real-time server');
           this.reconnectAttempts = 0;
 
-          // Send online status
+          this._registerAllSocketListeners();
           this.socket.emit('user_online', userId, deviceInfo);
           this._emit('connected', { userId });
-          resolve(this.socket);
+          resolveOnce(this.socket);
         });
 
-        // Connection lost
         this.socket.on('disconnect', (reason) => {
-          console.warn('Disconnected from real-time server:', reason);
+          console.warn('[RealTimeService] Disconnected from real-time server:', reason);
           this._emit('disconnected', { reason });
         });
 
-        // Reconnection attempt
         this.socket.on('reconnect_attempt', () => {
           this.reconnectAttempts++;
           console.log(
-            `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
+            `[RealTimeService] Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
           );
         });
 
-        // Connection error
         this.socket.on('connect_error', (error) => {
-          console.error('Connection error:', error);
+          console.error('[RealTimeService] Connection error:', error);
           this._emit('connection_error', { error: error.message });
-          reject(error);
         });
 
-        // Generic error
         this.socket.on('error', (error) => {
-          console.error('Socket error:', error);
+          console.error('[RealTimeService] Socket error:', error);
           this._emit('error', { error });
         });
       } catch (error) {
-        reject(error);
+        console.error('[RealTimeService] Error during connection setup:', error);
+        rejectOnce(error);
       }
     });
+
+    return this.connectPromise;
   }
 
   /**
    * Disconnect from real-time server
    */
   disconnect() {
+    this.connectPromise = null;
+    this.socketListeners = new Set();
+
     if (this.socket?.connected) {
       this.socket.emit('user_offline', this.userId);
       this.socket.disconnect();
@@ -99,18 +165,16 @@ class RealTimeService {
    * Subscribe to event
    */
   on(eventName, callback) {
+    // Add to listeners map
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, []);
-
-      // Set up socket listener if not already done
-      if (this.socket && !this.socket._events?.[eventName]) {
-        this.socket.on(eventName, (data) => {
-          this._emit(eventName, data);
-        });
-      }
     }
-
     this.listeners.get(eventName).push(callback);
+
+    // Register socket listener if socket is connected
+    if (this.socket?.connected) {
+      this._registerSocketListener(eventName);
+    }
 
     // Return unsubscribe function
     return () => this.off(eventName, callback);
@@ -125,6 +189,49 @@ class RealTimeService {
       const index = callbacks.indexOf(callback);
       if (index > -1) {
         callbacks.splice(index, 1);
+      }
+    }
+  }
+
+  /**
+   * Register a socket listener for a specific event
+   */
+  _registerSocketListener(eventName) {
+    if (!this.socket) {
+      return;
+    }
+
+    const eventAliases = getEventAliases(eventName);
+
+    eventAliases.forEach((socketEventName) => {
+      if (this.socketListeners.has(socketEventName)) {
+        return;
+      }
+
+      this.socketListeners.add(socketEventName);
+      console.log(`Registering socket listener for event: ${socketEventName}`);
+
+      this.socket.on(socketEventName, (data) => {
+        console.log(`Received event: ${socketEventName}`, data);
+        eventAliases.forEach((aliasEventName) => {
+          this._emit(aliasEventName, data);
+        });
+      });
+    });
+  }
+
+  /**
+   * Register all socket listeners for events that have active subscribers
+   */
+  _registerAllSocketListeners() {
+    if (!this.socket?.connected) {
+      return;
+    }
+
+    // Register listeners for all events that have callbacks
+    for (const eventName of this.listeners.keys()) {
+      if (!this.socketListeners.has(eventName)) {
+        this._registerSocketListener(eventName);
       }
     }
   }

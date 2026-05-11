@@ -115,7 +115,7 @@
   background: #f8f9fa;
   padding: 1rem;
   border-radius: 8px;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
 }
 
 .week-number {
@@ -194,7 +194,7 @@
 }
 
 .legend-color.matches {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
 }
 
 .chart-bars {
@@ -248,7 +248,7 @@
   margin-bottom: 2rem;
   padding: 1.5rem;
   background: #f0f4ff;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
   border-radius: 8px;
 }
 
@@ -277,7 +277,7 @@
 .video-value {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
 }
 
 .report-summary {

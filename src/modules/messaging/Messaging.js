@@ -533,7 +533,7 @@ const Messaging = () => {
       const response = await apiCall('/invitations/send', 'POST', {
         recipientIdentifierType: 'username',
         recipientIdentifier: userUsername || userEmail,
-        message: `Hi ${userName}, let's connect on LinkUp!`,
+        message: `Hi ${userName}, let's connect on DatingHub!`,
         module: 'messaging',
       });
 
@@ -2119,7 +2119,7 @@ const Messaging = () => {
                 <div className="new-chat-header-copy">
                   <h3>Start a New Chat</h3>
                   <p className="new-chat-intro">
-                    Search for people, send a LinkUp invite, or jump into a conversation with someone you already know.
+                    Search for people, send a DatingHub invite, or jump into a conversation with someone you already know.
                   </p>
                 </div>
                 <div className="new-chat-search">

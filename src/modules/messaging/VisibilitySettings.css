@@ -49,12 +49,12 @@
 }
 
 .visibility-option:hover {
-  border-color: #667eea;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 2px 8px rgba(208, 96, 48, 0.1);
 }
 
 .visibility-option.enabled {
-  border-color: #667eea;
+  border-color: var(--dh-logo-copper, #d06030);
   background: #f0f4ff;
 }
 
@@ -79,7 +79,7 @@
   width: 20px;
   height: 20px;
   cursor: pointer;
-  accent-color: #667eea;
+  accent-color: var(--dh-logo-copper, #d06030);
 }
 
 .option-label input[type="checkbox"]:disabled {
@@ -129,7 +129,7 @@
 
 .btn-save {
   padding: 0.75rem 2rem;
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border: none;
   border-radius: 6px;
@@ -142,7 +142,7 @@
 .btn-save:hover:not(:disabled) {
   background: #5568d3;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
 }
 
 .btn-save:disabled {
@@ -178,7 +178,7 @@
   padding: 1rem;
   background: #f9f9f9;
   border-radius: 6px;
-  border-left: 3px solid #667eea;
+  border-left: 3px solid var(--dh-logo-copper, #d06030);
 }
 
 .info-title {

@@ -4,16 +4,72 @@
  * Tracks consecutive days, milestones, and engagement psychology
  */
 
-const { sequelize } = require('../config/database');
-const {
-  User,
-  Match,
-  Message,
-  MessageStreakTracker,
-  UserAchievement,
-  Achievement
-} = require('../models');
+const db = require('../config/database');
+const { MessageStreakTracker } = require('../models');
 const { Op } = require('sequelize');
+
+const OPTIONAL_SCHEMA_ERROR_CODES = new Set(['42P01', '42703']);
+
+const isOptionalSchemaError = (error) =>
+  OPTIONAL_SCHEMA_ERROR_CODES.has(error?.code || error?.parent?.code || error?.original?.code);
+
+const normalizeLimit = (value, fallback = 50) => {
+  const parsedLimit = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+    return fallback;
+  }
+
+  return Math.min(parsedLimit, 100);
+};
+
+const normalizePair = (userId1, userId2) => [
+  Math.min(Number(userId1), Number(userId2)),
+  Math.max(Number(userId1), Number(userId2))
+];
+
+const mapOtherUser = (row, currentUserId) => {
+  if (!row || !currentUserId) {
+    return null;
+  }
+
+  const isCurrentUserUser1 = Number(row.user_id_1) === Number(currentUserId);
+  const prefix = isCurrentUserUser1 ? 'user2' : 'user1';
+
+  return {
+    id: row[`${prefix}_id`],
+    firstName: row[`${prefix}_first_name`] || 'Your match',
+    profilePhotoUrl: row[`${prefix}_photo_url`] || null
+  };
+};
+
+const mapStreakRow = (row, currentUserId = null) => {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    userId1: row.user_id_1,
+    userId2: row.user_id_2,
+    matchId: row.match_id,
+    streakDays: Number(row.streak_days || 0),
+    isActive: Boolean(row.is_active),
+    streakStartDate: row.streak_start_date,
+    lastMessageDate: row.last_message_date,
+    streakBrokenDate: row.streak_broken_date,
+    milestone3Days: Boolean(row.milestone_3_days),
+    milestone7Days: Boolean(row.milestone_7_days),
+    milestone30Days: Boolean(row.milestone_30_days),
+    totalMessages: Number(row.total_messages || 0),
+    totalReactions: Number(row.total_reactions || 0),
+    engagementScore: Number(row.engagement_score || 0),
+    notificationSent: Boolean(row.notification_sent),
+    lastNotificationDate: row.last_notification_date,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    otherUser: mapOtherUser(row, currentUserId)
+  };
+};
 
 const MILESTONES = {
   FIRST_BADGE: 3,      // Badge appears at 3 days
@@ -211,38 +267,58 @@ class StreakService {
    */
   async getStreakInfo(matchId, userId) {
     try {
-      const streak = await MessageStreakTracker.findOne({
-        where: { matchId },
-        include: [
-          {
-            model: User,
-            as: 'user1',
-            attributes: ['id', 'firstName', 'profilePhotoUrl']
-          },
-          {
-            model: User,
-            as: 'user2',
-            attributes: ['id', 'firstName', 'profilePhotoUrl']
-          }
-        ]
-      });
+      const result = await db.query(
+        `SELECT mst.*,
+                u1.id AS user1_id,
+                COALESCE(dp1.first_name, u1.email, 'Your match') AS user1_first_name,
+                pp1.photo_url AS user1_photo_url,
+                u2.id AS user2_id,
+                COALESCE(dp2.first_name, u2.email, 'Your match') AS user2_first_name,
+                pp2.photo_url AS user2_photo_url
+         FROM message_streak_trackers mst
+         INNER JOIN matches m
+           ON m.id = mst.match_id
+          AND (m.user_id_1 = $2 OR m.user_id_2 = $2)
+         LEFT JOIN users u1 ON u1.id = mst.user_id_1
+         LEFT JOIN users u2 ON u2.id = mst.user_id_2
+         LEFT JOIN dating_profiles dp1 ON dp1.user_id = mst.user_id_1
+         LEFT JOIN dating_profiles dp2 ON dp2.user_id = mst.user_id_2
+         LEFT JOIN LATERAL (
+           SELECT photo_url
+           FROM profile_photos
+           WHERE user_id = mst.user_id_1
+           ORDER BY is_primary DESC, position ASC, uploaded_at DESC
+           LIMIT 1
+         ) pp1 ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT photo_url
+           FROM profile_photos
+           WHERE user_id = mst.user_id_2
+           ORDER BY is_primary DESC, position ASC, uploaded_at DESC
+           LIMIT 1
+         ) pp2 ON TRUE
+         WHERE mst.match_id = $1
+         LIMIT 1`,
+        [matchId, userId]
+      );
 
+      const streak = mapStreakRow(result.rows[0], userId);
       if (!streak) {
         return null;
       }
 
-      const isCurrentUserUser1 = streak.userId1 === userId;
-      const otherUser = isCurrentUserUser1 ? streak.user2 : streak.user1;
-
       return {
-        ...streak.toJSON(),
+        ...streak,
         flameEmoji: this.getFlameEmoji(streak.streakDays),
         flameLevel: this.getFlameLevel(streak.streakDays),
-        otherUser,
         daysSinceMessage: this.getDaysSinceLastMessage(streak.lastMessageDate),
         isBadgeEarned: streak.streakDays >= MILESTONES.FIRST_BADGE
       };
     } catch (error) {
+      if (isOptionalSchemaError(error)) {
+        return null;
+      }
+
       console.error('Error getting streak info:', error);
       throw error;
     }
@@ -253,44 +329,55 @@ class StreakService {
    */
   async getUserStreaks(userId, limit = 50) {
     try {
-      const streaks = await MessageStreakTracker.findAll({
-        where: {
-          isActive: true,
-          [Op.or]: [
-            { userId1: userId },
-            { userId2: userId }
-          ]
-        },
-        include: [
-          {
-            model: User,
-            as: 'user1',
-            attributes: ['id', 'firstName', 'profilePhotoUrl']
-          },
-          {
-            model: User,
-            as: 'user2',
-            attributes: ['id', 'firstName', 'profilePhotoUrl']
-          }
-        ],
-        order: [['streakDays', 'DESC']],
-        limit
-      });
+      const result = await db.query(
+        `SELECT mst.*,
+                u1.id AS user1_id,
+                COALESCE(dp1.first_name, u1.email, 'Your match') AS user1_first_name,
+                pp1.photo_url AS user1_photo_url,
+                u2.id AS user2_id,
+                COALESCE(dp2.first_name, u2.email, 'Your match') AS user2_first_name,
+                pp2.photo_url AS user2_photo_url
+         FROM message_streak_trackers mst
+         LEFT JOIN users u1 ON u1.id = mst.user_id_1
+         LEFT JOIN users u2 ON u2.id = mst.user_id_2
+         LEFT JOIN dating_profiles dp1 ON dp1.user_id = mst.user_id_1
+         LEFT JOIN dating_profiles dp2 ON dp2.user_id = mst.user_id_2
+         LEFT JOIN LATERAL (
+           SELECT photo_url
+           FROM profile_photos
+           WHERE user_id = mst.user_id_1
+           ORDER BY is_primary DESC, position ASC, uploaded_at DESC
+           LIMIT 1
+         ) pp1 ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT photo_url
+           FROM profile_photos
+           WHERE user_id = mst.user_id_2
+           ORDER BY is_primary DESC, position ASC, uploaded_at DESC
+           LIMIT 1
+         ) pp2 ON TRUE
+         WHERE mst.is_active = TRUE
+           AND (mst.user_id_1 = $1 OR mst.user_id_2 = $1)
+         ORDER BY mst.streak_days DESC, mst.last_message_date DESC
+         LIMIT $2`,
+        [userId, normalizeLimit(limit)]
+      );
 
-      return streaks.map(streak => {
-        const isCurrentUserUser1 = streak.userId1 === userId;
-        const otherUser = isCurrentUserUser1 ? streak.user2 : streak.user1;
-
+      return result.rows.map((row) => {
+        const streak = mapStreakRow(row, userId);
         return {
-          ...streak.toJSON(),
+          ...streak,
           flameEmoji: this.getFlameEmoji(streak.streakDays),
           flameLevel: this.getFlameLevel(streak.streakDays),
-          otherUser,
           isBadgeEarned: streak.streakDays >= MILESTONES.FIRST_BADGE,
           daysUntilBroken: this.getDaysUntilStreakBreaks(streak.lastMessageDate)
         };
       });
     } catch (error) {
+      if (isOptionalSchemaError(error)) {
+        return [];
+      }
+
       console.error('Error getting user streaks:', error);
       throw error;
     }
@@ -301,31 +388,35 @@ class StreakService {
    */
   async getStreakLeaderboard(limit = 20) {
     try {
-      const leaderboard = await MessageStreakTracker.findAll({
-        where: { isActive: true },
-        order: [['streakDays', 'DESC']],
-        limit,
-        include: [
-          {
-            model: User,
-            as: 'user1',
-            attributes: ['id', 'firstName', 'profilePhotoUrl']
-          },
-          {
-            model: User,
-            as: 'user2',
-            attributes: ['id', 'firstName', 'profilePhotoUrl']
-          }
-        ]
-      });
+      const result = await db.query(
+        `SELECT mst.*,
+                COALESCE(dp1.first_name, u1.email, 'User ' || mst.user_id_1) AS user1_first_name,
+                COALESCE(dp2.first_name, u2.email, 'User ' || mst.user_id_2) AS user2_first_name
+         FROM message_streak_trackers mst
+         LEFT JOIN users u1 ON u1.id = mst.user_id_1
+         LEFT JOIN users u2 ON u2.id = mst.user_id_2
+         LEFT JOIN dating_profiles dp1 ON dp1.user_id = mst.user_id_1
+         LEFT JOIN dating_profiles dp2 ON dp2.user_id = mst.user_id_2
+         WHERE mst.is_active = TRUE
+         ORDER BY mst.streak_days DESC, mst.last_message_date DESC
+         LIMIT $1`,
+        [normalizeLimit(limit, 20)]
+      );
 
-      return leaderboard.map((streak, index) => ({
-        rank: index + 1,
-        ...streak.toJSON(),
-        flameEmoji: this.getFlameEmoji(streak.streakDays),
-        matchNames: `${streak.user1.firstName} & ${streak.user2.firstName}`
-      }));
+      return result.rows.map((row, index) => {
+        const streak = mapStreakRow(row);
+        return {
+          rank: index + 1,
+          ...streak,
+          flameEmoji: this.getFlameEmoji(streak.streakDays),
+          matchNames: `${row.user1_first_name} & ${row.user2_first_name}`
+        };
+      });
     } catch (error) {
+      if (isOptionalSchemaError(error)) {
+        return [];
+      }
+
       console.error('Error getting leaderboard:', error);
       throw error;
     }
@@ -336,35 +427,52 @@ class StreakService {
    */
   async getUserStreakStats(userId) {
     try {
-      const streaks = await MessageStreakTracker.findAll({
-        where: {
-          [Op.or]: [
-            { userId1: userId },
-            { userId2: userId }
-          ]
-        }
-      });
+      const result = await db.query(
+        `SELECT
+           COUNT(*)::int AS total_streaks,
+           COUNT(*) FILTER (WHERE is_active = TRUE)::int AS active_streak_count,
+           COALESCE(MAX(streak_days), 0)::int AS longest_streak,
+           COALESCE(SUM(engagement_score), 0)::float AS total_engagement_score,
+           COUNT(*) FILTER (WHERE milestone_3_days = TRUE)::int AS badge_3_day,
+           COUNT(*) FILTER (WHERE milestone_7_days = TRUE)::int AS milestone_7_day,
+           COUNT(*) FILTER (WHERE milestone_30_days = TRUE)::int AS milestone_30_day,
+           COALESCE(AVG(streak_days), 0)::float AS average_streak_length
+         FROM message_streak_trackers
+         WHERE user_id_1 = $1 OR user_id_2 = $1`,
+        [userId]
+      );
 
-      const activeStreaks = streaks.filter(s => s.isActive);
-      const longestStreak = Math.max(...streaks.map(s => s.streakDays), 0);
-      const totalStreaks = streaks.length;
-      const totalEngagementScore = streaks.reduce((sum, s) => sum + (s.engagementScore || 0), 0);
-
+      const stats = result.rows[0] || {};
       const milestoneCount = {
-        badge3Day: streaks.filter(s => s.milestone3Days).length,
-        milestone7Day: streaks.filter(s => s.milestone7Days).length,
-        milestone30Day: streaks.filter(s => s.milestone30Days).length
+        badge3Day: Number(stats.badge_3_day || 0),
+        milestone7Day: Number(stats.milestone_7_day || 0),
+        milestone30Day: Number(stats.milestone_30_day || 0)
       };
 
       return {
-        activeStreakCount: activeStreaks.length,
-        longestStreak,
-        totalStreaks,
-        totalEngagementScore,
+        activeStreakCount: Number(stats.active_streak_count || 0),
+        longestStreak: Number(stats.longest_streak || 0),
+        totalStreaks: Number(stats.total_streaks || 0),
+        totalEngagementScore: Number(stats.total_engagement_score || 0),
         milestoneCount,
-        averageStreakLength: Math.round(streaks.reduce((sum, s) => sum + s.streakDays, 0) / Math.max(totalStreaks, 1))
+        averageStreakLength: Math.round(Number(stats.average_streak_length || 0))
       };
     } catch (error) {
+      if (isOptionalSchemaError(error)) {
+        return {
+          activeStreakCount: 0,
+          longestStreak: 0,
+          totalStreaks: 0,
+          totalEngagementScore: 0,
+          milestoneCount: {
+            badge3Day: 0,
+            milestone7Day: 0,
+            milestone30Day: 0
+          },
+          averageStreakLength: 0
+        };
+      }
+
       console.error('Error getting streak stats:', error);
       throw error;
     }

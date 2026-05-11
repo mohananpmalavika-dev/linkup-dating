@@ -867,7 +867,7 @@ const DateJourneyPanel = ({
                 </label>
 
                 <p className="date-safety-checkin-copy">
-                  LinkUp can create a second reminder so your trusted contacts know when to expect your
+                  DatingHub can create a second reminder so your trusted contacts know when to expect your
                   "I'm okay" message after the plan starts.
                 </p>
 

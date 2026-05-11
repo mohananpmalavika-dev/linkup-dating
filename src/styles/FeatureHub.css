@@ -2,7 +2,7 @@
   padding: 16px;
   max-width: 600px;
   margin: 0 auto;
-  padding-bottom: 100px;
+  padding-bottom: calc(var(--dating-nav-clearance, 89px) + 24px);
 }
 
 .feature-hub-header {
@@ -70,9 +70,19 @@
 }
 
 .feature-emoji {
-  font-size: 28px;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: #eef2ff;
+  color: var(--dh-logo-ink, #102030);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
   line-height: 1;
   flex-shrink: 0;
+  text-align: center;
 }
 
 .feature-card-content {

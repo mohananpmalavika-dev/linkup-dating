@@ -1,5 +1,5 @@
 // 📸 MOMENTS FEATURE - INTEGRATION EXAMPLES
-// Copy-paste ready code for integrating Story-like Moments into LinkUp
+// Copy-paste ready code for integrating Story-like Moments into DatingHub
 
 // ============================================================
 // 1. ROUTE REGISTRATION (backend/server.js)

@@ -52,27 +52,41 @@ const hasConversation = (match = {}, messages = []) =>
 
 const getJourneyProgress = (match = {}) => Number(match.journey?.progressCount || 0);
 
-const toProposalDate = (proposal = {}) => {
-  const proposedDate = proposal.proposedDate;
+const getProposalValue = (proposal, camelCaseKey, snakeCaseKey) =>
+  proposal?.[camelCaseKey] ?? proposal?.[snakeCaseKey] ?? null;
+
+const toProposalDate = (proposal) => {
+  const proposedDate = getProposalValue(proposal, 'proposedDate', 'proposed_date');
   if (!proposedDate) {
     return null;
   }
 
-  const proposedTime = String(proposal.proposedTime || '12:00').slice(0, 5);
+  const proposedTime = String(
+    getProposalValue(proposal, 'proposedTime', 'proposed_time') || '12:00'
+  ).slice(0, 5);
   return toDate(`${proposedDate}T${proposedTime}`);
 };
 
 export const hasActiveDatePlan = (match = {}, now = Date.now()) => {
-  const pendingProposal = match.journey?.pendingProposal;
-  if (pendingProposal?.status === 'pending' || pendingProposal?.isReceived || pendingProposal?.isSent) {
+  const journey = match?.journey || {};
+  const pendingProposal = journey.pendingProposal;
+  const pendingProposalStatus = String(pendingProposal?.status || '').toLowerCase();
+  if (
+    pendingProposalStatus === 'pending' ||
+    pendingProposal?.isReceived ||
+    pendingProposal?.isSent ||
+    pendingProposal?.is_received ||
+    pendingProposal?.is_sent
+  ) {
     return true;
   }
 
-  const acceptedProposal = match.journey?.latestAcceptedProposal;
+  const acceptedProposal = journey.latestAcceptedProposal;
+  const acceptedProposalStatus = String(acceptedProposal?.status || '').toLowerCase();
   const acceptedProposalDate = toProposalDate(acceptedProposal);
   if (
     acceptedProposal &&
-    (acceptedProposal.status === 'accepted' || !acceptedProposal.status) &&
+    (acceptedProposalStatus === 'accepted' || !acceptedProposalStatus) &&
     acceptedProposalDate &&
     acceptedProposalDate.getTime() >= now - DAY_MS
   ) {

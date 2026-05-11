@@ -1,7 +1,7 @@
 # AI-Powered Profile Suggestions Implementation
 
 ## Overview
-This document outlines the implementation of AI-Powered Profile Suggestions for LinkUp, a feature that learns from user swipe patterns and suggests high-quality matches with 70%+ compatibility probability.
+This document outlines the implementation of AI-Powered Profile Suggestions for DatingHub, a feature that learns from user swipe patterns and suggests high-quality matches with 70%+ compatibility probability.
 
 ## Feature Requirements Met ✅
 

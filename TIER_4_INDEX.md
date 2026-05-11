@@ -259,7 +259,7 @@
 ## File Locations
 
 ```
-LinkUp/
+DatingHub/
 ├── backend/
 │   ├── models/
 │   │   ├── ProfileVerificationScore.js ✅

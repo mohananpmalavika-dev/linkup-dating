@@ -3,13 +3,14 @@ import axios from 'axios';
 import { getTranslationValue } from '../data/translations';
 import { API_BASE_URL } from '../utils/api';
 import { isValidPincode } from '../utils/ecommerceHelpers';
-import { formatPhoneForFirebase, isValidPhoneFormat, getPhoneErrorMessage } from '../utils/phoneFormatter';
+import { formatPhoneForFirebase, getPhoneErrorMessage } from '../utils/phoneFormatter';
 import {
   KERALA_REGION_OPTIONS,
   getDistrictOptionsForRegion,
   normalizePincodeInput,
   resolveKeralaLocation
 } from '../utils/keralaLocation';
+import { setPreferredLoginMethod } from '../utils/auth';
 import PublicLegalNotice from './PublicLegalNotice';
 import AgeGate from './AgeGate/AgeGate';
 import '../styles/DatingSignUp.css';
@@ -63,13 +64,20 @@ const MESSAGE_GATING_OPTIONS = [
   { value: 'trusted_only', label: 'Highest-trust intros' }
 ];
 
+const SIMPLE_SIGNUP_STEPS = [
+  { number: 1, label: 'Account' },
+  { number: 2, label: 'Details' },
+  { number: 3, label: 'Photo' },
+  { number: 4, label: 'MPIN' }
+];
+
 /**
  * DatingSignUp Component
  * Sign up for dating app with profile creation
  * Uses OTP-based authentication matching the Login flow
  */
 const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackToLaunch }) => {
-  const [step, setStep] = useState(1); // 1: Email OTP, 2: Username, 3: Profile, 4: Photos
+  const [step, setStep] = useState(1); // 1: contact code, 2: basic details, 3: optional photo, 4: MPIN
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -88,17 +96,17 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   const [referralValidated, setReferralValidated] = useState(false);
   const [referralMessage, setReferralMessage] = useState('');
   const [validatingReferral, setValidatingReferral] = useState(false);
+  const [showReferralCode, setShowReferralCode] = useState(false);
   const [ageVerification, setAgeVerification] = useState(null);
   const [gmailSigningIn, setGmailSigningIn] = useState(false);
   
-  // Username state
+  // Hidden account handle used by older-user friendly signup. Users can change it later.
   const [username, setUsername] = useState('');
-  const [usernameStatus, setUsernameStatus] = useState(null); // 'checking', 'available', 'taken'
+  const [usernameStatus, setUsernameStatus] = useState(''); // 'checking', 'available', 'taken'
   const [usernameError, setUsernameError] = useState('');
-  const usernameCheckTimeoutRef = React.useRef(null);
   const resendTimerRef = React.useRef(null);
 
-  const [formData, setFormData] = useState({
+const [formData, setFormData] = useState({
     firstName: '',
     age: '',
     gender: 'female',
@@ -114,10 +122,10 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     languages: ['English'],
     religion: '',
     communityPreference: '',
-    conversationStyle: '',
-    weekendStyle: '',
-    planningStyle: '',
-    socialEnergy: '',
+    conversationStyle: 'steady',
+    weekendStyle: 'cozy',
+    planningStyle: 'balanced',
+    socialEnergy: 'balanced',
     messageGating: 'balanced',
     interests: [],
     height: '',
@@ -125,6 +133,11 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     education: '',
     photos: [],
   });
+
+  // MPIN state for the final signup security step
+  const [mpin, setMpin] = useState('');
+  const [confirmMpin, setConfirmMpin] = useState('');
+  const [mpinError, setMpinError] = useState('');
 
   const INTERESTS = [
     'Travel', 'Fitness', 'Music', 'Art', 'Cooking', 'Gaming', 'Sports',
@@ -135,10 +148,6 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
   const validateEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
   const looksLikePhoneNumber = (value) => /^\+?[0-9\s()-]{7,}$/.test(String(value || '').trim());
   const legalNoticeMessage = getTranslationValue(language, 'public.signupNotice');
-
-  const validateUsername = (value) => {
-    return /^[a-zA-Z0-9_-]{3,20}$/.test(value);
-  };
 
   const trackFunnelEvent = async (eventName, payload = {}) => {
     if (!verifiedToken) {
@@ -209,8 +218,10 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
         setVerifiedUser(backendUser);
         setEmail(user.email);
         setOtpSent(false);
-        setStep(2); // Skip OTP step, go straight to username
+        setStep(2);
         setSuccess('✓ Google signup successful! Now set your username.');
+
+        setSuccess('Google sign up successful. Please add your basic details.');
 
         // Track event
         try {
@@ -240,13 +251,11 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     if (urlCode) {
       const normalizedCode = urlCode.trim().toUpperCase();
       setReferralCode(normalizedCode);
+      setShowReferralCode(true);
       void validateReferralCode(normalizedCode, true);
     }
 
     return () => {
-      if (usernameCheckTimeoutRef.current) {
-        clearTimeout(usernameCheckTimeoutRef.current);
-      }
       if (resendTimerRef.current) {
         clearInterval(resendTimerRef.current);
       }
@@ -287,16 +296,17 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    if (referralCode.trim()) {
-      const validReferral = await validateReferralCode(referralCode, false);
+if (referralCode.trim()) {
+      // Make referral non-blocking - allow to continue even if invalid
+      const validReferral = await validateReferralCode(referralCode, true);
       if (!validReferral) {
-        setError('Please use a valid referral code or clear the field to continue.');
-        return;
+        // Show warning but don't block - user can still sign up
+        setSuccess('Referral code could not be validated. You can still sign up.');
       }
     }
 
     if (otpMethod === 'phone' && !phone.trim()) {
-      setError('Please enter your phone number to receive OTP via SMS');
+      setError('Please enter your mobile number to receive the SMS code.');
       return;
     }
 
@@ -320,7 +330,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     }
 
     if (otpMethod === 'email' && looksLikePhoneNumber(email) && !validateEmail(normalizedEmail)) {
-      setError('That looks like a phone number. Please use your email address or switch to phone OTP method.');
+setError('That looks like a phone number. Please use your email (like yourname@example.com) or switch to phone OTP method.');
       return;
     }
 
@@ -335,7 +345,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     }
 
     if (!ageVerification?.dateOfBirth || !ageVerification?.method) {
-      setError('Complete age verification before requesting an OTP.');
+      setError('Please confirm your age before requesting a code.');
       return;
     }
 
@@ -355,7 +365,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       setOtpId(response.data.otpId || '');
       setOtpSent(true);
       const channel = otpMethod === 'phone' ? 'SMS' : 'email';
-      setSuccess(response.data?.message || `OTP sent to your ${channel}!`);
+      setSuccess(response.data?.message || `Code sent by ${channel}.`);
       setResendCooldown(60); // 60 second cooldown
       
       // Start countdown timer
@@ -372,7 +382,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
         });
       }, 1000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to send OTP');
+      setError(err.response?.data?.error || 'Failed to send the code');
     } finally {
       setLoading(false);
     }
@@ -402,7 +412,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
 
       setOtpId(response.data.otpId || '');
       const channel = otpMethod === 'phone' ? 'SMS' : 'email';
-      setSuccess(response.data?.message || `OTP resent to your ${channel}!`);
+      setSuccess(response.data?.message || `Code sent again by ${channel}.`);
       setResendCooldown(60); // Reset cooldown
       
       // Start countdown timer
@@ -419,7 +429,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
         });
       }, 1000);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to resend OTP');
+      setError(err.response?.data?.error || 'Failed to resend the code');
     } finally {
       setLoading(false);
     }
@@ -431,12 +441,12 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
     setError('');
 
     if (!otp.trim()) {
-      setError('Please enter the OTP');
+      setError('Please enter the code');
       return;
     }
 
     if (!/^\d{6}$/.test(otp.trim())) {
-      setError('Please enter the 6-digit OTP');
+      setError('Please enter the 6-digit code');
       return;
     }
 
@@ -452,8 +462,8 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       const { token, user } = response.data;
       setVerifiedToken(token);
       setVerifiedUser(user);
-      setStep(2); // Move to username setup
-      setSuccess('Email verified! Now set your username.');
+      setStep(2);
+      setSuccess('Code verified. Please add your basic details.');
       setOtp('');
       setOtpId('');
       setOtpSent(false);
@@ -470,23 +480,100 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
         ).catch(() => {})
       ]);
     } catch (err) {
-      setError(err.response?.data?.error || 'Invalid OTP');
+      setError(err.response?.data?.error || 'Invalid code');
     } finally {
       setLoading(false);
     }
   };
 
-  // Check username availability
-  const checkUsernameAvailability = async (value) => {
-    if (!value || value.length < 3) {
-      setUsernameStatus(null);
+  const getUsernameBase = () => {
+    const emailName = email.split('@')[0];
+    const preferred = formData.firstName || verifiedUser?.name || emailName || 'datinghub';
+    const cleaned = String(preferred)
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_.-]/g, '')
+      .replace(/^[_.-]+|[_.-]+$/g, '')
+      .slice(0, 14);
+
+    if (cleaned.length >= 3) {
+      return cleaned;
+    }
+
+    return `${cleaned || 'user'}123`.slice(0, 14);
+  };
+
+  const ensureUsernameQuietly = async () => {
+    const existingUsername = username || verifiedUser?.username;
+
+    if (existingUsername || !verifiedToken) {
+      return existingUsername || null;
+    }
+
+    const base = getUsernameBase();
+    const suffixes = [
+      '',
+      formData.age || '',
+      Math.floor(1000 + Math.random() * 9000).toString(),
+      Date.now().toString().slice(-5)
+    ];
+    const candidates = [...new Set(
+      suffixes.map((suffix) => `${base}${suffix}`.slice(0, 20))
+    )].filter((candidate) => /^[a-zA-Z0-9_.-]{3,20}$/.test(candidate));
+
+    for (const candidate of candidates) {
+      try {
+        const availability = await axios.post(`${API_BASE_URL}/auth/check-username`, {
+          username: candidate
+        });
+
+        if (availability.data && availability.data.available === false) {
+          continue;
+        }
+
+        const response = await axios.post(`${API_BASE_URL}/auth/set-username`, {
+          username: candidate
+        }, {
+          headers: { Authorization: `Bearer ${verifiedToken}` }
+        });
+
+        setUsername(candidate);
+        setVerifiedUser((previousUser) => ({
+          ...(previousUser || {}),
+          ...(response.data?.user || {}),
+          username: response.data?.user?.username || candidate
+        }));
+
+        await trackFunnelEvent('dating_onboarding_username_set', {
+          context: {
+            usernameLength: candidate.length,
+            autoGenerated: true
+          }
+        });
+
+        return candidate;
+      } catch (usernameError) {
+        if (usernameError.response?.status !== 409) {
+          console.error('Automatic username setup failed:', usernameError);
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const handleUsernameChange = async (value) => {
+    setUsername(value);
+    
+    if (!value.trim()) {
+      setUsernameStatus('');
       setUsernameError('');
       return;
     }
 
-    if (!validateUsername(value)) {
-      setUsernameStatus(null);
-      setUsernameError('Username can only contain letters, numbers, underscores, and dashes (3-20 characters)');
+    if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(value)) {
+      setUsernameStatus('');
+      setUsernameError('Username must be 3-20 characters (letters, numbers, _, ., -)');
       return;
     }
 
@@ -498,61 +585,46 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
         username: value
       });
 
-      if (response.data.available) {
+      if (response.data?.available) {
         setUsernameStatus('available');
+        setUsernameError('');
       } else {
         setUsernameStatus('taken');
-        setUsernameError('This username is already taken');
+        setUsernameError('Username already taken');
       }
     } catch (err) {
-      setUsernameStatus(null);
-      setUsernameError('Error checking username availability');
+      setUsernameStatus('');
+      setUsernameError(err.response?.data?.error || 'Error checking username');
     }
   };
 
-  const handleUsernameChange = (value) => {
-    setUsername(value);
-    
-    if (usernameCheckTimeoutRef.current) {
-      clearTimeout(usernameCheckTimeoutRef.current);
-    }
-    
-    usernameCheckTimeoutRef.current = setTimeout(() => {
-      checkUsernameAvailability(value);
-    }, 500);
-  };
-
-  // Set username
   const handleSetUsername = async (e) => {
     e.preventDefault();
-    setError('');
-
-    if (!username.trim()) {
-      setError('Please enter a username');
-      return;
-    }
-
-    if (usernameStatus !== 'available') {
+    
+    if (!username.trim() || usernameStatus !== 'available') {
       setError('Please choose an available username');
       return;
     }
 
     setLoading(true);
     try {
-      await axios.post(`${API_BASE_URL}/auth/set-username`, {
-        username: username.trim()
-      }, {
-        headers: { Authorization: `Bearer ${verifiedToken}` }
+      const response = await axios.post(
+        `${API_BASE_URL}/auth/set-username`,
+        { username },
+        { headers: { Authorization: `Bearer ${verifiedToken}` } }
+      );
+
+      setUsername(response.data?.user?.username || username);
+      setVerifiedUser({
+        ...(verifiedUser || {}),
+        ...response.data?.user
       });
+      setSuccess('✓ Username set successfully');
+      setStep(3);
 
       await trackFunnelEvent('dating_onboarding_username_set', {
-        context: {
-          usernameLength: username.trim().length
-        }
+        context: { usernameLength: username.length }
       });
-
-      setStep(3); // Move to profile setup
-      setSuccess('Username set! Now complete your dating profile.');
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to set username');
     } finally {
@@ -634,14 +706,10 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       !formData.firstName ||
       !formData.age ||
       !resolvedLocation.city ||
-      !formData.relationshipGoals ||
-      !formData.languages.length ||
-      !formData.conversationStyle ||
-      !formData.weekendStyle ||
-      !formData.planningStyle ||
-      !formData.socialEnergy
+      !formData.gender ||
+      !formData.relationshipGoals
     ) {
-      setError('Add your intent, language, conversation rhythm, and dating style before continuing.');
+      setError('Please add your name, gender, city, and what you are looking for.');
       return;
     }
 
@@ -667,14 +735,17 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
         messageGating: formData.messageGating
       }
     });
-    setStep(4);
+    setStep(3);
   };
 
-  // Submit complete signup
+// Submit complete signup
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
     setLoading(true);
     setError('');
+    setMpinError('');
     const resolvedLocation = resolveKeralaLocation(formData);
 
     if (formData.pincode && !isValidPincode(formData.pincode)) {
@@ -683,9 +754,23 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       return;
     }
 
+    if (!/^\d{4,6}$/.test(mpin)) {
+      setLoading(false);
+      setMpinError('Create a 4-6 digit MPIN to continue.');
+      return;
+    }
+
+    if (mpin !== confirmMpin) {
+      setLoading(false);
+      setMpinError('MPINs do not match');
+      return;
+    }
+
     try {
+      const ensuredUsername = await ensureUsernameQuietly();
+
       // Create dating profile
-      await axios.post(`${API_BASE_URL}/dating/profiles`, {
+      const profileResponse = await axios.post(`${API_BASE_URL}/dating/profiles`, {
         firstName: formData.firstName,
         age: formData.age,
         gender: formData.gender,
@@ -744,6 +829,21 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
         });
       }
 
+      const mpinResponse = await axios.post(
+        `${API_BASE_URL}/auth/set-mpin`,
+        {
+          mpin,
+          confirmMpin
+        },
+        {
+          headers: { Authorization: `Bearer ${verifiedToken}` }
+        }
+      );
+
+      if (!mpinResponse.data?.success) {
+        throw new Error(mpinResponse.data?.message || mpinResponse.data?.error || 'Failed to set MPIN');
+      }
+
       let referralApplied = false;
       if (referralValidated && referralCode.trim()) {
         try {
@@ -779,10 +879,23 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
           ? 'Account created successfully and referral rewards were applied.'
           : 'Account created successfully!'
       );
-      onSignUpSuccess?.(verifiedToken, verifiedUser);
+      const completedUser = {
+        ...(verifiedUser || {}),
+        hasMpin: true,
+        username: ensuredUsername || verifiedUser?.username,
+        firstName: formData.firstName,
+        name: formData.firstName,
+        city: resolvedLocation.city,
+        profile: profileResponse.data?.profile || verifiedUser?.profile || null
+      };
+      setVerifiedUser(completedUser);
+      setPreferredLoginMethod('mpin');
+      onSignUpSuccess?.(verifiedToken, completedUser);
     } catch (err) {
       console.error('Signup error:', err);
-      setError(err.response?.data?.error || 'Failed to create profile');
+      const fallbackError = err.message || 'Failed to create profile';
+      const responseError = err.response?.data?.error || err.response?.data?.message;
+      setError(responseError || fallbackError);
     } finally {
       setLoading(false);
     }
@@ -795,7 +908,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
       age: verification?.age ? String(verification.age) : prev.age
     }));
     setError('');
-    setSuccess('Age verified. Now create your account.');
+    setSuccess('Age confirmed. Now create your account.');
   };
 
   if (!ageVerification) {
@@ -822,6 +935,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
             <button
               type="button"
               className="btn-back"
+              aria-label="Back"
               onClick={onBackToLaunch}
               disabled={loading || otpSent}
             >
@@ -829,23 +943,447 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
             </button>
           </div>
         )}
-        <h1>Create Your Dating Profile</h1>
-        <p className="signup-positioning">Real matches, safe dates, better conversations.</p>
+        <img src="/datinghub-logo.png" alt="DatingHub" className="signup-brand-logo" />
+        <h1>Create your profile</h1>
+        <p className="signup-positioning">A few simple details to start meeting real people.</p>
 
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
 
         {/* Step Indicators */}
-        <div className="step-indicators">
-          {[1, 2, 3, 4].map(s => (
-            <div key={s} className={`step ${s <= step ? 'active' : ''}`}>
-              {s}
-            </div>
-          ))}
+        <div className="signup-progress" aria-label="Signup progress">
+          <span>Step {step} of {SIMPLE_SIGNUP_STEPS.length}</span>
+          <div className="step-indicators">
+            {SIMPLE_SIGNUP_STEPS.map((signupStep) => (
+              <div
+                key={signupStep.number}
+                className={`step ${signupStep.number <= step ? 'active' : ''}`}
+                title={signupStep.label}
+              >
+                <strong>{signupStep.number}</strong>
+                <small>{signupStep.label}</small>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Step 1: Email & OTP Verification */}
+        {/* Step 1: Contact verification */}
         {step === 1 && (
+          <form className="signup-step simplified-step" onSubmit={otpSent ? handleVerifyOtp : handleSendOtp}>
+            <h2>{otpSent ? 'Enter your 6-digit code' : 'Create your account'}</h2>
+            <p className="signup-step-note">
+              We will send one short code. No password is needed.
+            </p>
+
+            {!otpSent ? (
+              <>
+                <button
+                  type="button"
+                  className="btn-google-signup"
+                  onClick={handleGoogleSignup}
+                  disabled={loading || gmailSigningIn}
+                >
+                  <span className="google-icon" aria-hidden="true">G</span>
+                  {gmailSigningIn ? 'Opening Google...' : 'Continue with Google'}
+                </button>
+
+                <div className="divider-or">
+                  <span>or use email</span>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="signup-email">Email address</label>
+                  <input
+                    id="signup-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@example.com"
+                    disabled={loading}
+                    autoComplete="email"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Where should we send the code?</label>
+                  <div className="method-toggle" role="group" aria-label="Code delivery method">
+                    <button
+                      type="button"
+                      className={otpMethod === 'email' ? 'selected' : ''}
+                      onClick={() => setOtpMethod('email')}
+                      disabled={loading}
+                    >
+                      Email
+                    </button>
+                    <button
+                      type="button"
+                      className={otpMethod === 'phone' ? 'selected' : ''}
+                      onClick={() => setOtpMethod('phone')}
+                      disabled={loading}
+                    >
+                      SMS
+                    </button>
+                  </div>
+                </div>
+
+                {otpMethod === 'phone' && (
+                  <div className="form-group">
+                    <label htmlFor="signup-phone">Mobile number</label>
+                    <input
+                      id="signup-phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      disabled={loading}
+                      autoComplete="tel"
+                    />
+                    <small className="helper-text">SMS sign up still needs your email for the account.</small>
+                  </div>
+                )}
+
+                {showReferralCode ? (
+                  <div className="form-group">
+                    <label htmlFor="signup-referral">Invite code (optional)</label>
+                    <input
+                      id="signup-referral"
+                      type="text"
+                      value={referralCode}
+                      onChange={(e) => {
+                        setReferralCode(e.target.value.toUpperCase());
+                        setReferralValidated(false);
+                        setReferralMessage('');
+                      }}
+                      onBlur={() => {
+                        if (referralCode.trim()) {
+                          void validateReferralCode(referralCode, false);
+                        }
+                      }}
+                      placeholder="Invite code"
+                      disabled={loading || validatingReferral}
+                    />
+                    {referralMessage ? (
+                      <small className="helper-text" style={{ color: referralValidated ? '#166534' : '#9f1239' }}>
+                        {validatingReferral ? 'Checking invite code...' : referralMessage}
+                      </small>
+                    ) : null}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-text"
+                    onClick={() => setShowReferralCode(true)}
+                    disabled={loading}
+                  >
+                    I have an invite code
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  className="btn-submit"
+                  disabled={loading || (otpMethod === 'phone' && !phone.trim())}
+                >
+                  {loading ? 'Sending code...' : `Send code by ${otpMethod === 'phone' ? 'SMS' : 'email'}`}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label htmlFor="signup-code">6-digit code</label>
+                  <input
+                    id="signup-code"
+                    type="text"
+                    inputMode="numeric"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="123456"
+                    maxLength="6"
+                    autoComplete="one-time-code"
+                    disabled={loading}
+                  />
+                  <small className="helper-text">
+                    Code sent to {otpMethod === 'phone' ? phone : email}
+                  </small>
+                </div>
+
+                <button type="submit" className="btn-submit" disabled={loading}>
+                  {loading ? 'Checking code...' : 'Continue'}
+                </button>
+
+                <div className="otp-actions">
+                  <button
+                    type="button"
+                    className="btn-resend"
+                    onClick={handleResendOtp}
+                    disabled={loading || resendCooldown > 0}
+                  >
+                    {resendCooldown > 0
+                      ? `Send again in ${resendCooldown}s`
+                      : 'Send code again'}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-outline"
+                    onClick={() => {
+                      setOtpSent(false);
+                      setOtp('');
+                      setOtpId('');
+                      setError('');
+                      setSuccess('');
+                      if (resendTimerRef.current) {
+                        clearInterval(resendTimerRef.current);
+                      }
+                      setResendCooldown(0);
+                    }}
+                    disabled={loading}
+                  >
+                    Change email or phone
+                  </button>
+                </div>
+              </>
+            )}
+          </form>
+        )}
+
+        {/* Step 2: Basic profile */}
+        {step === 2 && (
+          <div className="signup-step simplified-step">
+            <h2>Your basic details</h2>
+            <p className="signup-step-note">Only the important details are needed now.</p>
+
+            <div className="form-group">
+              <label htmlFor="signup-first-name">First name</label>
+              <input
+                id="signup-first-name"
+                type="text"
+                name="firstName"
+                value={formData.firstName}
+                onChange={handleProfileInputChange}
+                placeholder="Your first name"
+                autoComplete="given-name"
+              />
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="signup-age">Age</label>
+                <input
+                  id="signup-age"
+                  type="number"
+                  name="age"
+                  value={formData.age}
+                  onChange={handleProfileInputChange}
+                  min="18"
+                  max="120"
+                  readOnly={Boolean(ageVerification)}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="signup-gender">Gender</label>
+                <select id="signup-gender" name="gender" value={formData.gender} onChange={handleProfileInputChange}>
+                  <option value="female">Female</option>
+                  <option value="male">Male</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="signup-city">City</label>
+              <input
+                id="signup-city"
+                type="text"
+                name="city"
+                value={formData.city}
+                onChange={handleProfileInputChange}
+                placeholder="Kochi, Trivandrum, Kozhikode..."
+                autoComplete="address-level2"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="signup-intent">I am looking for</label>
+              <select
+                id="signup-intent"
+                name="relationshipGoals"
+                value={formData.relationshipGoals}
+                onChange={handleProfileInputChange}
+              >
+                {RELATIONSHIP_INTENT_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group">
+              <label>Languages</label>
+              <div className="interests-grid simple-grid">
+                {LANGUAGE_OPTIONS.slice(0, 4).map((currentLanguage) => (
+                  <button
+                    key={currentLanguage}
+                    type="button"
+                    className={`interest-tag ${formData.languages.includes(currentLanguage) ? 'selected' : ''}`}
+                    onClick={() => handleLanguageToggle(currentLanguage)}
+                  >
+                    {currentLanguage}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <details className="optional-profile-details">
+              <summary>Add more details now</summary>
+              <div className="optional-profile-body">
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="signup-district">District</label>
+                    <select
+                      id="signup-district"
+                      name="district"
+                      value={formData.district}
+                      onChange={handleProfileInputChange}
+                    >
+                      <option value="">Select district</option>
+                      {districtOptions.map((district) => (
+                        <option key={district.value} value={district.value}>
+                          {district.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="signup-pincode">Pincode</label>
+                    <input
+                      id="signup-pincode"
+                      type="text"
+                      inputMode="numeric"
+                      name="pincode"
+                      value={formData.pincode}
+                      onChange={handleProfileInputChange}
+                      placeholder="682030"
+                      maxLength="6"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="signup-occupation">Occupation</label>
+                    <input
+                      id="signup-occupation"
+                      type="text"
+                      name="occupation"
+                      value={formData.occupation}
+                      onChange={handleProfileInputChange}
+                      placeholder="Your occupation"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="signup-education">Education</label>
+                    <input
+                      id="signup-education"
+                      type="text"
+                      name="education"
+                      value={formData.education}
+                      onChange={handleProfileInputChange}
+                      placeholder="Your education"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="signup-bio">About you</label>
+                  <textarea
+                    id="signup-bio"
+                    name="bio"
+                    value={formData.bio}
+                    onChange={handleProfileInputChange}
+                    placeholder="A short line about yourself"
+                    rows="3"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Interests</label>
+                  <div className="interests-grid">
+                    {INTERESTS.map((interest) => (
+                      <button
+                        key={interest}
+                        type="button"
+                        className={`interest-tag ${formData.interests.includes(interest) ? 'selected' : ''}`}
+                        onClick={() => handleInterestToggle(interest)}
+                      >
+                        {interest}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </details>
+
+            <button type="button" className="btn-submit" onClick={handleNext}>
+              Continue
+            </button>
+          </div>
+        )}
+
+        {/* Step 3: Optional photo */}
+        {step === 3 && (
+          <form
+            className="signup-step simplified-step"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setStep(4);
+            }}
+          >
+            <h2>Add a photo</h2>
+            <p className="signup-step-note">A photo helps trust, but you can add it later.</p>
+
+            <div className="form-group">
+              <label htmlFor="signup-photos">Choose photo</label>
+              <input
+                id="signup-photos"
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={handlePhotoUpload}
+                disabled={loading}
+              />
+              {formData.photos.length > 0 && (
+                <div className="photo-preview">
+                  <div className="photos-grid">
+                    {formData.photos.map((photo, idx) => (
+                      <div key={idx} className="photo-item">
+                        <img src={photo.preview} alt={`Profile upload ${idx + 1}`} />
+                        <button
+                          type="button"
+                          className="btn-remove"
+                          onClick={() => handleRemovePhoto(idx)}
+                          title="Remove photo"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button type="submit" className="btn-submit" disabled={loading}>
+              Continue to MPIN
+            </button>
+            <button type="button" className="btn-outline" onClick={() => setStep(4)} disabled={loading}>
+              Skip photo for now
+            </button>
+          </form>
+        )}
+
+        {/* Step 1: Email & OTP Verification */}
+        {false && step === 1 && (
           <form className="signup-step" onSubmit={otpSent ? handleVerifyOtp : handleSendOtp}>
             <h2>{otpSent ? 'Verify Your Email' : 'Create Your Account'}</h2>
 
@@ -1007,13 +1545,15 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                       ? `Resend OTP (${resendCooldown}s)` 
                       : 'Resend OTP'}
                   </button>
-                  <button
+<button
                     type="button"
                     className="btn-outline"
                     onClick={() => {
                       setOtpSent(false);
                       setOtp('');
                       setOtpId('');
+                      setError('');
+                      setSuccess('');
                       if (resendTimerRef.current) {
                         clearInterval(resendTimerRef.current);
                       }
@@ -1021,7 +1561,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
                     }}
                     disabled={loading}
                   >
-                    Change Method
+                    Change Method or Start Over
                   </button>
                 </div>
               </>
@@ -1029,47 +1569,15 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
           </form>
         )}
 
-        {/* Step 2: Set Username */}
-        {step === 2 && (
-          <form className="signup-step" onSubmit={handleSetUsername}>
-            <h2>Choose Your Username</h2>
-            <div className="form-group">
-              <label>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => handleUsernameChange(e.target.value)}
-                placeholder="Choose a unique username"
-                disabled={loading}
-              />
-              {usernameStatus === 'checking' && (
-                <p className="helper-text" style={{ color: '#FF9500' }}>Checking availability...</p>
-              )}
-              {usernameStatus === 'available' && (
-                <p className="helper-text" style={{ color: '#4CAF50' }}>✓ Username is available</p>
-              )}
-              {usernameStatus === 'taken' && (
-                <p className="helper-text" style={{ color: '#F44336' }}>✗ {usernameError}</p>
-              )}
-              {usernameError && usernameStatus !== 'taken' && (
-                <p className="helper-text" style={{ color: '#F44336' }}>{usernameError}</p>
-              )}
-            </div>
-            <button type="submit" className="btn-submit" disabled={loading || usernameStatus !== 'available'}>
-              {loading ? 'Setting Username...' : 'Continue'}
-            </button>
-          </form>
-        )}
-
-        {/* Step 3: Profile Info */}
-        {step === 3 && (
+        {/* Legacy full profile step retained for reference */}
+        {false && step === 3 && (
           <div className="signup-step">
             <h2>Tell Us About Yourself</h2>
             <p>We use these answers to make your profile clearer and your first matches more relevant.</p>
             <div className="intent-capture-card">
               <strong>Intent snapshot</strong>
               <span>
-                LinkUp now learns not just what you want, but how you want early dating to feel:
+                DatingHub now learns not just what you want, but how you want early dating to feel:
                 direct, warm, low-pressure, and safe.
               </span>
             </div>
@@ -1203,7 +1711,7 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
               </div>
             </div>
             <small className="helper-text">
-              District, locality, pincode, and Kerala region help LinkUp make tighter Kochi,
+              District, locality, pincode, and Kerala region help DatingHub make tighter Kochi,
               Trivandrum, and Calicut-area matches.
             </small>
             <div className="form-group">
@@ -1393,9 +1901,9 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
           </div>
         )}
 
-        {/* Step 4: Photos */}
-        {step === 4 && (
-          <form className="signup-step" onSubmit={handleSubmit}>
+{/* Step 4: Photos */}
+        {false && step === 4 && (
+          <form className="signup-step" onSubmit={(e) => { e.preventDefault(); setStep(5); }}>
             <h2>Add Your Photos</h2>
             <div className="form-group">
               <label>Upload Photos</label>
@@ -1428,7 +1936,83 @@ const DatingSignUp = ({ language = 'en', onSignUpSuccess, onLoginClick, onBackTo
               )}
             </div>
             <button type="submit" className="btn-submit" disabled={loading || formData.photos.length === 0}>
-              {loading ? 'Creating Account...' : `Create Account (${formData.photos.length} photo${formData.photos.length !== 1 ? 's' : ''})`}
+              {loading ? 'Saving...' : `Continue (${formData.photos.length} photo${formData.photos.length !== 1 ? 's' : ''})`}
+            </button>
+            <button type="button" className="btn-outline" onClick={() => setStep(5)} disabled={loading}>
+              Skip Photo Upload
+            </button>
+          </form>
+        )}
+
+        {/* Step 4: Security */}
+        {step === 4 && (
+          <form className="signup-step" onSubmit={handleSubmit}>
+            <h2>Create your MPIN</h2>
+            <p className="signup-step-note">
+              This 4-6 digit MPIN becomes your faster sign-in option for future logins.
+            </p>
+
+            <div className="mpin-info-card">
+              <strong>Why we collect it</strong>
+              <span>Use your email or mobile number with this MPIN instead of waiting for OTP every time.</span>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="signup-mpin">MPIN (4-6 digits)</label>
+              <input
+                id="signup-mpin"
+                type="password"
+                inputMode="numeric"
+                value={mpin}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setMpin(value);
+                  setMpinError('');
+                }}
+                placeholder="Enter 4-6 digit MPIN"
+                maxLength="6"
+                disabled={loading}
+                autoComplete="new-password"
+              />
+              <small className="helper-text">Digits only. Avoid using repeated or obvious numbers.</small>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="signup-confirm-mpin">Confirm MPIN</label>
+              <input
+                id="signup-confirm-mpin"
+                type="password"
+                inputMode="numeric"
+                value={confirmMpin}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                  setConfirmMpin(value);
+                  setMpinError('');
+                }}
+                placeholder="Re-enter MPIN"
+                maxLength="6"
+                disabled={loading}
+                autoComplete="new-password"
+              />
+            </div>
+
+            {mpinError && <div className="error-message">{mpinError}</div>}
+
+            <button
+              type="submit"
+              className="btn-submit"
+              disabled={loading || !mpin || !confirmMpin || mpin !== confirmMpin}
+            >
+              {loading ? 'Creating profile...' : 'Create my profile'}
+            </button>
+
+            <button
+              type="button"
+              className="btn-outline"
+              onClick={() => setStep(3)}
+              disabled={loading}
+            >
+              Back to photo step
             </button>
           </form>
         )}

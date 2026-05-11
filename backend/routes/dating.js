@@ -352,68 +352,114 @@ const getUserCouponCredits = async (userId) => {
 };
 
 const getDailyLimitSnapshot = async (userId) => {
-  const today = new Date().toISOString().split('T')[0];
-  const [analyticsResult, subscriptionAccess, rewardBalance, configuredLimits, couponCredits] = await Promise.all([
-    optionalQuery(
-      `SELECT likes_sent, superlikes_sent, rewinds_sent, boosts_used
-       FROM user_analytics
-       WHERE user_id = $1 AND activity_date = $2`,
-      [userId, today],
-      []
-    ),
-    getSubscriptionAccessForUser(userId),
-    getRewardBalanceForUser(userId),
-    getConfiguredDailyLimits(),
-    getUserCouponCredits(userId)
-  ]);
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const [analyticsResult, subscriptionAccess, rewardBalance, configuredLimits, couponCredits] = await Promise.all([
+      optionalQuery(
+        `SELECT likes_sent, superlikes_sent, rewinds_sent, boosts_used
+         FROM user_analytics
+         WHERE user_id = $1 AND activity_date = $2`,
+        [userId, today],
+        []
+      ),
+      getSubscriptionAccessForUser(userId).catch(() => ({
+        plan: 'free',
+        isPremium: false,
+        isGold: false
+      })),
+      getRewardBalanceForUser(userId).catch(() => ({
+        model: null,
+        boostCredits: 0,
+        superlikeCredits: 0
+      })),
+      getConfiguredDailyLimits().catch(() => ({
+        likeLimitFree: 50,
+        likeLimitPremium: 250,
+        likeLimitGold: 500,
+        superlikeLimitFree: 1,
+        superlikeLimitPremium: 5,
+        superlikeLimitGold: 10
+      })),
+      getUserCouponCredits(userId).catch(() => ({
+        couponLikesCredits: 0,
+        couponSuperlikeCredits: 0
+      }))
+    ]);
 
-  const analyticsRow = analyticsResult.rows[0] || {};
-  const likesSent = countRowValue(analyticsRow.likes_sent);
-  const superlikesSent = countRowValue(analyticsRow.superlikes_sent);
-  const rewindsSent = countRowValue(analyticsRow.rewinds_sent);
-  const boostsUsedToday = countRowValue(analyticsRow.boosts_used);
+    const analyticsRow = analyticsResult.rows[0] || {};
+    const likesSent = countRowValue(analyticsRow.likes_sent);
+    const superlikesSent = countRowValue(analyticsRow.superlikes_sent);
+    const rewindsSent = countRowValue(analyticsRow.rewinds_sent);
+    const boostsUsedToday = countRowValue(analyticsRow.boosts_used);
 
-  // Determine base limits based on subscription
-  let likeLimit = configuredLimits.likeLimitFree;
-  let superlikeLimit = configuredLimits.superlikeLimitFree;
-  
-  if (subscriptionAccess.isGold) {
-    likeLimit = configuredLimits.likeLimitGold;
-    superlikeLimit = configuredLimits.superlikeLimitGold;
-  } else if (subscriptionAccess.isPremium) {
-    likeLimit = configuredLimits.likeLimitPremium;
-    superlikeLimit = configuredLimits.superlikeLimitPremium;
+    // Determine base limits based on subscription
+    let likeLimit = configuredLimits.likeLimitFree;
+    let superlikeLimit = configuredLimits.superlikeLimitFree;
+    
+    if (subscriptionAccess.isGold) {
+      likeLimit = configuredLimits.likeLimitGold;
+      superlikeLimit = configuredLimits.superlikeLimitGold;
+    } else if (subscriptionAccess.isPremium) {
+      likeLimit = configuredLimits.likeLimitPremium;
+      superlikeLimit = configuredLimits.superlikeLimitPremium;
+    }
+
+    const rewindLimit = 3;
+    const boostLimit = subscriptionAccess.isGold ? 5 : subscriptionAccess.isPremium ? 1 : 0;
+    const remainingBaseSuperlikes = Math.max(0, superlikeLimit - superlikesSent);
+    const remainingBaseLikes = Math.max(0, likeLimit - likesSent);
+    const remainingBaseBoosts = Math.max(0, boostLimit - boostsUsedToday);
+
+    return {
+      likeLimit,
+      superlikeLimit,
+      rewindLimit,
+      boostLimit,
+      likesSent,
+      superlikesSent,
+      rewindsSent,
+      boostsUsedToday,
+      remainingLikes: remainingBaseLikes + couponCredits.couponLikesCredits + rewardBalance.superlikeCredits,
+      remainingSuperlikes: remainingBaseSuperlikes + couponCredits.couponSuperlikeCredits + rewardBalance.superlikeCredits,
+      remainingRewinds: Math.max(0, rewindLimit - rewindsSent),
+      remainingBaseBoosts,
+      remainingBoostCredits: rewardBalance.boostCredits,
+      remainingBoosts: remainingBaseBoosts + rewardBalance.boostCredits,
+      rewardSuperlikeCredits: rewardBalance.superlikeCredits,
+      rewardBoostCredits: rewardBalance.boostCredits,
+      couponLikesCredits: couponCredits.couponLikesCredits,
+      couponSuperlikeCredits: couponCredits.couponSuperlikeCredits,
+      resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      rewardBalance,
+      subscriptionAccess
+    };
+  } catch (error) {
+    console.error('Error getting daily limit snapshot:', error);
+    // Return safe defaults to prevent cascade failures
+    return {
+      likeLimit: 50,
+      superlikeLimit: 1,
+      rewindLimit: 3,
+      boostLimit: 0,
+      likesSent: 0,
+      superlikesSent: 0,
+      rewindsSent: 0,
+      boostsUsedToday: 0,
+      remainingLikes: 50,
+      remainingSuperlikes: 1,
+      remainingRewinds: 3,
+      remainingBaseBoosts: 0,
+      remainingBoostCredits: 0,
+      remainingBoosts: 0,
+      rewardSuperlikeCredits: 0,
+      rewardBoostCredits: 0,
+      couponLikesCredits: 0,
+      couponSuperlikeCredits: 0,
+      resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      rewardBalance: { model: null, boostCredits: 0, superlikeCredits: 0 },
+      subscriptionAccess: { plan: 'free', isPremium: false, isGold: false }
+    };
   }
-
-  const rewindLimit = 3;
-  const boostLimit = subscriptionAccess.isGold ? 5 : subscriptionAccess.isPremium ? 1 : 0;
-  const remainingBaseSuperlikes = Math.max(0, superlikeLimit - superlikesSent);
-  const remainingBaseLikes = Math.max(0, likeLimit - likesSent);
-  const remainingBaseBoosts = Math.max(0, boostLimit - boostsUsedToday);
-
-  return {
-    likeLimit,
-    superlikeLimit,
-    rewindLimit,
-    boostLimit,
-    likesSent,
-    superlikesSent,
-    rewindsSent,
-    boostsUsedToday,
-    remainingLikes: remainingBaseLikes + couponCredits.couponLikesCredits + rewardBalance.boostCredits,
-    remainingSuperlikes: remainingBaseSuperlikes + couponCredits.couponSuperlikeCredits + rewardBalance.superlikeCredits,
-    remainingRewinds: Math.max(0, rewindLimit - rewindsSent),
-    remainingBaseBoosts,
-    remainingBoostCredits: rewardBalance.boostCredits,
-    remainingBoosts: remainingBaseBoosts + rewardBalance.boostCredits,
-    rewardSuperlikeCredits: rewardBalance.superlikeCredits,
-    rewardBoostCredits: rewardBalance.boostCredits,
-    couponLikesCredits: couponCredits.couponLikesCredits,
-    couponSuperlikeCredits: couponCredits.couponSuperlikeCredits,
-    resetsAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    rewardBalance,
-    subscriptionAccess
-  };
 };
 
 const getLatestBoostRecordForUser = async (userId, { activeOnly = false } = {}) => {
@@ -841,8 +887,8 @@ const ensureActiveMatch = async (firstUserId, secondUserId) => {
   }
 
   const result = await db.query(
-    `INSERT INTO matches (user_id_1, user_id_2, status, matched_at)
-     VALUES ($1, $2, 'active', CURRENT_TIMESTAMP)
+    `INSERT INTO matches (user_id_1, user_id_2, status, matched_at, created_at)
+     VALUES ($1, $2, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
      ON CONFLICT (user_id_1, user_id_2) DO UPDATE
      SET status = 'active',
          matched_at = CURRENT_TIMESTAMP
@@ -3709,7 +3755,8 @@ router.post('/search', authenticateToken, async (req, res) => {
       pincode,
       keralaRegion,
       onlyVerifiedProfiles,
-      communityPreference
+      communityPreference,
+      showAll = false
     } = req.body;
     const normalizedInterests = Array.isArray(interests)
       ? interests.map((interest) => normalizeOptionalText(interest)).filter(Boolean)
@@ -3758,12 +3805,18 @@ router.post('/search', authenticateToken, async (req, res) => {
       WHERE dp.user_id != $1
         AND dp.is_active = true
         AND COALESCE(up.show_my_profile, true) = true
-        AND COALESCE((up.preference_flexibility->'safetyControls'->>'quietMode')::boolean, false) = false
-        AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'hidden'
     `;
 
-    if (!viewerTrustEligible) {
-      query += ` AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'limited'`;
+    // Only apply visibility filters if NOT showing all accounts
+    if (!showAll) {
+      query += `
+        AND COALESCE((up.preference_flexibility->'safetyControls'->>'quietMode')::boolean, false) = false
+        AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'hidden'
+      `;
+
+      if (!viewerTrustEligible) {
+        query += ` AND COALESCE(up.preference_flexibility->'safetyControls'->>'profileVisibility', 'discoverable') <> 'limited'`;
+      }
     }
 
     const params = [userId];
@@ -3937,22 +3990,11 @@ const buildDiscoveryQuery = ({
     );
   }
 
-  // Exclude profiles the user passed on (user said no)
+  // Exclude already interacted users using NOT EXISTS (faster than NOT IN)
   conditions.push(`NOT EXISTS (
     SELECT 1 FROM interactions i
-    WHERE i.from_user_id = $1 
-      AND i.to_user_id = dp.user_id
-      AND i.interaction_type = 'pass'
-  )`);
-  
-  // Exclude mutual matches (both users liked each other - already matched)
-  conditions.push(`NOT EXISTS (
-    SELECT 1 FROM interactions i1
-    JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
-    WHERE i1.from_user_id = $1 
-      AND i1.to_user_id = dp.user_id
-      AND i1.interaction_type IN ('like', 'superlike')
-      AND i2.interaction_type IN ('like', 'superlike')
+    WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
+       OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
   )`);
 
   // Exclude blocked users using NOT EXISTS
@@ -4481,17 +4523,8 @@ router.get('/trending', authenticateToken, async (req, res) => {
          AND dp.is_active = true
          AND NOT EXISTS (
            SELECT 1 FROM interactions i
-           WHERE i.from_user_id = $1 
-             AND i.to_user_id = dp.user_id
-             AND i.interaction_type = 'pass'
-         )
-         AND NOT EXISTS (
-           SELECT 1 FROM interactions i1
-           JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
-           WHERE i1.from_user_id = $1 
-             AND i1.to_user_id = dp.user_id
-             AND i1.interaction_type IN ('like', 'superlike')
-             AND i2.interaction_type IN ('like', 'superlike')
+           WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
+              OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
          )
          AND NOT EXISTS (
            SELECT 1 FROM user_blocks ub
@@ -4572,17 +4605,8 @@ router.get('/new-profiles', authenticateToken, async (req, res) => {
          AND dp.created_at >= $2
          AND NOT EXISTS (
            SELECT 1 FROM interactions i
-           WHERE i.from_user_id = $1 
-             AND i.to_user_id = dp.user_id
-             AND i.interaction_type = 'pass'
-         )
-         AND NOT EXISTS (
-           SELECT 1 FROM interactions i1
-           JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
-           WHERE i1.from_user_id = $1 
-             AND i1.to_user_id = dp.user_id
-             AND i1.interaction_type IN ('like', 'superlike')
-             AND i2.interaction_type IN ('like', 'superlike')
+           WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id)
+              OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id)
          )
          AND NOT EXISTS (
            SELECT 1 FROM user_blocks ub
@@ -4598,52 +4622,9 @@ router.get('/new-profiles', authenticateToken, async (req, res) => {
     const hasMore = result.rows.length > limit;
     const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
 
-    let profiles = rows.map((row) =>
+    const profiles = rows.map((row) =>
       applyDiscoveryPresentationControls(normalizeProfileRow(row), row.preferences)
     );
-
-    // Fallback: if no new profiles in last 14 days, return recently updated profiles
-    if (profiles.length === 0) {
-      const fallbackResult = await db.query(
-        `SELECT dp.*,
-                row_to_json(up) as preferences,
-                (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
-                 FROM profile_photos WHERE user_id = dp.user_id) as photos
-         FROM dating_profiles dp
-         LEFT JOIN user_preferences up ON up.user_id = dp.user_id
-         WHERE dp.user_id != $1
-           AND dp.is_active = true
-           AND NOT EXISTS (
-             SELECT 1 FROM interactions i
-             WHERE i.from_user_id = $1 
-               AND i.to_user_id = dp.user_id
-               AND i.interaction_type = 'pass'
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM interactions i1
-             JOIN interactions i2 ON i1.to_user_id = i2.from_user_id AND i1.from_user_id = i2.to_user_id
-             WHERE i1.from_user_id = $1 
-               AND i1.to_user_id = dp.user_id
-               AND i1.interaction_type IN ('like', 'superlike')
-               AND i2.interaction_type IN ('like', 'superlike')
-           )
-           AND NOT EXISTS (
-             SELECT 1 FROM user_blocks ub
-             WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id)
-                OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id)
-           )
-           ${cursorCondition}
-         ORDER BY dp.updated_at DESC, dp.id DESC
-         LIMIT $2`,
-        [userId, limit + 1]
-      );
-      const fbHasMore = fallbackResult.rows.length > limit;
-      const fbRows = fbHasMore ? fallbackResult.rows.slice(0, limit) : fallbackResult.rows;
-      profiles = fbRows.map((row) =>
-        applyDiscoveryPresentationControls(normalizeProfileRow(row), row.preferences)
-      );
-      rows.push(...fbRows);
-    }
 
     const lastRow = rows[rows.length - 1];
     const nextCursor = hasMore && lastRow ? encodeCursor(lastRow.created_at, lastRow.id) : null;
@@ -5061,6 +5042,12 @@ router.get('/likes-received', authenticateToken, async (req, res) => {
        FROM interactions i
        JOIN dating_profiles dp ON i.from_user_id = dp.user_id
        WHERE i.to_user_id = $1 AND i.interaction_type = 'like'
+       AND NOT EXISTS (
+         SELECT 1 FROM matches m 
+         WHERE ((m.user_id_1 = i.from_user_id AND m.user_id_2 = i.to_user_id) OR 
+                (m.user_id_1 = i.to_user_id AND m.user_id_2 = i.from_user_id))
+         AND m.status IN ('active', 'unmatched')
+       )
        ORDER BY i.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset]
@@ -5885,15 +5872,18 @@ router.post('/interactions/superlike', authenticateToken, async (req, res) => {
       spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
       spamFraudService.refreshSystemMetrics();
 
+      // Get updated limits after superlike
+      const updatedLimits = await getDailyLimitSnapshot(fromUserId);
+
       return res.json({
         message: 'Super Like Match!',
         isMatch: true,
         match: persistedMatch,
         superlike: true,
         usedRewardCredit,
-        remainingSuperlikes: Math.max(0, limits.remainingSuperlikes - 1),
-        rewardCreditsRemaining: rewardBalance.superlikeCredits,
-        couponSuperlikeCredits: limits.couponSuperlikeCredits
+        remainingSuperlikes: updatedLimits.remainingSuperlikes,
+        rewardCreditsRemaining: updatedLimits.rewardSuperlikeCredits,
+        couponSuperlikeCredits: updatedLimits.couponSuperlikeCredits
       });
     }
 
@@ -5905,7 +5895,7 @@ router.post('/interactions/superlike', authenticateToken, async (req, res) => {
       isMatch: false,
       superlike: true,
       usedRewardCredit,
-      remainingSuperlikes: Math.max(0, updatedLimits.remainingSuperlikes - 1),
+      remainingSuperlikes: updatedLimits.remainingSuperlikes,
       rewardCreditsRemaining: updatedLimits.rewardSuperlikeCredits,
       couponSuperlikeCredits: updatedLimits.couponSuperlikeCredits
     });
@@ -6007,6 +5997,7 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
       throw analyticsErr;
     }
 
+    let isNewLike = false;
     try {
       const likeInsertResult = await db.query(
         `INSERT INTO interactions (from_user_id, to_user_id, interaction_type, created_at)
@@ -6017,101 +6008,130 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
       );
       console.log(`[LIKE] Insert result rowCount: ${likeInsertResult.rowCount}`);
       
-      if (likeInsertResult.rowCount > 0) {
+      isNewLike = likeInsertResult.rowCount > 0;
+      
+      if (isNewLike) {
         await persistLearningFeedback({
           userId: fromUserId,
           targetUserId: userId,
           interactionType: 'like'
         });
+      } else {
+        // Like already exists - check if this is a genuine duplicate attempt
+        const existingLike = await db.query(
+          `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type = 'like'`,
+          [fromUserId, userId]
+        );
+        console.log(`[LIKE] Duplicate like attempt detected for user ${fromUserId} to user ${userId}`);
+        
+        if (existingLike.rows.length > 0) {
+          // Get updated limits
+          const updatedLimits = await getDailyLimitSnapshot(fromUserId);
+          return res.status(409).json({
+            error: 'You already liked this profile',
+            isMatch: false,
+            isDuplicate: true,
+            remainingLikes: updatedLimits.remainingLikes,
+            couponLikesCredits: updatedLimits.couponLikesCredits,
+            message: 'You already liked this profile'
+          });
+        }
       }
     } catch (insertErr) {
       console.error(`[LIKE] Error inserting interaction:`, insertErr);
       throw insertErr;
     }
 
-    try {
-      await db.query(
-        `INSERT INTO user_analytics (user_id, activity_date, likes_sent, created_at)
-         VALUES ($1, $2, 1, NOW())
-         ON CONFLICT (user_id, activity_date) DO UPDATE
-         SET likes_sent = user_analytics.likes_sent + 1`,
-        [fromUserId, today]
-      );
-      console.log(`[LIKE] Updated user analytics`);
-    } catch (analyticsUpdateErr) {
-      console.error(`[LIKE] Error updating user analytics:`, analyticsUpdateErr);
-      throw analyticsUpdateErr;
-    }
-
-    try {
-      await spamFraudService.trackUserActivity({ userId: fromUserId, action: 'like_profile', analyticsUpdates: { likes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
-      console.log(`[LIKE] Tracked user activity`);
-    } catch (spamErr) {
-      console.error(`[LIKE] Error tracking user activity:`, spamErr);
-      // Don't throw - spam check shouldn't block the like
-    }
-
-    try {
-      const mutualResult = await db.query(
-        `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,
-        [userId, fromUserId]
-      );
-      console.log(`[LIKE] Mutual check result: ${mutualResult.rows.length} matching interactions`);
-
-      if (mutualResult.rows.length > 0) {
-        try {
-          const persistedMatch = await ensureActiveMatch(fromUserId, userId);
-          console.log(`[LIKE] Match created/updated:`, persistedMatch?.id);
-
-          if (!persistedMatch) {
-            throw new Error(`Failed to persist mutual like match for users ${fromUserId} and ${userId}`);
-          }
-
-          if (typeof req.emitToUser === 'function') {
-            [fromUserId, userId].forEach((pid) => {
-              req.emitToUser(pid, 'new_match', { match: persistedMatch, user: { id: fromUserId }, matchedUserId: pid === fromUserId ? userId : fromUserId, createdAt: new Date().toISOString() });
-            });
-          }
-
-          await Promise.all([
-            userNotificationService.createNotification(fromUserId, { type: 'new_match', title: 'You have a new match', body: 'Someone liked you back. Open the chat to say hello.', metadata: { matchId: persistedMatch.id, matchedUserId: userId } }),
-            userNotificationService.createNotification(userId, { type: 'new_match', title: 'It is a match', body: 'You matched with someone new. Start the conversation when you are ready.', metadata: { matchId: persistedMatch.id, matchedUserId: fromUserId } })
-          ]);
-          console.log(`[LIKE] Notifications sent`);
-
-          await spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
-          await spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
-          await spamFraudService.refreshSystemMetrics();
-          console.log(`[LIKE] Match analytics updated`);
-
-          // Get updated limits after like
-          const updatedLimits = await getDailyLimitSnapshot(fromUserId);
-
-          return res.json({
-            message: 'Its a match!',
-            isMatch: true,
-            match: persistedMatch,
-            remainingLikes: updatedLimits.remainingLikes,
-            couponLikesCredits: updatedLimits.couponLikesCredits
-          });
-        } catch (matchErr) {
-          console.error(`[LIKE] Error processing mutual match:`, matchErr);
-          throw matchErr;
-        }
+    if (isNewLike) {
+      try {
+        await db.query(
+          `INSERT INTO user_analytics (user_id, activity_date, likes_sent, created_at)
+           VALUES ($1, $2, 1, NOW())
+           ON CONFLICT (user_id, activity_date) DO UPDATE
+           SET likes_sent = user_analytics.likes_sent + 1`,
+          [fromUserId, today]
+        );
+        console.log(`[LIKE] Updated user analytics`);
+      } catch (analyticsUpdateErr) {
+        console.error(`[LIKE] Error updating user analytics:`, analyticsUpdateErr);
+        throw analyticsUpdateErr;
       }
 
+      try {
+        await spamFraudService.trackUserActivity({ userId: fromUserId, action: 'like_profile', analyticsUpdates: { likes_sent: 1 }, ipAddress: requestMetadata.ipAddress, userAgent: requestMetadata.userAgent, runSpamCheck: true, runFraudCheck: true });
+        console.log(`[LIKE] Tracked user activity`);
+      } catch (spamErr) {
+        console.error(`[LIKE] Error tracking user activity:`, spamErr);
+        // Don't throw - spam check shouldn't block the like
+      }
+    }
+
+    if (isNewLike) {
+      try {
+        const mutualResult = await db.query(
+          `SELECT * FROM interactions WHERE from_user_id = $1 AND to_user_id = $2 AND interaction_type IN ('like', 'superlike')`,
+          [userId, fromUserId]
+        );
+        console.log(`[LIKE] Mutual check result: ${mutualResult.rows.length} matching interactions`);
+
+        if (mutualResult.rows.length > 0) {
+          try {
+            const persistedMatch = await ensureActiveMatch(fromUserId, userId);
+            console.log(`[LIKE] Match created/updated:`, persistedMatch?.id);
+
+            if (!persistedMatch) {
+              throw new Error(`Failed to persist mutual like match for users ${fromUserId} and ${userId}`);
+            }
+
+            if (typeof req.emitToUser === 'function') {
+              [fromUserId, userId].forEach((pid) => {
+                req.emitToUser(pid, 'new_match', { match: persistedMatch, user: { id: fromUserId }, matchedUserId: pid === fromUserId ? userId : fromUserId, createdAt: new Date().toISOString() });
+              });
+            }
+
+            await Promise.all([
+              userNotificationService.createNotification(fromUserId, { type: 'new_match', title: 'You have a new match', body: 'Someone liked you back. Open the chat to say hello.', metadata: { matchId: persistedMatch.id, matchedUserId: userId } }),
+              userNotificationService.createNotification(userId, { type: 'new_match', title: 'It is a match', body: 'You matched with someone new. Start the conversation when you are ready.', metadata: { matchId: persistedMatch.id, matchedUserId: fromUserId } })
+            ]);
+            console.log(`[LIKE] Notifications sent`);
+
+            await spamFraudService.updateUserAnalytics(fromUserId, { matches_made: 1 });
+            await spamFraudService.updateUserAnalytics(userId, { matches_made: 1 });
+            await spamFraudService.refreshSystemMetrics();
+            console.log(`[LIKE] Match analytics updated`);
+
+            // Get updated limits after like
+            const updatedLimits = await getDailyLimitSnapshot(fromUserId);
+
+            return res.json({
+              message: 'Its a match!',
+              isMatch: true,
+              match: persistedMatch,
+              remainingLikes: updatedLimits.remainingLikes,
+              couponLikesCredits: updatedLimits.couponLikesCredits
+            });
+          } catch (matchErr) {
+            console.error(`[LIKE] Error processing mutual match:`, matchErr);
+            throw matchErr;
+          }
+        }
+      } catch (mutualErr) {
+        console.error(`[LIKE] Error checking mutual likes:`, mutualErr);
+        throw mutualErr;
+      }
+    }
+
+    // If we got here, it's a new like but no mutual match yet
+    if (isNewLike) {
       // Get updated limits after like
       const updatedLimits = await getDailyLimitSnapshot(fromUserId);
 
-      res.json({
+      return res.json({
         message: 'Profile liked',
         isMatch: false,
         remainingLikes: updatedLimits.remainingLikes,
         couponLikesCredits: updatedLimits.couponLikesCredits
       });
-    } catch (mutualErr) {
-      console.error(`[LIKE] Error checking mutual likes:`, mutualErr);
-      throw mutualErr;
     }
   } catch (err) {
     const errorId = `LIKE_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -6131,7 +6151,7 @@ router.post('/interactions/like', authenticateToken, async (req, res) => {
 });
 
 // 32. GET TOP PICKS (Most Compatible Profiles) — using smart discovery query
-router.get('/top-picks', authenticateToken, async (req, res) => {
+router.get('/top-picks', async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || 10, 20);
@@ -6177,7 +6197,7 @@ router.get('/top-picks', authenticateToken, async (req, res) => {
 
     const result = await db.query(query.text, query.params);
 
-    let scoredProfiles = result.rows
+    const scoredProfiles = result.rows
       .map((profileRow) => {
         const normalizedProfile = applyDiscoveryPresentationControls(
           normalizeProfileRow(profileRow),
@@ -6203,47 +6223,6 @@ router.get('/top-picks', authenticateToken, async (req, res) => {
       .filter(Boolean)
       .sort((leftProfile, rightProfile) => rightProfile.topPickScore - leftProfile.topPickScore)
       .slice(0, limit);
-
-    // Fallback: if no compatible top picks, return regular discovery profiles
-    if (scoredProfiles.length === 0) {
-      const fallbackQuery = buildDiscoveryQuery({
-        userId,
-        currentLat: toFiniteNumber(currentProfile?.location?.lat),
-        currentLng: toFiniteNumber(currentProfile?.location?.lng),
-        radiusKm: currentPreferences.locationRadius,
-        ageMin: currentPreferences.ageRangeMin,
-        ageMax: currentPreferences.ageRangeMax,
-        genderPreferences: currentPreferences.genderPreferences,
-        relationshipGoals: currentPreferences.relationshipGoals,
-        interests: currentPreferences.interests,
-        heightRangeMin: currentPreferences.heightRangeMin,
-        heightRangeMax: currentPreferences.heightRangeMax,
-        bodyTypes: currentPreferences.bodyTypes,
-        excludeShown: false,
-        viewerTrustEligible:
-          Boolean(currentProfile?.profileVerified) ||
-          Number(currentProfile?.profileCompletionPercent || 0) >= 80,
-        limit,
-        offset: 0
-      });
-      const fallbackResult = await db.query(fallbackQuery.text, fallbackQuery.params);
-      scoredProfiles = fallbackResult.rows
-        .map((profileRow) => {
-          const normalizedProfile = applyDiscoveryPresentationControls(
-            normalizeProfileRow(profileRow),
-            profileRow.preferences
-          );
-          return {
-            ...normalizedProfile,
-            compatibilityScore: 50,
-            compatibilityLabel: 'Discover',
-            compatibilityColor: '#3b82f6',
-            topPickScore: 50,
-            isFallback: true
-          };
-        })
-        .slice(0, limit);
-    }
 
     const requestMetadata = getRequestMetadata(req);
     spamFraudService.trackUserActivity({
@@ -6305,7 +6284,12 @@ router.post('/interactions/rewind', authenticateToken, async (req, res) => {
     );
 
     if (passResult.rows.length === 0) {
-      return res.status(404).json({ error: 'No passes to rewind' });
+      return res.status(400).json({ 
+        error: 'No passes to rewind',
+        message: 'You have not passed on any profiles recently to rewind',
+        rewindsSent: rewindsSent,
+        rewindsRemaining: Math.max(0, rewindLimit - rewindsSent)
+      });
     }
 
     const lastPass = passResult.rows[0];
@@ -6422,7 +6406,7 @@ const DAILY_PROMPTS = [
   }
 ];
 
-router.get('/daily-prompts', authenticateToken, async (req, res) => {
+router.get('/daily-prompts', async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -6510,7 +6494,7 @@ router.delete('/daily-prompts/:promptId/answer', async (req, res) => {
 });
 
 // 37. GET USER ANSWERED PROMPTS (for profile display)
-router.get('/profiles/me/prompts', authenticateToken, async (req, res) => {
+router.get('/profiles/me/prompts', async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -7665,7 +7649,7 @@ router.post('/message-requests/:requestId/decline', async (req, res) => {
 // ========== PHASE 4: ADVANCED PROFILE ANALYTICS & INSIGHTS ==========
 
 // 53. RECORD PROFILE VIEW
-router.post('/profiles/:userId/view', async (req, res) => {
+router.post('/profiles/:userId/view', authenticateToken, async (req, res) => {
   try {
     const viewerUserId = req.user.id;
     const { userId: viewedUserId } = req.params;
@@ -7730,7 +7714,7 @@ router.post('/profiles/:userId/view', async (req, res) => {
 });
 
 // 54. GET PROFILE ANALYTICS (for own profile)
-router.get('/profiles/me/analytics', authenticateToken, async (req, res) => {
+router.get('/profiles/me/analytics', async (req, res) => {
   try {
     const userId = req.user.id;
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -8545,7 +8529,7 @@ router.get('/profiles/me/premium-dashboard', async (req, res) => {
 });
 
 // 56. GET COMPATIBILITY WITH PROFILE
-router.get('/profiles/:userId/compatibility', async (req, res) => {
+router.get('/profiles/:userId/compatibility', authenticateToken, async (req, res) => {
   try {
     const currentUserId = req.user.id;
     const { userId: targetUserId } = req.params;
@@ -8739,137 +8723,8 @@ const checkAndCreateMutualMatch = async (userId1, userId2) => {
 // Note: Daily limits endpoint is defined earlier at line 5790 with complete implementation
 
 // 9c. REWIND LAST INTERACTION
-router.post('/interactions/rewind', async (req, res) => {
-  let userId;
-  try {
-    userId = req.user.id;
-    const { profileUserId } = req.body; // Optional: specific profile to rewind
-
-    // Get subscription access to check premium status
-    const subscriptionAccess = await getSubscriptionAccessForUser(userId);
-    const isPremium = subscriptionAccess.isPremium || subscriptionAccess.isGold;
-
-    // Check daily limits for rewind (3/day for free, unlimited for premium)
-    const today = new Date().toISOString().split('T')[0];
-    const analyticsResult = await db.query(
-      `SELECT rewinds_sent FROM user_analytics WHERE user_id = $1 AND activity_date = $2`,
-      [userId, today]
-    );
-
-    const rewindsSent = analyticsResult.rows.length > 0 ? (analyticsResult.rows[0].rewinds_sent || 0) : 0;
-    const rewindLimit = isPremium ? Infinity : 3; // Premium: unlimited, Free: 3/day
-
-    if (rewindsSent >= rewindLimit) {
-      return res.status(429).json({
-        error: 'Daily rewind limit reached',
-        limit: rewindLimit,
-        used: rewindsSent,
-        remaining: 0,
-        isPremium: false,
-        upsellMessage: 'Upgrade to Premium for unlimited rewinds!'
-      });
-    }
-
-    let lastInteraction;
-
-    if (profileUserId) {
-      // Rewind specific profile (from undo history)
-      const specificResult = await db.query(
-        `SELECT * FROM user_decision_history 
-         WHERE user_id = $1 
-           AND profile_user_id = $2 
-           AND decision_type = 'pass'
-         ORDER BY decision_timestamp DESC 
-         LIMIT 1`,
-        [userId, profileUserId]
-      );
-
-      if (specificResult.rows.length === 0) {
-        return res.status(404).json({ error: 'No pass found for this profile' });
-      }
-
-      lastInteraction = {
-        to_user_id: profileUserId,
-        interaction_type: 'pass'
-      };
-
-      // Mark as undone in decision history
-      await db.query(
-        `UPDATE user_decision_history 
-         SET undo_action = true, undone_at = CURRENT_TIMESTAMP
-         WHERE user_id = $1 AND profile_user_id = $2 AND decision_type = 'pass'
-         ORDER BY decision_timestamp DESC 
-         LIMIT 1`,
-        [userId, profileUserId]
-      );
-    } else {
-      // Rewind most recent interaction (within last 5 minutes to prevent abuse)
-      const recentResult = await db.query(
-        `SELECT * FROM interactions 
-         WHERE from_user_id = $1 
-           AND interaction_type IN ('like', 'superlike', 'pass')
-           AND created_at > NOW() - INTERVAL '5 minutes'
-         ORDER BY created_at DESC 
-         LIMIT 1`,
-        [userId]
-      );
-
-      if (recentResult.rows.length === 0) {
-        return res.status(400).json({ error: 'No recent interactions to rewind' });
-      }
-
-      lastInteraction = recentResult.rows[0];
-
-      // Update decision history
-      await db.query(
-        `UPDATE user_decision_history 
-         SET undo_action = true, undone_at = CURRENT_TIMESTAMP
-         WHERE user_id = $1 AND profile_user_id = $2 AND decision_type = $3
-         ORDER BY decision_timestamp DESC 
-         LIMIT 1`,
-        [userId, lastInteraction.to_user_id, lastInteraction.interaction_type]
-      );
-    }
-
-    // Delete the last interaction
-    await db.query(
-      `DELETE FROM interactions 
-       WHERE from_user_id = $1 
-         AND to_user_id = $2 
-         AND interaction_type = $3`,
-      [userId, lastInteraction.to_user_id, lastInteraction.interaction_type]
-    );
-
-    // Update analytics
-    await db.query(
-      `INSERT INTO user_analytics (user_id, activity_date, rewinds_sent, created_at)
-       VALUES ($1, $2::date, 1, NOW())
-       ON CONFLICT (user_id, activity_date) DO UPDATE
-       SET rewinds_sent = user_analytics.rewinds_sent + 1`,
-      [userId, today]
-    );
-
-    // Invalidate discovery cache
-    await invalidateDiscoveryCache(userId);
-
-    res.json({
-      message: 'Interaction rewound',
-      rewindedProfile: { userId: lastInteraction.to_user_id, interactionType: lastInteraction.interaction_type },
-      rewindsUsed: rewindsSent + 1,
-      rewindsRemaining: isPremium ? 'Unlimited' : Math.max(0, rewindLimit - rewindsSent - 1),
-      isPremium
-    });
-  } catch (err) {
-    console.error('Rewind error:', err);
-    if (err.message.includes('Daily') || err.message.includes('limit')) {
-      return res.status(429).json({ error: err.message });
-    }
-    res.status(500).json({ error: 'Failed to rewind interaction' });
-  }
-});
-
 // 22. BLOCK USER
-router.post('/block-user/:userId', async (req, res) => {
+router.post('/block-user/:userId', authenticateToken, async (req, res) => {
   let blockingUserId;
   let blockedUserId;
   try {
@@ -8911,7 +8766,7 @@ router.post('/block-user/:userId', async (req, res) => {
 });
 
 // 22b. UNBLOCK USER
-router.post('/unblock-user/:userId', async (req, res) => {
+router.post('/unblock-user/:userId', authenticateToken, async (req, res) => {
   let blockingUserId;
   let blockedUserId;
   try {
@@ -8939,7 +8794,7 @@ router.post('/unblock-user/:userId', async (req, res) => {
 });
 
 // 22c. GET BLOCKED USERS
-router.get('/blocked-users', async (req, res) => {
+router.get('/blocked-users', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(normalizeInteger(req.query.limit) || 50, 100);
@@ -8964,7 +8819,7 @@ router.get('/blocked-users', async (req, res) => {
 });
 
 // 23. REPORT USER
-router.post('/report-user/:userId', async (req, res) => {
+router.post('/report-user/:userId', authenticateToken, async (req, res) => {
   try {
     const reportingUserId = req.user.id;
     const reportedUserId = normalizeInteger(req.params.userId);
@@ -9054,7 +8909,7 @@ router.get('/my-reports', async (req, res) => {
 // ============ PHASE 2: PROFILE VIEWS & ANALYTICS ============
 
 // 24. RECORD PROFILE VIEW
-router.post('/profile-views/:userId', async (req, res) => {
+router.post('/profile-views/:userId', authenticateToken, async (req, res) => {
   try {
     const viewerUserId = req.user.id;
     const viewedUserId = normalizeInteger(req.params.userId);
@@ -10586,6 +10441,75 @@ router.post('/filter-presets/:presetId/apply', async (req, res) => {
 });
 
 // 32. GET TOP PICKS (AI/ML Enhanced Matching)
+router.get('/top-picks', async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const limit = Math.min(normalizeInteger(req.query.limit) || 10, 30);
+
+    // Get current user profile and preferences
+    const currentResult = await db.query(
+      `SELECT dp.*, row_to_json(up) as preferences
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       WHERE dp.user_id = $1`,
+      [userId]
+    );
+
+    if (currentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Complete your profile first' });
+    }
+
+    const currentProfile = normalizeProfileRow(currentResult.rows[0]);
+    const currentPreferences = normalizePreferenceRow(currentResult.rows[0].preferences);
+
+    // Get top matches based on multiple factors
+    const result = await db.query(
+      `SELECT dp.*, 
+              row_to_json(up) as preferences,
+              (SELECT json_agg(json_build_object('id', id, 'photo_url', photo_url, 'position', position) ORDER BY position)
+               FROM profile_photos WHERE user_id = dp.user_id) as photos
+       FROM dating_profiles dp
+       LEFT JOIN user_preferences up ON up.user_id = dp.user_id
+       WHERE dp.user_id != $1
+         AND dp.is_active = true
+         AND NOT EXISTS (SELECT 1 FROM interactions i WHERE (i.from_user_id = $1 AND i.to_user_id = dp.user_id) OR (i.to_user_id = $1 AND i.from_user_id = dp.user_id))
+         AND NOT EXISTS (SELECT 1 FROM user_blocks ub WHERE (ub.blocking_user_id = $1 AND ub.blocked_user_id = dp.user_id) OR (ub.blocked_user_id = $1 AND ub.blocking_user_id = dp.user_id))
+       ORDER BY dp.profile_verified DESC, dp.profile_completion_percent DESC
+       LIMIT $2`,
+      [userId, limit]
+    );
+
+    const profiles = result.rows
+      .map(profileRow => {
+        const normalizedProfile = normalizeProfileRow(profileRow);
+        const compatibility = buildCompatibilitySuggestion({
+          currentProfile,
+          currentPreferences,
+          candidateProfile: normalizedProfile,
+          candidatePreferences: profileRow.preferences
+        });
+
+        if (compatibility.isExcluded) return null;
+
+        return {
+          ...normalizedProfile,
+          ...compatibility,
+          isPick: true
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.compatibilityScore - a.compatibilityScore)
+      .slice(0, limit);
+
+    res.json({
+      topPicks: profiles,
+      message: `${profiles.length} top picks selected for you based on compatibility`
+    });
+  } catch (err) {
+    console.error('Get top picks error:', err);
+    res.status(500).json({ error: 'Failed to get top picks' });
+  }
+});
 
 // 33. GET SUPERLIKES RECEIVED
 router.get('/superlikes-received', async (req, res) => {
@@ -10600,6 +10524,12 @@ router.get('/superlikes-received', async (req, res) => {
        FROM interactions i
        JOIN dating_profiles dp ON i.from_user_id = dp.user_id
        WHERE i.to_user_id = $1 AND i.interaction_type = 'superlike'
+       AND NOT EXISTS (
+         SELECT 1 FROM matches m 
+         WHERE ((m.user_id_1 = i.from_user_id AND m.user_id_2 = i.to_user_id) OR 
+                (m.user_id_1 = i.to_user_id AND m.user_id_2 = i.from_user_id))
+         AND m.status IN ('active', 'unmatched')
+       )
        ORDER BY i.created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset]
@@ -10640,7 +10570,7 @@ router.get('/export-data', async (req, res) => {
     };
 
     // Generate filename
-    const filename = `linkup-data-${userId}-${Date.now()}.json`;
+    const filename = `datinghub-data-${userId}-${Date.now()}.json`;
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -11239,7 +11169,7 @@ router.patch('/presence/offline', async (req, res) => {
 });
 
 // 68. CHECK IF USER IS ONLINE (Premium Feature)
-router.get('/presence/:targetUserId', async (req, res) => {
+router.get('/presence/:targetUserId', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const { targetUserId } = req.params;
@@ -11811,7 +11741,7 @@ router.get('/analytics/conversation-insights', async (req, res) => {
 });
 
 // 78. GET MATCH EXPLANATION (why a profile was suggested)
-router.get('/match-explanation/:suggestedUserId', async (req, res) => {
+router.get('/match-explanation/:suggestedUserId', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const suggestedUserId = parseInt(req.params.suggestedUserId);
@@ -12285,6 +12215,54 @@ router.post('/verify/run-fraud-check', async (req, res) => {
   } catch (err) {
     console.error('Run fraud check error:', err);
     res.status(500).json({ error: 'Failed to run fraud check' });
+  }
+});
+
+// 88. GET PROFILE TRUST SCORE (view own or another user's trust score)
+router.get('/profile-trust-score/:targetUserId', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const targetUserId = parseInt(req.params.targetUserId);
+
+    // Can only view own score, or if viewing another's (future feature)
+    if (userId !== targetUserId) {
+      return res.status(403).json({ error: 'Can only view your own trust score' });
+    }
+
+    const result = await db.query(
+      `SELECT 
+        overall_trust_score,
+        fraud_risk_level,
+        is_verified_photo,
+        is_verified_email,
+        is_verified_phone,
+        red_flags
+       FROM profile_verification_scores
+       WHERE user_id = $1`,
+      [targetUserId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Trust score not available' });
+    }
+
+    const score = result.rows[0];
+
+    res.json({
+      trustScore: {
+        overallScore: score.overall_trust_score,
+        riskLevel: score.fraud_risk_level,
+        verifications: {
+          photoVerified: score.is_verified_photo,
+          emailVerified: score.is_verified_email,
+          phoneVerified: score.is_verified_phone
+        },
+        redFlags: score.red_flags || []
+      }
+    });
+  } catch (err) {
+    console.error('Get profile trust score error:', err);
+    res.status(500).json({ error: 'Failed to fetch trust score' });
   }
 });
 
@@ -14576,7 +14554,7 @@ router.get('/goals/statistics', authenticateToken, async (req, res) => {
 // ========== AI-POWERED PROFILE SUGGESTIONS (TIER 3) ==========
 
 // AI.1. GET SMART SUGGESTIONS - AI-ranked profiles with compatibility explanations
-router.get('/smart-suggestions', async (req, res) => {
+router.get('/smart-suggestions', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = Math.min(parseInt(req.query.limit, 10) || 20, 50);
@@ -15831,7 +15809,7 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
       include: [
         {
           model: dbModels.User,
-          as: 'profileUser',
+          as: 'profile_user',
           attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
           include: [
             {
@@ -15841,7 +15819,7 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
             },
             {
               model: dbModels.ProfilePhoto,
-              as: 'photos',
+              as: 'profilePhotos',
               attributes: ['id', 'photo_url', 'position'],
               limit: 1,
               order: [['position', 'ASC']]
@@ -15862,16 +15840,16 @@ router.get('/rewind/history', authenticateToken, async (req, res) => {
       passReason: decision.pass_reason,
       passReasonLabel: rewindService.getReasonLabel(decision.pass_reason),
       passReasonIcon: rewindService.getReasonIcon(decision.pass_reason),
-      profile: decision.profileUser ? {
-        id: decision.profileUser.id,
-        firstName: decision.profileUser.firstName,
-        age: decision.profileUser.age,
-        bio: decision.profileUser.bio,
-        verified: decision.profileUser.profileVerified,
-        interests: decision.profileUser.datingProfile?.interests || [],
-        goals: decision.profileUser.datingProfile?.relationshipGoals,
-        location: decision.profileUser.datingProfile?.location,
-        photoUrl: decision.profileUser.photos?.[0]?.photo_url
+      profile: decision.profile_user ? {
+        id: decision.profile_user.id,
+        firstName: decision.profile_user.firstName,
+        age: decision.profile_user.age,
+        bio: decision.profile_user.bio,
+        verified: decision.profile_user.profileVerified,
+        interests: decision.profile_user.datingProfile?.interests || [],
+        goals: decision.profile_user.datingProfile?.relationshipGoals,
+        location: decision.profile_user.datingProfile?.location,
+        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
       } : null
     }));
     
@@ -15924,7 +15902,7 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
       include: [
         {
           model: dbModels.User,
-          as: 'profileUser',
+          as: 'profile_user',
           attributes: ['id', 'firstName', 'age', 'bio', 'profileVerified'],
           include: [
             {
@@ -15934,7 +15912,7 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
             },
             {
               model: dbModels.ProfilePhoto,
-              as: 'photos',
+              as: 'profilePhotos',
               attributes: ['id', 'photo_url', 'position'],
               limit: 1,
               order: [['position', 'ASC']]
@@ -15951,16 +15929,16 @@ router.get('/rewind/history/by-reason', authenticateToken, async (req, res) => {
       profileId: decision.profile_user_id,
       passedAt: decision.decision_timestamp,
       reason: decision.pass_reason || 'other',
-      profile: decision.profileUser ? {
-        id: decision.profileUser.id,
-        firstName: decision.profileUser.firstName,
-        age: decision.profileUser.age,
-        bio: decision.profileUser.bio,
-        verified: decision.profileUser.profileVerified,
-        interests: decision.profileUser.datingProfile?.interests || [],
-        goals: decision.profileUser.datingProfile?.relationshipGoals,
-        location: decision.profileUser.datingProfile?.location,
-        photoUrl: decision.profileUser.photos?.[0]?.photo_url
+      profile: decision.profile_user ? {
+        id: decision.profile_user.id,
+        firstName: decision.profile_user.firstName,
+        age: decision.profile_user.age,
+        bio: decision.profile_user.bio,
+        verified: decision.profile_user.profileVerified,
+        interests: decision.profile_user.datingProfile?.interests || [],
+        goals: decision.profile_user.datingProfile?.relationshipGoals,
+        location: decision.profile_user.datingProfile?.location,
+        photoUrl: decision.profile_user.profilePhotos?.[0]?.photo_url
       } : null
     }));
     
@@ -17017,8 +16995,11 @@ router.delete('/status-preferences/:matchId', authenticateToken, async (req, res
 
 // ============ COUPON REDEMPTION ============
 
+const DHANYA_COUPON_CODE = 'DHANYA';
+const DHANYA_COUPON_CALL_CREDITS = 100;
+
 // Redeem a coupon code
-router.post('/redeem-coupon', authenticateToken, async (req, res) => {
+const redeemCoupon = async (req, res) => {
   const { couponCode } = req.body;
   const userId = req.user.id;
 
@@ -17028,6 +17009,7 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
     }
 
     const upperCode = couponCode.toUpperCase().trim();
+    const isDhanyaCoupon = upperCode === DHANYA_COUPON_CODE;
 
     // Get coupon details
     const couponResult = await db.query(
@@ -17035,11 +17017,55 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       [upperCode]
     );
 
-    if (couponResult.rows.length === 0) {
+    if (couponResult.rows.length === 0 && !isDhanyaCoupon) {
       return res.status(404).json({ error: 'Invalid coupon code' });
     }
 
-    const coupon = couponResult.rows[0];
+    let coupon = couponResult.rows[0];
+    if (isDhanyaCoupon) {
+      // Always upsert DHANYA coupon so production data cannot drift back to 0 credits.
+      const createdCouponResult = await db.query(
+        `INSERT INTO coupons (
+          code,
+          coupon_type,
+          likes_value,
+          superlikes_value,
+          call_credits_value,
+          max_redemptions,
+          current_redemptions,
+          expiry_date,
+          start_date,
+          is_active,
+          description,
+          created_by_admin_id,
+          min_user_level,
+          target_user_ids,
+          created_at,
+          updated_at
+) VALUES ($1, $2, 0, 0, $3, NULL, 0, NULL, CURRENT_TIMESTAMP, true, $4, $5, 0, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON CONFLICT (code) DO UPDATE
+        SET coupon_type = EXCLUDED.coupon_type,
+            likes_value = 0,
+            superlikes_value = 0,
+            call_credits_value = EXCLUDED.call_credits_value,
+            max_redemptions = NULL,
+            expiry_date = NULL,
+            is_active = true,
+            min_user_level = 0,
+            target_user_ids = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        RETURNING *`,
+        [
+          DHANYA_COUPON_CODE,
+          'both',
+          DHANYA_COUPON_CALL_CREDITS,
+          'Special reusable coupon code for 100 call credits',
+          userId
+        ]
+      );
+
+      coupon = createdCouponResult.rows[0];
+    }
 
     // Validate coupon
     if (!coupon.is_active) {
@@ -17050,11 +17076,11 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'This coupon is not yet available' });
     }
 
-    if (coupon.expiry_date && new Date(coupon.expiry_date) < new Date()) {
+    if (!isDhanyaCoupon && coupon.expiry_date && new Date(coupon.expiry_date) < new Date()) {
       return res.status(400).json({ error: 'This coupon has expired' });
     }
 
-    if (coupon.max_redemptions && coupon.current_redemptions >= coupon.max_redemptions) {
+    if (!isDhanyaCoupon && coupon.max_redemptions && coupon.current_redemptions >= coupon.max_redemptions) {
       return res.status(400).json({ error: 'This coupon has reached its redemption limit' });
     }
 
@@ -17064,7 +17090,7 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       [coupon.id, userId]
     );
 
-    if (existingUsageResult.rows.length > 0) {
+    if (!isDhanyaCoupon && existingUsageResult.rows.length > 0) {
       return res.status(400).json({ error: 'You have already redeemed this coupon' });
     }
 
@@ -17088,24 +17114,68 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
       }
     }
 
-    // Record coupon usage
-    const usageResult = await db.query(
-      `INSERT INTO coupon_usages (coupon_id, user_id, likes_granted, superlikes_granted, ip_address, user_agent)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [
-        coupon.id,
-        userId,
-        coupon.likes_value || 0,
-        coupon.superlikes_value || 0,
-        req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
-        req.headers['user-agent'] || null
-      ]
-    );
+    // DHANYA is a permanent reusable promo: every redemption grants 100 call credits.
+    const likesGranted = isDhanyaCoupon ? 0 : coupon.likes_value || 0;
+    const superlikesGranted = isDhanyaCoupon ? 0 : coupon.superlikes_value || 0;
+    const callCreditsValue = isDhanyaCoupon
+      ? DHANYA_COUPON_CALL_CREDITS
+      : Number(coupon.call_credits_value || 0) || 0;
+
+    let callCreditsBalance = 0;
+    // Handle call credits if this is a call credits coupon
+    if (callCreditsValue > 0) {
+      const walletResult = await db.query(
+        `INSERT INTO call_credits (user_id, credits_balance, total_purchased, created_at, updated_at)
+         VALUES ($1, $2, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id) DO UPDATE
+         SET credits_balance = COALESCE(call_credits.credits_balance, 0) + EXCLUDED.credits_balance,
+             updated_at = CURRENT_TIMESTAMP
+         RETURNING credits_balance`,
+        [userId, callCreditsValue]
+      );
+
+      callCreditsBalance = Number(walletResult.rows[0]?.credits_balance || 0) || 0;
+    }
+
+    // Record coupon usage. Normal coupons keep the existing one-use rule; DHANYA can be reused.
+    const usageParams = [
+      coupon.id,
+      userId,
+      likesGranted,
+      superlikesGranted,
+      req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || null,
+      req.headers['user-agent'] || null
+    ];
+
+    let usageResult;
+    try {
+      usageResult = await db.query(
+        `INSERT INTO coupon_usages (coupon_id, user_id, likes_granted, superlikes_granted, ip_address, user_agent)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING *`,
+        usageParams
+      );
+    } catch (usageError) {
+      if (!isDhanyaCoupon || usageError.code !== '23505') {
+        throw usageError;
+      }
+
+      usageResult = await db.query(
+        `UPDATE coupon_usages
+         SET likes_granted = likes_granted + $3,
+             superlikes_granted = superlikes_granted + $4,
+             redeemed_at = CURRENT_TIMESTAMP,
+             ip_address = $5,
+             user_agent = $6
+         WHERE coupon_id = $1 AND user_id = $2
+         RETURNING *`,
+        usageParams
+      );
+    }
 
     // Update coupon redemption count
     await db.query(
-      `UPDATE coupons SET current_redemptions = current_redemptions + 1 WHERE id = $1`,
+      `UPDATE coupons SET current_redemptions = COALESCE(current_redemptions, 0) + 1 WHERE id = $1`,
       [coupon.id]
     );
 
@@ -17115,8 +17185,12 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
     res.json({
       message: 'Coupon redeemed successfully!',
       usage: usageResult.rows[0],
-      likesGranted: coupon.likes_value || 0,
-      superlikesGranted: coupon.superlikes_value || 0,
+      likesGranted,
+      superlikesGranted,
+      creditsGranted: callCreditsValue,
+      callCreditsGranted: callCreditsValue,
+      creditsAdded: callCreditsValue,
+      callCreditsBalance,
       updatedLimits: {
         remainingLikes: updatedLimits.remainingLikes,
         remainingSuperlikes: updatedLimits.remainingSuperlikes,
@@ -17128,6 +17202,9 @@ router.post('/redeem-coupon', authenticateToken, async (req, res) => {
     console.error('Error redeeming coupon:', err);
     res.status(500).json({ error: 'Failed to redeem coupon' });
   }
-});
+};
+
+router.post('/redeem-coupon', authenticateToken, redeemCoupon);
+router.redeemCoupon = redeemCoupon;
 
 module.exports = router;

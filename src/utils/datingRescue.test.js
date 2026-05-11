@@ -91,6 +91,43 @@ describe('datingRescue', () => {
     expect(getMatchRescueSuggestion(match, now)).toBeNull();
   });
 
+  test('handles null journey proposals without crashing rescue prompts', () => {
+    const suggestion = getMatchRescueSuggestion({
+      id: 'match-null-plan',
+      firstName: 'Maya',
+      messageCount: 8,
+      lastMessageAt: '2030-05-19T12:00:00.000Z',
+      journey: {
+        pendingProposal: null,
+        latestAcceptedProposal: null,
+      },
+    }, now);
+
+    expect(suggestion).toEqual(
+      expect.objectContaining({
+        kind: 'ready_to_plan',
+      })
+    );
+  });
+
+  test('recognizes raw snake_case proposal fields from API payloads', () => {
+    const match = {
+      id: 'match-raw-plan',
+      firstName: 'Isha',
+      messageCount: 8,
+      journey: {
+        latestAcceptedProposal: {
+          proposed_date: '2030-05-20',
+          proposed_time: '18:30',
+          status: 'accepted',
+        },
+      },
+    };
+
+    expect(hasActiveDatePlan(match, now)).toBe(true);
+    expect(getMatchRescueSuggestion(match, now)).toBeNull();
+  });
+
   test('sorts actionable matches by urgency', () => {
     const entries = getActionableMatches([
       {

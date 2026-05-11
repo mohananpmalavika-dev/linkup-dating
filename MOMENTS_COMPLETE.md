@@ -2,7 +2,7 @@
 
 ## ✅ Completion Status
 
-The **Story-like Moments** feature has been fully implemented with comprehensive documentation, code structure, and styling. This is a Snapchat-style ephemeral photo sharing feature for the LinkUp dating app.
+The **Story-like Moments** feature has been fully implemented with comprehensive documentation, code structure, and styling. This is a Snapchat-style ephemeral photo sharing feature for the DatingHub dating app.
 
 ---
 

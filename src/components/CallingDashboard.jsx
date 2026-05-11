@@ -1,118 +1,684 @@
 /**
- * Calling Dashboard - FRND-style paid calling interface
- * Users can buy credits and make/receive voice/video calls
+ * Calling Dashboard - paid voice/video calling marketplace.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
+import { useNavigate } from '../router';
 import { useApp } from '../contexts/AppContext';
 import callWalletService from '../services/callWalletService';
+import realTimeService from '../services/realTimeService';
+import useIncomingCall from '../hooks/useIncomingCall';
+import CouponRedemption from './CouponRedemption';
+import RazorpayPayment from './RazorpayPayment';
+import IncomingCallNotification from './IncomingCallNotification';
 import '../styles/CallingDashboard.css';
 
-const CREDIT_PACKAGES = [
-  { id: 'starter', name: 'Starter', credits: 50, price: 50, bonus: 0 },
-  { id: 'basic', name: 'Basic', credits: 100, price: 95, bonus: 5 },
-  { id: 'popular', name: 'Popular', credits: 250, price: 225, bonus: 25 },
-  { id: 'pro', name: 'Pro', credits: 500, price: 425, bonus: 75 },
-  { id: 'premium', name: 'Premium', credits: 1000, price: 800, bonus: 200 }
+const ESTIMATED_CALL_MINUTES = 5;
+
+const FALLBACK_CREDIT_PACKAGES = [
+  { id: 1, name: 'Starter', credits: 50, price: 50, bonus: 0 },
+  { id: 2, name: 'Basic', credits: 100, price: 95, bonus: 5 },
+  { id: 3, name: 'Popular', credits: 250, price: 225, bonus: 25 },
+  { id: 4, name: 'Pro', credits: 500, price: 425, bonus: 75 },
+  { id: 5, name: 'Premium', credits: 1000, price: 800, bonus: 200 }
 ];
 
+const CALL_TYPES = {
+  voice: {
+    label: 'Voice',
+    actionLabel: 'Voice call',
+    description: 'Audio only'
+  },
+  video: {
+    label: 'Video',
+    actionLabel: 'Video call',
+    description: 'Camera and audio'
+  }
+};
+
+const MARKET_LANGUAGE_OPTIONS = ['English', 'Hindi', 'Malayalam', 'Tamil', 'Telugu', 'Kannada', 'Bengali', 'Marathi'];
+const MARKET_GENDER_OPTIONS = ['male', 'female', 'non-binary', 'other'];
+const createDefaultMarketFilters = () => ({
+  minAge: '',
+  maxAge: '',
+  language: '',
+  gender: ''
+});
+const normalizeMarketFilters = (filters = {}) => ({
+  minAge: String(filters.minAge ?? '').trim(),
+  maxAge: String(filters.maxAge ?? '').trim(),
+  language: String(filters.language ?? '').trim(),
+  gender: String(filters.gender ?? '').trim()
+});
+
+const hasAnyMarketFilters = (filters = {}) =>
+  Object.values(normalizeMarketFilters(filters)).some((value) => value !== '');
+
+const toNumber = (value, fallback = 0) => {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : fallback;
+};
+
+const toNullableNumber = (value) => {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? parsedValue : null;
+};
+
+const getUserId = (user) => user?.userId || user?.id || user?._id;
+
+const normalizeAvailableCallTypes = (value, fallback = ['voice', 'video']) => {
+  const rawTypes = Array.isArray(value)
+    ? value
+    : value === undefined || value === null
+      ? fallback
+      : [value];
+
+  return Array.from(
+    new Set(
+      rawTypes
+        .map((type) => String(type || '').trim().toLowerCase())
+        .filter((type) => Object.prototype.hasOwnProperty.call(CALL_TYPES, type))
+    )
+  );
+};
+
+const buildCallTypeState = (availableCallTypes = []) => ({
+  voice: availableCallTypes.includes('voice'),
+  video: availableCallTypes.includes('video')
+});
+
+const buildAvailableCallTypes = (availableFor = {}) =>
+  Object.keys(CALL_TYPES).filter((type) => availableFor[type]);
+
+const normalizePackage = (pkg) => ({
+  id: pkg.id,
+  name: pkg.name || pkg.label || 'Credits',
+  credits: toNumber(pkg.credits),
+  price: toNumber(pkg.price),
+  bonus: toNumber(pkg.bonus)
+});
+
+const normalizeCaller = (user) => {
+  const rates = user.rates || {};
+  const availableCallTypes = normalizeAvailableCallTypes(
+    user.availableCallTypes || user.available_call_types,
+    user.availableFor ? buildAvailableCallTypes(user.availableFor) : ['voice', 'video']
+  );
+
+  return {
+    ...user,
+    userId: getUserId(user),
+    name: user.name || user.firstName || 'DatingHub user',
+    age: user.age,
+    gender: user.gender || '',
+    location: user.location,
+    bio: user.bio || 'Available for a friendly call.',
+    photoUrl: user.photoUrl || user.photo_url,
+    callRating: toNumber(user.callRating),
+    totalCalls: toNumber(user.totalCalls),
+    availableCallTypes,
+    availableFor: {
+      voice: availableCallTypes.includes('voice'),
+      video: availableCallTypes.includes('video')
+    },
+    rates: {
+      voice: toNumber(user.voiceRate ?? rates.voice, 5),
+      video: toNumber(user.videoRate ?? rates.video, 10)
+    },
+    interests: Array.isArray(user.interests) ? user.interests : [],
+    languages: Array.isArray(user.languages) ? user.languages : [],
+    distanceKm: toNullableNumber(user.distanceKm ?? user.distance_km)
+  };
+};
+
 const CallDashboard = () => {
+  const navigate = useNavigate();
   const { currentUser, apiCall } = useApp();
+  const userId = currentUser?.id || currentUser?.userId;
+  const { incomingCall, dismissIncomingCall } = useIncomingCall(userId);
   const [balance, setBalance] = useState(0);
   const [loadingBalance, setLoadingBalance] = useState(true);
+  const [packages, setPackages] = useState(FALLBACK_CREDIT_PACKAGES);
   const [selectedPackage, setSelectedPackage] = useState(null);
-  const [purchasing, setPurchasing] = useState(false);
-  const [purchaseSuccess, setPurchaseSuccess] = useState(false);
   const [callingUsers, setCallingUsers] = useState([]);
   const [loadingMarket, setLoadingMarket] = useState(false);
-  const [callModal, setCallModal] = useState(null);
-  const [calling, setCalling] = useState(false);
+  const [marketEnabled, setMarketEnabled] = useState(true);
+  const [marketTotal, setMarketTotal] = useState(0);
+  const [marketFilters, setMarketFilters] = useState(createDefaultMarketFilters);
+  const [appliedMarketFilters, setAppliedMarketFilters] = useState(createDefaultMarketFilters);
+  const [availability, setAvailability] = useState(false);
+  const [callTypes, setCallTypes] = useState({ voice: true, video: true }); // Track call types user is available for
+  const [loadingAvailability, setLoadingAvailability] = useState(true);
+  const [updatingAvailability, setUpdatingAvailability] = useState(false);
+  const [activeCallAction, setActiveCallAction] = useState(null);
+  const [pendingRequest, setPendingRequest] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  useEffect(() => {
-    loadBalance();
-    loadCallingMarket();
+  const normalizedPackages = useMemo(
+    () => packages.map(normalizePackage),
+    [packages]
+  );
+
+  const hasAppliedMarketFilters = useMemo(
+    () => hasAnyMarketFilters(appliedMarketFilters),
+    [appliedMarketFilters]
+  );
+
+  // Define showNotice callback
+  const showNotice = useCallback((message, tone = 'info') => {
+    setNotice({ message, tone });
   }, []);
 
-  const loadBalance = async () => {
+  // Filter incoming call based on user's call type availability
+  const filteredIncomingCall = useMemo(() => {
+    if (!incomingCall || !availability) {
+      return null;
+    }
+    
+    const callType = incomingCall.callType?.toLowerCase() || 'voice';
+    const isCallTypeAvailable = callType === 'voice' ? callTypes.voice : callTypes.video;
+    
+    return isCallTypeAvailable ? incomingCall : null;
+  }, [incomingCall, availability, callTypes]);
+
+  const loadBalance = useCallback(async () => {
     setLoadingBalance(true);
     try {
       const data = await callWalletService.getBalance();
-      setBalance(data.balance || 0);
+      setBalance(toNumber(data.balance));
     } catch (error) {
       console.error('Failed to load balance:', error);
+      showNotice('Could not load your call credits. Please try again.', 'error');
     } finally {
       setLoadingBalance(false);
     }
-  };
+  }, [showNotice]);
 
-  const loadCallingMarket = async () => {
+  const loadPackages = useCallback(async () => {
+    try {
+      const data = await callWalletService.getPackages();
+      if (Array.isArray(data.packages) && data.packages.length > 0) {
+        setPackages(data.packages);
+      }
+    } catch (error) {
+      console.error('Failed to load packages:', error);
+      setPackages(FALLBACK_CREDIT_PACKAGES);
+    }
+  }, []);
+
+  const syncAvailabilityState = useCallback((preferences = {}) => {
+    const isAvailableForCalls = Boolean(preferences?.isAvailableForCalls ?? preferences?.isAvailable);
+    const availableCallTypes = normalizeAvailableCallTypes(
+      preferences?.availableCallTypes,
+      isAvailableForCalls ? ['voice', 'video'] : []
+    );
+
+    setAvailability(isAvailableForCalls);
+    setCallTypes(buildCallTypeState(availableCallTypes));
+  }, []);
+
+  const updateMyCallPreferences = useCallback(async (nextAvailability, nextCallTypes) => {
+    const response = await apiCall('/calling/preferences/my-preferences', 'PUT', {
+      isAvailableForCalls: nextAvailability,
+      availableCallTypes: nextAvailability ? buildAvailableCallTypes(nextCallTypes) : []
+    });
+
+    syncAvailabilityState(response?.preferences);
+    return response;
+  }, [apiCall, syncAvailabilityState]);
+
+  const loadCallingMarket = useCallback(async () => {
     setLoadingMarket(true);
     try {
-      const data = await apiCall('/calling/market', 'GET');
-      setCallingUsers(data.users || []);
+      const params = {};
+      const normalizedFilters = normalizeMarketFilters(appliedMarketFilters);
+      const filtersApplied = hasAnyMarketFilters(normalizedFilters);
+
+      if (filtersApplied) {
+        params.filtersApplied = 'true';
+      }
+
+      if (normalizedFilters.minAge) params.minAge = normalizedFilters.minAge;
+      if (normalizedFilters.maxAge) params.maxAge = normalizedFilters.maxAge;
+      if (normalizedFilters.language) params.language = normalizedFilters.language;
+      if (normalizedFilters.gender) params.gender = normalizedFilters.gender;
+
+      const data = await apiCall('/calling/market/available', 'GET', params);
+      setMarketEnabled(data.enabled !== false);
+      setMarketTotal(toNumber(data.total));
+      setCallingUsers((data.users || []).map(normalizeCaller).filter((user) => user.userId));
     } catch (error) {
       console.error('Failed to load market:', error);
+      setCallingUsers([]);
+      setMarketTotal(0);
+      showNotice('Could not load people available for calls.', 'error');
     } finally {
       setLoadingMarket(false);
     }
-  };
+  }, [apiCall, appliedMarketFilters, showNotice]);
 
-  const handlePurchase = async (pkg) => {
-    if (!currentUser) return;
-    setSelectedPackage(pkg);
-    setPurchasing(true);
-    setPurchaseSuccess(false);
-
+  const loadAvailability = useCallback(async () => {
+    setLoadingAvailability(true);
     try {
-      // Step 1: Initiate purchase
-      const initiate = await callWalletService.initiatePurchase(pkg.id);
-      if (initiate.checkoutUrl) {
-        // In production, redirect to payment checkout
-        // window.location.href = initiate.checkoutUrl;
-        console.log('Would redirect to payment:', initiate.checkoutUrl);
-        alert(`Payment gateway integration needed for ${pkg.price} INR`);
-      }
+      const data = await apiCall('/calling/preferences/my-preferences', 'GET');
+      syncAvailabilityState(data?.preferences);
     } catch (error) {
-      console.error('Purchase failed:', error);
+      console.error('Failed to load availability:', error);
     } finally {
-      setPurchasing(false);
+      setLoadingAvailability(false);
     }
-  };
+  }, [apiCall, syncAvailabilityState]);
 
-  const handleStartCall = async (user) => {
-    if (!user || balance < 5) {
-      alert('Insufficient credits. Please purchase credits first.');
+  useEffect(() => {
+    loadBalance();
+    loadPackages();
+    loadAvailability();
+  }, [loadAvailability, loadBalance, loadPackages]);
+
+  useEffect(() => {
+    loadCallingMarket();
+  }, [loadCallingMarket]);
+
+  // Initialize real-time connection for incoming calls and call acceptance
+  const realTimeConnectionRef = useRef(false);
+  const pendingRequestRef = useRef(null);
+  const marketRefreshTimeoutRef = useRef(null);
+
+  const scheduleMarketRefresh = useCallback(() => {
+    if (marketRefreshTimeoutRef.current) {
+      window.clearTimeout(marketRefreshTimeoutRef.current);
+    }
+
+    marketRefreshTimeoutRef.current = window.setTimeout(() => {
+      void loadCallingMarket();
+    }, 150);
+  }, [loadCallingMarket]);
+
+  useEffect(() => {
+    if (!currentUser?.id && !currentUser?.userId) {
+      console.warn('CallingDashboard: No user ID available');
       return;
     }
 
-    setCallModal(user);
-    setCalling(true);
+    if (realTimeConnectionRef.current || realTimeService.isConnecting()) {
+      console.log('CallingDashboard: Real-time connection already initialized');
+    }
+
+    const userId = currentUser.id || currentUser.userId;
+    console.log('CallingDashboard: Connecting to real-time service for user:', userId);
+
+    const unsubscribeConnected = realTimeService.on('connected', () => {
+      realTimeConnectionRef.current = true;
+      console.log('CallingDashboard: Real-time service connected successfully');
+      showNotice('Connected to call notifications.', 'success');
+    });
+
+    const unsubscribeCallAccepted = realTimeService.on('call:accepted', (data) => {
+      console.log('📞 CallingDashboard: Received call:accepted', {
+        receivedCallId: data?.callId,
+        pendingCallId: pendingRequestRef.current?.callId,
+        match: data?.callId === pendingRequestRef.current?.callId
+      });
+      if (data?.callId === pendingRequestRef.current?.callId) {
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+        showNotice('Call accepted! Connecting...', 'success');
+
+        const receiverUserId = data.fromUserId || data.targetUserId;
+        console.log('📞 CallingDashboard: Navigating caller to video room', { receiverUserId });
+        navigate(`/calls/${receiverUserId}/video`, {
+          state: {
+            callMode: 'outgoing',
+            autoAccepted: false,
+            callData: data,
+            callType: data.callType || 'video',
+            targetUserId: receiverUserId,
+            returnPath: '/call'
+          }
+        });
+      }
+    });
+
+    const unsubscribeCallRejected = realTimeService.on('call:rejected', (data) => {
+      console.log('CallingDashboard: Call rejected by receiver', data);
+      if (data?.callId === pendingRequestRef.current?.callId) {
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+        showNotice('Call was rejected.', 'info');
+      }
+    });
+
+    const unsubscribeCallTimeout = realTimeService.on('call:timeout', (data) => {
+      console.log('CallingDashboard: Call timed out', data);
+      if (data?.callId === pendingRequestRef.current?.callId) {
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+        showNotice('Call request expired.', 'info');
+      }
+    });
+
+    const unsubscribeCallEnded = realTimeService.on('call:ended', (data) => {
+      console.log('CallingDashboard: Call ended', data);
+      if (data?.callId === pendingRequestRef.current?.callId) {
+        setPendingRequest(null);
+        pendingRequestRef.current = null;
+      }
+    });
+
+    const connectToRealTime = async () => {
+      try {
+        if (realTimeService.isConnected()) {
+          console.log('CallingDashboard: Real-time service already connected');
+          realTimeConnectionRef.current = true;
+          return;
+        }
+
+        console.log('CallingDashboard: Establishing real-time connection...');
+        await realTimeService.connect(userId, { device: 'web' });
+      } catch (err) {
+        console.error('CallingDashboard: Failed to connect to real-time service:', err);
+        showNotice(
+          'Could not connect to call notifications. You can still receive calls, but notifications may be delayed.',
+          'warning'
+        );
+      }
+    };
+
+    void connectToRealTime();
+
+    return () => {
+      unsubscribeConnected?.();
+      unsubscribeCallAccepted?.();
+      unsubscribeCallRejected?.();
+      unsubscribeCallTimeout?.();
+      unsubscribeCallEnded?.();
+    };
+  }, [currentUser?.id, currentUser?.userId, showNotice, navigate]);
+
+  useEffect(() => {
+    const unsubscribePreferenceUpdates = realTimeService.on('user_call_preference_updated', () => {
+      scheduleMarketRefresh();
+    });
+
+    const unsubscribeOwnPreferenceUpdates = realTimeService.on('your_call_preference_updated', (data) => {
+      syncAvailabilityState(data);
+      scheduleMarketRefresh();
+    });
+
+    return () => {
+      unsubscribePreferenceUpdates?.();
+      unsubscribeOwnPreferenceUpdates?.();
+      if (marketRefreshTimeoutRef.current) {
+        window.clearTimeout(marketRefreshTimeoutRef.current);
+      }
+    };
+  }, [scheduleMarketRefresh, syncAvailabilityState]);
+
+  const handleToggleAvailability = async () => {
+    if (!currentUser || updatingAvailability) {
+      return;
+    }
+
+    const nextAvailability = !availability;
+    setUpdatingAvailability(true);
+    try {
+      await updateMyCallPreferences(
+        nextAvailability,
+        nextAvailability ? callTypes : { voice: false, video: false }
+      );
+      const typesList = nextAvailability && callTypes.voice && callTypes.video ? 'voice and video' : 
+                       nextAvailability && callTypes.voice ? 'voice only' :
+                       nextAvailability && callTypes.video ? 'video only' : '';
+      showNotice(
+        nextAvailability
+          ? `You are available for incoming ${typesList} calls.`
+          : 'You are offline for paid calls.',
+        'success'
+      );
+      await loadCallingMarket();
+    } catch (error) {
+      console.error('Failed to update availability:', error);
+      showNotice('Could not update your call availability.', 'error');
+    } finally {
+      setUpdatingAvailability(false);
+    }
+  };
+
+  const handleCallTypeChange = async (type) => {
+    const newCallTypes = { ...callTypes, [type]: !callTypes[type] };
+    // Ensure at least one call type is selected
+    if (!newCallTypes.voice && !newCallTypes.video) {
+      showNotice('You must select at least one call type.', 'warning');
+      return;
+    }
+    setCallTypes(newCallTypes);
+
+    // Always update the server with the new preferences
+    try {
+      await updateMyCallPreferences(availability, newCallTypes);
+      showNotice('Call type preferences updated.', 'success');
+      // Reload market to reflect the change
+      await loadCallingMarket();
+    } catch (error) {
+      console.error('Failed to update call type preferences:', error);
+      showNotice('Could not update call type preferences.', 'error');
+      // Revert the change
+      setCallTypes(callTypes);
+    }
+  };
+
+  const handleMarketFilterChange = (field, value) => {
+    setMarketFilters((currentFilters) => ({
+      ...currentFilters,
+      [field]: value
+    }));
+  };
+
+  const handleApplyMarketFilters = () => {
+    setAppliedMarketFilters(normalizeMarketFilters(marketFilters));
+  };
+
+  const handleClearMarketFilters = () => {
+    const clearedFilters = createDefaultMarketFilters();
+    setMarketFilters(clearedFilters);
+    setAppliedMarketFilters(clearedFilters);
+  };
+
+  const handlePurchase = (pkg) => {
+    if (!currentUser) {
+      showNotice('Please log in to buy call credits.', 'error');
+      return;
+    }
+
+    setSelectedPackage(pkg);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = (paymentData) => {
+    setShowPaymentModal(false);
+    setBalance(paymentData.balance);
+    showNotice(
+      `Success! ${paymentData.creditsAdded} credits added to your account.`,
+      'success'
+    );
+    loadBalance();
+  };
+
+  const handlePaymentError = (error) => {
+    showNotice(error, 'error');
+  };
+
+  const handleStartCall = async (user, callType = 'voice') => {
+    const callerId = getUserId(user);
+    const normalizedCallType = callType === 'video' ? 'video' : 'voice';
+    const callerSupportsRequestedType = user.availableCallTypes?.includes(normalizedCallType);
+    const rate = toNumber(user?.rates?.[normalizedCallType], normalizedCallType === 'video' ? 10 : 5);
+    const requiredCredits = rate * ESTIMATED_CALL_MINUTES;
+
+    if (!callerId) {
+      showNotice('This caller profile is missing a valid ID.', 'error');
+      return;
+    }
+
+    if (!callerSupportsRequestedType) {
+      showNotice(`This person is currently available for ${user.availableCallTypes?.join(' and ') || 'other'} calls only.`, 'warning');
+      return;
+    }
+
+    if (balance < requiredCredits) {
+      showNotice(
+        `You need at least ${requiredCredits} credits for a ${CALL_TYPES[normalizedCallType].label.toLowerCase()} call.`,
+        'error'
+      );
+      return;
+    }
+
+    const actionId = `${callerId}:${normalizedCallType}`;
+    setActiveCallAction(actionId);
 
     try {
-      // Deduct initial credits (first minute estimate)
-      const deduct = await callWalletService.deductCredits(null, 5, 'voice');
-      if (deduct.success) {
-        // Navigate to call interface
-        console.log('Starting call with:', user.name);
-        // In production, open call interface
-        alert(`Starting call with ${user.name}...`);
+      const response = await apiCall('/calling/market/request', 'POST', {
+        targetUserId: callerId,
+        callType: normalizedCallType
+      });
+
+      if (response?.success) {
+        const pendingRequestData = {
+          ...response,
+          callId: response.callId || response.id,
+          userName: user.name,
+          userId: callerId,
+          callType: normalizedCallType
+        };
+        setPendingRequest(pendingRequestData);
+        pendingRequestRef.current = pendingRequestData;
+        console.log('📞 CallingDashboard: Call request sent', {
+          callId: pendingRequestData.callId,
+          sessionId: pendingRequestData.sessionId,
+          targetUser: user.name
+        });
+        showNotice(
+          `${CALL_TYPES[normalizedCallType].label} call request sent to ${user.name}. Credits are reserved only when they accept.`,
+          'success'
+        );
       }
     } catch (error) {
       console.error('Failed to start call:', error);
+      showNotice(error?.response?.data?.error || 'Could not send the call request.', 'error');
     } finally {
-      setCalling(false);
-      setCallModal(null);
+      setActiveCallAction(null);
+    }
+  };
+
+  const handleRedemptionSuccess = async (redemptionData = {}) => {
+    const returnedBalance = toNumber(redemptionData.callCreditsBalance, null);
+    const responseCreditsAdded = toNumber(
+      redemptionData.creditsGranted ?? redemptionData.callCreditsGranted ?? redemptionData.creditsAdded,
+      0
+    );
+    const creditsAdded = responseCreditsAdded ||
+      (Number.isFinite(returnedBalance) ? Math.max(0, returnedBalance - balance) : 0);
+
+    setShowCouponModal(false);
+    if (Number.isFinite(returnedBalance)) {
+      setBalance(returnedBalance);
+    }
+    await loadBalance();
+    showNotice(`Coupon redeemed! ${creditsAdded} credits added to your account.`, 'success');
+  };
+
+  // Handle accepting incoming call request
+  const handleAcceptIncomingCall = async (callData) => {
+    try {
+      // Normalize call data to ensure all fields are present
+      const normalizedCallData = {
+        ...callData,
+        callId: callData.callId || callData.sessionId,
+        fromUserId: callData.fromUserId || callData.callerId,
+        callType: callData.callType || 'voice'
+      };
+
+      console.log('📞 CallingDashboard: Accepting incoming call', {
+        receivedCallId: normalizedCallData.callId,
+        fromUserId: normalizedCallData.fromUserId
+      });
+
+      const response = await apiCall(`/calling/market/accept/${normalizedCallData.requestId}`, 'POST');
+      if (response?.success) {
+        showNotice('Call accepted! Connecting...', 'success');
+        dismissIncomingCall();
+        
+        // Navigate to video call interface
+        // If matchId exists, use match-based route; otherwise use userId-based route
+        const hasMatchId = normalizedCallData?.matchId;
+        const videoCallRoute = hasMatchId 
+          ? `/matches/${normalizedCallData.matchId}/video`
+          : `/calls/${normalizedCallData.fromUserId}/video`;
+        
+        const returnPath = hasMatchId
+          ? `/matches/${normalizedCallData.matchId}/chat`
+          : `/call`;
+
+        console.log('📞 CallingDashboard: Navigating receiver to video room', {
+          callId: normalizedCallData.callId,
+          route: videoCallRoute
+        });
+
+          navigate(videoCallRoute, {
+          state: {
+            callMode: 'incoming',
+            autoAccepted: true,
+            incomingCall: normalizedCallData,
+            returnPath: returnPath,
+            callType: normalizedCallData.callType,
+            targetUserId: normalizedCallData.fromUserId
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error accepting call:', error);
+      showNotice(
+        error?.response?.data?.error || 'Failed to accept the call. Please try again.',
+        'error'
+      );
+    }
+  };
+
+  // Handle declining incoming call request
+  const handleDeclineIncomingCall = async (callData) => {
+    try {
+      const response = await apiCall(`/calling/market/decline/${callData.requestId}`, 'POST');
+      if (response?.success) {
+        showNotice('Call request declined.', 'info');
+        dismissIncomingCall();
+      }
+    } catch (error) {
+      console.error('Error declining call:', error);
+      showNotice(
+        error?.response?.data?.error || 'Failed to decline the call.',
+        'error'
+      );
     }
   };
 
   return (
     <div className="calling-dashboard">
       <div className="calling-header">
-        <h1>📞 FRND Calling</h1>
-        <p>Make friends through voice and video calls</p>
+        <h1>Calls</h1>
+        <p>Use credits to request voice or video calls with people who are available now.</p>
       </div>
 
-      {/* Balance Card */}
+      {notice ? (
+        <div className={`calling-notice calling-notice-${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}>
+          <span>{notice.message}</span>
+          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+
       <div className="balance-card">
         <div className="balance-info">
           <span className="balance-label">Your Credits</span>
@@ -122,58 +688,213 @@ const CallDashboard = () => {
             <span className="balance-amount">{balance} credits</span>
           )}
         </div>
-        <button 
-          className="btn-reload"
-          onClick={() => document.getElementById('credits-section')?.scrollIntoView({ behavior: 'smooth' })}
-        >
-          Reload Credits
-        </button>
+        <div className="balance-actions">
+          <button
+            className="btn-reload"
+            onClick={() => document.getElementById('credits-section')?.scrollIntoView({ behavior: 'smooth' })}
+            type="button"
+          >
+            Add Credits
+          </button>
+          <button
+            className="btn-coupon"
+            onClick={() => setShowCouponModal(true)}
+            type="button"
+            title="Redeem a coupon code for credits"
+          >
+            Redeem Coupon
+          </button>
+        </div>
       </div>
 
-      {/* Credit Packages */}
+      <section className="availability-section">
+        <div>
+          <h2>Receive Calls</h2>
+          <p>
+            {availability
+              ? 'You are visible to people looking for a call.'
+              : 'Turn this on when you are ready to receive paid calls.'}
+          </p>
+        </div>
+
+        {availability && (
+          <div className="call-types-selector">
+            <div className="call-types-title">Available for:</div>
+            <div className="call-types-options">
+              <label className="call-type-option">
+                <input
+                  type="checkbox"
+                  checked={callTypes.voice}
+                  onChange={() => handleCallTypeChange('voice')}
+                  disabled={updatingAvailability}
+                />
+                <span className="call-type-label">
+                  <span className="call-type-icon">🎤</span> Voice Calls
+                </span>
+              </label>
+              <label className="call-type-option">
+                <input
+                  type="checkbox"
+                  checked={callTypes.video}
+                  onChange={() => handleCallTypeChange('video')}
+                  disabled={updatingAvailability}
+                />
+                <span className="call-type-label">
+                  <span className="call-type-icon">📹</span> Video Calls
+                </span>
+              </label>
+            </div>
+            <p className="call-types-hint">Callers will only see you for the types you select above.</p>
+          </div>
+        )}
+
+        <button
+          type="button"
+          className={`availability-toggle ${availability ? 'active' : ''}`}
+          onClick={handleToggleAvailability}
+          disabled={loadingAvailability || updatingAvailability}
+          aria-pressed={availability}
+        >
+          {loadingAvailability
+            ? 'Checking...'
+            : updatingAvailability
+              ? 'Saving...'
+              : availability
+                ? 'Available'
+                : 'Go Available'}
+        </button>
+      </section>
+
       <section id="credits-section" className="credits-section">
         <h2>Buy Credits</h2>
         <div className="packages-grid">
-          {CREDIT_PACKAGES.map((pkg) => (
-            <div 
-              key={pkg.id} 
-              className={`package-card ${selectedPackage?.id === pkg.id ? 'selected' : ''}`}
+          {normalizedPackages.map((pkg) => (
+            <button
+              type="button"
+              key={pkg.id}
+              className={`package-card ${selectedPackage?.id === pkg.id && showPaymentModal ? 'selected' : ''}`}
               onClick={() => handlePurchase(pkg)}
+              disabled={showPaymentModal}
             >
-              <div className="package-badge">{pkg.name}</div>
-              <div className="package-credits">{pkg.credits + pkg.bonus} credits</div>
-              {pkg.bonus > 0 && (
-                <div className="package-bonus">+{pkg.bonus} bonus</div>
-              )}
-              <div className="package-price">₹{pkg.price}</div>
-              <button 
-                className="btn-buy-package"
-                onClick={(e) => { e.stopPropagation(); handlePurchase(pkg); }}
-                disabled={purchasing}
-              >
-                {purchasing && selectedPackage?.id === pkg.id ? 'Processing...' : 'Buy Now'}
-              </button>
-            </div>
+              <span className="package-badge">{pkg.name}</span>
+              <span className="package-credits">{pkg.credits + pkg.bonus} credits</span>
+              {pkg.bonus > 0 ? (
+                <span className="package-bonus">+{pkg.bonus} bonus</span>
+              ) : null}
+              <span className="package-price">INR {pkg.price}</span>
+              <span className="btn-buy-package">
+                {showPaymentModal && selectedPackage?.id === pkg.id ? 'Processing...' : 'Buy'}
+              </span>
+            </button>
           ))}
         </div>
       </section>
 
-      {/* Calling Market */}
       <section className="market-section">
-        <h2>People Ready to Talk</h2>
-        <p className="market-hint">Browse profiles and start a call with someone interesting</p>
-        
+        <div className="section-title-row">
+          <div>
+            <h2>Available Now</h2>
+            <p className="market-hint">Send a request first. The call starts only after they accept.</p>
+          </div>
+          <button type="button" className="btn-refresh" onClick={loadCallingMarket} disabled={loadingMarket}>
+            Refresh
+          </button>
+        </div>
+
+        <div className="market-filters-card">
+          <div className="market-filters-grid">
+            <label className="market-filter-field">
+              <span>Min age</span>
+              <input
+                type="number"
+                min="18"
+                max="99"
+                value={marketFilters.minAge}
+                onChange={(event) => handleMarketFilterChange('minAge', event.target.value)}
+                placeholder="18"
+              />
+            </label>
+            <label className="market-filter-field">
+              <span>Max age</span>
+              <input
+                type="number"
+                min="18"
+                max="99"
+                value={marketFilters.maxAge}
+                onChange={(event) => handleMarketFilterChange('maxAge', event.target.value)}
+                placeholder="45"
+              />
+            </label>
+            <label className="market-filter-field">
+              <span>Language</span>
+              <select
+                value={marketFilters.language}
+                onChange={(event) => handleMarketFilterChange('language', event.target.value)}
+              >
+                <option value="">Any language</option>
+                {MARKET_LANGUAGE_OPTIONS.map((language) => (
+                  <option key={language} value={language}>
+                    {language}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="market-filter-field">
+              <span>Gender</span>
+              <select
+                value={marketFilters.gender}
+                onChange={(event) => handleMarketFilterChange('gender', event.target.value)}
+              >
+                <option value="">Any gender</option>
+                {MARKET_GENDER_OPTIONS.map((genderOption) => (
+                  <option key={genderOption} value={genderOption}>
+                    {genderOption}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="market-filters-actions">
+            <button
+              type="button"
+              className="btn-market-filter"
+              onClick={handleApplyMarketFilters}
+              disabled={loadingMarket}
+            >
+              Apply filters
+            </button>
+            <button
+              type="button"
+              className="btn-market-filter secondary"
+              onClick={handleClearMarketFilters}
+              disabled={loadingMarket}
+            >
+              Clear
+            </button>
+            <span className="market-filter-summary">
+              {hasAppliedMarketFilters
+                ? `${marketTotal} people match your filters.`
+                : `${marketTotal} people are available right now.`}
+            </span>
+          </div>
+        </div>
+
         {loadingMarket ? (
-          <div className="loading-market">Loading available callers...</div>
+          <div className="loading-market">Loading available people...</div>
+        ) : !marketEnabled ? (
+          <div className="empty-market">
+            <p>Calling is currently unavailable.</p>
+            <p>Please check back later.</p>
+          </div>
         ) : callingUsers.length === 0 ? (
           <div className="empty-market">
-            <p>No callers available right now.</p>
-            <p>Check back soon or be the first to go live!</p>
+            <p>No one is available for calls right now.</p>
+            <p>You can turn on your own availability above or check again soon.</p>
           </div>
         ) : (
           <div className="callers-list">
             {callingUsers.map((user) => (
-              <div key={user.id} className="caller-card">
+              <div key={user.userId} className="caller-card">
                 <div className="caller-avatar">
                   {user.photoUrl ? (
                     <img src={user.photoUrl} alt={user.name} />
@@ -182,74 +903,114 @@ const CallDashboard = () => {
                   )}
                 </div>
                 <div className="caller-info">
-                  <h3>{user.name}</h3>
-                  <p className="caller-bio">{user.bio || 'Looking to chat!'}</p>
+                  <h3>{user.name}{user.age ? `, ${user.age}` : ''}</h3>
+                  <p className="caller-bio">{user.bio}</p>
                   <div className="caller-tags">
-                    <span className="caller-rate">₹{user.voiceRate}/min</span>
-                    {user.interests?.slice(0, 2).map((tag, i) => (
+                    {user.availableFor?.voice && <span className="call-type-available voice">🎤 Voice</span>}
+                    {user.availableFor?.video && <span className="call-type-available video">📹 Video</span>}
+                    {user.availableFor?.voice ? (
+                      <span className="caller-rate">Voice INR {user.rates.voice}/min</span>
+                    ) : null}
+                    {user.availableFor?.video ? (
+                      <span className="caller-rate video-rate">Video INR {user.rates.video}/min</span>
+                    ) : null}
+                    {user.distanceKm !== null ? (
+                      <span className="caller-tag">{user.distanceKm} km away</span>
+                    ) : null}
+                    {user.languages.slice(0, 1).map((language) => (
+                      <span key={language} className="caller-tag">{language}</span>
+                    ))}
+                    {user.interests.slice(0, 2).map((tag, i) => (
                       <span key={i} className="caller-tag">{tag}</span>
                     ))}
                   </div>
                 </div>
-                <div className="caller-actions">
-                  <button 
-                    className="btn-voice-call"
-                    onClick={() => handleStartCall(user)}
-                    disabled={balance < 5}
-                    title={`Start voice call (${user.voiceRate}/min)`}
-                  >
-                    📞 Call
-                  </button>
-                  <button 
-                    className="btn-video-call"
-                    onClick={() => handleStartCall({ ...user, callType: 'video' })}
-                    disabled={balance < 10}
-                    title={`Start video call (${user.videoRate}/min)`}
-                  >
-                    📹 Video
-                  </button>
+                <div className={`caller-actions ${user.availableCallTypes.length === 1 ? 'single' : ''}`}>
+                  {user.availableCallTypes.map((callType) => {
+                    const config = CALL_TYPES[callType];
+                    const requiredCredits = user.rates[callType] * ESTIMATED_CALL_MINUTES;
+                    const actionId = `${user.userId}:${callType}`;
+                    const disabled = activeCallAction !== null || balance < requiredCredits;
+
+                    return (
+                      <button
+                        key={callType}
+                        className={`btn-call-action btn-${callType}-call`}
+                        onClick={() => handleStartCall(user, callType)}
+                        disabled={disabled}
+                        title={`${config.actionLabel}: ${requiredCredits} credits minimum`}
+                        type="button"
+                      >
+                        <strong>{activeCallAction === actionId ? 'Sending...' : config.label}</strong>
+                        <span>{config.description}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        <button className="btn-go-live" onClick={() => alert('Go Live feature coming soon!')}>
-          🎤 Become a Caller - Earn Credits
-        </button>
+        {pendingRequest ? (
+          <div className="pending-call-card" role="status">
+            <strong>Request sent</strong>
+            <p>{pendingRequest.userName} has about two minutes to accept. Keep this page open for updates.</p>
+          </div>
+        ) : null}
       </section>
 
-      {/* Pricing Info */}
       <section className="pricing-section">
         <h2>How It Works</h2>
         <div className="pricing-steps">
           <div className="pricing-step">
             <span className="step-number">1</span>
             <h3>Buy Credits</h3>
-            <p>Choose a package that fits your budget</p>
+            <p>Choose a package that fits your budget.</p>
           </div>
           <div className="pricing-step">
             <span className="step-number">2</span>
-            <h3>Browse Callers</h3>
-            <p>Find interesting people to chat with</p>
+            <h3>Pick a Person</h3>
+            <p>Only available profiles are shown here.</p>
           </div>
           <div className="pricing-step">
             <span className="step-number">3</span>
-            <h3>Start a Call</h3>
-            <p>Voice or video - credits are deducted per minute</p>
+            <h3>Send Request</h3>
+            <p>Voice or video, with the rate shown first.</p>
           </div>
           <div className="pricing-step">
             <span className="step-number">4</span>
-            <h3>Earn as a Caller</h3>
-            <p>Go live and earn credits when others call you</p>
+            <h3>Talk Safely</h3>
+            <p>The call begins only after both sides agree.</p>
           </div>
         </div>
         <div className="pricing-rates">
           <h3>Current Rates</h3>
-          <p>Voice: ₹5/min | Video: ₹10/min</p>
-          <p>Callers earn 70% of each call</p>
+          <p>Rates are shown on each profile before you send a request.</p>
+          <p>Credits are checked for a 5 minute estimate and settled after the call.</p>
         </div>
       </section>
+
+      <CouponRedemption
+        isOpen={showCouponModal}
+        onClose={() => setShowCouponModal(false)}
+        onRedemptionSuccess={handleRedemptionSuccess}
+      />
+
+      <RazorpayPayment
+        isOpen={showPaymentModal}
+        package={selectedPackage}
+        onClose={() => setShowPaymentModal(false)}
+        onSuccess={handlePaymentSuccess}
+        onError={handlePaymentError}
+      />
+
+      <IncomingCallNotification
+        incomingCall={filteredIncomingCall}
+        onDismiss={dismissIncomingCall}
+        onAccept={handleAcceptIncomingCall}
+        onDecline={handleDeclineIncomingCall}
+      />
     </div>
   );
 };

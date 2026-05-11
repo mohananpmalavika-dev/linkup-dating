@@ -141,7 +141,7 @@
 }
 
 .value-box.your-value {
-  border: 2px solid #667eea;
+  border: 2px solid var(--dh-logo-copper, #d06030);
 }
 
 .value-box.benchmark-value {
@@ -272,7 +272,7 @@
   background: #f8f9fa;
   padding: 1.5rem;
   border-radius: 8px;
-  border-left: 4px solid #667eea;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
 }
 
 .action-icon {
@@ -297,17 +297,17 @@
   background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
   padding: 1.5rem;
   border-radius: 8px;
-  border-left: 4px solid #2196f3;
+  border-left: 4px solid var(--dh-logo-copper, #d06030);
 }
 
 .benchmark-info h4 {
   margin: 0 0 0.75rem;
-  color: #1565c0;
+  color: var(--dh-logo-ink, #102030);
 }
 
 .benchmark-info p {
   margin: 0;
-  color: #1565c0;
+  color: var(--dh-logo-ink, #102030);
   opacity: 0.9;
   font-size: 0.9rem;
   line-height: 1.6;

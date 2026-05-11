@@ -39,7 +39,7 @@ Created a comprehensive logout feature with a beautiful, user-friendly launch pa
 .launch-header - Sticky header with gradient background and golden bottom border
 .header-content - Flexible layout for logo, title, and user controls
 .header-logo - Small circular logo in header
-.header-title - "LinkUp Dating" title
+.header-title - "DatingHub" title
 .user-greeting - Yellow badge showing user's name
 .logout-button - Prominent yellow button with hover effects
 ```
@@ -65,7 +65,7 @@ Created a comprehensive logout feature with a beautiful, user-friendly launch pa
 
 ### When Authenticated:
 1. **Header Appears** - Sticky header shows at top with:
-   - LinkUp Dating logo and title
+   - DatingHub logo and title
    - User's name greeting
    - Sign Out button
 

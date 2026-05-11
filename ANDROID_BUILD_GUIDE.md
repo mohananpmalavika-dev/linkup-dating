@@ -1,8 +1,8 @@
-# LinkUp - Android Build Guide
+# DatingHub - Android Build Guide
 
 ## Project Overview
 
-**LinkUp** is a standalone Android messaging and chatroom communication application built with React, Capacitor, and Node.js backend.
+**DatingHub** is a standalone Android messaging and chatroom communication application built with React, Capacitor, and Node.js backend.
 
 **Features:**
 - ✅ Real-time messaging (Direct chats & Group chats)
@@ -61,9 +61,9 @@ emulator -version
 
 ## Setup Steps
 
-### Step 1: Navigate to LinkUp Project
+### Step 1: Navigate to DatingHub Project
 ```bash
-cd C:\Users\Dhanya\LinkUp
+cd C:\Users\Dhanya\DatingHub
 ```
 
 ### Step 2: Install Dependencies
@@ -126,7 +126,7 @@ Edit `android/app/build.gradle`:
 android {
     ...
     defaultConfig {
-        applicationId "com.linkup.messaging"  // Package ID
+        applicationId "com.datinghub.app"  // Package ID
         minSdkVersion 24
         targetSdkVersion 34
         versionCode 1
@@ -148,7 +148,7 @@ android {
 2. **Add App Name** - `android/app/src/main/res/values/strings.xml`:
 ```xml
 <resources>
-    <string name="app_name">LinkUp</string>
+    <string name="app_name">DatingHub</string>
 </resources>
 ```
 
@@ -242,7 +242,7 @@ adb install -r path/to/app-debug.apk
 
 3. **Run and Test:**
 ```bash
-adb shell am start -n com.linkup.messaging/.MainActivity
+adb shell am start -n com.datinghub.app/.MainActivity
 ```
 
 ### On Physical Device
@@ -262,7 +262,7 @@ adb install -r path/to/app-debug.apk
 
 4. **Check Logs:**
 ```bash
-adb logcat | grep LinkUp
+adb logcat | grep DatingHub
 ```
 
 ---
@@ -361,7 +361,7 @@ npm run build  # Verify build succeeds
 ## Project Structure
 
 ```
-LinkUp/
+DatingHub/
 ├── public/                 # HTML entry point
 ├── src/
 │   ├── components/        # React components

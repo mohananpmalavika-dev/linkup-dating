@@ -3,6 +3,7 @@ services:
     name: linkup-backend
     runtime: node
     buildCommand: cd backend && npm install --legacy-peer-deps
+    preDeployCommand: cd backend && npm run render:predeploy
     startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
@@ -33,6 +34,8 @@ services:
         sync: false
       - key: REDIS_URL
         sync: false
+      - key: SEED_GOOGLE_PLAY_REVIEWERS
+        value: true
     region: oregon
     plan: free
 

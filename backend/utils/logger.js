@@ -32,7 +32,7 @@ const consoleFormat = winston.format.combine(
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: logFormat,
-  defaultMeta: { service: 'linkup-dating-api' },
+  defaultMeta: { service: 'datinghub-api' },
   transports: [
     new winston.transports.Console({
       format: consoleFormat,

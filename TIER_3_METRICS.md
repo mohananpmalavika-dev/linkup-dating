@@ -279,7 +279,7 @@ Impact:
 
 ### Tier 3 vs. Competitors
 
-| Feature | LinkUp | Tinder | Bumble | Hinge |
+| Feature | DatingHub | Tinder | Bumble | Hinge |
 |---------|--------|--------|--------|-------|
 | Friend Referrals | ✅ Tier 3 | ❌ | ✅ Limited | ✅ Limited |
 | Video Dating | ✅ Tier 3 | ✅ Basic | ✅ Basic | ✅ Basic |
@@ -436,7 +436,7 @@ Year 3 Projection (Growth): +$900,000 profit
 
 ---
 
-## Comparison: LinkUp Post-Tier 3
+## Comparison: DatingHub Post-Tier 3
 
 ### Engagement Metrics
 ```

@@ -96,8 +96,8 @@
 .quicklinks-input:focus,
 .quicklinks-select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 0 0 3px rgba(208, 96, 48, 0.1);
 }
 
 /* Messages */
@@ -140,7 +140,7 @@
 
 .quicklinks-btn-primary {
   padding: 0.75rem 1.5rem;
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
   border: none;
   border-radius: 6px;
@@ -154,7 +154,7 @@
 .quicklinks-btn-primary:hover {
   background: #5568d3;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.3);
 }
 
 .quicklinks-btn-primary:active {
@@ -178,8 +178,8 @@
 }
 
 .quicklinks-card:hover {
-  border-color: #667eea;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  border-color: var(--dh-logo-copper, #d06030);
+  box-shadow: 0 4px 12px rgba(208, 96, 48, 0.15);
 }
 
 @keyframes fadeIn {
@@ -215,7 +215,7 @@
   display: inline-block;
   padding: 0.25rem 0.6rem;
   background: #e8eef9;
-  color: #667eea;
+  color: var(--dh-logo-copper, #d06030);
   border-radius: 12px;
   font-size: 0.7rem;
   font-weight: 600;
@@ -264,7 +264,7 @@
 }
 
 .quicklinks-btn-open {
-  background: #667eea;
+  background: var(--dh-logo-copper, #d06030);
   color: white;
 }
 

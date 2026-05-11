@@ -15,6 +15,8 @@ const ageVerificationRoutes = require('./routes/ageVerification');
 const datingRoutes = require('./routes/dating');
 const messagingRoutes = require('./routes/messaging');
 const messagingEnhancedRoutes = require('./routes/messagingEnhanced');
+const messageReactionRoutes = require('./routes/messageReactions');
+const moderationRoutes = require('./routes/moderation');
 const chatroomsRoutes = require('./routes/chatrooms');
 const lobbyRoutes = require('./routes/lobby');
 const adminRoutes = require('./routes/admin');
@@ -26,6 +28,8 @@ const flashsalesRoutes = require('./routes/flashsales');
 const videoCallRoutes = require('./routes/video-calls');
 const callMarketRoutes = require('./routes/call-market');
 const callWalletRoutes = require('./routes/call-wallet');
+const callPreferencesRoutes = require('./routes/callPreferences');
+const callEarningsRoutes = require('./routes/call-earnings');
 const socialRoutes = require('./routes/social');
 const notificationRoutes = require('./routes/notifications');
 const challengeRoutes = require('./routes/challenges');
@@ -70,8 +74,12 @@ const io = socketIO(server, {
   cors: {
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  },
+  transports: ['websocket', 'polling'],
+  pingInterval: 25000,
+  pingTimeout: 5000
 });
 
 // Category B: Register real-time event handlers (presence, typing, activity, match notifications, profile changes)
@@ -103,6 +111,13 @@ app.use((req, res, next) => {
   res.on('finish', () => {
     logRequest(req, res, startTime);
   });
+  next();
+});
+
+// Attach socket.io instance to app for use in routes
+app.use((req, res, next) => {
+  req.app.io = io;
+  req.app.emitToUser = emitToUser;
   next();
 });
 
@@ -169,15 +184,29 @@ const markUserOffline = (socketId) => {
 
 // WebSocket Connection
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  console.log('[Socket.io] User connected:', socket.id);
+
+  // Handle connection errors
+  socket.on('error', (error) => {
+    console.error('[Socket.io] Error on socket:', socket.id, error);
+  });
+
+  socket.on('connect_error', (error) => {
+    console.error('[Socket.io] Connection error on socket:', socket.id, error);
+  });
 
   socket.on('user_online', (userId) => {
     if (!userId) {
+      console.warn('[Socket.io] user_online called without userId');
       return;
     }
 
     socket.data.userId = normalizeUserKey(userId);
     const wasOffline = markUserOnline(userId, socket.id);
+
+    // Join user-specific room for targeted notifications (calls, messages, etc)
+    socket.join(`user_${userId}`);
+    console.log(`[Socket.io] User ${userId} joined room: user_${userId}`);
 
     if (wasOffline) {
       io.emit('user_status', { userId, online: true });
@@ -490,7 +519,7 @@ app.use((req, res, next) => {
 // Root route
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'LinkUp Dating API Backend',
+    message: 'DatingHub API Backend',
     version: '1.0.0',
     status: 'running',
     endpoints: {
@@ -515,10 +544,13 @@ app.use('/api/orders', ordersRoutes);
 app.use('/api/app-data', appDataRoutes);
 app.use('/api/astrology', astrologyRoutes);
 app.use('/api/flashsales', flashsalesRoutes);
+app.use('/api/moderation', moderationRoutes);
 app.use('/api/dating/video-calls', authenticateToken, videoCallRoutes);
 app.use('/api/dating', authenticateToken, datingRoutes);
 app.use('/api/messaging', authenticateToken, messagingRoutes);
 app.use('/api/messaging', authenticateToken, messagingEnhancedRoutes);
+app.use('/api/messages', messageReactionRoutes);
+app.use('/api/reactions', messageReactionRoutes);
 app.use('/api/chatrooms', authenticateToken, chatroomsRoutes);
 app.use('/api/lobby', authenticateToken, lobbyRoutes);
 app.use('/api/admin', authenticateToken, adminRoutes);
@@ -526,9 +558,11 @@ app.use('/api/social', authenticateToken, socialRoutes);
 app.use('/api/notifications', authenticateToken, notificationRoutes);
 app.use('/api/challenges', authenticateToken, challengeRoutes);
 app.use('/api/streaks', authenticateToken, streakRoutes);
+app.use('/api/matches', authenticateToken, streakRoutes);
 app.use('/api/introductions', authenticateToken, introductionsRoutes);
 app.use('/api/boosts', boostRoutes);
 app.use('/api/preferences-priority', authenticateToken, preferencesPriorityRoutes);
+app.post('/api/redeem-coupon', authenticateToken, datingRoutes.redeemCoupon);
 app.use('/api/events', authenticateToken, eventRoutes);
 app.use('/api/double-dates', authenticateToken, doubleDatesRoutes);
 app.use('/api/referrals', referralRoutes);
@@ -544,6 +578,8 @@ app.use('/api/icebreaker-videos', authenticateToken, icebreakerVideoRoutes);
 app.use('/api/profile-reset', profileResetRoutes);
 app.use('/api/calling/market', authenticateToken, callMarketRoutes);
 app.use('/api/calling/wallet', authenticateToken, callWalletRoutes);
+app.use('/api/calling/preferences', authenticateToken, callPreferencesRoutes);
+app.use('/api/calling/earnings', authenticateToken, callEarningsRoutes);
 app.use('/api/moments', momentsRoutes);
 app.use('/api/video-insights', videoInsightsRoutes);
 app.use('/api/payments', authenticateToken, paymentsRoutes);
@@ -564,6 +600,7 @@ app.use((req, res) => {
       appData: '/api/app-data/public, /api/app-data/classifieds/*, /api/app-data/realestate/*',
       astrology: '/api/astrology/signs, /api/astrology/daily/{sign}, /api/astrology/profile',
       flashsales: '/api/flashsales, /api/flashsales/reserve/bulk',
+      moderation: '/api/moderation/*',
       dating: '/api/dating/* (requires auth)',
       messaging: '/api/messaging/* (requires auth)',
       chatrooms: '/api/chatrooms/* (requires auth)',
@@ -605,16 +642,35 @@ const startServer = () => {
   });
 };
 
-// Initialize database and start server
-db.init()
-  .then(async () => {
+// Start server immediately on port (don't wait for DB init)
+startServer();
+
+// Initialize database and sync models in background
+(async () => {
+  try {
+    await db.init();
+    
+    // Run database migrations
+    try {
+      const { runMigrations } = require('./utils/runMigrations');
+      logger.info('Running database migrations...');
+      const migrationResult = await runMigrations();
+      if (migrationResult.success) {
+        logger.info(`✓ Database migrations completed. Executed: ${migrationResult.executed} migrations`);
+      } else {
+        logger.error('Migration failed:', migrationResult.error);
+      }
+    } catch (migrationError) {
+      logger.error('Error during migrations:', migrationError.message);
+    }
+    
     // Sync Sequelize models with controlled order to prevent foreign key constraint errors
     try {
       const dbModels = require('./models');
       const { syncModelsInOrder } = require('./utils/syncModels');
 
       logger.info('Starting controlled model sync...');
-      syncModelsInOrder(dbModels.sequelize, dbModels, logger).then(async () => {
+      await syncModelsInOrder(dbModels.sequelize, dbModels, logger);
         logger.info('✓ Sequelize models synchronized successfully');
         
         // Initialize IP blocklist table (critical for auth flows)
@@ -694,34 +750,19 @@ db.init()
           });
           // Don't fail startup if calling system init fails
         }
-      }).catch(err => {
-        logger.error('Sequelize sync error', {
-          message: err.message,
-          stack: err.stack
-        });
-      });
     } catch (err) {
-      logger.error('Failed to load Sequelize models for sync', {
+      logger.error('Sequelize sync error', {
         message: err.message,
         stack: err.stack
       });
     }
-
-    startServer();
-  })
-  .catch(err => {
+  } catch (err) {
     logger.error('Failed to initialize database', {
       message: err.message,
       stack: err.stack
     });
-
-    if (process.env.NODE_ENV === 'production') {
-      logger.warn('Starting server without database initialization so the app can stay online.');
-      startServer();
-      return;
-    }
-
-    process.exit(1);
-  });
+    logger.warn('Server is running but database is not fully initialized yet. Some features may not work until initialization completes.');
+  }
+})();
 
 module.exports = { app, server, io };

@@ -319,7 +319,7 @@ const VideoCallAnalytics = () => {
                 {analytics.percentileVsIndustry > 50
                   ? 'better than average'
                   : 'below average'}{' '}
-                compared to other users on LinkUp.
+                compared to other users on DatingHub.
               </p>
             </div>
           </div>

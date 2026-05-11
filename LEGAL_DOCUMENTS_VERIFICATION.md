@@ -1,4 +1,4 @@
-# LinkUp Legal Documents - Play Store Submission Verification
+# DatingHub Legal Documents - Play Store Submission Verification
 
 **Status**: ✅ **READY FOR SUBMISSION**  
 **Last Verified**: April 28, 2026  
@@ -23,7 +23,7 @@
 - ✅ Security measures (technical, infrastructure, organizational)
 - ✅ Data breach notification (72-hour requirement)
 - ✅ User rights (DPDPA + GDPR compliant)
-- ✅ Contact information (dpo@linkupapp.com)
+- ✅ Contact information (dpo@datinghub.app)
 - ✅ India-specific compliance (DPDPA 2023)
 - ✅ EU compliance (GDPR reference)
 
@@ -87,7 +87,7 @@
 - ✅ Billing timeline (with IST timezone reference)
 - ✅ Payment methods (Razorpay-based)
 - ✅ Trial period status (none currently)
-- ✅ Contact for refund issues (support@linkupapp.com)
+- ✅ Contact for refund issues (support@datinghub.app)
 
 **Play Store Requirements Met**:
 - ✅ Clear subscription pricing
@@ -168,17 +168,17 @@
 ### 2. Google Play Store Links
 - [ ] Add privacy policy URL to Play Store listing
 - [ ] Add terms of service URL to Play Store listing
-- [ ] Add support email (support@linkupapp.com)
-- [ ] Add DPO email (dpo@linkupapp.com) for complaints
+- [ ] Add support email (support@datinghub.app)
+- [ ] Add DPO email (dpo@datinghub.app) for complaints
 
 ### 3. App Store (iOS) Links
 - [ ] Add privacy policy URL to App Store listing (if iOS release planned)
 - [ ] Add terms of service URL to App Store listing
 
 ### 4. Website Links (Optional)
-- [ ] Publish documents at linkupapp.com/privacy
-- [ ] Publish documents at linkupapp.com/terms
-- [ ] Publish documents at linkupapp.com/refund-policy
+- [ ] Publish documents at datinghub.app/privacy
+- [ ] Publish documents at datinghub.app/terms
+- [ ] Publish documents at datinghub.app/refund-policy
 
 ---
 
@@ -199,9 +199,9 @@
 ## 📞 CONTACT INFORMATION
 
 **In Documents**:
-- Support Email: support@linkupapp.com
-- Appeals Email: appeals@linkupapp.com
-- Data Protection Officer: dpo@linkupapp.com
+- Support Email: support@datinghub.app
+- Appeals Email: appeals@datinghub.app
+- Data Protection Officer: dpo@datinghub.app
 
 **Must Configure in Settings**:
 - Support contact (make it functional)
@@ -286,5 +286,5 @@
 
 ---
 
-*Document prepared for LinkUp Dating App Launch*  
+*Document prepared for DatingHub App Launch*  
 *May 1, 2026*

@@ -99,7 +99,11 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
       });
 
       if (response.data.verified || response.data.success) {
-        setStep('confirm');
+        onAgeVerified({
+          method: verificationMethod,
+          dateOfBirth: dateOfBirth,
+          age: calculateAge(dateOfBirth)
+        });
       } else {
         setError(response.data.error || 'Age verification failed');
       }
@@ -127,10 +131,66 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
 
   return (
     <div className="age-gate-container">
+      <div className="age-gate-card simple-age-card">
+        <div className="age-gate-header">
+          <h1>Confirm your age</h1>
+          <p className="age-gate-subtitle">DatingHub is for adults 18 and older.</p>
+        </div>
+
+        <div className="age-gate-step">
+          <div className="form-group">
+            <label htmlFor="age-date-of-birth">Date of birth</label>
+            <input
+              id="age-date-of-birth"
+              type="date"
+              value={dateOfBirth}
+              onChange={handleDateChange}
+              max={new Date().toISOString().split('T')[0]}
+              className="dob-input"
+            />
+            {ageBracket !== null && (
+              <div className={`age-display ${ageBracket >= 18 ? 'valid' : 'invalid'}`}>
+                You are {ageBracket} years old
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <div className="error-message">
+              {error}
+            </div>
+          )}
+
+          <button
+            className="button-primary"
+            onClick={handleVerify}
+            disabled={!dateOfBirth || loading}
+          >
+            {loading ? 'Checking...' : 'Continue'}
+          </button>
+
+          <button
+            className="button-secondary"
+            onClick={onCancel}
+            disabled={loading}
+          >
+            Back
+          </button>
+
+          <p className="privacy-note">
+            Your birth date is used only to confirm the 18+ requirement.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="age-gate-container">
       <div className="age-gate-card">
         <div className="age-gate-header">
-          <h1>LinkUp Age Verification</h1>
-          <p className="age-gate-subtitle">You must be 18+ to use LinkUp</p>
+          <h1>DatingHub Age Verification</h1>
+          <p className="age-gate-subtitle">You must be 18+ to use DatingHub</p>
         </div>
 
         {/* Step 1: Choose Verification Method */}
@@ -237,7 +297,7 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
               <div className="success-icon">✅</div>
               <h2>Age Verification Successful!</h2>
               <p className="confirmation-text">
-                You have verified that you are {ageBracket} years old and meet the 18+ requirement to use LinkUp.
+                You have verified that you are {ageBracket} years old and meet the 18+ requirement to use DatingHub.
               </p>
 
               <div className="confirmation-details">
@@ -270,7 +330,7 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
             </button>
 
             <p className="confirmation-footer">
-              By continuing, you agree to LinkUp's Terms of Service and Privacy Policy
+              By continuing, you agree to DatingHub's Terms of Service and Privacy Policy
             </p>
           </div>
         )}
@@ -285,7 +345,7 @@ const AgeGate = ({ onAgeVerified, onCancel }) => {
       <div className="safety-info">
         <h3>Why Age Verification?</h3>
         <ul>
-          <li>LinkUp is designed for adults 18 and older</li>
+          <li>DatingHub is designed for adults 18 and older</li>
           <li>Age verification protects minors from inappropriate content</li>
           <li>Your date of birth is encrypted and never shared</li>
           <li>Falsifying age information may result in permanent ban</li>

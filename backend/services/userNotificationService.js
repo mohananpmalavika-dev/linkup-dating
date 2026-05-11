@@ -37,7 +37,7 @@ const userNotificationService = {
         [
           userId,
           payload.type || 'general',
-          payload.title || 'LinkUp update',
+          payload.title || 'DatingHub update',
           payload.body || '',
           JSON.stringify(payload.metadata || {})
         ]

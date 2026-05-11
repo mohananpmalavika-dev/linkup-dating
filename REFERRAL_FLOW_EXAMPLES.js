@@ -100,8 +100,8 @@ async function userGetMyCode() {
  * Via WhatsApp, SMS, Email, or Copy-Paste
  */
 function userShareCode(code, method = 'copy') {
-  const message = `Join me on LinkUp! Use my code: ${code}`;
-  const link = `https://linkup.dating/?referral=${code}`;
+  const message = `Join me on DatingHub! Use my code: ${code}`;
+  const link = `https://datinghub.app/?referral=${code}`;
   const fullMessage = `${message}\n${link}`;
 
   switch(method) {
@@ -114,7 +114,7 @@ function userShareCode(code, method = 'copy') {
       break;
     
     case 'email':
-      window.open(`mailto:?subject=Join LinkUp&body=${encodeURIComponent(fullMessage)}`);
+      window.open(`mailto:?subject=Join DatingHub&body=${encodeURIComponent(fullMessage)}`);
       break;
     
     case 'copy':
@@ -226,7 +226,7 @@ async function userGetStats() {
 //     "pendingReferrals": 1,
 //     "expiredReferrals": 1,
 //     "referralCode": "LINK1A2B3C4D",
-//     "referralLink": "https://linkup.dating/?referral=LINK1A2B3C4D",
+//     "referralLink": "https://datinghub.app/?referral=LINK1A2B3C4D",
 //     "rewardsEarned": {
 //       "premium_days": 21,
 //       "superlikes": 15
@@ -363,7 +363,7 @@ async function adminRegenerateCodeForUser(userId) {
  * Demonstrates the complete referral system
  */
 async function runCompleteReferralFlow() {
-  console.log('\n=== 🚀 LinkUp Referral System - Complete Flow ===\n');
+  console.log('\n=== 🚀 DatingHub Referral System - Complete Flow ===\n');
 
   try {
     // Step 1: Generate codes

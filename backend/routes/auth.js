@@ -112,7 +112,12 @@ const getRequestMetadata = (req) => ({
   userAgent: req.headers['user-agent'] || null
 });
 
-const isStrongPassword = (value = '') => String(value || '').length >= 8;
+const isStrongPassword = (value = '') => {
+  const pwd = String(value || '');
+  if (pwd.length < 8) return false;
+  // Require at least one uppercase, one lowercase, one number
+  return /[A-Z]/.test(pwd) && /[a-z]/.test(pwd) && /[0-9]/.test(pwd);
+};
 const isEmailAddress = (value = '') => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeRecipient(value));
 const looksLikePhoneNumber = (value = '') => /^\+?[0-9\s()-]{7,}$/.test(String(value || '').trim());
 const resolveAuthContact = ({ identifier, email, phone } = {}) => {
@@ -200,7 +205,7 @@ const maskRecipient = (value = '') => {
 };
 
 const buildDisplayNameFromEmail = (email = '') => {
-  const localPart = normalizeRecipient(email).split('@')[0] || 'linkup-user';
+  const localPart = normalizeRecipient(email).split('@')[0] || 'datinghub-user';
   const words = localPart
     .replace(/[._-]+/g, ' ')
     .split(' ')
@@ -208,7 +213,7 @@ const buildDisplayNameFromEmail = (email = '') => {
     .filter(Boolean);
 
   if (words.length === 0) {
-    return 'LinkUp User';
+    return 'DatingHub User';
   }
 
   return words
@@ -346,7 +351,7 @@ const ensureUserForOtpLogin = async (email, { allowCreate = true, ageVerificatio
   }
 
   if (!ageValidation.isOver18) {
-    throw createHttpError(403, 'You must be at least 18 years old to use LinkUp');
+    throw createHttpError(403, 'You must be at least 18 years old to use DatingHub');
   }
 
   const fallbackName = buildDisplayNameFromEmail(normalizedEmail);
@@ -499,10 +504,10 @@ const applyOtpRegistrationProfile = async (userId, email, registrationData = {})
   const locationCountry = String(registrationData.country || '').trim() || null;
   const bio = String(registrationData.bio || '').trim() || null;
 
-  if (normalizedUsername && !/^[a-zA-Z0-9_-]{3,20}$/.test(normalizedUsername)) {
+if (normalizedUsername && !/^[a-zA-Z0-9_.-]{3,20}$/.test(normalizedUsername)) {
     throw createHttpError(
       400,
-      'Username can only contain letters, numbers, underscores, and dashes (3-20 characters)'
+      'Username can only contain letters, numbers, periods, underscores, dashes (3-20 characters)'
     );
   }
 
@@ -613,8 +618,12 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'Email and password required' });
     }
 
-    if (password !== confirmPassword) {
+if (password !== confirmPassword) {
       return res.status(400).json({ error: 'Passwords do not match' });
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters with uppercase, lowercase, and number' });
     }
 
     // Check account creation limit BEFORE age verification
@@ -663,7 +672,7 @@ router.post('/signup', async (req, res) => {
 
     if (!ageValidation.isOver18) {
       return res.status(403).json({
-        error: 'You must be at least 18 years old to use LinkUp',
+        error: 'You must be at least 18 years old to use DatingHub',
         code: 'UNDERAGE_USER'
       });
     }
@@ -1296,7 +1305,7 @@ router.post('/send-otp', async (req, res) => {
 
       if (!ageValidation.isOver18) {
         return res.status(403).json({
-          error: 'You must be at least 18 years old to use LinkUp',
+          error: 'You must be at least 18 years old to use DatingHub',
           code: 'UNDERAGE_USER'
         });
       }
@@ -1443,16 +1452,16 @@ router.post('/send-otp', async (req, res) => {
         transporter.sendMail({
           from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
           to: deliveryTarget,
-          subject: 'Your LinkUp OTP Code',
+          subject: 'Your DatingHub OTP Code',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>LinkUp - Email Verification</h2>
+              <h2>DatingHub - Email Verification</h2>
               <p>Your One-Time Password (OTP) is:</p>
               <h1 style="color: #6366f1; letter-spacing: 2px; text-align: center;">${otp}</h1>
               <p>This OTP will expire in 10 minutes.</p>
               <p>If you didn't request this code, please ignore this email.</p>
               <hr />
-              <p style="color: #666; font-size: 12px;">LinkUp Dating - Your Perfect Match Awaits</p>
+              <p style="color: #666; font-size: 12px;">DatingHub - Your Perfect Match Awaits</p>
             </div>
           `
         }),
@@ -1710,10 +1719,10 @@ router.post('/request-password-reset', async (req, res) => {
         await transporter.sendMail({
           from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
           to: normalizedEmail,
-          subject: 'Your LinkUp password reset code',
+          subject: 'Your DatingHub password reset code',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2>LinkUp password reset</h2>
+              <h2>DatingHub password reset</h2>
               <p>Use this code to reset your password:</p>
               <h1 style="letter-spacing: 2px; text-align: center;">${resetCode}</h1>
               <p>This code expires in 15 minutes.</p>
@@ -1764,7 +1773,7 @@ router.post('/reset-password', async (req, res) => {
     }
 
     if (!isStrongPassword(newPassword)) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+return res.status(400).json({ error: 'Password must be at least 8 characters with uppercase, lowercase, and number' });
     }
 
     const resetEntry = findStoredPasswordResetEntry({ resetId, email: normalizedEmail });
@@ -1842,9 +1851,9 @@ router.post('/set-username', async (req, res) => {
       return res.status(400).json({ error: 'Username required' });
     }
 
-    if (!/^[a-zA-Z0-9_-]{3,20}$/.test(username)) {
+if (!/^[a-zA-Z0-9_.-]{3,20}$/.test(username)) {
       return res.status(400).json({
-        error: 'Username can only contain letters, numbers, underscores, and dashes (3-20 characters)'
+        error: 'Username can only contain letters, numbers, periods, underscores, dashes (3-20 characters)'
       });
     }
 
@@ -2326,7 +2335,7 @@ router.post('/firebase-verify-phone', async (req, res) => {
 
       if (!ageValidation.isOver18) {
         return res.status(403).json({
-          error: 'You must be at least 18 years old to use LinkUp',
+          error: 'You must be at least 18 years old to use DatingHub',
           code: 'UNDERAGE_USER'
         });
       }
@@ -2508,7 +2517,7 @@ router.post('/google-signup', async (req, res) => {
     const firebaseConfig = require('../config/firebase');
     const tokenVerification = await firebaseConfig.verifyFirebaseIdToken(idToken);
 
-    if (!tokenVerification.success) {
+if (!tokenVerification.success) {
       return res.status(401).json({
         error: 'Invalid Firebase token',
         code: 'INVALID_FIREBASE_TOKEN'
@@ -2524,28 +2533,52 @@ router.post('/google-signup', async (req, res) => {
       [normalizedEmail]
     );
 
-    // Age verification is only required for NEW users (signup), not existing users (login)
+    // Age verification is required for NEW users (signup), optional for existing users (login)
     let verifiedAge = null;
-    if (existingUserResult.rows.length === 0 && !ageVerification) {
-      return res.status(400).json({ error: 'Date of birth verification is required for signup' });
-    }
-
-    // Validate age verification only if provided or if creating new account
-    if (ageVerification) {
+    
+    if (existingUserResult.rows.length === 0) {
+      // NEW USER: Age verification is MANDATORY
+      if (!ageVerification) {
+        return res.status(400).json({ error: 'Date of birth verification is required for signup' });
+      }
+      
+      // Validate age verification for new user
       const ageValidation = validateAgeVerification(ageVerification);
       if (!ageValidation.valid) {
         return res.status(400).json({
-          error: ageValidation.errors[0] || 'Invalid date of birth'
+          error: ageValidation.errors[0] || 'Invalid date of birth',
+          code: 'AGE_VERIFICATION_FAILED'
         });
       }
 
       if (!ageValidation.isOver18) {
         return res.status(403).json({
-          error: 'You must be at least 18 years old to use LinkUp'
+          error: 'You must be at least 18 years old to use DatingHub',
+          code: 'UNDERAGE_USER'
         });
       }
 
       verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
+    } else {
+      // EXISTING USER: Validate age only if provided (optional for returning users)
+      if (ageVerification) {
+        const ageValidation = validateAgeVerification(ageVerification);
+        if (!ageValidation.valid) {
+          return res.status(400).json({
+            error: ageValidation.errors[0] || 'Invalid date of birth',
+            code: 'AGE_VERIFICATION_FAILED'
+          });
+        }
+
+        if (!ageValidation.isOver18) {
+          return res.status(403).json({
+            error: 'You must be at least 18 years old to use DatingHub',
+            code: 'UNDERAGE_USER'
+          });
+        }
+
+        verifiedAge = calculateAgeFromDOB(new Date(ageVerification.dateOfBirth));
+      }
     }
 
     let user;
@@ -2626,11 +2659,45 @@ router.post('/google-signup', async (req, res) => {
         signupMethod: 'google'
       }
     });
-  } catch (err) {
-    console.error('Google signup error:', err);
+} catch (err) {
+    console.error('Google signup error:', {
+      message: err.message,
+      code: err.code,
+      detail: err.detail,
+      stack: err.stack
+    });
+    
+    // Provide more specific error messages
+    if (err.message?.includes('Firebase')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Google authentication failed. Please try again or use email signup.',
+        code: 'FIREBASE_ERROR'
+      });
+    }
+    
+    if (err.message?.includes('age') || err.code === 'UNDERAGE_USER') {
+      return res.status(403).json({
+        success: false,
+        error: 'You must be at least 18 years old to use DatingHub',
+        code: 'UNDERAGE_USER'
+      });
+    }
+    
+    if (err.message?.includes('email')) {
+      return res.status(409).json({
+        success: false,
+        error: 'An account with this email already exists',
+        code: 'EMAIL_EXISTS'
+      });
+    }
+    
+    // Generic fallback
     res.status(500).json({
       success: false,
-      error: err.message || 'Google signup failed'
+      error: process.env.NODE_ENV === 'development' 
+        ? err.message 
+        : 'Google signup failed. Please try again or use email signup.'
     });
   }
 });

@@ -2,7 +2,7 @@
 
 ## Overview
 
-LinkUp includes a comprehensive content moderation system to ensure platform safety and compliance with Play Store policies. The system detects:
+DatingHub includes a comprehensive content moderation system to ensure platform safety and compliance with Play Store policies. The system detects:
 - **Profanity & offensive language**
 - **NSFW images** (using Google Cloud Vision)
 - **Spam & promotional content**
@@ -449,4 +449,4 @@ active BOOLEAN       -- Is ban currently active
 
 For issues or questions:
 - Check Google Cloud Vision docs: https://cloud.google.com/vision/docs
-- Email: support@linkup.io
+- Email: support@datinghub.app

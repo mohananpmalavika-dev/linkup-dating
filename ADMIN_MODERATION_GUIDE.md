@@ -437,7 +437,7 @@ A: Only Super Admin can modify bans. Submit recommendation to Super Admin.
 
 **Need Help?**
 - Slack: #moderation-help
-- Email: moderation@linkup.io
+- Email: moderation@datinghub.app
 - Escalate to: Super Admin
 
 ---

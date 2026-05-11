@@ -3,6 +3,7 @@ import { useApp } from '../../contexts/AppContext';
 import MessageSearch from './MessageSearch';
 import MessageContextMenu from './MessageContextMenu';
 import EmojiPicker from './EmojiPicker';
+import StickerPicker from './StickerPicker';
 import ReadReceipts from './ReadReceipts';
 import MessagePagination from './MessagePagination';
 import { getAvatarLabel, getEntityId, isSameEntity } from './utils';
@@ -42,6 +43,7 @@ const ChatWindow = ({
   const [showSearch, setShowSearch] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
   const [selectedMessageForReaction, setSelectedMessageForReaction] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingContent, setEditingContent] = useState('');
@@ -404,6 +406,17 @@ const ChatWindow = ({
     setShowEmojiPicker(false);
   };
 
+  const handleStickerSelect = async (stickerValue) => {
+    if (!stickerValue) {
+      return;
+    }
+
+    await onSendMessage(stickerValue, 'sticker', null, null);
+    setMessageInput('');
+    setReplyingToMessage(null);
+    setShowStickerPicker(false);
+  };
+
   const handleSearchSelect = (message) => {
     const messageElement = messageContainerRef.current?.querySelector(
       `[data-message-id="${message._id}"]`
@@ -607,6 +620,15 @@ const ChatWindow = ({
                             <video src={message.media?.url} controls />
                           </div>
                         )}
+                        {message.messageType === 'sticker' && (
+                          <div className="message-sticker">
+                            {message.media?.url ? (
+                              <img src={message.media.url} alt="Sticker" />
+                            ) : (
+                              <span>{message.content}</span>
+                            )}
+                          </div>
+                        )}
                         {(message.messageType === 'audio' || message.messageType === 'voice') && (
                           <div className="message-media">
                             {message.messageType === 'voice' && (
@@ -750,6 +772,12 @@ const ChatWindow = ({
           }}
         />
       )}
+      {showStickerPicker && (
+        <StickerPicker
+          onSelectSticker={handleStickerSelect}
+          onClose={() => setShowStickerPicker(false)}
+        />
+      )}
 
       <div className="message-input-area">
         {replyingToMessage && (
@@ -783,10 +811,23 @@ const ChatWindow = ({
             onClick={() => {
               setSelectedMessageForReaction(null);
               setShowEmojiPicker((current) => !current);
+              setShowStickerPicker(false);
             }}
             type="button"
           >
             Emoji
+          </button>
+          <button
+            className="btn-action"
+            title="Sticker picker"
+            onClick={() => {
+              setSelectedMessageForReaction(null);
+              setShowStickerPicker((current) => !current);
+              setShowEmojiPicker(false);
+            }}
+            type="button"
+          >
+            Sticker
           </button>
           <button className="btn-action" title="Attach file" onClick={onOpenFileUpload} type="button">
             File

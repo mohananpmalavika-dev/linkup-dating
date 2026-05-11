@@ -1,5 +1,5 @@
 /* ============================================================
-   LinkUp App Styles — Premium Edition
+   DatingHub App Styles — Premium Edition
    ============================================================ */
 
 /* ── Premium Loading Screen ── */
@@ -50,14 +50,31 @@
 
 /* ── App Layout ── */
 .dating-app {
+  --dating-nav-base-height: 65px;
+  --dating-nav-safe-area: env(safe-area-inset-bottom, 0px);
+  --dating-nav-height: calc(var(--dating-nav-base-height) + var(--dating-nav-safe-area));
+  --dating-nav-clearance: calc(var(--dating-nav-height) + 24px);
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--lu-bg-primary);
   font-family: var(--lu-font-sans);
 }
 
 .app-content {
-  min-height: calc(100vh - 65px);
-  padding-bottom: var(--lu-space-4);
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-bottom: var(--dating-nav-clearance);
+  scroll-padding-bottom: var(--dating-nav-clearance);
+}
+
+.app-content > * {
+  scroll-margin-bottom: var(--dating-nav-clearance);
+}
+
+@media (max-width: 480px) {
+  .dating-app {
+    --dating-nav-base-height: 60px;
+  }
 }
 
 /* ── Page Transition Wrapper ── */
@@ -157,14 +174,14 @@
 }
 
 .incoming-call-accept {
-  background: linear-gradient(135deg, #fb7185, #f97316);
+  background: linear-gradient(135deg, var(--dh-logo-copper-light, #f1a06f), var(--dh-logo-copper, #d06030));
   color: var(--lu-text-inverse);
-  box-shadow: 0 8px 24px rgba(249, 115, 22, 0.35);
+  box-shadow: 0 8px 24px rgba(208, 96, 48, 0.35);
 }
 
 .incoming-call-accept:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 32px rgba(249, 115, 22, 0.45);
+  box-shadow: 0 12px 32px rgba(208, 96, 48, 0.45);
 }
 
 .incoming-call-accept:active {
