@@ -69,6 +69,9 @@ const app = express();
 // when the app is behind a proxy, load balancer, or CDN (like on Render, Heroku, AWS, etc.)
 app.set('trust proxy', 1);
 
+// Create HTTP server (needed for socketIO)
+const server = http.createServer(app);
+
 const normalizeOriginList = (value = '') =>
   String(value || '')
     .split(',')
