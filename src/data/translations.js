@@ -15,11 +15,11 @@ const translations = {
       ],
 },
     launch: {
-      brand: "DatingHub Dating",
+      brand: "DatingHub",
       title: "Real Matches Start Here",
       promise: "Real matches, safe dates, better conversations.",
       intro:
-        "DatingHub Dating helps you move from profile to first message to real plans with more clarity, safer date tools, and stronger conversation prompts.",
+        "DatingHub helps you move from profile to first message to real plans with more clarity, safer date tools, and stronger conversation prompts.",
       languageLabel: "Language",
       login: "Login",
       loginHelp: "Sign in to your DatingHub account with your email address or phone number.",
@@ -143,7 +143,7 @@ const translations = {
       ],
     },
     launch: {
-      brand: "DatingHub Dating",
+      brand: "DatingHub",
       title: "ആധുനിക ഡേറ്റിംഗ് ലളിതമാക്കി",
       intro:
         "DatingHub Dating എന്നത് അർത്ഥവത്തായ ബന്ധങ്ങൾ കണ്ടെത്താൻ സഹായിക്കുന്ന ഒരു ആധുനിക ഡേറ്റിംഗ് പ്ലാറ്റ്ഫോം ആണ്.",
@@ -241,10 +241,10 @@ const translations = {
       ],
     },
     launch: {
-      brand: "DatingHub Dating",
+      brand: "DatingHub",
       title: "التواعد الحديث الميسر",
       intro:
-        "DatingHub Dating هي منصة تواعد حديثة مصممة لمساعدتك في العثور على اتصالات معنى.",
+        "DatingHub هي منصة تواعد حديثة مصممة لمساعدتك في العثور على اتصالات معنى.",
       languageLabel: "اللغة",
       login: "تسجيل الدخول",
       loginHelp: "سجل الدخول إلى حساب DatingHub ببريد موثق.",
