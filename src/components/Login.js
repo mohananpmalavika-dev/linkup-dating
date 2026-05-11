@@ -13,7 +13,7 @@ import "../styles/Login.css";
 import "../styles/LoginFresh.css";
 
 const ADMIN_EMAIL = "mgdhanyamohan@gmail.com";
-const DEFAULT_LOGIN_METHOD = "firebase_phone";
+const DEFAULT_LOGIN_METHOD = "gmail";
 const SIMPLE_LOGIN_METHODS = new Set([DEFAULT_LOGIN_METHOD, "gmail", "mpin"]);
 
 const getInitialLoginMethod = () => {
@@ -686,7 +686,7 @@ const Login = ({
           <img src="/datinghub-logo.png" alt="DatingHub" className="login-simple-logo" />
           <p className="login-simple-kicker">Welcome to DatingHub</p>
           <h1>Login</h1>
-          <p>Use your mobile number. We will send a 6 digit SMS code.</p>
+          <p>Sign in with Google or use mobile OTP if you prefer.</p>
         </header>
 
         {showMethodChoices && (
@@ -716,7 +716,7 @@ const Login = ({
               }}
             >
               <span>Google</span>
-              <small>One tap</small>
+              <small>Recommended</small>
             </button>
             <button
               type="button"
@@ -729,7 +729,7 @@ const Login = ({
               }}
             >
               <span>Mobile OTP</span>
-              <small>Recommended</small>
+              <small>SMS code</small>
             </button>
           </div>
         )}
@@ -871,7 +871,7 @@ const Login = ({
                   type="button"
                   className="login-simple-text-button"
                   onClick={() => {
-                    setLoginMethod(DEFAULT_LOGIN_METHOD);
+                    setLoginMethod("firebase_phone");
                     resetFirebaseFlow();
                   }}
                   disabled={loading}

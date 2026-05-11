@@ -193,7 +193,7 @@ const translations = {
       ],
     },
     launch: {
-      brand: "DatingHub Dating",
+      brand: "DatingHub",
       title: "आधुनिक डेटिंग आसान बनाई गई",
       intro:
         "DatingHub Dating एक आधुनिक डेटिंग प्लेटफॉर्म है जो आपको सार्थक संबंध खोजने में मदद करता है।",
