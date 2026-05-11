@@ -69,10 +69,21 @@ const app = express();
 // when the app is behind a proxy, load balancer, or CDN (like on Render, Heroku, AWS, etc.)
 app.set('trust proxy', 1);
 
-const server = http.createServer(app);
+const normalizeOriginList = (value = '') =>
+  String(value || '')
+    .split(',')
+    .map((origin) => origin.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
+const allowedFrontendOrigins = [
+  ...normalizeOriginList(process.env.FRONTEND_URLS),
+  ...normalizeOriginList(process.env.FRONTEND_URL),
+  'http://localhost:3000'
+].filter((origin, index, self) => self.indexOf(origin) === index);
+
 const io = socketIO(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: allowedFrontendOrigins,
     methods: ['GET', 'POST'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true
@@ -90,7 +101,7 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      connectSrc: ["'self'", process.env.FRONTEND_URL || 'http://localhost:3000'],
+      connectSrc: ["'self'", ...allowedFrontendOrigins],
       imgSrc: ["'self'", 'data:', 'https:'],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"]
@@ -99,7 +110,7 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false
 }));
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: allowedFrontendOrigins,
   credentials: true
 }));
 app.use(express.json({ limit: '50mb' }));
