@@ -136,6 +136,6 @@ adb install -r app\build\outputs\apk\release\app-release.apk
 ---
 
 **Version**: 1.0  
-**App**: LinkUp Dating  
+**App**: DatingHub  
 **Package**: com.linkup.dating  
 **Last Updated**: May 2026

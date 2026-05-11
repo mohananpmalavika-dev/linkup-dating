@@ -1,7 +1,7 @@
-# LinkUp Dating App - Google Play Store Publishing Complete Guide
+# DatingHub App - Google Play Store Publishing Complete Guide
 
 **Last Updated:** May 3, 2026  
-**App Name:** LinkUp Dating  
+**App Name:** DatingHub  
 **Package Name:** com.linkup.dating  
 **Status:** Ready for Publication
 
@@ -74,7 +74,7 @@
 ### Step 2: Create App
 1. Click "Create app"
 2. Fill app details:
-   - **App name:** LinkUp Dating
+   - **App name:** DatingHub
    - **Default language:** English
    - **App or game:** App
    - **Free or paid:** Select "Free" or setup pricing
@@ -135,7 +135,7 @@ LinkUp - Meet Your Match
 
 **Full Description** (4000 characters max):
 ```
-Introducing LinkUp Dating – The Modern Way to Meet Someone Special
+Introducing DatingHub – The Modern Way to Meet Someone Special
 
 LinkUp is a revolutionary dating app designed to help you find genuine connections, meaningful relationships, and maybe even true love. With cutting-edge matching algorithms and AI-powered profiles, LinkUp makes dating smarter, safer, and more enjoyable.
 

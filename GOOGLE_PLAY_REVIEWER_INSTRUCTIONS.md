@@ -1,6 +1,6 @@
-# LinkUp Dating - Google Play Reviewer Instructions
+# DatingHub - Google Play Reviewer Instructions
 
-App name: LinkUp Dating
+App name: DatingHub
 Package ID: com.linkup.datinghub
 Version: 1.0.1 (versionCode 2)
 Last updated: May 4, 2026

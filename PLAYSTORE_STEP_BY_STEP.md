@@ -1,4 +1,4 @@
-# LinkUp Dating App - Step-by-Step Play Store Submission Guide
+# DatingHub App - Step-by-Step Play Store Submission Guide
 
 **For First-Time Publishers**  
 **Last Updated:** May 3, 2026
@@ -7,7 +7,7 @@
 
 ## 🎯 Quick Overview
 
-This guide walks you through EVERY step to publish LinkUp Dating on Google Play Store. Follow each section in order.
+This guide walks you through EVERY step to publish DatingHub on Google Play Store. Follow each section in order.
 
 ---
 
@@ -46,7 +46,7 @@ This guide walks you through EVERY step to publish LinkUp Dating on Google Play 
 
 | Field | Value |
 |-------|-------|
-| **App name** | LinkUp Dating |
+| **App name** | DatingHub |
 | **Default language** | English |
 | **App or game** | App |
 | **Free or paid** | Free |
@@ -343,7 +343,7 @@ Similar to privacy policy:
 ```
 Version 1.0 - Launch Release
 
-🎉 Welcome to LinkUp Dating!
+🎉 Welcome to DatingHub!
 
 LinkUp is your new favorite dating app. Connect with people, 
 find your match, and enjoy video dating!

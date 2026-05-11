@@ -1,4 +1,4 @@
-# LinkUp Dating App - Privacy Policy Template
+# DatingHub App - Privacy Policy Template
 
 **Last Updated:** May 3, 2026  
 **Effective Date:** [INSERT DATE]
@@ -9,7 +9,7 @@
 
 ### Introduction
 
-LinkUp Dating ("we," "us," "our," or "Company") operates the LinkUp mobile application ("App"). This Privacy Policy explains our practices regarding the collection, use, and protection of your information.
+DatingHub ("we," "us," "our," or "Company") operates the LinkUp mobile application ("App"). This Privacy Policy explains our practices regarding the collection, use, and protection of your information.
 
 By downloading and using LinkUp, you consent to our data practices described in this Privacy Policy. If you do not agree with our policies, please do not use the App.
 
@@ -306,7 +306,7 @@ If your child has created an account, contact us immediately at: privacy@linkup-
 - Legal compliance
 - Legitimate interests
 
-**Data Controller:** LinkUp Dating [Company Address]  
+**Data Controller:** DatingHub [Company Address]  
 **Data Protection Officer:** [Contact if applicable]
 
 **To exercise rights:** privacy@linkup-dating.com
@@ -376,7 +376,7 @@ We may update this Privacy Policy periodically. Changes will be:
 
 **Mailing Address:**
 ```
-LinkUp Dating
+DatingHub
 [Your Company Address]
 [City, State, Country]
 ```
@@ -395,7 +395,7 @@ LinkUp Dating
 
 ## 12. Acknowledgment
 
-By using LinkUp Dating, you acknowledge that you have read this Privacy Policy and agree to:
+By using DatingHub, you acknowledge that you have read this Privacy Policy and agree to:
 - Our data collection and usage practices
 - Terms of Service
 - DPDPA, GDPR, and other applicable laws

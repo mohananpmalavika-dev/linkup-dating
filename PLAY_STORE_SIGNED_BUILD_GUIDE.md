@@ -1,4 +1,4 @@
-# LinkUp Dating - Android Signed Build Guide for Play Store
+# DatingHub - Android Signed Build Guide for Play Store
 
 ## 📋 Overview
 
@@ -70,7 +70,7 @@ keytool -genkey -v -keystore linkup-release-key.jks ^
 **When prompted, enter:**
 - **Keystore password**: Choose a strong password (min 6 characters)
 - **Key password**: Same as keystore password (recommended)
-- **First and last name**: LinkUp Dating
+- **First and last name**: DatingHub
 - **Organizational unit**: DatingHub
 - **Organization**: LinkUp
 - **City/Locality**: Bangalore
@@ -170,7 +170,7 @@ Before uploading, prepare the following:
 
 ### 2. App Store Listing Text
 
-- **App Title**: "LinkUp Dating" (max 50 characters)
+- **App Title**: "DatingHub" (max 50 characters)
 - **Short Description**: Brief one-liner (max 80 characters)
 - **Full Description**: Detailed features and benefits (max 4000 characters)
 
@@ -227,7 +227,7 @@ Version 1.0.0 (Initial Release)
 ### 2. Create App Listing
 
 1. Click "Create app"
-2. Enter app name: "LinkUp Dating"
+2. Enter app name: "DatingHub"
 3. Select category: "Dating"
 4. Choose content rating
 5. Accept agreement and create
@@ -340,4 +340,4 @@ After app is published:
 
 ---
 
-**Good luck with your LinkUp Dating app launch! 🎉**
+**Good luck with your DatingHub app launch! 🎉**

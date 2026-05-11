@@ -1,6 +1,6 @@
 # LinkUp Android Play Store - Complete Deployment Checklist
 
-**App Name**: LinkUp Dating  
+**App Name**: DatingHub  
 **Package ID**: com.linkup.dating  
 **Version Code**: 1  
 **Version Name**: 1.0.0  
@@ -112,7 +112,7 @@
 
 ### Store Listing Text
 - [ ] App title (max 50 characters)
-  - Title: "LinkUp Dating"
+  - Title: "DatingHub"
   - Length: ________
 - [ ] Short description (max 80 characters)
   - Text: ___________________________________________
@@ -171,7 +171,7 @@
 ### App Store Listing
 - [ ] App store listing created
   - Package name: com.linkup.dating
-  - App name: LinkUp Dating
+  - App name: DatingHub
 - [ ] App category selected: Dating
 - [ ] Contact information added
 - [ ] Website/support links added

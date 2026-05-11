@@ -1,4 +1,4 @@
-# LinkUp Dating App - Graphics & Assets Guide
+# DatingHub App - Graphics & Assets Guide
 
 **For PlayStore Publishing**  
 **Last Updated:** May 3, 2026
@@ -347,7 +347,7 @@ Or: "Get More Connections"
 
 **30-Second Flow:**
 ```
-0-3s:    App icon + "LinkUp Dating" title
+0-3s:    App icon + "DatingHub" title
 3-7s:    Swiping screen + "Swipe to Match"
 7-12s:   Match animation + "It's a Match!"
 12-17s:  Messaging preview + "Real Connections"

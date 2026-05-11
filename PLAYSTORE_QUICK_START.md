@@ -1,4 +1,4 @@
-# 🚀 LinkUp Dating App - Quick Start Publishing Guide
+# 🚀 DatingHub App - Quick Start Publishing Guide
 
 **START HERE** | **Your app is ready! Follow these 8 simple steps.**
 
@@ -238,7 +238,7 @@ Before starting STEP 1:
 
 ### First 24 Hours
 - App appears in Play Store (maybe takes a few hours)
-- Users can search for "LinkUp Dating"
+- Users can search for "DatingHub"
 - Share the link with friends/family
 - Monitor crash reports
 

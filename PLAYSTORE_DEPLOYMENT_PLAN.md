@@ -427,5 +427,5 @@ Once these items are complete, your app can be published to the Play Store!
 ---
 
 **Document Created:** May 1, 2026
-**For:** LinkUp Dating App
+**For:** DatingHub App
 **Location:** c:/Users/Dhanya/LinkUp

@@ -1,4 +1,4 @@
-# LinkUp Dating App - Publishing Checklist & Quick Reference
+# DatingHub App - Publishing Checklist & Quick Reference
 
 **Created:** May 3, 2026  
 **Status:** Ready to Publish
@@ -79,7 +79,7 @@
 
 #### Step 2.2: Create App in Console
 - [ ] Click "Create app"
-- [ ] App name: **LinkUp Dating**
+- [ ] App name: **DatingHub**
 - [ ] Default language: **English**
 - [ ] App or game: **App**
 - [ ] Free or paid: **Free**

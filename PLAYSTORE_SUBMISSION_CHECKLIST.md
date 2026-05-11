@@ -1,4 +1,4 @@
-# LinkUp Dating - Play Store Submission Checklist
+# DatingHub - Play Store Submission Checklist
 
 Date: May 4, 2026
 Package ID: com.linkup.datinghub
